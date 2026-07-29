@@ -1,0 +1,32 @@
+# --- Runtime / generated ---
+logs/
+current-tunnel-url.txt
+cloudflared/*.log
+*.log
+
+# --- Local backups (kept out of history; they duplicate the tree) ---
+backups/
+
+# --- Laravel app: dependencies, secrets, build artifacts, runtime storage ---
+application/vendor/
+application/node_modules/
+application/.env
+application/.env.backup
+application/.env.production
+application/public/build/
+application/public/hot
+application/public/storage
+application/storage/*.key
+application/storage/pail/
+application/storage/framework/cache/data/
+application/storage/framework/sessions/
+application/storage/framework/views/
+application/storage/logs/
+application/.phpunit.result.cache
+application/.phpunit.cache/
+
+# --- Editor / OS noise ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
