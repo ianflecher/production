@@ -5,6 +5,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\JobOrderController;
+use App\Http\Controllers\OrderDesignBriefController;
 use App\Http\Controllers\OrderDocumentController;
 use App\Http\Controllers\OrderReferenceFileController;
 use App\Http\Controllers\PasswordController;
@@ -148,10 +149,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/orders/{order}/send-for-layout', [ProductionOrderController::class, 'sendForLayout'])->whereNumber('order')->name('orders.send-for-layout');
 
         // Client design questionnaire → copy-paste ChatGPT prompt.
-        Route::get('/orders/{order}/design-brief', [ProductionOrderController::class, 'designBrief'])->whereNumber('order')->name('orders.design-brief');
-        Route::post('/orders/{order}/design-brief', [ProductionOrderController::class, 'saveDesignBrief'])->whereNumber('order')->name('orders.design-brief.save');
+        Route::get('/orders/{order}/design-brief', [OrderDesignBriefController::class, 'designBrief'])->whereNumber('order')->name('orders.design-brief');
+        Route::post('/orders/{order}/design-brief', [OrderDesignBriefController::class, 'saveDesignBrief'])->whereNumber('order')->name('orders.design-brief.save');
         // Reopen the single-use client link for one more submission.
-        Route::post('/orders/{order}/design-brief/reopen', [ProductionOrderController::class, 'reopenClientBrief'])->whereNumber('order')->name('orders.design-brief.reopen');
+        Route::post('/orders/{order}/design-brief/reopen', [OrderDesignBriefController::class, 'reopenClientBrief'])->whereNumber('order')->name('orders.design-brief.reopen');
 
         // Live due-date capacity hint on the order forms.
         Route::get('/order-capacity', [ProductionOrderController::class, 'capacity'])->name('orders.capacity');
