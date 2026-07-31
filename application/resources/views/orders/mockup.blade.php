@@ -130,7 +130,7 @@
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
                 <p style="margin: 0; font-weight: 600;">No mockup available yet</p>
-                <p style="margin: 0.5rem 0 0; font-size: 0.8rem;">The artist is working on the {{ $taskType | lower }}.</p>
+                <p style="margin: 0.5rem 0 0; font-size: 0.8rem;">The artist is working on the {{ strtolower($taskType) }}.</p>
             </div>
         @endif
         
