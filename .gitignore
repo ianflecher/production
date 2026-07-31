@@ -30,3 +30,6 @@ application/.phpunit.cache/
 Thumbs.db
 .idea/
 .vscode/
+
+# Cloudflare tunnel binary (52MB, downloadable — never track it)
+cloudflared/cloudflared.exe

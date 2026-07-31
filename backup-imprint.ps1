@@ -4,7 +4,7 @@
     Produces ONE self-contained restore kit per run:
         imprint-backup-<timestamp>.zip
             ├── database.sql     full mysqldump of imprint_production
-            ├── code.bundle      git bundle of ALL code + history (restore with `git clone`)
+            ├── code.zip         snapshot of all tracked source at HEAD (just unzip)
             └── RESTORE.txt      step-by-step restore instructions
 
     The zip is copied to OneDrive (offsite / cloud) and old backups are pruned.
@@ -96,11 +96,13 @@ try {
     Remove-Item $errFile -Force -ErrorAction SilentlyContinue   # empty on success; keep it out of the zip
     Write-Log ("Database dumped: {0:N0} bytes" -f $dumpSize)
 
-    # ---- 2. Code + full git history as a single restorable bundle ----------
-    $bundleFile = Join-Path $work 'code.bundle'
-    & git -C $RepoDir bundle create $bundleFile --all 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundleFile)) { throw "git bundle failed" }
-    Write-Log ("Code bundle created: {0:N0} bytes" -f (Get-Item $bundleFile).Length)
+    # ---- 2. Code snapshot (current tracked files at HEAD) -----------------
+    # A git archive of HEAD — every tracked source file, minus gitignored bulk
+    # like the 52MB cloudflared.exe. Self-contained: just unzip to restore.
+    $codeZip = Join-Path $work 'code.zip'
+    & git -C $RepoDir archive --format=zip -o $codeZip HEAD 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $codeZip)) { throw "git archive failed" }
+    Write-Log ("Code snapshot created: {0:N0} bytes" -f (Get-Item $codeZip).Length)
 
     # ---- 3. Restore instructions ------------------------------------------
     $restore = @"
@@ -110,8 +112,8 @@ Backup taken: $Stamp
 This kit fully restores the app + data onto a fresh machine.
 
 1. RESTORE THE CODE
-   git clone code.bundle imprint-restored
-   (this recreates the whole repo, including history)
+   Unzip code.zip — it contains every tracked source file at HEAD.
+   (The 52MB cloudflared.exe is intentionally excluded; re-download it if needed.)
 
 2. RESTORE THE DATABASE
    - Create an empty MySQL database, e.g.:  CREATE DATABASE imprint_production;
