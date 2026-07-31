@@ -8,6 +8,7 @@ use App\Http\Controllers\JobOrderController;
 use App\Http\Controllers\OrderDocumentController;
 use App\Http\Controllers\OrderReferenceFileController;
 use App\Http\Controllers\PasswordController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductionOrderController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
@@ -143,7 +144,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/orders', [ProductionOrderController::class, 'store'])->name('orders.store');
         Route::get('/orders/{order}/edit', [ProductionOrderController::class, 'edit'])->whereNumber('order')->name('orders.edit');
         Route::post('/orders/{order}', [ProductionOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
-        Route::post('/orders/{order}/payment', [ProductionOrderController::class, 'recordPayment'])->name('orders.payment');
+        Route::post('/orders/{order}/payment', [PaymentController::class, 'recordPayment'])->name('orders.payment');
         Route::post('/orders/{order}/send-for-layout', [ProductionOrderController::class, 'sendForLayout'])->whereNumber('order')->name('orders.send-for-layout');
 
         // Client design questionnaire → copy-paste ChatGPT prompt.
@@ -193,7 +194,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/orders/{order}/mockup', [ProductionOrderController::class, 'mockup'])->whereNumber('order')->name('orders.mockup');
         Route::get('/orders/{order}/reference', [ProductionOrderController::class, 'references'])->whereNumber('order')->name('orders.references');
         Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
-        Route::get('/payments/{payment}/proof', [ProductionOrderController::class, 'proof'])
+        Route::get('/payments/{payment}/proof', [PaymentController::class, 'proof'])
             ->whereNumber('payment')->name('payments.proof');
     });
 
