@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\JobOrderController;
 use App\Http\Controllers\OrderDocumentController;
 use App\Http\Controllers\OrderReferenceFileController;
 use App\Http\Controllers\PasswordController;
@@ -53,7 +54,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/stations', [\App\Http\Controllers\StationController::class, 'index'])->name('stations.index');
     // The approved package (mockup, template, job order, production details) —
     // the floor needs to see exactly what the leader signed off before running it.
-    Route::get('/orders/{order}/package', [ProductionOrderController::class, 'completeJobOrder'])
+    Route::get('/orders/{order}/package', [JobOrderController::class, 'completeJobOrder'])
         ->whereNumber('order')->name('orders.package');
     Route::post('/stations/start', [\App\Http\Controllers\StationController::class, 'start'])->name('stations.start');
     Route::post('/station-sessions/{stationSession}/end', [\App\Http\Controllers\StationController::class, 'end'])
@@ -124,13 +125,13 @@ Route::middleware(['auth', 'active'])->group(function () {
     // -------- Sales: samples waiting for the client's decision --------
     Route::middleware('role:sales,super_admin')->group(function () {
         Route::get('/sample-review', [TaskController::class, 'sampleReview'])->name('sample.review');
-        Route::get('/job-orders/{order}/create', [ProductionOrderController::class, 'createJobOrder'])->name('job-orders.create');
-        Route::post('/job-orders/{order}', [ProductionOrderController::class, 'storeJobOrder'])->name('job-orders.store');
-        Route::get('/job-orders/{order}/edit', [ProductionOrderController::class, 'editJobOrder'])->name('job-orders.edit');
-        Route::post('/job-orders/{order}/update', [ProductionOrderController::class, 'updateJobOrder'])->name('job-orders.update');
-        Route::get('/job-orders/{order}/production', [ProductionOrderController::class, 'productionJobOrder'])->name('job-orders.production');
-        Route::post('/job-orders/{order}/production', [ProductionOrderController::class, 'updateProductionDetails'])->name('job-orders.production.update');
-        Route::post('/job-orders/{order}/send', [ProductionOrderController::class, 'sendJobOrderToArtist'])->name('job-orders.send');
+        Route::get('/job-orders/{order}/create', [JobOrderController::class, 'createJobOrder'])->name('job-orders.create');
+        Route::post('/job-orders/{order}', [JobOrderController::class, 'storeJobOrder'])->name('job-orders.store');
+        Route::get('/job-orders/{order}/edit', [JobOrderController::class, 'editJobOrder'])->name('job-orders.edit');
+        Route::post('/job-orders/{order}/update', [JobOrderController::class, 'updateJobOrder'])->name('job-orders.update');
+        Route::get('/job-orders/{order}/production', [JobOrderController::class, 'productionJobOrder'])->name('job-orders.production');
+        Route::post('/job-orders/{order}/production', [JobOrderController::class, 'updateProductionDetails'])->name('job-orders.production.update');
+        Route::post('/job-orders/{order}/send', [JobOrderController::class, 'sendJobOrderToArtist'])->name('job-orders.send');
         Route::post('/job-orders/{order}/reference', [OrderReferenceFileController::class, 'uploadReferenceFile'])->name('job-orders.reference');
         Route::post('/job-order-files/{file}/delete', [OrderReferenceFileController::class, 'deleteReferenceFile'])->whereNumber('file')->name('job-order-files.delete');
         Route::post('/job-order-files/{file}/kind', [OrderReferenceFileController::class, 'markReferenceKind'])->whereNumber('file')->name('job-order-files.kind');
