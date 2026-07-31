@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\OrderDocumentController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\ProductionOrderController;
 use App\Http\Controllers\TaskController;
@@ -153,23 +154,23 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/order-capacity', [ProductionOrderController::class, 'capacity'])->name('orders.capacity');
 
         // Client documents: DR (no VAT) / PQ (+12% VAT) — before and after payment.
-        Route::get('/orders/{order}/document/{type}', [ProductionOrderController::class, 'document'])
+        Route::get('/orders/{order}/document/{type}', [OrderDocumentController::class, 'document'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->name('orders.document');
-        Route::post('/orders/{order}/document/{type}', [ProductionOrderController::class, 'saveDocument'])
+        Route::post('/orders/{order}/document/{type}', [OrderDocumentController::class, 'saveDocument'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->name('orders.document.save');
-        Route::post('/orders/{order}/document/{type}/refresh', [ProductionOrderController::class, 'refreshDocument'])
+        Route::post('/orders/{order}/document/{type}/refresh', [OrderDocumentController::class, 'refreshDocument'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->name('orders.document.refresh');
 
         // Contract / payment proof / signed copy placed on the sheet.
-        Route::post('/orders/{order}/document/{type}/attach', [ProductionOrderController::class, 'uploadDocumentFile'])
+        Route::post('/orders/{order}/document/{type}/attach', [OrderDocumentController::class, 'uploadDocumentFile'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->name('orders.document.attach');
-        Route::post('/orders/{order}/document/{type}/attach/{index}/delete', [ProductionOrderController::class, 'deleteDocumentFile'])
+        Route::post('/orders/{order}/document/{type}/attach/{index}/delete', [OrderDocumentController::class, 'deleteDocumentFile'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->whereNumber('index')->name('orders.document.attach.delete');
-        Route::get('/orders/{order}/document/{type}/attach/{index}', [ProductionOrderController::class, 'viewDocumentFile'])
+        Route::get('/orders/{order}/document/{type}/attach/{index}', [OrderDocumentController::class, 'viewDocumentFile'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->whereNumber('index')->name('orders.document.attach.view');
-        Route::post('/orders/{order}/document/{type}/flatlay', [ProductionOrderController::class, 'uploadDocumentFlatlay'])
+        Route::post('/orders/{order}/document/{type}/flatlay', [OrderDocumentController::class, 'uploadDocumentFlatlay'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->name('orders.document.uploadFlatlay');
-        Route::get('/orders/{order}/document/{type}/flatlay', [ProductionOrderController::class, 'viewDocumentFlatlay'])
+        Route::get('/orders/{order}/document/{type}/flatlay', [OrderDocumentController::class, 'viewDocumentFlatlay'])
             ->whereNumber('order')->whereIn('type', ['dr', 'pq'])->name('orders.document.flatlay');
     });
 
