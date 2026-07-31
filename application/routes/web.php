@@ -5,6 +5,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\OrderDocumentController;
+use App\Http\Controllers\OrderReferenceFileController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\ProductionOrderController;
 use App\Http\Controllers\TaskController;
@@ -103,9 +104,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->whereNumber('file')->name('tasks.file.view');
 
     // Job order client-reference files — access checked per-file in the controller.
-    Route::get('/job-order-files/{file}/view', [ProductionOrderController::class, 'viewReferenceFile'])
+    Route::get('/job-order-files/{file}/view', [OrderReferenceFileController::class, 'viewReferenceFile'])
         ->whereNumber('file')->name('job-order-files.view');
-    Route::get('/job-order-files/{file}/download', [ProductionOrderController::class, 'downloadReferenceFile'])
+    Route::get('/job-order-files/{file}/download', [OrderReferenceFileController::class, 'downloadReferenceFile'])
         ->whereNumber('file')->name('job-order-files.download');
 
     // -------- Approve / revise: sales decide samples, leaders decide the rest
@@ -130,9 +131,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/job-orders/{order}/production', [ProductionOrderController::class, 'productionJobOrder'])->name('job-orders.production');
         Route::post('/job-orders/{order}/production', [ProductionOrderController::class, 'updateProductionDetails'])->name('job-orders.production.update');
         Route::post('/job-orders/{order}/send', [ProductionOrderController::class, 'sendJobOrderToArtist'])->name('job-orders.send');
-        Route::post('/job-orders/{order}/reference', [ProductionOrderController::class, 'uploadReferenceFile'])->name('job-orders.reference');
-        Route::post('/job-order-files/{file}/delete', [ProductionOrderController::class, 'deleteReferenceFile'])->whereNumber('file')->name('job-order-files.delete');
-        Route::post('/job-order-files/{file}/kind', [ProductionOrderController::class, 'markReferenceKind'])->whereNumber('file')->name('job-order-files.kind');
+        Route::post('/job-orders/{order}/reference', [OrderReferenceFileController::class, 'uploadReferenceFile'])->name('job-orders.reference');
+        Route::post('/job-order-files/{file}/delete', [OrderReferenceFileController::class, 'deleteReferenceFile'])->whereNumber('file')->name('job-order-files.delete');
+        Route::post('/job-order-files/{file}/kind', [OrderReferenceFileController::class, 'markReferenceKind'])->whereNumber('file')->name('job-order-files.kind');
     });
 
     // -------- Order intake: Sales (and Super Admin) create orders --------
