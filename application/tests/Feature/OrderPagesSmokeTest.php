@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ProductionOrder;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -36,7 +37,7 @@ class OrderPagesSmokeTest extends TestCase
         return ProductionOrder::where('order_number', 'IC2026-09500')->firstOrFail();
     }
 
-    /** @dataProvider orderPages */
+    #[DataProvider('orderPages')]
     public function test_order_page_responds_as_expected(string $path, int $expected): void
     {
         $user = $this->salesUser();
