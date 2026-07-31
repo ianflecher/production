@@ -19,16 +19,22 @@ return new class extends Migration
 
         // Existing printer rows keyed on the bare printer name; the station keys
         // are prefixed so they can't collide with a press or line station.
+        $concat = DB::getDriverName() === 'mysql'
+            ? "CONCAT('printer_', station)"   // MySQL
+            : "'printer_' || station";        // SQLite / others
         DB::table('station_sessions')->update([
-            'station' => DB::raw("CONCAT('printer_', station)"),
+            'station' => DB::raw($concat),
         ]);
     }
 
     public function down(): void
     {
+        $substr = DB::getDriverName() === 'mysql'
+            ? "SUBSTRING(station, 9)"   // MySQL
+            : "substr(station, 9)";     // SQLite / others
         DB::table('station_sessions')
             ->where('station', 'like', 'printer\_%')
-            ->update(['station' => DB::raw("SUBSTRING(station, 9)")]);
+            ->update(['station' => DB::raw($substr)]);
 
         Schema::table('station_sessions', function (Blueprint $table) {
             $table->renameColumn('station', 'printer');

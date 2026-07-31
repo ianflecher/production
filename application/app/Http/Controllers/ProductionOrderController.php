@@ -9,14 +9,21 @@ use App\Models\Task;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ProductionOrderController extends Controller
 {
     public function index(Request $request): View
     {
+        // Sort orders by workflow priority. FIELD() is MySQL-only, so fall back
+        // to a portable CASE on other drivers (e.g. SQLite in tests).
+        $statusOrder = DB::getDriverName() === 'mysql'
+            ? "FIELD(status, 'active', 'on_hold', 'complete', 'cancelled')"
+            : "CASE status WHEN 'active' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'complete' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END";
+
         $orders = ProductionOrder::with('tasks')
-            ->orderByRaw("FIELD(status, 'active', 'on_hold', 'complete', 'cancelled')")
+            ->orderByRaw($statusOrder)
             ->orderByDesc('id')
             // Account officers see only their own orders; leaders/admin see all.
             ->when($request->user()->isSales(), fn ($q) => $q->where('created_by', $request->user()->id))
