@@ -74,17 +74,32 @@ echo       MySQL is up.
 rem ---------- 2/4 Laravel, bound to the whole network ----------
 powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"
 
-if errorlevel 1 (
-    echo [2/4] Something is already running on port %PORT% - reusing it.
-    echo       If it was started by start-imprint.bat it is localhost-only,
-    echo       so the office network will not reach it. Close its
-    echo       "Imprint Laravel" window and run this file again.
-) else (
-    echo [2/4] Starting Laravel on the network ^(0.0.0.0:%PORT%^) ...
+rem Exit code tells us not just "in use" but WHICH address it is bound to:
+rem   0 = free, 2 = bound to all interfaces (LAN ok), 3 = localhost only (LAN blind)
+powershell -NoProfile -Command "$c = @(Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue); if ($c.Count -eq 0) { exit 0 }; if ($c.LocalAddress -contains '0.0.0.0' -or $c.LocalAddress -contains '::') { exit 2 } else { exit 3 }"
 
-    start "Imprint Laravel (LAN)" /MIN cmd /c ^
-    ""%PHP%" "%APP%\artisan" serve --host=0.0.0.0 --port=%PORT% > "%LOGS%\laravel.log" 2>&1"
+if errorlevel 3 (
+    echo [2/4] [!] Laravel is running on port %PORT% but LOCALHOST ONLY.
+    echo           Other computers on the office network CANNOT reach it.
+    echo           This happens when it was started by start-imprint.bat.
+    echo.
+    echo           Close the "Imprint Laravel" window ^(or run stop-imprint.bat^)
+    echo           and run this file again to serve the network as well.
+    echo.
+    goto :laravelcheck
 )
+
+if errorlevel 2 (
+    echo [2/4] Laravel is already serving the whole network - reusing it.
+    goto :laravelcheck
+)
+
+echo [2/4] Starting Laravel on the network ^(0.0.0.0:%PORT%^) ...
+
+start "Imprint Laravel (LAN)" /MIN cmd /c ^
+""%PHP%" "%APP%\artisan" serve --host=0.0.0.0 --port=%PORT% > "%LOGS%\laravel.log" 2>&1"
+
+:laravelcheck
 
 powershell -NoProfile -Command "foreach($i in 1..30){ try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:%PORT%/up' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } } catch {}; Start-Sleep -Seconds 1 }; exit 1"
 
