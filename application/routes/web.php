@@ -32,9 +32,14 @@ Route::middleware('guest')->group(function () {
 // client fills the questionnaire and their answers are saved to the order's
 // design brief. The token IS the secret (bound by brief_token), and the link
 // expires after ProductionOrder::BRIEF_LINK_DAYS (checked in the controller).
+// Throttled because this is the only route reachable without logging in: it caps
+// automated guessing of brief_token and stops the upload form being hammered.
+// The limits are far above what a real client filling one form ever needs.
 Route::get('/imprint-customs/design-questionnaire/{order:brief_token}', [\App\Http\Controllers\ClientDesignBriefController::class, 'show'])
+    ->middleware('throttle:30,1')
     ->name('client.design-brief');
 Route::post('/imprint-customs/design-questionnaire/{order:brief_token}', [\App\Http\Controllers\ClientDesignBriefController::class, 'submit'])
+    ->middleware('throttle:10,1')
     ->name('client.design-brief.submit');
 
 // ============ Authenticated routes (active accounts only) ============
