@@ -610,6 +610,34 @@
                                     </details>
 
 
+                                    {{-- Deactivate / reactivate: keeps the account and
+                                         its history, but blocks signing in. --}}
+                                    <form
+                                        method="POST"
+                                        action="{{ route(
+                                            'users.toggle',
+                                            $user
+                                        ) }}"
+                                        onsubmit="
+                                            return confirm(
+                                                @if ($user->is_active)
+                                                    'Deactivate {{ addslashes($user->name) }}? They will be signed out and cannot log in until reactivated.'
+                                                @else
+                                                    'Reactivate {{ addslashes($user->name) }} so they can sign in again?'
+                                                @endif
+                                            );
+                                        "
+                                    >
+                                        @csrf
+
+                                        <button
+                                            type="submit"
+                                            class="btn {{ $user->is_active ? 'btn-ghost' : 'btn-success' }} btn-sm"
+                                        >
+                                            {{ $user->is_active ? 'Deactivate' : 'Reactivate' }}
+                                        </button>
+                                    </form>
+
                                     {{-- Remove user (soft delete — account is hidden but recoverable) --}}
                                     <form
                                         method="POST"

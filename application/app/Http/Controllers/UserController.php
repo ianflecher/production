@@ -178,6 +178,48 @@ class UserController extends Controller
         );
     }
 
+    /**
+     * Activate / deactivate an account. A deactivated user stays in the system
+     * (so their history is kept) but EnsureUserIsActive signs them out on their
+     * next request — the way to off-board someone without deleting them.
+     */
+    public function toggle(
+        Request $request,
+        User $user
+    ): RedirectResponse {
+        /*
+         * You cannot deactivate yourself — that would lock you out
+         * of the very page you are standing on.
+         */
+        if ($user->id === $request->user()->id) {
+            throw ValidationException::withMessages([
+                'user' => 'You cannot deactivate your own account.',
+            ]);
+        }
+
+        /*
+         * Only a Super Admin may deactivate another Super Admin.
+         */
+        if (
+            $user->isSuperAdmin()
+            && ! $request->user()->isSuperAdmin()
+        ) {
+            abort(403);
+        }
+
+        $user->update([
+            'is_active' => ! $user->is_active,
+        ]);
+
+        return back()->with(
+            'success',
+            $user->name
+            . ($user->is_active
+                ? ' can sign in again.'
+                : ' has been deactivated and will be signed out.')
+        );
+    }
+
     public function resetPassword(
         Request $request,
         User $user

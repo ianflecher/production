@@ -328,6 +328,12 @@ class User extends Authenticatable
 
         $role = strtolower((string) $this->job_role);
 
+        // Drop "production" before matching: the factory-floor team's name
+        // contains the substring "product", which would otherwise misread them
+        // as the finished-products desk (and lock them out of the station
+        // board). A role like "Production Inventory" still matches "inventory".
+        $role = trim(str_replace('production', '', $role));
+
         return in_array($role, ['inventory', 'products', 'finished goods'], true)
             || str_contains($role, 'inventory')
             || str_contains($role, 'product');

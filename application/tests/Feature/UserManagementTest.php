@@ -62,22 +62,53 @@ class UserManagementTest extends TestCase
             ->assertInvalid(['name', 'email', 'password', 'position']);
     }
 
-    /*
-     * NOTE: there is deliberately no test for POST /users/{user}/toggle.
-     * That route points at UserController@toggle, which does not exist — the
-     * endpoint 500s and no UI links to it. Deactivating a user is currently
-     * not possible through the app (the is_active flag and its middleware work,
-     * but nothing can set it). Reported 2026-08-02; awaiting a decision to
-     * either implement the toggle or drop the dead route.
-     */
-
-    public function test_deactivated_user_cannot_use_the_app(): void
+    public function test_toggling_a_user_deactivates_then_reactivates_them(): void
     {
-        // Set the flag directly, since no endpoint can currently do it.
-        $staff = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => false]);
+        $admin = $this->superAdmin();
+        $staff = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
 
-        // The 'active' middleware must bounce them to login.
-        $this->actingAs($staff)->get('/dashboard')->assertRedirect('/login');
+        $this->actingAs($admin)->post("/users/{$staff->id}/toggle")->assertRedirect();
+        $this->assertFalse((bool) $staff->fresh()->is_active, 'should be deactivated');
+
+        $this->actingAs($admin)->post("/users/{$staff->id}/toggle");
+        $this->assertTrue((bool) $staff->fresh()->is_active, 'should be reactivated');
+    }
+
+    public function test_deactivated_user_is_signed_out_of_the_app(): void
+    {
+        $admin = $this->superAdmin();
+        $staff = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
+
+        $this->actingAs($admin)->post("/users/{$staff->id}/toggle");
+
+        // The 'active' middleware must now bounce them to login.
+        $this->actingAs($staff->fresh())->get('/dashboard')->assertRedirect('/login');
+    }
+
+    public function test_you_cannot_deactivate_your_own_account(): void
+    {
+        $admin = $this->superAdmin();
+
+        $this->actingAs($admin)->post("/users/{$admin->id}/toggle")->assertInvalid(['user']);
+        $this->assertTrue((bool) $admin->fresh()->is_active, 'admin must not lock themselves out');
+    }
+
+    public function test_a_leader_cannot_deactivate_a_super_admin(): void
+    {
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+        $admin = $this->superAdmin();
+
+        $this->actingAs($leader)->post("/users/{$admin->id}/toggle")->assertForbidden();
+        $this->assertTrue((bool) $admin->fresh()->is_active);
+    }
+
+    public function test_agent_cannot_toggle_accounts(): void
+    {
+        $agent = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
+        $victim = User::factory()->create(['job_role' => 'sewing', 'is_active' => true]);
+
+        $this->actingAs($agent)->post("/users/{$victim->id}/toggle")->assertForbidden();
+        $this->assertTrue((bool) $victim->fresh()->is_active);
     }
 
     public function test_agent_cannot_manage_users(): void

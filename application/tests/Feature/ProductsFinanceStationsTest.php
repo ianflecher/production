@@ -88,17 +88,29 @@ class ProductsFinanceStationsTest extends TestCase
             ->assertInvalid(['station', 'operator_name', 'production_order_id']);
     }
 
-    public function test_canonical_production_role_is_locked_out_of_stations_BUG(): void
+    /**
+     * Regression: "production" contains the substring "product", which used to
+     * make canManageProducts() true — locking the factory floor out of the
+     * station board and handing them the finished-products desk. Fixed 2026-08-02.
+     */
+    public function test_production_team_gets_stations_not_the_products_desk(): void
     {
-        $this->markTestSkipped(
-            'KNOWN BUG (found 2026-08-02): User::canManageProducts() does '
-            .'str_contains($role, "product"), and the job role "production" contains '
-            .'"product". So a user whose job_role is exactly "production" is treated as '
-            .'the finished-products desk: locked out of /stations (403) and wrongly given '
-            .'/products (200) — the opposite of what canUseStations()\'s docblock states. '
-            .'Free-typed roles like "sewing"/"cutting"/"QC" are unaffected. '
-            .'Un-skip this test once the role check is fixed.'
-        );
+        $prod = $this->user(User::JOB_PRODUCTION);
+
+        $this->assertFalse($prod->canManageProducts(), '"production" must not read as the products desk');
+        $this->assertTrue($prod->canUseStations(), 'production staff run machines — they need the station board');
+
+        $this->actingAs($prod)->get('/stations')->assertOk();
+        $this->actingAs($prod)->get('/products')->assertForbidden();
+    }
+
+    /** A role that genuinely names the products desk still works. */
+    public function test_production_inventory_role_still_reaches_products(): void
+    {
+        $desk = $this->user('Production Inventory');
+
+        $this->assertTrue($desk->canManageProducts());
+        $this->actingAs($desk)->get('/products')->assertOk();
     }
 
     public function test_station_board_is_visible_to_leaders(): void
