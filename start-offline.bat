@@ -20,6 +20,11 @@ rem Run EITHER launcher at a time - both use port %PORT%.
 
 if not exist "%LOGS%" mkdir "%LOGS%"
 
+rem No tunnel runs in offline mode, so any saved public address is stale. Clear
+rem it: the app then warns that client questionnaire links are in-house only,
+rem instead of handing out a dead address.
+break > "%ROOT%\current-tunnel-url.txt"
+
 echo ==========================================================
 echo   IMPRINT PRODUCTION - STARTING (OFFLINE / NETWORK MODE)
 echo ==========================================================

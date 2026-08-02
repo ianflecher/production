@@ -56,6 +56,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public URL (client-facing)
+    |--------------------------------------------------------------------------
+    |
+    | The address CLIENTS can reach from outside the office, used to build the
+    | design-questionnaire link. Leave blank to fall back to the current
+    | Cloudflare tunnel address in current-tunnel-url.txt. Set it once you have
+    | a permanent domain, e.g. https://app.imprintcustoms.ph
+    |
+    */
+
+    'public_url' => env('PUBLIC_URL', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

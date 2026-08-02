@@ -32,6 +32,13 @@ class OrderDesignBriefController extends Controller
 
         $answers = $order->jobOrder->design_brief ?? [];
 
+        // Clients are off-site, so the link must use the PUBLIC address, not
+        // whatever the officer is browsing — generating this page over the
+        // office LAN would otherwise produce a link only reachable in-house.
+        $clientLink = \App\Services\PublicUrl::rewrite(
+            route('client.design-brief', ['order' => $order])
+        );
+
         return view('orders.design-brief', [
             'order' => $order,
             'questions' => \App\Services\DesignBrief::questions(),
@@ -39,7 +46,10 @@ class OrderDesignBriefController extends Controller
             'prompt' => $answers ? \App\Services\DesignBrief::toPrompt($answers, $order) : null,
             // Shareable, login-free link the client can fill in themselves — a
             // clean random-token URL (no signature) that expires after 30 days.
-            'clientLink' => route('client.design-brief', ['order' => $order]),
+            'clientLink' => $clientLink,
+            // True when the link is still an in-house address (tunnel not
+            // running) — the view warns instead of letting it be sent out.
+            'clientLinkIsPrivate' => \App\Services\PublicUrl::isPrivate($clientLink),
             'clientLinkExpiresAt' => $order->brief_expires_at,
             // When set, the client already submitted and the link is now closed.
             'clientSubmittedAt' => $order->jobOrder->client_brief_submitted_at,

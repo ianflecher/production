@@ -143,6 +143,16 @@
                 <a href="{{ $clientLink }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">↗ Open</a>
                 <span id="copyLinkOk" style="display:none; color: var(--success-ink); font-weight:600; font-size:0.82rem;">Copied.</span>
             </div>
+            @if ($clientLinkIsPrivate)
+                {{-- The tunnel isn't running, so this link is an in-house
+                     address. Sending it to a client would simply not open. --}}
+                <p style="font-size: 0.8rem; margin-top: 0.6rem; padding: 0.6rem 0.75rem; border-radius: 8px; background: var(--danger-soft, #fef2f2); border: 1px solid var(--danger-border, #fecaca); color: var(--danger-ink, #b91c1c);">
+                    ⚠️ <strong>Do not send this link yet — it only works inside the office.</strong>
+                    The public address is not available right now, so the link above points at an
+                    in-house address your client cannot open. Start the Cloudflare tunnel
+                    (<code>start-imprint.bat</code>) and reload this page to get a shareable link.
+                </p>
+            @endif
             @if ($clientLinkExpiresAt)
                 <p style="font-size: 0.78rem; color: {{ $order->briefExpired() ? 'var(--danger-ink)' : 'var(--ink-3)' }}; margin-top: 0.55rem;">
                     ⏰ {{ $order->briefExpired() ? 'This link expired on' : 'This link expires on' }}
