@@ -229,7 +229,9 @@ class UserSeeder extends Seeder
             [
                 'name' => 'Rey',
                 'email' => 'finance@imprintcustoms.ph',
-                'job_role' => 'Finance',
+                // Use the constant, not the literal "Finance": the permission
+                // role is derived from this value.
+                'job_role' => User::ROLE_FINANCE,
                 'team' => null,
             ],
         ];

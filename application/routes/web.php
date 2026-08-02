@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\BookkeepingController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceController;
@@ -189,6 +190,15 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/finance/export', [FinanceController::class, 'export'])->name('finance.export');
         Route::get('/finance/payments/{payment}/proof', [FinanceController::class, 'proof'])
             ->whereNumber('payment')->name('finance.proof');
+
+        // -------- Bookkeeping: money in vs money out, month by month --------
+        Route::get('/books', [BookkeepingController::class, 'index'])->name('books.index');
+        Route::post('/books/expenses', [BookkeepingController::class, 'store'])->name('books.expenses.store');
+        Route::post('/books/expenses/{expense}/delete', [BookkeepingController::class, 'destroy'])
+            ->whereNumber('expense')->name('books.expenses.destroy');
+        Route::get('/books/expenses/{expense}/receipt', [BookkeepingController::class, 'receipt'])
+            ->whereNumber('expense')->name('books.expenses.receipt');
+        Route::get('/books/export', [BookkeepingController::class, 'export'])->name('books.export');
     });
 
     // -------- Order viewing + calendar: Sales, Leader, Super Admin --------

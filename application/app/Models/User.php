@@ -113,7 +113,13 @@ class User extends Authenticatable
      */
     public function getRoleAttribute(): string
     {
-        return match ($this->job_role) {
+        // Job roles are free text, so "Finance" and "finance" must mean the same
+        // thing. match() is strict, and an unmatched value silently falls through
+        // to ROLE_AGENT — which handed the finance desk the station operator UI.
+        // Normalise first, the way isSupervisor() already does.
+        $jobRole = strtolower(trim((string) $this->job_role));
+
+        return match ($jobRole) {
             self::ROLE_SUPER_ADMIN => self::ROLE_SUPER_ADMIN,
             self::ROLE_LEADER => self::ROLE_LEADER,
             self::ROLE_SALES => self::ROLE_SALES,
@@ -130,7 +136,9 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->job_role === self::ROLE_SUPER_ADMIN;
+        // Compare against the DERIVED role, which normalises case/whitespace —
+        // job_role is free text, so "Finance" must behave like "finance".
+        return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
     /**
@@ -228,17 +236,17 @@ class User extends Authenticatable
      */
     public function isLeader(): bool
     {
-        return $this->job_role === self::ROLE_LEADER || $this->isSuperAdmin() || $this->isSupervisor();
+        return $this->role === self::ROLE_LEADER || $this->isSuperAdmin() || $this->isSupervisor();
     }
 
     public function isSales(): bool
     {
-        return $this->job_role === self::ROLE_SALES;
+        return $this->role === self::ROLE_SALES;
     }
 
     public function isFinance(): bool
     {
-        return $this->job_role === self::ROLE_FINANCE;
+        return $this->role === self::ROLE_FINANCE;
     }
 
     /** Finance, leaders and super admins may see the payments ledger. */
@@ -249,12 +257,12 @@ class User extends Authenticatable
 
     public function isAgent(): bool
     {
-        return ! in_array($this->job_role, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_SALES, self::ROLE_FINANCE], true);
+        return $this->role === self::ROLE_AGENT;
     }
 
     public function isArtist(): bool
     {
-        return $this->job_role === self::JOB_ARTIST;
+        return strtolower(trim((string) $this->job_role)) === self::JOB_ARTIST;
     }
 
     public function jobRoleLabel(): ?string
