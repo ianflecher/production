@@ -8,7 +8,10 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** Staff-to-staff direct messages, and the job orders they can carry. */
+/**
+ * Conversations live on a job order. Everyone connected to the order shares the
+ * thread; anyone else is shut out entirely.
+ */
 class MessagingTest extends TestCase
 {
     use RefreshDatabase;
@@ -18,8 +21,10 @@ class MessagingTest extends TestCase
         return User::factory()->create(['job_role' => $jobRole, 'is_active' => true]);
     }
 
-    private function orderOwnedBy(User $sales): ProductionOrder
+    private function order(?User $sales = null): ProductionOrder
     {
+        $sales ??= $this->user(User::ROLE_SALES);
+
         $this->actingAs($sales)->post('/orders', [
             'order_number' => 'IC2026-02222',
             'client_name' => 'Chat Co',
@@ -31,91 +36,97 @@ class MessagingTest extends TestCase
         return ProductionOrder::where('order_number', 'IC2026-02222')->firstOrFail();
     }
 
-    // ---- Sending -----------------------------------------------------------
-
-    public function test_a_user_can_message_another_user(): void
+    /** Put someone on the order by assigning them one of its tasks. */
+    private function assignTo(ProductionOrder $order, User $user): void
     {
-        $me = $this->user();
-        $them = $this->user();
+        $order->tasks()->first()->update(['assigned_to' => $user->id]);
+    }
 
-        $this->actingAs($me)->post('/messages', [
-            'recipient_id' => $them->id,
-            'body' => 'Is the sewing done?',
-        ])->assertRedirect();
+    // ---- Posting -----------------------------------------------------------
+
+    public function test_the_owning_officer_can_post_on_their_order(): void
+    {
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'Client wants navy.'])
+            ->assertRedirect();
 
         $this->assertDatabaseHas('messages', [
-            'sender_id' => $me->id,
-            'recipient_id' => $them->id,
-            'body' => 'Is the sewing done?',
+            'production_order_id' => $order->id,
+            'sender_id' => $sales->id,
+            'body' => 'Client wants navy.',
         ]);
+    }
+
+    public function test_an_assigned_worker_can_post_on_the_order(): void
+    {
+        $order = $this->order();
+        $worker = $this->user();
+        $this->assignTo($order, $worker);
+
+        $this->actingAs($worker)->post("/messages/{$order->id}", ['body' => 'Sewing done.'])
+            ->assertRedirect();
+
+        $this->assertSame(1, Message::where('production_order_id', $order->id)->count());
+    }
+
+    public function test_a_leader_can_post_on_any_order(): void
+    {
+        $order = $this->order();
+        $leader = $this->user(User::ROLE_LEADER);
+
+        $this->actingAs($leader)->post("/messages/{$order->id}", ['body' => 'Prioritise this.'])
+            ->assertRedirect();
+
+        $this->assertSame(1, Message::count());
+    }
+
+    public function test_someone_not_on_the_order_cannot_post(): void
+    {
+        $order = $this->order();
+        $stranger = $this->user();
+
+        $this->actingAs($stranger)->post("/messages/{$order->id}", ['body' => 'butting in'])
+            ->assertForbidden();
+
+        $this->assertSame(0, Message::count());
     }
 
     public function test_an_empty_message_is_rejected(): void
     {
-        $me = $this->user();
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
 
-        $this->actingAs($me)->post('/messages', [
-            'recipient_id' => $this->user()->id,
-        ])->assertInvalid(['body']);
-
-        $this->assertSame(0, Message::count());
-    }
-
-    public function test_you_cannot_message_yourself(): void
-    {
-        $me = $this->user();
-
-        $this->actingAs($me)->post('/messages', [
-            'recipient_id' => $me->id,
-            'body' => 'hello me',
-        ])->assertStatus(422);
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => ''])
+            ->assertInvalid(['body']);
 
         $this->assertSame(0, Message::count());
-    }
-
-    public function test_the_recipient_gets_a_notification(): void
-    {
-        $me = $this->user();
-        $them = $this->user();
-
-        $this->actingAs($me)->post('/messages', ['recipient_id' => $them->id, 'body' => 'ping']);
-
-        $this->assertDatabaseHas('app_notifications', ['user_id' => $them->id]);
     }
 
     // ---- Reading -----------------------------------------------------------
 
-    public function test_opening_a_conversation_marks_their_messages_read(): void
+    public function test_everyone_on_the_order_sees_the_same_thread(): void
     {
-        $me = $this->user();
-        $them = $this->user();
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+        $worker = $this->user();
+        $this->assignTo($order, $worker);
 
-        $this->actingAs($them)->post('/messages', ['recipient_id' => $me->id, 'body' => 'yo']);
-        $this->assertSame(1, Message::unreadFor($me->id));
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'Please start cutting.']);
 
-        $this->actingAs($me)->get("/messages/{$them->id}")->assertOk();
-
-        $this->assertSame(0, Message::unreadFor($me->id), 'opening the chat should clear unread');
+        // The worker sees what the officer wrote.
+        $this->actingAs($worker)->get("/messages/{$order->id}")
+            ->assertOk()->assertSee('Please start cutting.');
     }
 
-    public function test_the_inbox_lists_a_conversation(): void
+    public function test_someone_not_on_the_order_cannot_read_the_thread(): void
     {
-        $me = $this->user();
-        $them = $this->user();
-        $this->actingAs($them)->post('/messages', ['recipient_id' => $me->id, 'body' => 'about the order']);
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'internal note']);
 
-        $this->actingAs($me)->get('/messages')->assertOk()->assertSee('about the order');
-    }
-
-    public function test_a_third_party_cannot_read_someone_elses_conversation(): void
-    {
-        $a = $this->user();
-        $b = $this->user();
-        $this->actingAs($a)->post('/messages', ['recipient_id' => $b->id, 'body' => 'private stuff']);
-
-        // A third person opening a chat with B sees their OWN empty thread.
-        $c = $this->user();
-        $this->actingAs($c)->get("/messages/{$b->id}")->assertOk()->assertDontSee('private stuff');
+        $this->actingAs($this->user())->get("/messages/{$order->id}")->assertForbidden();
     }
 
     public function test_a_guest_cannot_reach_messages(): void
@@ -123,101 +134,92 @@ class MessagingTest extends TestCase
         $this->get('/messages')->assertRedirect('/login');
     }
 
-    // ---- Attaching a job order --------------------------------------------
+    // ---- Unread ------------------------------------------------------------
 
-    public function test_an_officer_can_send_their_own_order(): void
+    public function test_a_message_is_unread_for_the_others_but_not_the_sender(): void
     {
         $sales = $this->user(User::ROLE_SALES);
-        $order = $this->orderOwnedBy($sales);
-        $mate = $this->user();
+        $order = $this->order($sales);
+        $worker = $this->user();
+        $this->assignTo($order, $worker);
 
-        $this->actingAs($sales)->post('/messages', [
-            'recipient_id' => $mate->id,
-            'production_order_id' => $order->id,
-        ])->assertRedirect();
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'update please']);
 
-        $this->assertDatabaseHas('messages', [
-            'sender_id' => $sales->id,
-            'production_order_id' => $order->id,
-        ]);
+        $this->assertSame(1, Message::unreadInOrder($worker->fresh(), $order->id));
+        $this->assertSame(0, Message::unreadInOrder($sales->fresh(), $order->id), 'your own message is not unread');
     }
 
-    public function test_an_order_alone_is_a_valid_message(): void
+    public function test_opening_the_thread_clears_unread(): void
     {
         $sales = $this->user(User::ROLE_SALES);
-        $order = $this->orderOwnedBy($sales);
+        $order = $this->order($sales);
+        $worker = $this->user();
+        $this->assignTo($order, $worker);
 
-        $this->actingAs($sales)->post('/messages', [
-            'recipient_id' => $this->user()->id,
-            'production_order_id' => $order->id,
-        ])->assertRedirect();
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'ping']);
+        $this->assertSame(1, Message::unreadInOrder($worker->fresh(), $order->id));
 
-        $this->assertNull(Message::first()->body);
+        $this->actingAs($worker)->get("/messages/{$order->id}")->assertOk();
+
+        $this->assertSame(0, Message::unreadInOrder($worker->fresh(), $order->id));
     }
 
-    public function test_you_cannot_send_an_order_you_are_not_on(): void
-    {
-        $owner = $this->user(User::ROLE_SALES);
-        $order = $this->orderOwnedBy($owner);
-
-        // A different officer has no claim on that order.
-        $outsider = $this->user(User::ROLE_SALES);
-
-        $this->actingAs($outsider)->post('/messages', [
-            'recipient_id' => $this->user()->id,
-            'production_order_id' => $order->id,
-        ])->assertForbidden();
-
-        $this->assertSame(0, Message::count());
-    }
-
-    public function test_the_recipient_can_open_the_order_when_they_are_on_it(): void
+    public function test_the_nav_badge_counts_only_threads_you_are_on(): void
     {
         $sales = $this->user(User::ROLE_SALES);
-        $order = $this->orderOwnedBy($sales);
+        $order = $this->order($sales);
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'hello']);
+
+        $stranger = $this->user();
+        $this->assertSame(0, Message::unreadFor($stranger->id), 'outsiders must not be counted');
 
         $worker = $this->user();
-        $order->tasks()->first()->update(['assigned_to' => $worker->id]);
-
-        $this->actingAs($sales)->post('/messages', [
-            'recipient_id' => $worker->id,
-            'production_order_id' => $order->id,
-        ]);
-
-        $this->assertTrue(Message::first()->canSeeOrder($worker->fresh()));
+        $this->assignTo($order, $worker);
+        $this->assertSame(1, Message::unreadFor($worker->id));
     }
 
-    public function test_a_recipient_not_on_the_order_cannot_open_it(): void
+    // ---- Inbox -------------------------------------------------------------
+
+    public function test_the_inbox_lists_the_order_thread(): void
     {
         $sales = $this->user(User::ROLE_SALES);
-        $order = $this->orderOwnedBy($sales);
+        $order = $this->order($sales);
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'about the print']);
+
+        $this->actingAs($sales)->get('/messages')
+            ->assertOk()
+            ->assertSee($order->order_number)
+            ->assertSee('about the print');
+    }
+
+    public function test_the_inbox_does_not_show_orders_you_are_not_on(): void
+    {
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
         $stranger = $this->user();
 
-        $this->actingAs($sales)->post('/messages', [
-            'recipient_id' => $stranger->id,
-            'production_order_id' => $order->id,
-        ]);
+        // Drop the "order created" flash from the officer's session, otherwise
+        // it echoes the order number back on the next page for any user.
+        $this->flushSession();
 
-        $message = Message::first();
-        $this->assertFalse($message->canSeeOrder($stranger));
+        $this->assertSame([], Message::accessibleOrderIds($stranger)->all());
 
-        // The thread says so rather than exposing the order.
-        $this->actingAs($stranger)->get("/messages/{$sales->id}")
+        $this->actingAs($stranger)->get('/messages')
             ->assertOk()
-            ->assertSee('cannot be opened');
+            ->assertDontSee($order->order_number)
+            ->assertSee('not on any job orders');
     }
 
-    public function test_a_leader_can_open_any_attached_order(): void
+    public function test_everyone_else_on_the_order_gets_notified(): void
     {
         $sales = $this->user(User::ROLE_SALES);
-        $order = $this->orderOwnedBy($sales);
-        $leader = $this->user(User::ROLE_LEADER);
+        $order = $this->order($sales);
+        $worker = $this->user();
+        $this->assignTo($order, $worker);
 
-        $this->actingAs($sales)->post('/messages', [
-            'recipient_id' => $leader->id,
-            'production_order_id' => $order->id,
-        ]);
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'heads up']);
 
-        $this->assertTrue(Message::first()->canSeeOrder($leader));
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $worker->id]);
+        $this->assertDatabaseMissing('app_notifications', ['user_id' => $sales->id]);
     }
 }

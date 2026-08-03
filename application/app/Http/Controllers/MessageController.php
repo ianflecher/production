@@ -8,145 +8,119 @@ use App\Models\ProductionOrder;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Direct messages between staff accounts. A message can carry a job order,
- * which shows as a card in the thread.
+ * Conversations that live on a job order. Everyone connected to the order —
+ * the account officer who owns it, leaders, and whoever is assigned to its
+ * tasks — shares one thread.
  */
 class MessageController extends Controller
 {
-    /** Inbox: one row per person you have talked to, newest first. */
+    /** Inbox: every job order thread this person is part of, newest first. */
     public function index(Request $request): View
     {
-        $me = $request->user()->id;
+        $me = $request->user();
+        $orderIds = Message::accessibleOrderIds($me);
 
-        // The other person in each conversation, with the last message and how
-        // many of theirs are still unread.
-        $latest = Message::involving($me)
-            ->with(['sender', 'recipient', 'order'])
-            ->orderByDesc('id')
-            ->get()
-            ->groupBy(fn ($m) => $m->sender_id === $me ? $m->recipient_id : $m->sender_id);
+        $orders = ProductionOrder::whereIn('id', $orderIds)
+            ->with(['client', 'messages' => fn ($q) => $q->latest('id')->limit(1), 'messages.sender'])
+            ->get();
 
-        $conversations = $latest->map(function ($messages, $otherId) use ($me) {
-            $last = $messages->first();
+        $threads = $orders->map(function ($order) use ($me) {
+            $last = $order->messages->first();
 
             return [
-                'user' => $last->sender_id === $me ? $last->recipient : $last->sender,
+                'order' => $order,
                 'last' => $last,
-                'unread' => $messages->where('recipient_id', $me)->whereNull('read_at')->count(),
+                'unread' => Message::unreadInOrder($me, $order->id),
             ];
-        })->filter(fn ($c) => $c['user'] !== null)
-            ->sortByDesc(fn ($c) => $c['last']->id)
+        })
+            // Orders that have been talked about float to the top; the rest
+            // follow so a thread can still be started on them.
+            ->sortByDesc(fn ($t) => $t['last']?->id ?? 0)
             ->values();
 
         return view('messages.index', [
-            'conversations' => $conversations,
-            'people' => $this->addressBook($request->user()),
+            'threads' => $threads,
+            'talkedAbout' => $threads->filter(fn ($t) => $t['last'] !== null)->count(),
         ]);
     }
 
-    /** One conversation. Opening it marks their messages read. */
-    public function show(Request $request, User $user): View
+    /** One job order's thread. Opening it marks the thread read. */
+    public function show(Request $request, ProductionOrder $order): View
     {
         $me = $request->user();
-        abort_if($user->id === $me->id, 404);
+        abort_unless(Message::canAccess($me, $order), 403);
 
-        Message::where('sender_id', $user->id)
-            ->where('recipient_id', $me->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+        $messages = $order->messages()->with('sender')->orderBy('id')->get();
 
-        $messages = Message::conversation($me->id, $user->id)
-            ->with(['sender', 'order.client'])
-            ->orderBy('id')
-            ->get();
+        Message::markRead($me, $order->id);
 
         return view('messages.show', [
-            'other' => $user,
+            'order' => $order->load('client'),
             'messages' => $messages,
-            'orders' => $this->attachableOrders($me),
-            'people' => $this->addressBook($me),
+            'participants' => $this->participants($order),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ProductionOrder $order): RedirectResponse
     {
         $me = $request->user();
+        abort_unless(Message::canAccess($me, $order), 403);
 
         $data = $request->validate([
-            'recipient_id' => ['required', 'integer', 'exists:users,id'],
-            'body' => ['nullable', 'string', 'max:5000'],
-            'production_order_id' => ['nullable', 'integer', 'exists:production_orders,id'],
+            'body' => ['required', 'string', 'max:5000'],
+        ], [
+            'body.required' => 'Type a message first.',
         ]);
 
-        abort_if((int) $data['recipient_id'] === $me->id, 422);
-
-        // A message needs to say something or carry an order.
-        if (blank($data['body'] ?? null) && blank($data['production_order_id'] ?? null)) {
-            return back()->withErrors(['body' => 'Type a message or attach a job order.'])->withInput();
-        }
-
-        // You can only send an order you are allowed to see yourself.
-        $orderId = $data['production_order_id'] ?? null;
-        if ($orderId && ! $this->attachableOrders($me)->contains('id', (int) $orderId)) {
-            abort(403);
-        }
-
-        $message = Message::create([
+        Message::create([
+            'production_order_id' => $order->id,
             'sender_id' => $me->id,
-            'recipient_id' => $data['recipient_id'],
-            'body' => filled($data['body'] ?? null) ? trim($data['body']) : null,
-            'production_order_id' => $orderId,
+            'body' => trim($data['body']),
         ]);
 
-        // Reuse the existing desktop-alert pipeline.
-        $preview = $message->body
-            ? \Illuminate\Support\Str::limit($message->body, 80)
-            : 'Sent you a job order.';
+        Message::markRead($me, $order->id);
 
-        AppNotification::toUser(
-            (int) $data['recipient_id'],
-            'Message from '.$me->name,
-            $preview,
-            route('messages.show', $me)
-        );
+        // Tell everyone else on the order, through the existing alert pipeline.
+        foreach ($this->participants($order) as $person) {
+            if ($person->id === $me->id) {
+                continue;
+            }
 
-        return redirect()->route('messages.show', $data['recipient_id'])->withFragment('end');
+            AppNotification::toUser(
+                $person->id,
+                $me->name.' on '.$order->order_number,
+                \Illuminate\Support\Str::limit(trim($data['body']), 80),
+                route('messages.show', $order)
+            );
+        }
+
+        return redirect()->route('messages.show', $order)->withFragment('end');
     }
 
-    /** Unread count for the page poll (drives the nav badge). */
+    /** Unread total for the nav badge. */
     public function unread(Request $request)
     {
         return response()->json(['unread' => Message::unreadFor($request->user()->id)]);
     }
 
-    /** Everyone else who can be messaged. */
-    private function addressBook(User $me)
-    {
-        return User::where('is_active', true)
-            ->where('id', '!=', $me->id)
-            ->orderBy('name')
-            ->get(['id', 'name', 'job_role']);
-    }
-
     /**
-     * Orders this person may attach — the same ones they are allowed to open:
-     * leaders see everything, officers their own, agents the ones they work on.
+     * Everyone in an order's conversation: the officer who owns it, whoever is
+     * assigned to its tasks, and the leaders/admins.
      */
-    private function attachableOrders(User $me)
+    private function participants(ProductionOrder $order)
     {
-        return ProductionOrder::query()
-            ->when(! $me->isLeader(), function ($q) use ($me) {
-                $q->where(function ($w) use ($me) {
-                    $w->where('created_by', $me->id)
-                        ->orWhereHas('tasks', fn ($t) => $t->where('assigned_to', $me->id));
-                });
+        $ids = $order->tasks()->whereNotNull('assigned_to')->pluck('assigned_to');
+
+        return User::where('is_active', true)
+            ->where(function ($q) use ($ids, $order) {
+                $q->whereIn('id', $ids)
+                    ->orWhere('id', $order->created_by)
+                    ->orWhereIn('job_role', [User::ROLE_LEADER, User::ROLE_SUPER_ADMIN]);
             })
-            ->orderByDesc('id')
-            ->limit(100)
-            ->get(['id', 'order_number', 'customer_name']);
+            ->orderBy('name')
+            ->get();
     }
 }

@@ -2,31 +2,20 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * A direct message between two staff accounts. A message can carry a job order,
- * which renders as a card in the thread — but the card only opens for someone
- * who is actually on that order (see canSeeOrder()).
+ * One message in a job order's conversation. The thread belongs to the ORDER,
+ * and everyone connected to that order shares it — the account officer who owns
+ * it, leaders/admin, and anyone assigned to one of its tasks.
  */
 class Message extends Model
 {
-    protected $fillable = ['sender_id', 'recipient_id', 'body', 'production_order_id', 'read_at'];
-
-    protected function casts(): array
-    {
-        return ['read_at' => 'datetime'];
-    }
+    protected $fillable = ['production_order_id', 'sender_id', 'body'];
 
     public function sender()
     {
         return $this->belongsTo(User::class, 'sender_id');
-    }
-
-    public function recipient()
-    {
-        return $this->belongsTo(User::class, 'recipient_id');
     }
 
     public function order()
@@ -34,46 +23,71 @@ class Message extends Model
         return $this->belongsTo(ProductionOrder::class, 'production_order_id');
     }
 
-    /** Every message exchanged between two people, oldest first. */
-    public function scopeConversation(Builder $q, int $a, int $b): Builder
-    {
-        return $q->where(function ($w) use ($a, $b) {
-            $w->where(fn ($x) => $x->where('sender_id', $a)->where('recipient_id', $b))
-                ->orWhere(fn ($x) => $x->where('sender_id', $b)->where('recipient_id', $a));
-        });
-    }
-
-    /** Messages involving this person, either direction. */
-    public function scopeInvolving(Builder $q, int $userId): Builder
-    {
-        return $q->where(fn ($w) => $w->where('sender_id', $userId)->orWhere('recipient_id', $userId));
-    }
-
     /**
-     * Whether $user may open the attached job order. Same rule the job-order
-     * files use: the officer who owns it, leaders/admin, or anyone assigned to
-     * a task on it. Someone can be SENT an order they cannot open — they see
-     * the number but not the details.
+     * Who may read and post in an order's thread. Same rule the job-order files
+     * already use, so the chat never widens access to an order.
      */
-    public function canSeeOrder(User $user): bool
+    public static function canAccess(User $user, ProductionOrder $order): bool
     {
-        if (! $this->production_order_id) {
-            return false;
-        }
-
-        $order = $this->order;
-        if (! $order) {
-            return false;
-        }
-
         return $user->isLeader()
             || ($user->isSales() && $order->created_by === $user->id)
             || $order->tasks()->where('assigned_to', $user->id)->exists();
     }
 
-    /** How many unread messages this person has waiting. */
+    /** The orders whose threads this person is part of. */
+    public static function accessibleOrderIds(User $user): \Illuminate\Support\Collection
+    {
+        return ProductionOrder::query()
+            ->when(! $user->isLeader(), function ($q) use ($user) {
+                $q->where(function ($w) use ($user) {
+                    $w->where('created_by', $user->id)
+                        ->orWhereHas('tasks', fn ($t) => $t->where('assigned_to', $user->id));
+                });
+            })
+            ->pluck('id');
+    }
+
+    /** Unread messages for this person in one order (their own don't count). */
+    public static function unreadInOrder(User $user, int $orderId): int
+    {
+        $lastRead = MessageRead::where('user_id', $user->id)
+            ->where('production_order_id', $orderId)
+            ->value('last_read_at');
+
+        return self::where('production_order_id', $orderId)
+            ->where('sender_id', '!=', $user->id)
+            ->when($lastRead, fn ($q) => $q->where('created_at', '>', $lastRead))
+            ->count();
+    }
+
+    /** Total unread across every thread this person can see (nav badge). */
     public static function unreadFor(int $userId): int
     {
-        return self::where('recipient_id', $userId)->whereNull('read_at')->count();
+        $user = User::find($userId);
+        if (! $user) {
+            return 0;
+        }
+
+        $reads = MessageRead::where('user_id', $user->id)
+            ->pluck('last_read_at', 'production_order_id');
+
+        return self::whereIn('production_order_id', self::accessibleOrderIds($user))
+            ->where('sender_id', '!=', $user->id)
+            ->get(['production_order_id', 'created_at'])
+            ->filter(function ($m) use ($reads) {
+                $seen = $reads[$m->production_order_id] ?? null;
+
+                return $seen === null || $m->created_at > $seen;
+            })
+            ->count();
+    }
+
+    /** Mark an order's thread as read up to now. */
+    public static function markRead(User $user, int $orderId): void
+    {
+        MessageRead::updateOrCreate(
+            ['user_id' => $user->id, 'production_order_id' => $orderId],
+            ['last_read_at' => now()],
+        );
     }
 }

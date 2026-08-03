@@ -247,6 +247,12 @@ class ProductionOrder extends Model
         return $this->hasMany(Payment::class)->orderBy('id');
     }
 
+    /** The conversation everyone on this order shares. */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class);
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);

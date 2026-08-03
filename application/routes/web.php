@@ -69,13 +69,13 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/station-sessions/{stationSession}/end', [\App\Http\Controllers\StationController::class, 'end'])
         ->whereNumber('stationSession')->name('stations.end');
 
-    // -------- Messages: staff-to-staff DMs, can carry a job order --------
+    // -------- Messages: one conversation per job order, for everyone on it --------
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/unread', [MessageController::class, 'unread'])->name('messages.unread');
-    Route::post('/messages', [MessageController::class, 'store'])
-        ->middleware('throttle:60,1')->name('messages.store');
-    Route::get('/messages/{user}', [MessageController::class, 'show'])
-        ->whereNumber('user')->name('messages.show');
+    Route::get('/messages/{order}', [MessageController::class, 'show'])
+        ->whereNumber('order')->name('messages.show');
+    Route::post('/messages/{order}', [MessageController::class, 'store'])
+        ->whereNumber('order')->middleware('throttle:60,1')->name('messages.store');
 
     // -------- Raw materials inventory (supply chain + leaders; checked in controller) --------
     Route::get('/inventory', [\App\Http\Controllers\InventoryController::class, 'index'])->name('inventory.index');
