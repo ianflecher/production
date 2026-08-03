@@ -62,8 +62,16 @@ class LoginController extends Controller
 
         RateLimiter::clear($throttleKey);
 
-        // Stamp the login so attendance can tell who is present today.
-        $request->user()->forceFill(['last_login_at' => now()])->save();
+        // Stamp the login so attendance can tell who is present today. The
+        // address is stamped too: staff move between PCs and each one gets its
+        // address by DHCP, so this is how a file they recorded can still be
+        // pointed at the machine they are actually on.
+        $request->user()->forceFill([
+            'last_login_at' => now(),
+            'last_login_ip' => \App\Services\ServerIp::isPrivate((string) $request->ip())
+                ? $request->ip()
+                : $request->user()->last_login_ip,
+        ])->save();
 
         // When an agent logs in and is FREE (no open task), pick up ONE waiting
         // job — a released (ready) step for their team that nobody took because

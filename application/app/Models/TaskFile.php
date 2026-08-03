@@ -11,6 +11,34 @@ class TaskFile extends Model
         'task_id', 'path', 'external_path', 'original_name', 'label', 'mime', 'size', 'round', 'uploaded_by',
     ];
 
+    /**
+     * The location an artist recorded for their file.
+     *
+     * The file usually sits on the artist's OWN PC, whose address comes from
+     * DHCP — and staff move between machines. So the address of the PC the
+     * artist was signed in from is replaced by a marker when the path is
+     * stored, and put back from that person's latest login whenever the path is
+     * read. Everyone opening the path therefore gets the machine the artist is
+     * on now, not the one they used the day they submitted.
+     *
+     * A path pointing at some other machine keeps its own address untouched.
+     */
+    public function setExternalPathAttribute(?string $value): void
+    {
+        $this->attributes['external_path'] = \App\Services\ServerIp::pack(
+            $value,
+            \App\Services\ServerIp::ipForUser(auth()->user())
+        );
+    }
+
+    public function getExternalPathAttribute(?string $value): ?string
+    {
+        return \App\Services\ServerIp::unpack(
+            $value,
+            \App\Services\ServerIp::ipForUser($this->uploader)
+        );
+    }
+
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);

@@ -64,6 +64,7 @@ class User extends Authenticatable
         'team',
         'is_active',
         'last_login_at',
+        'last_login_ip',
         'last_auto_assigned_at',
     ];
 
