@@ -216,4 +216,41 @@ class JobOrderAddonTest extends TestCase
 
         $this->assertNotNull(collect($defaults['items'])->firstWhere('description', 'Rubberized print'));
     }
+
+    // ---- The printed package the floor reads -------------------------------
+
+    public function test_the_addon_shows_on_the_package(): void
+    {
+        $order = $this->order();
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'reflectorized',
+            'addon_price' => 800,
+        ]);
+
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        $this->actingAs($leader)->get("/orders/{$order->id}/package")
+            ->assertOk()
+            ->assertSee('Add-on', false)
+            ->assertSee('REFLECTORIZED', false)
+            ->assertSee('ROLLER PRESS', false);
+    }
+
+    public function test_an_others_addon_shows_its_typed_name_on_the_package(): void
+    {
+        $order = $this->order();
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'others',
+            'addon_other' => 'Rubberized print',
+            'press' => 'small_press',
+        ]);
+
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        $this->actingAs($leader)->get("/orders/{$order->id}/package")
+            ->assertOk()
+            ->assertSee('RUBBERIZED PRINT', false);
+    }
 }

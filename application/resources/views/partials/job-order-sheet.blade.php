@@ -186,7 +186,20 @@
         </tr>
         {{-- The two presses: one merges the print onto the fabric, one decorates. --}}
         <tr><td class="lbl-l">Fabric Press:</td><td colspan="3" class="yellow" style="text-align: left;">{{ strtoupper($y($jo?->fabricPressLabel())) }}</td></tr>
-        <tr><td class="lbl-l">Decoration:</td><td colspan="3" class="yellow" style="text-align: left;">{{ $jo?->press ? strtoupper($y($jo->decorationPressLabel())) : '—' }}</td></tr>
+        {{-- The add-on, and the press that does it, so the floor sees WHAT was
+             ordered — not just which machine to use. --}}
+        <tr><td class="lbl-l">Add-on:</td><td colspan="3" class="yellow" style="text-align: left;">
+            @if ($jo?->addonLabel())
+                {{ strtoupper($y($jo->addonLabel())) }}
+                @if ($jo?->press)
+                    <span style="font-weight: 400;">({{ strtoupper($y($jo->decorationPressLabel())) }})</span>
+                @endif
+            @elseif ($jo?->press)
+                {{ strtoupper($y($jo->decorationPressLabel())) }}
+            @else
+                —
+            @endif
+        </td></tr>
         {{-- Filled in from whoever ran each station, so the sheet doesn't have to
              be written up by hand after the job. --}}
         <tr><td class="lbl-l">Printer Operator:</td><td colspan="3">{{ $who(['Printer', 'Sticker', 'Mass production']) }}</td></tr>

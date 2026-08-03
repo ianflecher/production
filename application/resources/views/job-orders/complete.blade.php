@@ -268,11 +268,21 @@
                     $fabricKey = $jo?->fabric_press ?: $jo?->defaultFabricPress();
                     $fabricVal = $fabricKey ? (\App\Models\JobOrder::pressOptions()[$fabricKey] ?? $fabricKey) : 'NO PRESS';
 
+                    // The add-on the client ordered, plus the press that does it.
                     $decoKey = $jo?->press;
-                    if ($decoKey === 'embroidery') {
+                    $pressName = $decoKey ? (\App\Models\JobOrder::pressOptions()[$decoKey] ?? $decoKey) : null;
+                    $addonName = $jo?->addonLabel();
+
+                    if ($addonName) {
+                        $decoVal = $addonName.($pressName ? ' ('.$pressName.')' : '');
+                        // Embroidery still needs to say what to embroider.
+                        if ($decoKey === 'embroidery' && $jo?->embroidery_note) {
+                            $decoVal .= ' — '.$jo->embroidery_note;
+                        }
+                    } elseif ($decoKey === 'embroidery') {
                         $decoVal = 'EMBROIDERY'.($jo?->embroidery_note ? ' — '.$jo->embroidery_note : '');
                     } elseif ($decoKey) {
-                        $decoVal = \App\Models\JobOrder::pressOptions()[$decoKey] ?? $decoKey;
+                        $decoVal = $pressName;
                     } else {
                         $decoVal = 'NONE';
                     }
@@ -282,7 +292,7 @@
                     <td class="yellow">{{ strtoupper($fabricVal) }}</td>
                 </tr>
                 <tr>
-                    <td class="lbl-l">Decoration</td>
+                    <td class="lbl-l">Add-on</td>
                     {{-- Value output tight to the <td> — with white-space:pre-line, any
                          leading newline/indent from Blade would show as a blank line. --}}
                     <td class="yellow" style="white-space: pre-line;">{{ strtoupper($decoVal) }}</td>
