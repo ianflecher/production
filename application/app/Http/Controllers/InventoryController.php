@@ -8,6 +8,7 @@ use App\Models\StockMovement;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -148,11 +149,23 @@ class InventoryController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
             // Who is putting it in / taking it out.
             'operator_name' => ['required', 'string', 'max:100'],
+            // A picture of the material, so the floor can see what to pull.
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
         ], ['operator_name.required' => 'Enter the name of the person moving the stock.']);
 
         // Log the difference as stock in/out so the change is attributable.
         $delta = (float) $data['quantity'] - (float) $item->quantity;
         $item->update(['unit' => $data['unit']]);
+
+        if ($request->hasFile('photo')) {
+            // Drop the previous picture so old files don't pile up.
+            if ($item->photo && Storage::disk('public')->exists($item->photo)) {
+                Storage::disk('public')->delete($item->photo);
+            }
+
+            $item->update(['photo' => $request->file('photo')->store('inventory-photos', 'public')]);
+        }
+
         $item->recordMovement($delta, $delta > 0 ? 'restock' : 'correction', $data['note'] ?? null, null, $data['operator_name']);
 
         return back()->with('success', "{$item->name} updated — stock is now {$item->fresh()->qtyForHumans()} {$item->unit}.");

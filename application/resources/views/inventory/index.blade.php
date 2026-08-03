@@ -331,7 +331,7 @@
                                                 data-name="{{ $item->name }}"
                                                 data-unit="{{ $item->unit }}"
                                                 data-current="{{ (float) $item->quantity }}"
-                                                data-stock="{{ $item->qtyForHumans() }}">＋ Restock</button>
+                                                data-stock="{{ $item->qtyForHumans() }}">✎ Update</button>
                                         <form method="POST" action="{{ route('inventory.destroy', $item) }}" onsubmit="return confirm('Remove {{ addslashes($item->name) }} from inventory?');">
                                             @csrf
                                             <button class="stock-delete" type="submit" title="Remove material" aria-label="Remove {{ $item->name }}">
@@ -361,13 +361,23 @@
 <div id="restockModal" class="rm-overlay" hidden>
     <div class="rm-box" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
         <h3 id="rmTitle">Restock</h3>
-        <form method="POST" id="rmForm">
+        <form method="POST" id="rmForm" enctype="multipart/form-data">
             @csrf
             <input type="hidden" name="unit" id="rmUnit">
             <input type="hidden" name="quantity" id="rmQty">
             <div class="field">
                 <label>Add to stock <span id="rmStock" style="color: var(--ink-3); font-weight: 400;"></span></label>
-                <input type="number" id="rmAdd" step="0.01" min="0.01" required autocomplete="off" placeholder="e.g. 20">
+                {{-- Not required: leaving it blank means "just add the photo". --}}
+                <input type="number" id="rmAdd" step="0.01" min="0" autocomplete="off" placeholder="e.g. 20 — or leave blank">
+            </div>
+
+            {{-- The stock sheet's mock-up pictures can't come through a CSV, so
+                 a photo is added here instead, whenever someone next handles it. --}}
+            <div class="field">
+                <label>Photo <span style="color: var(--ink-3); font-weight: 400;">(optional — replaces the current one)</span></label>
+                <input type="file" name="photo" id="rmPhoto" accept=".jpg,.jpeg,.png,.webp">
+                <img id="rmPhotoPreview" alt="" hidden
+                     style="margin-top:0.5rem; width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">
             </div>
             <div class="field">
                 <label>Note (optional)</label>
@@ -379,7 +389,7 @@
             </div>
             <div class="rm-actions">
                 <button type="button" class="btn btn-ghost btn-sm" id="rmCancel">Cancel</button>
-                <button class="btn btn-primary btn-sm">＋ Add to stock</button>
+                <button class="btn btn-primary btn-sm">Save</button>
             </div>
         </form>
     </div>
@@ -406,17 +416,33 @@
             var qtyHidden = document.getElementById('rmQty');
             var unitHidden = document.getElementById('rmUnit');
             var nameEl = document.getElementById('rmName');
+            var photoEl = document.getElementById('rmPhoto');
+            var photoPreview = document.getElementById('rmPhotoPreview');
             var current = 0;
 
             function openRestock(btn) {
                 current = Number(btn.getAttribute('data-current') || 0);
                 form.action = btn.getAttribute('data-action');
-                title.textContent = 'Restock ' + btn.getAttribute('data-name');
+                title.textContent = 'Update ' + btn.getAttribute('data-name');
                 stock.textContent = '(now ' + btn.getAttribute('data-stock') + ' ' + btn.getAttribute('data-unit') + ')';
                 unitHidden.value = btn.getAttribute('data-unit');
                 addEl.value = ''; nameEl.value = ''; form.querySelector('[name="note"]').value = '';
+                // Clear any photo picked the last time the dialog was open.
+                if (photoEl) photoEl.value = '';
+                if (photoPreview) { photoPreview.hidden = true; photoPreview.removeAttribute('src'); }
                 modal.hidden = false;
                 setTimeout(function () { addEl.focus(); }, 30);
+            }
+
+            // Show the chosen picture so nobody uploads the wrong one.
+            if (photoEl) {
+                photoEl.addEventListener('change', function () {
+                    var file = photoEl.files && photoEl.files[0];
+                    if (!file) { photoPreview.hidden = true; return; }
+                    photoPreview.src = URL.createObjectURL(file);
+                    photoPreview.hidden = false;
+                    photoPreview.onload = function () { URL.revokeObjectURL(photoPreview.src); };
+                });
             }
             function closeRestock() { modal.hidden = true; }
 

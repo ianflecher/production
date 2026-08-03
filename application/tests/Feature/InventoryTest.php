@@ -59,6 +59,88 @@ class InventoryTest extends TestCase
             ->assertInvalid(['name', 'category', 'unit', 'quantity', 'operator_name']);
     }
 
+    // ---- Adding a photo to an existing material ---------------------------
+
+    public function test_a_photo_can_be_added_to_a_material_that_has_none(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $user = $this->supplyChain();
+        $this->actingAs($user)->post('/inventory', $this->item());
+        $item = InventoryItem::firstOrFail();
+        $this->assertNull($item->photo, 'imported materials start without a picture');
+
+        $this->actingAs($user)->post("/inventory/{$item->id}", [
+            'quantity' => (float) $item->quantity,
+            'unit' => $item->unit,
+            'operator_name' => 'Juan',
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('fabric.jpg'),
+        ])->assertRedirect();
+
+        $item->refresh();
+        $this->assertNotNull($item->photo);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($item->photo);
+    }
+
+    public function test_replacing_a_photo_deletes_the_old_file(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $user = $this->supplyChain();
+        $this->actingAs($user)->post('/inventory', $this->item());
+        $item = InventoryItem::firstOrFail();
+
+        $payload = fn ($file) => [
+            'quantity' => (float) $item->quantity,
+            'unit' => $item->unit,
+            'operator_name' => 'Juan',
+            'photo' => $file,
+        ];
+
+        $this->actingAs($user)->post("/inventory/{$item->id}", $payload(\Illuminate\Http\UploadedFile::fake()->image('one.jpg')));
+        $first = $item->fresh()->photo;
+
+        $this->actingAs($user)->post("/inventory/{$item->id}", $payload(\Illuminate\Http\UploadedFile::fake()->image('two.jpg')));
+        $second = $item->fresh()->photo;
+
+        $this->assertNotSame($first, $second);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($first);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($second);
+    }
+
+    public function test_adding_only_a_photo_leaves_the_stock_alone(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $user = $this->supplyChain();
+        $this->actingAs($user)->post('/inventory', $this->item(['quantity' => 100]));
+        $item = InventoryItem::firstOrFail();
+
+        $this->actingAs($user)->post("/inventory/{$item->id}", [
+            'quantity' => 100,          // unchanged
+            'unit' => $item->unit,
+            'operator_name' => 'Juan',
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('fabric.jpg'),
+        ]);
+
+        $this->assertEqualsWithDelta(100.0, (float) $item->fresh()->quantity, 0.01);
+        $this->assertNotNull($item->fresh()->photo);
+    }
+
+    public function test_a_non_image_is_refused_as_a_photo(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $user = $this->supplyChain();
+        $this->actingAs($user)->post('/inventory', $this->item());
+        $item = InventoryItem::firstOrFail();
+
+        $this->actingAs($user)->post("/inventory/{$item->id}", [
+            'quantity' => (float) $item->quantity,
+            'unit' => $item->unit,
+            'operator_name' => 'Juan',
+            'photo' => \Illuminate\Http\UploadedFile::fake()->create('notes.pdf', 30),
+        ])->assertInvalid(['photo']);
+
+        $this->assertNull($item->fresh()->photo);
+    }
+
     public function test_artist_cannot_access_raw_materials_inventory(): void
     {
         $artist = User::factory()->create(['job_role' => User::JOB_ARTIST, 'is_active' => true]);
