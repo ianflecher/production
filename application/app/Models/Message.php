@@ -36,6 +36,33 @@ class Message extends Model
     }
 
     /**
+     * One line describing this message, for the inbox list. A message can be a
+     * photo with nothing typed, so falling back to the body alone would leave
+     * the row reading "You:" and then nothing.
+     */
+    public function preview(): string
+    {
+        if (filled($this->body)) {
+            return $this->body;
+        }
+
+        $files = $this->files;
+        $count = $files->count();
+
+        if ($count === 0) {
+            return '';
+        }
+
+        $allImages = $files->every(fn ($f) => $f->isImage());
+
+        if ($allImages) {
+            return $count === 1 ? '📷 Photo' : "📷 {$count} photos";
+        }
+
+        return $count === 1 ? '📎 File' : "📎 {$count} files";
+    }
+
+    /**
      * Which of $candidates are @mentioned in $body. Longest names are matched
      * first so "@Maam Carla" doesn't get claimed by a "@Maam".
      *

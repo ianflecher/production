@@ -154,6 +154,67 @@ class MessageFileTest extends TestCase
         $this->get("/message-files/{$file->id}")->assertRedirect('/login');
     }
 
+    public function test_the_inbox_describes_a_photo_only_message(): void
+    {
+        Storage::fake('local');
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+
+        // A photo with nothing typed — the row must not read "You:" then blank.
+        $this->actingAs($sales)->post("/messages/{$order->id}", [
+            'files' => [UploadedFile::fake()->image('sample.jpg')],
+        ]);
+
+        $this->actingAs($sales)->get('/messages')
+            ->assertOk()
+            ->assertSee('Photo');
+
+        $this->assertSame('📷 Photo', Message::first()->preview());
+    }
+
+    public function test_the_preview_counts_several_photos(): void
+    {
+        Storage::fake('local');
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+
+        $this->actingAs($sales)->post("/messages/{$order->id}", [
+            'files' => [
+                UploadedFile::fake()->image('a.jpg'),
+                UploadedFile::fake()->image('b.jpg'),
+            ],
+        ]);
+
+        $this->assertSame('📷 2 photos', Message::first()->preview());
+    }
+
+    public function test_a_non_image_attachment_reads_as_a_file(): void
+    {
+        Storage::fake('local');
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+
+        $this->actingAs($sales)->post("/messages/{$order->id}", [
+            'files' => [UploadedFile::fake()->create('spec.pdf', 20, 'application/pdf')],
+        ]);
+
+        $this->assertSame('📎 File', Message::first()->preview());
+    }
+
+    public function test_typed_text_still_wins_over_the_attachment_description(): void
+    {
+        Storage::fake('local');
+        $sales = $this->user(User::ROLE_SALES);
+        $order = $this->order($sales);
+
+        $this->actingAs($sales)->post("/messages/{$order->id}", [
+            'body' => 'Here is the sample',
+            'files' => [UploadedFile::fake()->image('sample.jpg')],
+        ]);
+
+        $this->assertSame('Here is the sample', Message::first()->preview());
+    }
+
     public function test_the_photo_shows_in_the_thread(): void
     {
         Storage::fake('local');

@@ -24,7 +24,13 @@ class MessageController extends Controller
         $orderIds = Message::accessibleOrderIds($me);
 
         $orders = ProductionOrder::whereIn('id', $orderIds)
-            ->with(['client', 'messages' => fn ($q) => $q->latest('id')->limit(1), 'messages.sender'])
+            // files come too: the inbox preview describes a photo-only message.
+            ->with([
+                'client',
+                'messages' => fn ($q) => $q->latest('id')->limit(1),
+                'messages.sender',
+                'messages.files',
+            ])
             ->get();
 
         $threads = $orders->map(function ($order) use ($me) {

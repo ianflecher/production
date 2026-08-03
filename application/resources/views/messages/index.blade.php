@@ -52,7 +52,7 @@
                         <div class="msg-prev {{ $t['unread'] ? 'unread' : '' }}">
                             @if ($t['last'])
                                 <span style="color: var(--ink-3);">{{ $t['last']->sender_id === auth()->id() ? 'You' : $t['last']->sender?->name }}:</span>
-                                {{ $t['last']->body }}
+                                {{ $t['last']->preview() }}
                             @else
                                 <span style="font-style: italic;">No messages yet</span>
                             @endif
