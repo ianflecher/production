@@ -324,6 +324,32 @@
             .user-meta { display: none; }
             .scrim { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.45); z-index: 30; display: none; }
             .scrim.show { display: block; }
+
+            /* Tables are the main thing that breaks on a phone: a wide one drags
+               the whole page sideways so the nav and buttons drift off screen.
+               Turning it into its own scroll area keeps the page itself fixed —
+               swipe the table, not the page. */
+            table {
+                display: block;
+                width: 100%;
+                max-width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Nothing should be able to push the page wider than the screen. */
+            .content { padding: 1.1rem 0.9rem 2rem; overflow-x: hidden; }
+            img, video, canvas { max-width: 100%; height: auto; }
+            pre, code { white-space: pre-wrap; word-break: break-word; }
+
+            /* Long values (emails, file names, order notes) wrap instead of
+               stretching their column. */
+            td, th { word-break: break-word; }
+
+            /* iOS zooms the whole page in when you tap a field smaller than
+               16px, which then leaves the layout shifted. Holding every input
+               at 16px on phones stops that. */
+            input, select, textarea { font-size: 16px; }
         }
 
         /* Design previews are often transparent PNGs with light/white artwork

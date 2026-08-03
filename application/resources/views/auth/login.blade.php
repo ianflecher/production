@@ -151,6 +151,11 @@
             background:
                 linear-gradient(0deg, rgba(13,13,13,.55) 0%, rgba(13,13,13,.35) 100%);
         }
+        /* iOS zooms the page in when a tapped field is under 16px, leaving the
+           login box shifted off-centre. Hold the fields at 16px on phones. */
+        .login input[type="email"],
+        .login input[type="password"],
+        .login input[type="text"] { font-size: 16px; }
     }
     @media (max-width: 420px) {
         .login-box { padding: 2rem 1.5rem; }
