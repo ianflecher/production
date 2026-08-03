@@ -23,7 +23,9 @@ $MysqlDump  = 'C:\xampp1\mysql\bin\mysqldump.exe'
 $OneDrive   = Join-Path $env:USERPROFILE 'OneDrive\ImprintBackups'
 $LogDir     = Join-Path $RepoDir 'logs'
 $LogFile    = Join-Path $LogDir 'backup.log'
-$Keep       = 30          # how many most-recent backups to retain offsite
+# Backups run every 4 hours (6 a day), so 180 keeps roughly 30 days of history.
+# Each one is ~3.3 MB, i.e. about 600 MB held in OneDrive at steady state.
+$Keep       = 180         # how many most-recent backups to retain offsite
 $Stamp      = Get-Date -Format 'yyyyMMdd-HHmmss'
 
 function Write-Log($msg) {
