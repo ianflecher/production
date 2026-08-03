@@ -53,7 +53,7 @@ class MessageController extends Controller
         $me = $request->user();
         abort_unless(Message::canAccess($me, $order), 403);
 
-        $messages = $order->messages()->with('sender')->orderBy('id')->get();
+        $messages = $order->messages()->with(['sender', 'mentions'])->orderBy('id')->get();
 
         Message::markRead($me, $order->id);
 
@@ -75,24 +75,40 @@ class MessageController extends Controller
             'body.required' => 'Type a message first.',
         ]);
 
-        Message::create([
+        $body = trim($data['body']);
+        $participants = $this->participants($order);
+
+        $message = Message::create([
             'production_order_id' => $order->id,
             'sender_id' => $me->id,
-            'body' => trim($data['body']),
+            'body' => $body,
         ]);
+
+        // You can only tag someone who is actually in this conversation.
+        $mentioned = Message::detectMentions($body, $participants);
+        if ($mentioned) {
+            $message->mentions()->sync($mentioned);
+        }
 
         Message::markRead($me, $order->id);
 
         // Tell everyone else on the order, through the existing alert pipeline.
-        foreach ($this->participants($order) as $person) {
+        // Being @mentioned says so, so it stands out from ordinary chatter.
+        $preview = \Illuminate\Support\Str::limit($body, 80);
+
+        foreach ($participants as $person) {
             if ($person->id === $me->id) {
                 continue;
             }
 
+            $wasMentioned = in_array($person->id, $mentioned, true);
+
             AppNotification::toUser(
                 $person->id,
-                $me->name.' on '.$order->order_number,
-                \Illuminate\Support\Str::limit(trim($data['body']), 80),
+                $wasMentioned
+                    ? $me->name.' mentioned you on '.$order->order_number
+                    : $me->name.' on '.$order->order_number,
+                $preview,
                 route('messages.show', $order)
             );
         }

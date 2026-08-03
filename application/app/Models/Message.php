@@ -23,6 +23,57 @@ class Message extends Model
         return $this->belongsTo(ProductionOrder::class, 'production_order_id');
     }
 
+    /** The people @mentioned in this message. */
+    public function mentions()
+    {
+        return $this->belongsToMany(User::class, 'message_mentions')->withTimestamps();
+    }
+
+    /**
+     * Which of $candidates are @mentioned in $body. Longest names are matched
+     * first so "@Maam Carla" doesn't get claimed by a "@Maam".
+     *
+     * @return array<int> user ids
+     */
+    public static function detectMentions(string $body, $candidates): array
+    {
+        $found = [];
+        $remaining = $body;
+
+        $ordered = collect($candidates)->sortByDesc(fn ($u) => mb_strlen((string) $u->name));
+
+        foreach ($ordered as $user) {
+            $needle = '@'.$user->name;
+
+            if (mb_stripos($remaining, $needle) !== false) {
+                $found[] = $user->id;
+                // Consume it so a shorter name inside it can't match too.
+                $remaining = str_ireplace($needle, '', $remaining);
+            }
+        }
+
+        return array_values(array_unique($found));
+    }
+
+    /**
+     * The body with @mentions wrapped for display. Escapes first, so a message
+     * can never inject markup.
+     */
+    public function bodyWithMentions(): string
+    {
+        $html = e($this->body);
+
+        foreach ($this->mentions as $user) {
+            $html = str_ireplace(
+                e('@'.$user->name),
+                '<span class="mention">@'.e($user->name).'</span>',
+                $html
+            );
+        }
+
+        return $html;
+    }
+
     /**
      * Who may read and post in an order's thread. Same rule the job-order files
      * already use, so the chat never widens access to an order.
