@@ -13,6 +13,7 @@ use App\Http\Controllers\OrderReferenceFileController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductionOrderController;
+use App\Http\Controllers\SystemHealthController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AccountController;
@@ -233,6 +234,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/tasks/{task}/assign', [TaskController::class, 'assign'])->name('tasks.assign');
         Route::post('/tasks/{task}/unlock', [TaskController::class, 'unlock'])->name('tasks.unlock');
         Route::post('/tasks/{task}/complete', [TaskController::class, 'forceComplete'])->name('tasks.force-complete');
+
+        // What has been going wrong, without opening the log file on the server.
+        Route::get('/system/errors', [SystemHealthController::class, 'errors'])->name('system.errors');
 
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
