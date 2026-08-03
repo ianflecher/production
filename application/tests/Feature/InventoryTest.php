@@ -21,7 +21,8 @@ class InventoryTest extends TestCase
     {
         return array_merge([
             'name' => 'Cotton Fabric',
-            'category' => 'fabric',
+            // Categories come from the shop's stock sheet groups.
+            'category' => 'COTTON SHIRT',
             'unit' => 'yards',
             'quantity' => 100,
             'operator_name' => 'Juan',

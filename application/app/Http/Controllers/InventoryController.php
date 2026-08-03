@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
 use App\Models\MaterialRequest;
+use App\Models\StockMovement;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +51,17 @@ class InventoryController extends Controller
         $this->assertAccess();
 
         return view('inventory.index', [
-            'items' => InventoryItem::orderBy('name')->get(),
+            // Received / Less are summed in the query rather than per row —
+            // with a full stock sheet loaded that is two queries instead of
+            // two thousand.
+            'items' => InventoryItem::query()
+                ->withSum(['movements as received_sum' => fn ($q) => $q
+                    ->where('direction', StockMovement::IN)
+                    ->where('reason', '!=', 'added'), ], 'quantity')
+                ->withSum(['movements as less_sum' => fn ($q) => $q
+                    ->where('direction', StockMovement::OUT), ], 'quantity')
+                ->orderBy('name')
+                ->get(),
             'pendingCount' => MaterialRequest::where('status', 'pending')->count(),
         ]);
     }
@@ -191,6 +202,13 @@ class InventoryController extends Controller
 
         // Strip BOM and drop the header row if present.
         $rows[0][0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $rows[0][0]);
+
+        // The shop's own stock sheet exports a wider layout than name/unit/qty,
+        // so it is read on its own terms rather than being reformatted by hand.
+        if ($map = $this->stockSheetColumns($rows)) {
+            return $this->importStockSheet($rows, $map);
+        }
+
         if (strtolower(trim($rows[0][0])) === 'name') {
             array_shift($rows);
         }
@@ -220,6 +238,106 @@ class InventoryController extends Controller
         $note = $skipped > 0 ? " ({$skipped} row(s) skipped — missing name or quantity)" : '';
 
         return back()->with('success', "Imported {$imported} item(s) from the file.{$note}");
+    }
+
+    /**
+     * Recognise the shop's RAW MATERIALS STOCKS export and return where its
+     * columns are, or null when this is the plain name/unit/quantity file.
+     *
+     * @return array<string, int>|null
+     */
+    private function stockSheetColumns(array $rows): ?array
+    {
+        foreach (array_slice($rows, 0, 5) as $row) {
+            $head = array_map(fn ($c) => strtoupper(trim((string) $c)), $row);
+
+            $desc = array_search('DESCRIPTION', $head, true);
+            $remaining = array_search('REMAINING', $head, true);
+
+            if ($desc === false || $remaining === false) {
+                continue;
+            }
+
+            return [
+                'header' => (int) array_search($row, $rows, true),
+                'group' => (int) (array_search('TYPE OF FABRIC', $head, true) ?: -1),
+                'name' => (int) $desc,
+                'beginning' => (int) (array_search('BEG BAL', $head, true) ?: -1),
+                'received' => (int) (array_search('RECEIVED', $head, true) ?: -1),
+                'less' => (int) (array_search('LESS', $head, true) ?: -1),
+                'remaining' => (int) $remaining,
+                'notes' => (int) (array_search('NOTES', $head, true) ?: -1),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Load the stock sheet. The group name is only written on the first row of
+     * each block, so it carries down; a row with no description is a spacer or
+     * the totals line and is skipped.
+     */
+    private function importStockSheet(array $rows, array $map): RedirectResponse
+    {
+        $cell = function (array $row, int $i): string {
+            return $i < 0 ? '' : trim((string) ($row[$i] ?? ''));
+        };
+        $number = fn (string $v): float => is_numeric(str_replace(',', '', $v))
+            ? (float) str_replace(',', '', $v)
+            : 0.0;
+
+        $imported = 0;
+        $skipped = 0;
+        $group = '';
+        $operator = auth()->user()?->name;
+
+        DB::transaction(function () use ($rows, $map, $cell, $number, &$imported, &$skipped, &$group, $operator) {
+            foreach (array_slice($rows, $map['header'] + 1) as $row) {
+                // The group is written once per block and inherited below it.
+                if (($g = $cell($row, $map['group'])) !== '') {
+                    $group = $g;
+                }
+
+                $name = $cell($row, $map['name']);
+                if ($name === '') {
+                    $skipped++;   // spacer row, or the sheet's totals line
+
+                    continue;
+                }
+
+                $beginning = $number($cell($row, $map['beginning']));
+                $received = $number($cell($row, $map['received']));
+                $less = $number($cell($row, $map['less']));
+
+                $item = InventoryItem::withTrashed()->firstOrNew(['name' => $name]);
+                if ($item->trashed()) {
+                    $item->restore();
+                }
+
+                $item->fill([
+                    'category' => array_key_exists($group, InventoryItem::CATEGORIES) ? $group : null,
+                    'unit' => $item->unit ?: 'pcs',
+                    'quantity' => 0,
+                    'beginning_stock' => $beginning,
+                ])->save();
+
+                // Replay the sheet's own history so Received / Less / Total on
+                // the page match the spreadsheet rather than showing zero.
+                $item->movements()->delete();
+                $item->update(['quantity' => 0]);
+
+                $item->recordMovement($beginning, 'added', 'Opening balance (stock sheet import)', null, $operator);
+                $item->recordMovement($received, 'restock', 'Received (stock sheet import)', null, $operator);
+                $item->recordMovement(-$less, 'used', 'Issued out (stock sheet import)', null, $operator);
+
+                $imported++;
+            }
+        });
+
+        $note = $skipped > 0 ? " ({$skipped} row(s) skipped — no description)" : '';
+
+        return back()->with('success', "Imported {$imported} material(s) from the stock sheet.{$note}");
     }
 
     /* ==================== Material requests from orders ==================== */

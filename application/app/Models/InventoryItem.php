@@ -11,11 +11,44 @@ class InventoryItem extends Model
     use SoftDeletes;
 
     /** Raw-material categories. */
+    /**
+     * The stock groups, taken from the shop's own RAW MATERIALS STOCKS sheet
+     * so the app reads the same way the spreadsheet does. The sheet's name is
+     * used as the stored value too, which keeps the import and the database
+     * readable without a lookup table.
+     */
     public const CATEGORIES = [
-        'sewing' => 'Sewing raw materials',
-        'printer' => 'Printer raw materials',
-        'fabric' => 'Fabric',
-        'production' => 'Production raw materials',
+        'BOND PAPER HARD COPY' => 'Bond paper (hard copy)',
+        'BOX' => 'Box',
+        'BREAST PAD/ BRA PAD' => 'Breast pad / bra pad',
+        'CANVASS BAG' => 'Canvass bag',
+        'COTTON SHIRT' => 'Cotton shirt',
+        'ECO BAG' => 'Eco bag',
+        'FLAG POLE' => 'Flag pole',
+        'FOLDING CHAIR' => 'Folding chair',
+        'HEADMASK' => 'Headmask',
+        'HOODIE' => 'Hoodie',
+        'HOODIE W/ ZIPPER' => 'Hoodie with zipper',
+        'HOT MELT' => 'Hot melt',
+        'JACKET' => 'Jacket',
+        'LONGSLEEVE' => 'Longsleeve',
+        'MOUSE PAD' => 'Mouse pad',
+        'MUGS' => 'Mugs',
+        'PANTS' => 'Pants',
+        'PAPER BAG' => 'Paper bag',
+        'PLASTIC' => 'Plastic',
+        'PLASTIC BAG' => 'Plastic bag',
+        'POLO SHIRT' => 'Polo shirt',
+        'SANDO' => 'Sando',
+        'STAND' => 'Stand',
+        'SWEATER' => 'Sweater',
+        'TAPE' => 'Tape',
+        'TAPES' => 'Tapes',
+        'THERMAL PAPER' => 'Thermal paper',
+        'TISSUE PAPER/ PAPER FOR BOX' => 'Tissue paper / paper for box',
+        'TOWEL' => 'Towel',
+        'UMBRELLA' => 'Umbrella',
+        'WIND BREAKER' => 'Wind breaker',
     ];
 
     protected $fillable = [
@@ -49,6 +82,52 @@ class InventoryItem extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class)->latest('id');
+    }
+
+    /*
+     * The four running figures the shop's stock sheet shows. They are worked
+     * out from the movement history rather than stored, so they can never drift
+     * from what actually happened:
+     *
+     *   BEG BAL   beginning_stock  (the opening count)
+     *   RECEIVED  everything in
+     *   TOTAL     beginning + received
+     *   LESS      everything out
+     *   REMAINING quantity         (= total − less)
+     */
+
+    /**
+     * Everything received since the opening count. The opening itself is
+     * logged as an 'added' movement so the history shows who entered it, but
+     * it belongs to beginning_stock — counting it here would double it.
+     */
+    public function receivedTotal(): float
+    {
+        // Use the summed column when the list query preloaded it.
+        if (array_key_exists('received_sum', $this->attributes)) {
+            return (float) $this->attributes['received_sum'];
+        }
+
+        return (float) $this->movements()
+            ->where('direction', StockMovement::IN)
+            ->where('reason', '!=', 'added')
+            ->sum('quantity');
+    }
+
+    /** Everything issued out since the opening count. */
+    public function lessTotal(): float
+    {
+        if (array_key_exists('less_sum', $this->attributes)) {
+            return (float) $this->attributes['less_sum'];
+        }
+
+        return (float) $this->movements()->where('direction', StockMovement::OUT)->sum('quantity');
+    }
+
+    /** Opening count plus everything received. */
+    public function runningTotal(): float
+    {
+        return (float) $this->beginning_stock + $this->receivedTotal();
     }
 
     /**

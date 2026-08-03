@@ -248,9 +248,14 @@
                 <table class="inv-table">
                     <thead>
                         <tr>
+                            {{-- Same running figures as the stock sheet:
+                                 BEG BAL → RECEIVED → TOTAL → LESS → REMAINING --}}
                             <th>Material</th>
                             <th>Beginning</th>
-                            <th>Current stock</th>
+                            <th>Received</th>
+                            <th>Total</th>
+                            <th>Less</th>
+                            <th>Remaining</th>
                             <th aria-label="Actions"></th>
                         </tr>
                     </thead>
@@ -289,6 +294,20 @@
                                 <td>
                                     <span style="font-weight:700; color:var(--ink-2);">{{ $item->beginningForHumans() }}</span>
                                     <small style="color:var(--ink-3);">{{ $item->unit }}</small>
+                                </td>
+
+                                <td>
+                                    <span style="font-weight:600; color:var(--success-ink);">+{{ number_format($item->receivedTotal(), 0) }}</span>
+                                </td>
+
+                                <td>
+                                    <span style="font-weight:600; color:var(--ink-2);">{{ number_format($item->runningTotal(), 0) }}</span>
+                                </td>
+
+                                <td>
+                                    <span style="font-weight:600; color:{{ $item->lessTotal() > 0 ? 'var(--danger-ink)' : 'var(--ink-3)' }};">
+                                        @if ($item->lessTotal() > 0)−@endif{{ number_format($item->lessTotal(), 0) }}
+                                    </span>
                                 </td>
 
                                 <td>
