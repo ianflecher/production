@@ -486,6 +486,49 @@
         var rows = Array.prototype.slice.call(body.querySelectorAll('tr[data-search]'));
         var total = rows.length;
 
+        /*
+         * Colour and size only offer what the chosen category actually has —
+         * picking BOND PAPER shouldn't leave you scrolling past shirt colours
+         * and shirt sizes that can never match.
+         */
+        function narrowOptions() {
+            if (!category) return;
+            var cat = category.value;
+
+            function rebuild(select, attr, allLabel) {
+                if (!select) return;
+                var keep = select.value;
+                var values = [];
+
+                rows.forEach(function (row) {
+                    if (cat && row.getAttribute('data-category') !== cat) return;
+                    var v = row.getAttribute(attr);
+                    if (v && values.indexOf(v) === -1) values.push(v);
+                });
+
+                values.sort();
+
+                select.innerHTML = '';
+                var all = document.createElement('option');
+                all.value = '';
+                all.textContent = allLabel;
+                select.appendChild(all);
+
+                values.forEach(function (v) {
+                    var opt = document.createElement('option');
+                    opt.value = v;
+                    opt.textContent = v.toUpperCase();
+                    select.appendChild(opt);
+                });
+
+                // Hold on to the current choice when it still applies.
+                select.value = values.indexOf(keep) !== -1 ? keep : '';
+            }
+
+            rebuild(color, 'data-color', 'All colors');
+            rebuild(size, 'data-size', 'All sizes');
+        }
+
         function apply() {
             var query = search.value.trim().toLowerCase();
             var cat = category ? category.value : '';
@@ -512,7 +555,13 @@
         }
 
         search.addEventListener('input', apply);
-        [category, color, size].forEach(function (el) { if (el) el.addEventListener('change', apply); });
+        // Changing the category re-offers colour and size before filtering.
+        if (category) {
+            category.addEventListener('change', function () { narrowOptions(); apply(); });
+        }
+        [color, size].forEach(function (el) { if (el) el.addEventListener('change', apply); });
+
+        narrowOptions();
         apply();
     })();
 </script>
