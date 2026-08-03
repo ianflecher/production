@@ -328,8 +328,13 @@ class InventoryController extends Controller
                     $item->restore();
                 }
 
+                // The sheet keeps size and colour inside the description, so
+                // they are read off the name — that is what the inventory's
+                // size and colour filters work from.
                 $item->fill([
                     'category' => array_key_exists($group, InventoryItem::CATEGORIES) ? $group : null,
+                    'size' => $item->size ?: \App\Services\MaterialName::size($name),
+                    'color' => $item->color ?: \App\Services\MaterialName::color($name),
                     'unit' => $item->unit ?: 'pcs',
                     'quantity' => 0,
                     'beginning_stock' => $beginning,
