@@ -8,7 +8,10 @@
     .msg-list { display: flex; flex-direction: column; }
     .msg-row { display: flex; gap: 0.85rem; align-items: center; padding: 0.85rem 0.4rem; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; }
     .msg-row:last-child { border-bottom: 0; }
-    .msg-row:hover { background: rgba(0,0,0,0.02); }
+    /* The whole row is a link, so the global a:hover underline would drag a
+       line under all of it. The background tint is the hover cue instead. */
+    .msg-row:hover { background: rgba(0,0,0,0.02); text-decoration: none; }
+    .msg-row:hover .msg-name { text-decoration: none; }
     /* No avatar box: the order number is already the identity, so a chip
        repeating its last digits was only restating it. A small JO tag carries
        the "this is a job order" meaning without the extra weight. */

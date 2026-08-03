@@ -16,6 +16,8 @@
     .msg-photo { display: block; margin-top: 0.45rem; }
     .msg-photo img { max-width: 260px; max-height: 260px; width: auto; height: auto; border-radius: 10px; display: block; }
     .msg-file { display: inline-block; margin-top: 0.45rem; padding: 0.4rem 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.06); text-decoration: none; color: inherit; font-size: 0.83rem; }
+    /* The global a:hover underline would otherwise line these through. */
+    .msg-file:hover, .msg-photo:hover { text-decoration: none; }
     .bubble-row.mine .msg-file { background: rgba(255,255,255,0.18); }
     .msg-file .sz { opacity: 0.7; font-size: 0.75rem; }
     .previews { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
