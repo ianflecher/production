@@ -9,7 +9,20 @@
     .msg-row { display: flex; gap: 0.85rem; align-items: center; padding: 0.85rem 0.4rem; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; }
     .msg-row:last-child { border-bottom: 0; }
     .msg-row:hover { background: rgba(0,0,0,0.02); }
-    .msg-av { width: 44px; height: 44px; border-radius: 12px; background: var(--sidebar-bg); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; flex: 0 0 auto; }
+    /* No avatar box: the order number is already the identity, so a chip
+       repeating its last digits was only restating it. A small JO tag carries
+       the "this is a job order" meaning without the extra weight. */
+    /* Matches the user avatar in the top bar — same red gradient, white mark
+       and glow — so a job order reads as the same kind of thing. */
+    .jo-tag {
+        flex: 0 0 auto; align-self: center;
+        width: 46px; height: 46px; border-radius: 14px;
+        display: grid; place-items: center;
+        background: linear-gradient(135deg, #ff5860, var(--brand));
+        color: #fff;
+        font-weight: 800; font-size: 0.82rem; letter-spacing: 0.04em;
+        box-shadow: 0 2px 6px rgba(227, 27, 35, 0.3);
+    }
     .msg-mid { flex: 1; min-width: 0; }
     .msg-name { font-weight: 700; font-size: 0.92rem; }
     .msg-client { font-size: 0.78rem; color: var(--ink-3); }
@@ -44,7 +57,9 @@
         <div class="msg-list">
             @foreach ($threads as $t)
                 <a href="{{ route('messages.show', $t['order']) }}" class="msg-row">
-                    <div class="msg-av">{{ $t['order']->order_number ? \Illuminate\Support\Str::substr($t['order']->order_number, -5) : 'JO' }}</div>
+                    {{-- The tag sits outside the text column so the order
+                         number, client and preview all line up together. --}}
+                    <span class="jo-tag">JO</span>
 
                     <div class="msg-mid">
                         <div class="msg-name">{{ $t['order']->order_number }}</div>
