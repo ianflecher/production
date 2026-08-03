@@ -131,6 +131,12 @@ class User extends Authenticatable
             self::ROLE_LEADER => self::ROLE_LEADER,
             self::ROLE_SALES => self::ROLE_SALES,
             self::ROLE_FINANCE => self::ROLE_FINANCE,
+            // A supervisor runs part of the floor, so they get the leader's
+            // permissions. Without this they came out as ROLE_AGENT while
+            // isLeader() said true — the `role:` middleware trusts this value,
+            // so every leader page (approvals, users, orders, calendar) 403'd
+            // even though UserController already scopes the user list for them.
+            'supervisor' => self::ROLE_LEADER,
             default => self::ROLE_AGENT,
         };
     }
