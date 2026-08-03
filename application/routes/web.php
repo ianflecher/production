@@ -72,6 +72,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     // -------- Messages: one conversation per job order, for everyone on it --------
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/unread', [MessageController::class, 'unread'])->name('messages.unread');
+    Route::get('/message-files/{file}', [MessageController::class, 'file'])
+        ->whereNumber('file')->name('messages.file');
     Route::get('/messages/{order}', [MessageController::class, 'show'])
         ->whereNumber('order')->name('messages.show');
     Route::post('/messages/{order}', [MessageController::class, 'store'])

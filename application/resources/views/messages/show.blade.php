@@ -13,6 +13,13 @@
     .bubble-row.mine .bubble { background: var(--sidebar-bg); color: #fff; }
     .bubble .when { display: block; margin-top: 0.3rem; font-size: 0.7rem; opacity: 0.7; }
     .mention { font-weight: 700; color: #1d4ed8; background: rgba(29,78,216,0.10); border-radius: 5px; padding: 0 3px; }
+    .msg-photo { display: block; margin-top: 0.45rem; }
+    .msg-photo img { max-width: 260px; max-height: 260px; width: auto; height: auto; border-radius: 10px; display: block; }
+    .msg-file { display: inline-block; margin-top: 0.45rem; padding: 0.4rem 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.06); text-decoration: none; color: inherit; font-size: 0.83rem; }
+    .bubble-row.mine .msg-file { background: rgba(255,255,255,0.18); }
+    .msg-file .sz { opacity: 0.7; font-size: 0.75rem; }
+    .previews { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .previews img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
     .bubble-row.mine .mention { color: #fff; background: rgba(255,255,255,0.22); }
     .composer { display: flex; gap: 0.5rem; align-items: flex-start; margin-top: 0.9rem; position: relative; }
     .composer textarea { flex: 1; min-width: 200px; }
@@ -46,7 +53,25 @@
                 @unless ($mine)
                     <div class="who">{{ $m->sender?->name ?? 'Someone' }}</div>
                 @endunless
-                <div class="bubble">{!! $m->bodyWithMentions() !!}<span class="when">{{ $m->created_at?->format('M j, g:i a') }}</span></div>
+                <div class="bubble">
+                    @if (filled($m->body))
+                        {!! $m->bodyWithMentions() !!}
+                    @endif
+
+                    @foreach ($m->files as $f)
+                        @if ($f->isImage())
+                            <a href="{{ route('messages.file', $f) }}" target="_blank" rel="noopener" class="msg-photo">
+                                <img src="{{ route('messages.file', $f) }}" alt="{{ $f->original_name }}" loading="lazy">
+                            </a>
+                        @else
+                            <a href="{{ route('messages.file', $f) }}" target="_blank" rel="noopener" class="msg-file">
+                                📎 {{ $f->original_name }} <span class="sz">{{ $f->sizeForHumans() }}</span>
+                            </a>
+                        @endif
+                    @endforeach
+
+                    <span class="when">{{ $m->created_at?->format('M j, g:i a') }}</span>
+                </div>
             </div>
         @empty
             <p class="muted" style="text-align:center; padding: 2rem 0;">
@@ -56,15 +81,27 @@
         <div id="end"></div>
     </div>
 
-    <form method="POST" action="{{ route('messages.store', $order) }}" class="composer">
+    <form method="POST" action="{{ route('messages.store', $order) }}" class="composer" enctype="multipart/form-data">
         @csrf
-        <textarea name="body" id="composerBody" rows="2" maxlength="5000" required autocomplete="off"
-                  placeholder="Message everyone on {{ $order->order_number }}… type @ to mention someone">{{ old('body') }}</textarea>
+        <div style="flex:1; min-width:200px;">
+            <textarea name="body" id="composerBody" rows="2" maxlength="5000" autocomplete="off"
+                      placeholder="Message everyone on {{ $order->order_number }}… type @ to mention someone">{{ old('body') }}</textarea>
+
+            {{-- Thumbnails of what is about to be sent. --}}
+            <div class="previews" id="previews"></div>
+        </div>
 
         {{-- Filled in by the script below from the participant list. --}}
         <div class="mention-box" id="mentionBox"></div>
 
-        <button type="submit" class="btn btn-primary">Send</button>
+        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer; text-align:center;">
+                📷 Photo
+                <input type="file" name="files[]" id="msgFiles" multiple
+                       accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" style="display:none;">
+            </label>
+            <button type="submit" class="btn btn-primary">Send</button>
+        </div>
     </form>
 
     <div>
@@ -81,6 +118,30 @@
     (function () {
         var t = document.getElementById('thread');
         if (t) t.scrollTop = t.scrollHeight;
+    })();
+
+    // Show what is about to be sent, so nobody attaches the wrong photo.
+    (function () {
+        var input = document.getElementById('msgFiles');
+        var box = document.getElementById('previews');
+        if (!input || !box) return;
+
+        input.addEventListener('change', function () {
+            box.innerHTML = '';
+            Array.prototype.forEach.call(input.files, function (file) {
+                if (file.type.indexOf('image/') !== 0) {
+                    var tag = document.createElement('span');
+                    tag.className = 'msg-file';
+                    tag.textContent = '📎 ' + file.name;
+                    box.appendChild(tag);
+                    return;
+                }
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.onload = function () { URL.revokeObjectURL(img.src); };
+                box.appendChild(img);
+            });
+        });
     })();
 
     // @mention autocomplete. Only people in this conversation can be tagged,

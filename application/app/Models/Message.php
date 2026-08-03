@@ -29,6 +29,12 @@ class Message extends Model
         return $this->belongsToMany(User::class, 'message_mentions')->withTimestamps();
     }
 
+    /** Photos / files sent with this message. */
+    public function files()
+    {
+        return $this->hasMany(MessageFile::class);
+    }
+
     /**
      * Which of $candidates are @mentioned in $body. Longest names are matched
      * first so "@Maam Carla" doesn't get claimed by a "@Maam".

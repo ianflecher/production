@@ -53,7 +53,7 @@ class MessageController extends Controller
         $me = $request->user();
         abort_unless(Message::canAccess($me, $order), 403);
 
-        $messages = $order->messages()->with(['sender', 'mentions'])->orderBy('id')->get();
+        $messages = $order->messages()->with(['sender', 'mentions', 'files'])->orderBy('id')->get();
 
         Message::markRead($me, $order->id);
 
@@ -70,19 +70,37 @@ class MessageController extends Controller
         abort_unless(Message::canAccess($me, $order), 403);
 
         $data = $request->validate([
-            'body' => ['required', 'string', 'max:5000'],
-        ], [
-            'body.required' => 'Type a message first.',
+            // Either is enough — a photo on its own is a perfectly good message.
+            'body' => ['nullable', 'string', 'max:5000'],
+            'files' => ['nullable', 'array', 'max:10'],
+            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf', 'max:65536'],
         ]);
 
-        $body = trim($data['body']);
+        $body = trim((string) ($data['body'] ?? ''));
+        $hasFiles = $request->hasFile('files');
+
+        if ($body === '' && ! $hasFiles) {
+            return back()->withErrors(['body' => 'Type a message or attach a photo.'])->withInput();
+        }
+
         $participants = $this->participants($order);
 
         $message = Message::create([
             'production_order_id' => $order->id,
             'sender_id' => $me->id,
-            'body' => $body,
+            'body' => $body !== '' ? $body : null,
         ]);
+
+        if ($hasFiles) {
+            foreach ($request->file('files') as $file) {
+                $message->files()->create([
+                    'path' => $file->store('message-files', 'local'),
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                ]);
+            }
+        }
 
         // You can only tag someone who is actually in this conversation.
         $mentioned = Message::detectMentions($body, $participants);
@@ -94,7 +112,9 @@ class MessageController extends Controller
 
         // Tell everyone else on the order, through the existing alert pipeline.
         // Being @mentioned says so, so it stands out from ordinary chatter.
-        $preview = \Illuminate\Support\Str::limit($body, 80);
+        $preview = $body !== ''
+            ? \Illuminate\Support\Str::limit($body, 80)
+            : 'Sent a photo.';
 
         foreach ($participants as $person) {
             if ($person->id === $me->id) {
@@ -114,6 +134,20 @@ class MessageController extends Controller
         }
 
         return redirect()->route('messages.show', $order)->withFragment('end');
+    }
+
+    /**
+     * Serve a message attachment. Gated by the ORDER the message belongs to, so
+     * a file can never be reached by someone outside that conversation.
+     */
+    public function file(Request $request, \App\Models\MessageFile $file)
+    {
+        $order = $file->message?->order;
+        abort_unless($order && Message::canAccess($request->user(), $order), 403);
+        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($file->path), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')
+            ->response($file->path, $file->original_name);
     }
 
     /** Unread total for the nav badge. */
