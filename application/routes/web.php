@@ -6,6 +6,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\JobOrderController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\OrderDesignBriefController;
 use App\Http\Controllers\OrderDocumentController;
 use App\Http\Controllers\OrderReferenceFileController;
@@ -67,6 +68,14 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/stations/start', [\App\Http\Controllers\StationController::class, 'start'])->name('stations.start');
     Route::post('/station-sessions/{stationSession}/end', [\App\Http\Controllers\StationController::class, 'end'])
         ->whereNumber('stationSession')->name('stations.end');
+
+    // -------- Messages: staff-to-staff DMs, can carry a job order --------
+    Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::get('/messages/unread', [MessageController::class, 'unread'])->name('messages.unread');
+    Route::post('/messages', [MessageController::class, 'store'])
+        ->middleware('throttle:60,1')->name('messages.store');
+    Route::get('/messages/{user}', [MessageController::class, 'show'])
+        ->whereNumber('user')->name('messages.show');
 
     // -------- Raw materials inventory (supply chain + leaders; checked in controller) --------
     Route::get('/inventory', [\App\Http\Controllers\InventoryController::class, 'index'])->name('inventory.index');
