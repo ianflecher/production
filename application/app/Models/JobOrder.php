@@ -188,6 +188,39 @@ class JobOrder extends Model
         return self::ADDONS[$addon]['press'] ?? null;
     }
 
+    /**
+     * The cap press only ever runs caps, so it is noise on a shirt or jacket
+     * job. Caps aren't in the price list — they come through as a typed
+     * product ("Cap", "Trucker Cap", "bucket cap"), so match on the name.
+     */
+    public static function orderHasCap(?ProductionOrder $order): bool
+    {
+        return $order !== null
+            && str_contains(strtolower((string) $order->product_type), 'cap');
+    }
+
+    /**
+     * Press choices for an order: the full list for a cap job, otherwise the
+     * same list without the cap press.
+     *
+     * $selected keeps whatever the order already has, so an existing choice is
+     * never silently dropped from the dropdown (and lost on the next save).
+     *
+     * @return array<string, string>
+     */
+    public static function pressOptionsFor(?ProductionOrder $order, ?string $selected = null): array
+    {
+        $options = self::pressOptions();
+
+        if (self::orderHasCap($order) || $selected === 'cap_press') {
+            return $options;
+        }
+
+        unset($options['cap_press']);
+
+        return $options;
+    }
+
     /** Display label for the chosen add-on ("Others" shows what was typed). */
     public function addonLabel(): ?string
     {

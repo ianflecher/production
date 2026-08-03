@@ -77,7 +77,6 @@
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Step 3 — Fabric press</h2>
         @php
-            $pressOptions = \App\Models\JobOrder::pressOptions();
             $selectedFabric = old('fabric_press', $jobOrder->fabric_press ?: $jobOrder->defaultFabricPress());
             // Add-ons are a toggle: on = pick a press or embroidery; off = none.
             // (The form field is still named decoration_on — renaming the stored
@@ -85,13 +84,18 @@
             $decoOn = (bool) old('decoration_on', $jobOrder->press !== null);
             $selectedDeco = old('press', $jobOrder->press ?: \App\Models\JobOrder::DECORATION_PRESS_DEFAULT);
             $selectedAddon = old('addon', $jobOrder->addon ?: 'embroidery');
+
+            // The cap press is hidden unless this job is actually a cap — but
+            // never hidden out from under a value the order already holds.
+            $fabricOptions = \App\Models\JobOrder::pressOptionsFor($order, $selectedFabric);
+            $addonPressOptions = \App\Models\JobOrder::pressOptionsFor($order, $selectedDeco);
         @endphp
 
         {{-- Step 3: presses the print onto the fabric. Always needed. --}}
         <div class="field" style="max-width: 360px;">
             <label>Fabric press <span style="color: var(--danger-ink);">*</span></label>
             <select name="fabric_press" id="fabricPress" required>
-                @foreach ($pressOptions as $k => $l)
+                @foreach ($fabricOptions as $k => $l)
                     <option value="{{ $k }}" @selected($selectedFabric === $k)>{{ $l }}</option>
                 @endforeach
             </select>
@@ -146,7 +150,7 @@
             <div class="field" style="max-width: 360px;">
                 <label>Press for the add-on</label>
                 <select name="press" id="decorationPress">
-                    @foreach ($pressOptions as $k => $l)
+                    @foreach ($addonPressOptions as $k => $l)
                         <option value="{{ $k }}" @selected($selectedDeco === $k)>{{ $l }}</option>
                     @endforeach
                 </select>
