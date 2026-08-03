@@ -133,16 +133,33 @@ class ProductionOrder extends Model
         return $this->backPocketCount() * (float) \App\Services\PricingService::backPocketFee();
     }
 
+    /**
+     * What the add-on (embroidery / sublimated / reflectorized / others) is
+     * charged at. Set on the job order at Step 4, so it lands after intake —
+     * recomputeTotal() folds it into the order total when it changes.
+     */
+    public function addonAmount(): float
+    {
+        return (float) ($this->jobOrder?->addon_price ?? 0);
+    }
+
+    /** The add-on's label for money lines, or null when there isn't one. */
+    public function addonLabel(): ?string
+    {
+        return $this->jobOrder?->addonLabel();
+    }
+
     public function pricingBreakdown(): array
     {
         $garment = $this->unit_price !== null ? (float) $this->unit_price * (int) $this->quantity : null;
 
         if ($garment === null) {
-            return ['subtotal' => null, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
+            return ['subtotal' => null, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
         }
 
         $backPocket = $this->backPocketAmount();
-        $gross = $garment + $backPocket;                 // before discount
+        $addon = $this->addonAmount();
+        $gross = $garment + $backPocket + $addon;        // before discount
         $discount = min((float) $this->discount_amount, $gross);
         $vatable = round($gross - $discount, 2);
         $vat = $this->vat_inclusive ? round($vatable * self::VAT_RATE, 2) : 0.0;
@@ -151,11 +168,26 @@ class ProductionOrder extends Model
             'subtotal' => round($garment, 2),            // garment lines only
             'back_pocket' => round($backPocket, 2),
             'back_pocket_qty' => $this->backPocketCount(),
+            'addon' => round($addon, 2),
+            'addon_label' => $this->addonLabel(),
             'discount' => round($discount, 2),
             'vatable' => $vatable,
             'vat' => $vat,
             'total' => round($vatable + $vat, 2),
         ];
+    }
+
+    /**
+     * Recompute total_price from the current breakdown. Called when something
+     * priced changes AFTER intake — today that's the Step 4 add-on.
+     */
+    public function recomputeTotal(): void
+    {
+        if ($this->unit_price === null) {
+            return;     // still a quotation — nothing to recompute
+        }
+
+        $this->update(['total_price' => $this->pricingBreakdown()['total']]);
     }
 
     /**

@@ -119,6 +119,18 @@ class OrderDocument extends Model
             ];
         }
 
+        // The Step 4 add-on (embroidery / sublimated / reflectorized / others)
+        // is charged as one line, same as the back pocket.
+        if ($order->addonAmount() > 0) {
+            $items[] = [
+                'description' => $order->addonLabel() ?: 'Add-on',
+                'size' => '',
+                'quantity' => 1,
+                'unit_price' => $order->addonAmount(),
+                'addon' => true,
+            ];
+        }
+
         return [
             'number' => self::numberFor($order, $type),
             'items' => $items,

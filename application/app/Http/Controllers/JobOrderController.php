@@ -186,16 +186,37 @@ class JobOrderController extends Controller
             'cutting_type' => ['nullable', 'in:'.implode(',', array_keys(ProductionOrder::CUTTING_TYPES))],
             // Fabric press (required, merges the print onto the fabric) and the
             // decoration — a checkbox toggle; when on it's a press OR embroidery.
+            // Step 3 — always needed, it merges the print onto the fabric.
             'fabric_press' => ['required', 'in:'.implode(',', $pressKeys)],
             'decoration_on' => ['nullable', 'boolean'],
             'press' => ['nullable', 'in:'.implode(',', $pressKeys)],
             'embroidery_note' => ['nullable', 'string', 'max:500'],
+            // Add-ons: which one, what it is when "Others", and what it costs.
+            'addon' => ['nullable', 'in:'.implode(',', array_keys(JobOrder::ADDONS))],
+            'addon_other' => ['nullable', 'required_if:addon,others', 'string', 'max:255'],
+            'addon_price' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+        ], [
+            'addon_other.required_if' => 'Say what the add-on is when you choose Others.',
         ]);
 
-        // Decoration off → no decoration press at all. On → the chosen method.
+        // Add-ons off → no add-on and no add-on press. On → the chosen add-on,
+        // whose press is matched automatically (Others has none, so the officer
+        // picks it from the press list).
         $fabricPress = $data['fabric_press'];
         $decoOn = (bool) ($data['decoration_on'] ?? false);
-        $decoPress = $decoOn ? ($data['press'] ?? null) : null;
+
+        $addon = $decoOn ? ($data['addon'] ?? null) : null;
+        $addonOther = ($addon === 'others') ? ($data['addon_other'] ?? null) : null;
+        $addonPrice = $decoOn && filled($data['addon_price'] ?? null)
+            ? round((float) $data['addon_price'], 2)
+            : null;
+
+        // The matched press drives production routing; "Others" falls back to
+        // whatever press was picked in the dropdown.
+        $decoPress = null;
+        if ($decoOn) {
+            $decoPress = JobOrder::pressForAddon($addon) ?? ($data['press'] ?? null);
+        }
         // Embroidery is needed when EITHER slot is set to embroidery.
         $needsEmbroidery = $fabricPress === 'embroidery' || $decoPress === 'embroidery';
 
@@ -209,9 +230,16 @@ class JobOrderController extends Controller
             'raw_materials' => array_values(array_filter($data['raw_materials'] ?? [], fn ($v) => filled($v))),
             'fabric_press' => $fabricPress,
             'press' => $decoPress,
+            'addon' => $addon,
+            'addon_other' => $addonOther,
+            'addon_price' => $addonPrice,
             'needs_embroidery' => $needsEmbroidery,
             'embroidery_note' => $needsEmbroidery ? ($data['embroidery_note'] ?? null) : null,
         ]);
+
+        // The add-on is charged to the client, so fold it into the order total —
+        // that drives the payment section's balance and the quotation.
+        $order->load('jobOrder')->recomputeTotal();
 
         // Changing the press / embroidery changes the decoration steps, so rebuild
         // the routing — allowed while decoration and cutting haven't started.

@@ -340,6 +340,9 @@
                         @if (($pb['back_pocket'] ?? 0) > 0)
                             <tr><td style="color: var(--ink-3);">Back pocket ({{ $pb['back_pocket_qty'] }} pcs)</td><td style="text-align: right;">+ ₱{{ number_format($pb['back_pocket'], 2) }}</td></tr>
                         @endif
+                        @if (($pb['addon'] ?? 0) > 0)
+                            <tr><td style="color: var(--ink-3);">{{ $pb['addon_label'] ?: 'Add-on' }}</td><td style="text-align: right;">+ ₱{{ number_format($pb['addon'], 2) }}</td></tr>
+                        @endif
                         @if ($pb['discount'] > 0)
                             <tr><td style="color: var(--ink-3);">Discount</td><td style="text-align: right; color: var(--danger-ink);">− ₱{{ number_format($pb['discount'], 2) }}@if ($order->discount_note) <span class="muted" style="font-size:0.8rem;">({{ $order->discount_note }})</span>@endif</td></tr>
                         @endif

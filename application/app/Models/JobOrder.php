@@ -39,7 +39,10 @@ class JobOrder extends Model
         // Production (yellow)
         'print_type',
         'printer',
-        'press',            // the DECORATION press (default Heat press)
+        'press',            // the ADD-ON press, matched from `addon` (default Heat press)
+        'addon',            // embroidery / reflectorized / sublimated / others
+        'addon_other',      // free text when addon = others
+        'addon_price',      // what the add-on is charged at
         'fabric_press',     // the press that merges the print onto the fabric
         'needs_embroidery',
         'embroidery_note',
@@ -161,8 +164,43 @@ class JobOrder extends Model
         return $config['press'] ?? null;
     }
 
-    /** The decoration press defaults to the heat press. */
+    /** The add-on press defaults to the heat press. */
     public const DECORATION_PRESS_DEFAULT = 'heat_press';
+
+    /**
+     * Add-ons the client can order on top of the print, each matched to the
+     * press that actually does it — same idea as PRINT_TYPES above. "others"
+     * is free text and has no fixed press, so the officer picks one.
+     *
+     * @var array<string, array{label: string, press: ?string}>
+     */
+    public const ADDONS = [
+        'embroidery'    => ['label' => 'Embroidery',    'press' => 'embroidery'],
+        'sublimated'    => ['label' => 'Sublimated',    'press' => 'heat_press'],
+        'reflectorized' => ['label' => 'Reflectorized', 'press' => 'roller_press'],
+        // Free text — the shop says what it is, and picks the press.
+        'others'        => ['label' => 'Others',        'press' => null],
+    ];
+
+    /** The press that does a given add-on, or null when it must be chosen. */
+    public static function pressForAddon(?string $addon): ?string
+    {
+        return self::ADDONS[$addon]['press'] ?? null;
+    }
+
+    /** Display label for the chosen add-on ("Others" shows what was typed). */
+    public function addonLabel(): ?string
+    {
+        if (blank($this->addon)) {
+            return null;
+        }
+
+        if ($this->addon === 'others') {
+            return filled($this->addon_other) ? $this->addon_other : 'Others';
+        }
+
+        return self::ADDONS[$this->addon]['label'] ?? $this->addon;
+    }
 
     /**
      * Options for BOTH press dropdowns (fabric press and decoration press): the
