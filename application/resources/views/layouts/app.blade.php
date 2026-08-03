@@ -13,6 +13,10 @@
     {{-- App styles: extracted from this layout into a browser-cacheable stylesheet.
          The ?v= filemtime busts the cache automatically whenever the CSS changes. --}}
     <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
+    {{-- Page-specific stylesheets. A view pushes its own with @push('styles'),
+         so a heavy page's CSS is cached by the browser instead of being sent
+         again inside the HTML on every visit. --}}
+    @stack('styles')
 </head>
 <body>
     @auth
