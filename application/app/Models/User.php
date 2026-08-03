@@ -19,6 +19,13 @@ class User extends Authenticatable
     public const ROLE_FINANCE = 'finance';
     public const ROLE_AGENT = 'agent';
 
+    /**
+     * What "Reset password" puts an account back to, and what a seeded account
+     * starts with. Staff are told this and change it themselves — deliberate
+     * for an internal office tool where a leader resets accounts in person.
+     */
+    public const DEFAULT_PASSWORD = 'imprint123';
+
     public const ROLES = [
         self::ROLE_SUPER_ADMIN,
         self::ROLE_LEADER,

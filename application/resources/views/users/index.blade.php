@@ -568,46 +568,30 @@
                                         || auth()->user()->isSuperAdmin()
                                     )
                                 )
-                                    <details class="inline-form">
-                                        <summary
+                                    {{-- One click: put the account back to the
+                                         standard default password. --}}
+                                    <form
+                                        method="POST"
+                                        action="{{ route(
+                                            'users.reset',
+                                            $user
+                                        ) }}"
+                                        onsubmit="
+                                            return confirm(
+                                                'Reset {{ addslashes($user->name) }}\'s password to {{ \App\Models\User::DEFAULT_PASSWORD }}? They will need to use that to sign in.'
+                                            );
+                                        "
+                                    >
+                                        @csrf
+
+                                        <button
+                                            type="submit"
                                             class="btn btn-ghost btn-sm"
+                                            title="Sets the password back to {{ \App\Models\User::DEFAULT_PASSWORD }}"
                                         >
                                             Reset password
-                                        </summary>
-
-                                        <div class="pop">
-                                            <form
-                                                method="POST"
-                                                action="{{ route(
-                                                    'users.reset',
-                                                    $user
-                                                ) }}"
-                                            >
-                                                @csrf
-
-                                                <label>
-                                                    New password for
-                                                    {{ $user->name }}
-                                                </label>
-
-                                                <input
-                                                    type="password"
-                                                    name="password"
-                                                    required
-                                                    minlength="8"
-                                                    autocomplete="new-password"
-                                                >
-
-                                                <button
-                                                    type="submit"
-                                                    class="btn btn-primary btn-sm"
-                                                    style="margin-top: 0.5rem;"
-                                                >
-                                                    Change password
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </details>
+                                        </button>
+                                    </form>
 
 
                                     {{-- Deactivate / reactivate: keeps the account and

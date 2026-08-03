@@ -111,6 +111,83 @@ class UserManagementTest extends TestCase
         $this->assertTrue((bool) $victim->fresh()->is_active);
     }
 
+    public function test_reset_password_puts_the_account_back_to_the_default(): void
+    {
+        $admin = $this->superAdmin();
+        $staff = User::factory()->create([
+            'password' => 'something-they-chose',
+            'job_role' => User::JOB_PRODUCTION,
+            'is_active' => true,
+        ]);
+
+        // No password is typed — the button alone does it.
+        $this->actingAs($admin)->post("/users/{$staff->id}/reset-password")->assertRedirect();
+
+        $this->assertTrue(
+            \Illuminate\Support\Facades\Hash::check(User::DEFAULT_PASSWORD, $staff->fresh()->password),
+            'the account should be back to the default password'
+        );
+    }
+
+    public function test_the_reset_password_is_still_stored_hashed(): void
+    {
+        $admin = $this->superAdmin();
+        $staff = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
+
+        $this->actingAs($admin)->post("/users/{$staff->id}/reset-password");
+
+        $this->assertNotSame(User::DEFAULT_PASSWORD, $staff->fresh()->password);
+    }
+
+    public function test_the_reset_account_can_actually_log_in_afterwards(): void
+    {
+        $admin = $this->superAdmin();
+        $staff = User::factory()->create([
+            'email' => 'resetme@example.com',
+            'password' => 'forgotten',
+            'job_role' => User::JOB_PRODUCTION,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->post("/users/{$staff->id}/reset-password");
+
+        auth()->logout();
+        $this->flushSession();
+
+        $this->post('/login', [
+            'email' => 'resetme@example.com',
+            'password' => User::DEFAULT_PASSWORD,
+        ]);
+
+        $this->assertAuthenticatedAs($staff->fresh());
+    }
+
+    public function test_a_leader_cannot_reset_a_super_admins_password(): void
+    {
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+        $admin = $this->superAdmin();
+        $before = $admin->password;
+
+        $this->actingAs($leader)->post("/users/{$admin->id}/reset-password")->assertForbidden();
+
+        $this->assertSame($before, $admin->fresh()->password);
+    }
+
+    public function test_an_agent_cannot_reset_anyones_password(): void
+    {
+        $agent = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
+        $victim = User::factory()->create([
+            'password' => 'theirs',
+            'job_role' => 'sewing',
+            'is_active' => true,
+        ]);
+        $before = $victim->password;
+
+        $this->actingAs($agent)->post("/users/{$victim->id}/reset-password")->assertForbidden();
+
+        $this->assertSame($before, $victim->fresh()->password);
+    }
+
     public function test_agent_cannot_manage_users(): void
     {
         $agent = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);

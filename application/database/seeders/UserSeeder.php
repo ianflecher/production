@@ -265,7 +265,8 @@ class UserSeeder extends Seeder
 
             $user = new User();
             $user->forceFill($details + [
-                'password' => Hash::make('imprint123'),
+                // Same default the Users page resets an account back to.
+                'password' => Hash::make(User::DEFAULT_PASSWORD),
             ])->save();
         }
     }

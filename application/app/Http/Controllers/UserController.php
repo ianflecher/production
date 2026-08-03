@@ -234,23 +234,20 @@ class UserController extends Controller
             abort(403);
         }
 
-        $data = $request->validate([
-            'password' => [
-                'required',
-                'string',
-                'min:8',
-            ],
-        ]);
-
+        /*
+         * One button, no typing: the account goes back to the standard
+         * default and the leader tells the person in the shop what it is.
+         */
         $user->update([
-            'password' => $data['password'],
+            'password' => User::DEFAULT_PASSWORD,
         ]);
 
         return back()->with(
             'success',
-            'Password for '
-            . $user->name
-            . ' has been changed.'
+            $user->name
+            . ' can now sign in with the default password: '
+            . User::DEFAULT_PASSWORD
+            . ' — ask them to change it under Account.'
         );
     }
 
