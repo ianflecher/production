@@ -72,6 +72,18 @@ if exist "%APP%\vendor\autoload.php" (
     )
 )
 
+rem ---------- 1b. Writable folders Laravel needs at runtime ----------
+rem Belt and braces: these are tracked, but a zip download or an over-zealous
+rem cleanup can lose them, and without storage\framework\views every page 500s.
+for %%d in (
+    "storage\framework\views"
+    "storage\framework\sessions"
+    "storage\framework\cache\data"
+    "storage\logs"
+    "storage\app\public"
+    "bootstrap\cache"
+) do if not exist "%APP%\%%~d" mkdir "%APP%\%%~d" 2>nul
+
 rem ---------- 2. Settings file ----------
 if exist "%APP%\.env" (
     echo [2/6] Settings file already present.

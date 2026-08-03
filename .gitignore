@@ -18,10 +18,12 @@ application/public/hot
 application/public/storage
 application/storage/*.key
 application/storage/pail/
-application/storage/framework/cache/data/
-application/storage/framework/sessions/
-application/storage/framework/views/
-application/storage/logs/
+# NOTE: don't ignore storage/framework/{views,sessions,cache} or storage/logs
+# here. Git cannot track an empty directory, so excluding the folder means a
+# fresh clone has no storage/framework/views — and Blade cannot compile a
+# template without it, which makes every page 500 on first run. Laravel ships a
+# .gitignore inside each of those folders ("*" plus "!.gitignore") that keeps
+# the folder while ignoring whatever lands in it, which is what we rely on.
 application/.phpunit.result.cache
 application/.phpunit.cache/
 

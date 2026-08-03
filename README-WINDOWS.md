@@ -1,14 +1,34 @@
 # Imprint Production — Windows Host Guide
 
 Internal production-tracking system for Imprint Customs. Everything runs on
-this one Windows PC; employees reach it from anywhere through a Cloudflare
-Quick Tunnel link.
+one Windows PC; employees reach it over the office network, or from anywhere
+through a Cloudflare Quick Tunnel link.
+
+## Setting it up on a new PC
+
+1. Install **XAMPP** — <https://www.apachefriends.org> (gives you PHP + MySQL)
+2. Install **Composer** — <https://getcomposer.org/download>
+3. Double-click **`start.bat`**
+
+That's it. The first run installs dependencies, creates the settings file,
+generates the app key, creates and migrates the database, adds the staff
+accounts, and opens the system in your browser. It takes a couple of minutes
+the first time and a few seconds after that.
+
+Sign in with **`admin@imprintcustoms.ph`** / **`imprint123`**, then change that
+password.
+
+`start.bat` is safe to run again any time — each step is skipped once it has
+been done, and it never touches data that already exists.
 
 ## Daily operation
 
 | To do this | Double-click |
 |---|---|
-| Start everything and get the public link | `start-imprint.bat` |
+| Start everything (works on a fresh copy too) | `start.bat` |
+| Office network **and** public link together | `start-all.bat` |
+| Office network only, no internet needed | `start-offline.bat` |
+| Public tunnel link only | `start-imprint.bat` |
 | Stop the app and tunnel (MySQL stays up) | `stop-imprint.bat` |
 | Restart everything with a fresh link | `restart-imprint.bat` |
 | See what is running + the current link | `check-imprint-status.bat` |
