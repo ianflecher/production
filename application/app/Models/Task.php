@@ -14,7 +14,7 @@ class Task extends Model
         1 => 'Layout',
         2 => 'Final mockup & template',
         3 => 'Materials / Printer / Sticker',
-        4 => 'Decoration',
+        4 => 'Add-ons',
         5 => 'Cutting',
         6 => 'Pairing',
         7 => 'Sewing',

@@ -208,7 +208,7 @@ class User extends Authenticatable
             in_array($r, [self::ROLE_SALES, self::ROLE_AGENT], true) => 'Sales',
             $r === self::JOB_ARTIST => 'Design',
             $r === self::JOB_SUPPLY_CHAIN || $r === 'printer' || str_contains($r, 'raw material') => 'Supply / Printing',
-            str_contains($r, 'press') || $r === 'embroidery' => 'Decoration',
+            str_contains($r, 'press') || $r === 'embroidery' => 'Add-ons',
             str_contains($r, 'cutting') => 'Cutting',
             in_array($r, ['pairing', 'sewing', 'quality control', 'mover'], true) => 'Production Line',
             str_contains($r, 'inventory') || str_contains($r, 'product') => 'Inventory',

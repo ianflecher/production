@@ -12,7 +12,7 @@
 <div class="page-head">
     <div class="grow">
         <h1>Edit order {{ $order->order_number }}</h1>
-        <p class="muted">Fix any mistake and save. @unless ($canRouting)<span style="color: var(--danger-ink);">Decoration &amp; cutting are locked — those steps are already in production.</span>@endunless</p>
+        <p class="muted">Fix any mistake and save. @unless ($canRouting)<span style="color: var(--danger-ink);">Add-ons &amp; cutting are locked — those steps are already in production.</span>@endunless</p>
     </div>
 </div>
 
@@ -158,7 +158,7 @@
         </div>
     </div>
 
-    <p class="sub" style="margin-bottom: 1.4rem;">Decoration, cutting &amp; production specs are set on the <a href="{{ route('job-orders.edit', $order) }}">job order</a>.</p>
+    <p class="sub" style="margin-bottom: 1.4rem;">Add-ons, cutting &amp; production specs are set on the <a href="{{ route('job-orders.edit', $order) }}">job order</a>.</p>
 
     <div style="display: flex; gap: 0.75rem;">
         <button type="submit" class="btn btn-primary">Save changes</button>

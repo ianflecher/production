@@ -22,7 +22,7 @@
     $groupColors = [
         'Supply' => '#0d9488',
         'Printing' => '#2563eb',
-        'Decoration' => '#7c3aed',
+        'Add-ons' => '#7c3aed',
         'Cutting' => '#d97706',
         'Production Line' => '#e31b23',
     ];
