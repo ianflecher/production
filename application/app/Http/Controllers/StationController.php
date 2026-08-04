@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
 use App\Models\StationSession;
+use App\Models\Task;
 use App\Services\Stations;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +46,49 @@ class StationController extends Controller
         return $query;
     }
 
+    /**
+     * The jobs sitting at one station, newest first, each tagged with the step
+     * that is actually waiting there. Works off collections already in memory
+     * so the board doesn't query per station.
+     *
+     * @param  \Illuminate\Support\Collection<int, ProductionOrder>  $orders  keyed by id
+     * @param  \Illuminate\Support\Collection<string, \Illuminate\Support\Collection<int, int>>  $ordersByDepartment
+     */
+    private static function ordersWaitingAt(string $station, $orders, $ordersByDepartment)
+    {
+        // A printer only gets the jobs whose job order actually picked THAT
+        // printer — an Atexco job shouldn't show up on the DTF machine.
+        $printer = str_starts_with($station, 'printer_')
+            ? substr($station, strlen('printer_'))
+            : null;
+
+        $waiting = collect();
+
+        foreach (Stations::departments($station) as $department) {
+            foreach ($ordersByDepartment->get($department, collect()) as $id) {
+                $order = $orders->get($id);
+
+                if (! $order || $waiting->has($id)) {
+                    continue;
+                }
+                if ($printer !== null && $order->jobOrder?->printer !== $printer) {
+                    continue;
+                }
+
+                // Which step of this order is waiting here — a printer can be
+                // holding the first sample or the main run, and they read very
+                // differently. Each station gets its own copy so one board entry
+                // can't overwrite another's step.
+                $atStation = clone $order;
+                $atStation->station_step = $department;
+
+                $waiting->put($id, $atStation);
+            }
+        }
+
+        return $waiting->sortKeysDesc()->values();
+    }
+
     public function index(): View
     {
         $this->assertAccess();
@@ -65,6 +109,31 @@ class StationController extends Controller
             ->get()
             ->groupBy(fn ($s) => $all[$s->station]['group'] ?? 'Other');
 
+        // The board draws ~30 stations. Everything they need is fetched here in
+        // three queries and then matched up in memory — asking per station cost
+        // a query each for the session, the jobs and every job's waiting step,
+        // which is barely noticeable on a local database and very slow on a
+        // remote one.
+        $activeByStation = StationSession::with(['user', 'order'])
+            ->whereIn('station', $allowed)
+            ->whereNull('ended_at')
+            ->latest('id')
+            ->get()
+            ->groupBy('station');
+
+        // Every step released to the floor, and the job it belongs to.
+        $released = Task::whereIn('status', Stations::RELEASED)
+            ->whereHas('order', fn ($q) => $q->where('status', 'active'))
+            ->get(['production_order_id', 'department']);
+
+        $ordersByDepartment = $released->groupBy('department')
+            ->map(fn ($rows) => $rows->pluck('production_order_id')->unique()->values());
+
+        $orders = ProductionOrder::with('jobOrder')
+            ->whereIn('id', $released->pluck('production_order_id')->unique())
+            ->get()
+            ->keyBy('id');
+
         foreach (Stations::grouped() as $group => $stations) {
             foreach ($stations as $key => $s) {
                 if (! in_array($key, $allowed, true)) {
@@ -73,19 +142,10 @@ class StationController extends Controller
                 $groups[$group][] = [
                     'key' => $key,
                     'label' => $s['label'],
-                    'session' => StationSession::activeOn($key),
+                    'session' => $activeByStation->get($key)?->first(),
                     // The operator needs to know how many and what to make, so
                     // carry the job order details onto the board.
-                    'orders' => self::eligibleOrders($key)->with('jobOrder')->get()
-                        ->each(function ($o) use ($key) {
-                            // Which step of this order is actually waiting here —
-                            // a printer can be holding the first sample or the
-                            // main run, and they read very differently.
-                            $o->station_step = $o->tasks()
-                                ->whereIn('department', Stations::departments($key))
-                                ->whereIn('status', Stations::RELEASED)
-                                ->value('department');
-                        }),
+                    'orders' => self::ordersWaitingAt($key, $orders, $ordersByDepartment),
                 ];
             }
         }
