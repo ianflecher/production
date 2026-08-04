@@ -265,3 +265,15 @@ Route::delete('/users/{user}', [
 ])->name('users.destroy');
 
 });
+
+use Illuminate\Support\Facades\DB;
+
+Route::get('/db-test', function () {
+    $start = microtime(true);
+
+    DB::select('SELECT 1');
+
+    $ms = round((microtime(true) - $start) * 1000, 2);
+
+    return "Database response: {$ms} ms";
+});
