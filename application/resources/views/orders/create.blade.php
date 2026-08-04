@@ -89,7 +89,7 @@
             <select id="client_id" name="client_id" onchange="document.getElementById('newClient').style.display = this.value ? 'none' : 'block';">
                 <option value="">— New client (fill in below) —</option>
                 @foreach ($clients as $client)
-                    <option value="{{ $client->id }}" @selected(old('client_id') == $client->id)>{{ $client->name }}@if ($client->company) — {{ $client->company }}@endif</option>
+                    <option value="{{ $client->id }}" @selected(old('client_id') == $client->id)>{{ $client->listName() }}@if ($client->company) — {{ $client->company }}@endif</option>
                 @endforeach
             </select>
         </div>
@@ -97,11 +97,17 @@
         <div id="newClient" style="{{ old('client_id') ? 'display:none;' : '' }}">
             <div class="form-grid">
                 <div class="field">
-                    <label for="client_name">Client name</label>
-                    <input id="client_name" type="text" name="client_name" value="{{ old('client_name') }}" maxlength="255" placeholder="e.g. Juan Dela Cruz" style="text-transform: capitalize;">
+                    <label for="client_name">First name <span style="color: var(--danger-ink);">*</span></label>
+                    <input id="client_name" type="text" name="client_name" value="{{ old('client_name') }}" maxlength="255" placeholder="e.g. Juan" style="text-transform: capitalize;">
+                </div>
+                {{-- Held apart from the first name so the client list sorts by
+                     family name rather than by whatever was typed first. --}}
+                <div class="field">
+                    <label for="client_last_name">Last name <span style="color: var(--danger-ink);">*</span></label>
+                    <input id="client_last_name" type="text" name="client_last_name" value="{{ old('client_last_name') }}" maxlength="255" placeholder="e.g. Dela Cruz" style="text-transform: capitalize;">
                 </div>
                 <div class="field">
-                    <label for="client_contact">Contact number</label>
+                    <label for="client_contact">Contact number <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_contact" type="text" name="client_contact" value="{{ old('client_contact') }}" maxlength="255" placeholder="e.g. 0917-555-1234">
                 </div>
                 <div class="field">
@@ -109,11 +115,11 @@
                     <input id="client_company" type="text" name="client_company" value="{{ old('client_company') }}" maxlength="255" placeholder="e.g. Falcon Riders" style="text-transform: capitalize;">
                 </div>
                 <div class="field">
-                    <label for="client_office_address">Office address</label>
+                    <label for="client_office_address">Office address <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_office_address" type="text" name="client_office_address" value="{{ old('client_office_address') }}" maxlength="255" placeholder="e.g. 12 Rizal St., Angeles City" style="text-transform: capitalize;">
                 </div>
                 <div class="field">
-                    <label for="client_delivery_address">Delivery address</label>
+                    <label for="client_delivery_address">Delivery address <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_delivery_address" type="text" name="client_delivery_address" value="{{ old('client_delivery_address') }}" maxlength="255" placeholder="Where the order is delivered" style="text-transform: capitalize;">
                 </div>
                 <div class="field">
@@ -190,6 +196,26 @@
                 </div>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="setBackPocketAll()" style="margin-bottom:1px;">All pieces</button>
                 <span id="backPocketNote" style="font-size:0.78rem; color:var(--ink-3);"></span>
+            </div>
+        </div>
+
+        {{-- Rush order: the fee is agreed per job, so it is typed rather than
+             taken from the price list. --}}
+        <div style="margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; margin-bottom: 0.5rem;">
+                <input type="checkbox" id="rush" name="rush" value="1" style="width:auto;margin:0;"
+                       @checked(old('rush')) onchange="onRushToggle()">
+                🚨 Rush order
+            </label>
+
+            <div id="rushFeeWrap" style="display: {{ old('rush') ? 'flex' : 'none' }}; gap:0.6rem; align-items:flex-end; flex-wrap:wrap; margin-left:1.65rem;">
+                <div style="width:190px;">
+                    <label for="rush_fee" style="font-size:0.78rem; color:var(--ink-2); font-weight:600;">Rush fee (₱)</label>
+                    <input id="rush_fee" type="number" name="rush_fee" step="0.01" min="0"
+                           value="{{ old('rush_fee') }}" placeholder="e.g. 1500.00"
+                           class="no-caps" oninput="updatePrice()">
+                </div>
+                <span style="font-size:0.78rem; color:var(--ink-3); margin-bottom:0.55rem;">added once to the order total</span>
             </div>
         </div>
 
@@ -356,26 +382,32 @@
                 : 'No pieces selected.';
         } else if (bpNote) { bpNote.textContent = ''; }
 
-        // Total = (unit x qty) + back pocket, less discount, then +12% VAT when ticked.
+        // The rush fee is a one-off charge on the job, not a per-piece rate.
+        const rushOn = document.getElementById('rush')?.checked;
+        const rushFee = rushOn ? (parseFloat(document.getElementById('rush_fee')?.value) || 0) : 0;
+
+        // Total = (unit x qty) + back pocket + rush, less discount, then +12% VAT when ticked.
         const discount = parseFloat(document.getElementById('discount_amount')?.value) || 0;
         const vatOn = document.getElementById('vat_inclusive')?.checked;
 
         if (unit !== null && qty > 0) {
             const garment = unit * qty;
-            const subtotal = garment + pocketAmount;
+            const subtotal = garment + pocketAmount + rushFee;
             const vatable = Math.max(0, subtotal - discount);
             const vat = vatOn ? vatable * 0.12 : 0;
             unitOut.textContent = peso(unit);
             totalOut.textContent = peso(vatable + vat);
             const bits = [];
             if (pocketAmount > 0) bits.push('back pocket ' + peso(pocketAmount));
+            if (rushFee > 0) bits.push('rush ' + peso(rushFee));
             if (discount > 0) bits.push('less ' + peso(Math.min(discount, subtotal)) + ' discount');
             if (vatOn) bits.push('+12% VAT ' + peso(vat));
             noteText = (noteText ? noteText + ' ' : '') + 'Garment ' + peso(garment)
                 + (bits.length ? ', ' + bits.join(', ') : '') + '.';
         } else {
             unitOut.textContent = unit !== null ? peso(unit) : '—';
-            totalOut.textContent = (pocketAmount > 0 && qty > 0) ? peso(pocketAmount) : '—';
+            const extras = pocketAmount + rushFee;
+            totalOut.textContent = (extras > 0 && qty > 0) ? peso(extras) : '—';
         }
         note.textContent = noteText;
     }
@@ -386,6 +418,18 @@
         document.getElementById('backPocketQtyWrap').style.display = on ? 'flex' : 'none';
         const qtyEl = document.getElementById('back_pocket_qty');
         if (on && qtyEl.value === '') { qtyEl.value = document.getElementById('quantity').value || ''; }
+        updatePrice();
+    }
+
+    // Reveal the fee box when the order is marked rush, and clear it when it
+    // isn't — a hidden value must never end up on the client's total.
+    function onRushToggle() {
+        const on = document.getElementById('rush').checked;
+        const wrap = document.getElementById('rushFeeWrap');
+        const feeEl = document.getElementById('rush_fee');
+        wrap.style.display = on ? 'flex' : 'none';
+        if (!on) { feeEl.value = ''; }
+        if (on) { setTimeout(function () { feeEl.focus(); }, 30); }
         updatePrice();
     }
     function setBackPocketAll() {

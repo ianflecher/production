@@ -23,6 +23,10 @@ class CapPressVisibilityTest extends TestCase
         $this->actingAs($sales)->post('/orders', array_filter([
             'order_number' => $number,
             'client_name' => 'Cap Co',
+            'client_last_name' => 'Cruz',
+            'client_contact' => '0917-000-0000',
+            'client_office_address' => 'Angeles City',
+            'client_delivery_address' => 'Angeles City',
             'due_date' => now()->addWeeks(3)->toDateString(),
             'product_type' => $isListed ? $productType : '__other__',
             'product_type_custom' => $isListed ? null : $productType,

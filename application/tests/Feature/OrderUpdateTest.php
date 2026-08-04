@@ -22,6 +22,10 @@ class OrderUpdateTest extends TestCase
         $this->actingAs($user)->post('/orders', [
             'order_number' => 'IC2026-09600',
             'client_name' => 'Edit Test Co',
+            'client_last_name' => 'Cruz',
+            'client_contact' => '0917-000-0000',
+            'client_office_address' => 'Angeles City',
+            'client_delivery_address' => 'Angeles City',
             'due_date' => now()->addWeeks(2)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 10, 'L' => 5], // 15 pcs
@@ -38,6 +42,10 @@ class OrderUpdateTest extends TestCase
 
         $this->actingAs($user)->post("/orders/{$order->id}", [
             'client_name' => 'Edit Test Co',
+            'client_last_name' => 'Cruz',
+            'client_contact' => '0917-000-0000',
+            'client_office_address' => 'Angeles City',
+            'client_delivery_address' => 'Angeles City',
             'due_date' => now()->addWeeks(2)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 20, 'L' => 20], // now 40 pcs
@@ -58,6 +66,10 @@ class OrderUpdateTest extends TestCase
 
         $this->actingAs($user)->post("/orders/{$order->id}", [
             'client_name' => 'Hacked',
+            'client_last_name' => 'Cruz',
+            'client_contact' => '0917-000-0000',
+            'client_office_address' => 'Angeles City',
+            'client_delivery_address' => 'Angeles City',
             'due_date' => now()->addWeeks(2)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 5],

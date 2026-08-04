@@ -22,6 +22,10 @@ class CapacityBoundaryTest extends TestCase
         return [
             'order_number' => $num,
             'client_name' => 'Cap Co',
+            'client_last_name' => 'Cruz',
+            'client_contact' => '0917-000-0000',
+            'client_office_address' => 'Angeles City',
+            'client_delivery_address' => 'Angeles City',
             'due_date' => $date,
             'product_type' => 'round_neck',
             'sizes' => ['M' => $qty],

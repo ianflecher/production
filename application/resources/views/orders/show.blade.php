@@ -308,6 +308,12 @@
                         </td>
                     </tr>
                     <tr><td style="color: var(--ink-3);">Production total</td><td style="font-weight: 600;">{{ number_format($order->quantity) }} pcs</td></tr>
+                    @if ($order->rush)
+                        <tr class="full">
+                            <td>Rush</td>
+                            <td><span class="badge" style="background: #fee2e2; color: #991b1b;">🚨 RUSH ORDER — ₱{{ number_format((float) $order->rush_fee, 2) }} fee</span></td>
+                        </tr>
+                    @endif
                     <tr class="full">
                         <td>Production</td>
                         <td>
@@ -342,6 +348,9 @@
                         @endif
                         @if (($pb['addon'] ?? 0) > 0)
                             <tr><td style="color: var(--ink-3);">{{ $pb['addon_label'] ?: 'Add-on' }}</td><td style="text-align: right;">+ ₱{{ number_format($pb['addon'], 2) }}</td></tr>
+                        @endif
+                        @if (($pb['rush'] ?? 0) > 0)
+                            <tr><td style="color: var(--ink-3);">🚨 Rush fee</td><td style="text-align: right;">+ ₱{{ number_format($pb['rush'], 2) }}</td></tr>
                         @endif
                         @if ($pb['discount'] > 0)
                             <tr><td style="color: var(--ink-3);">Discount</td><td style="text-align: right; color: var(--danger-ink);">− ₱{{ number_format($pb['discount'], 2) }}@if ($order->discount_note) <span class="muted" style="font-size:0.8rem;">({{ $order->discount_note }})</span>@endif</td></tr>

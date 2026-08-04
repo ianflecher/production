@@ -23,11 +23,15 @@
         <h2>Client</h2>
         <div class="form-grid">
             <div class="field">
-                <label for="client_name">Client name</label>
-                <input id="client_name" type="text" name="client_name" value="{{ old('client_name', $order->client?->name ?? $order->customer_name) }}" required maxlength="255" style="text-transform: capitalize;">
+                <label for="client_name">First name <span style="color: var(--danger-ink);">*</span></label>
+                <input id="client_name" type="text" name="client_name" value="{{ old('client_name', $order->client?->name ?? $order->customer_name) }}" maxlength="255" style="text-transform: capitalize;">
             </div>
             <div class="field">
-                <label for="client_contact">Contact number</label>
+                <label for="client_last_name">Last name <span style="color: var(--danger-ink);">*</span></label>
+                <input id="client_last_name" type="text" name="client_last_name" value="{{ old('client_last_name', $order->client?->last_name) }}" maxlength="255" placeholder="e.g. Dela Cruz" style="text-transform: capitalize;">
+            </div>
+            <div class="field">
+                <label for="client_contact">Contact number <span style="color: var(--danger-ink);">*</span></label>
                 <input id="client_contact" type="text" name="client_contact" value="{{ old('client_contact', $order->client?->contact_number) }}" maxlength="255">
             </div>
             <div class="field">
@@ -35,11 +39,11 @@
                 <input id="client_company" type="text" name="client_company" value="{{ old('client_company', $order->client?->company) }}" maxlength="255" style="text-transform: capitalize;">
             </div>
             <div class="field">
-                <label for="client_office_address">Office address</label>
+                <label for="client_office_address">Office address <span style="color: var(--danger-ink);">*</span></label>
                 <input id="client_office_address" type="text" name="client_office_address" value="{{ old('client_office_address', $order->client?->office_address) }}" maxlength="255" style="text-transform: capitalize;">
             </div>
             <div class="field">
-                <label for="client_delivery_address">Delivery address</label>
+                <label for="client_delivery_address">Delivery address <span style="color: var(--danger-ink);">*</span></label>
                 <input id="client_delivery_address" type="text" name="client_delivery_address" value="{{ old('client_delivery_address', $order->client?->delivery_address) }}" maxlength="255" style="text-transform: capitalize;">
             </div>
             <div class="field">
@@ -111,6 +115,26 @@
                 </div>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="setBackPocketAll()" style="margin-bottom:1px;">All pieces</button>
                 <span id="backPocketNote" style="font-size:0.78rem; color:var(--ink-3);"></span>
+            </div>
+        </div>
+
+        {{-- Rush order: the fee is agreed per job, so it is typed rather than
+             taken from the price list. --}}
+        <div style="margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; margin-bottom: 0.5rem;">
+                <input type="checkbox" id="rush" name="rush" value="1" style="width:auto;margin:0;"
+                       @checked(old('rush', $order->rush)) onchange="onRushToggle()">
+                🚨 Rush order
+            </label>
+
+            <div id="rushFeeWrap" style="display: {{ old('rush', $order->rush) ? 'flex' : 'none' }}; gap:0.6rem; align-items:flex-end; flex-wrap:wrap; margin-left:1.65rem;">
+                <div style="width:190px;">
+                    <label for="rush_fee" style="font-size:0.78rem; color:var(--ink-2); font-weight:600;">Rush fee (₱)</label>
+                    <input id="rush_fee" type="number" name="rush_fee" step="0.01" min="0"
+                           value="{{ old('rush_fee', (float) $order->rush_fee ?: '') }}" placeholder="e.g. 1500.00"
+                           class="no-caps" oninput="updatePrice()">
+                </div>
+                <span style="font-size:0.78rem; color:var(--ink-3); margin-bottom:0.55rem;">added once to the order total</span>
             </div>
         </div>
 
@@ -248,19 +272,24 @@
                 : 'No pieces selected.';
         } else if (bpNote) { bpNote.textContent = ''; }
 
-        // Total = (unit x qty) + back pocket, less discount, then +12% VAT when ticked.
+        // The rush fee is a one-off charge on the job, not a per-piece rate.
+        const rushOn = document.getElementById('rush')?.checked;
+        const rushFee = rushOn ? (parseFloat(document.getElementById('rush_fee')?.value) || 0) : 0;
+
+        // Total = (unit x qty) + back pocket + rush, less discount, then +12% VAT when ticked.
         const discount = parseFloat(document.getElementById('discount_amount')?.value) || 0;
         const vatOn = document.getElementById('vat_inclusive')?.checked;
 
         if (unit !== null && qty > 0) {
             const garment = unit * qty;
-            const subtotal = garment + pocketAmount;
+            const subtotal = garment + pocketAmount + rushFee;
             const vatable = Math.max(0, subtotal - discount);
             const vat = vatOn ? vatable * 0.12 : 0;
             unitOut.textContent = peso(unit);
             totalOut.textContent = peso(vatable + vat);
             const bits = [];
             if (pocketAmount > 0) bits.push('back pocket ' + peso(pocketAmount));
+            if (rushFee > 0) bits.push('rush ' + peso(rushFee));
             if (discount > 0) bits.push('less ' + peso(Math.min(discount, subtotal)) + ' discount');
             if (vatOn) bits.push('+12% VAT ' + peso(vat));
             noteText = (noteText ? noteText + ' ' : '') + 'Garment ' + peso(garment)
@@ -275,6 +304,14 @@
         document.getElementById('backPocketQtyWrap').style.display = on ? 'flex' : 'none';
         const qtyEl = document.getElementById('back_pocket_qty');
         if (on && qtyEl.value === '') { qtyEl.value = document.getElementById('quantity').value || ''; }
+        updatePrice();
+    }
+    // Reveal the fee box when the order is marked rush, and clear it when it
+    // is unticked so an untouched fee can't linger on a normal job.
+    function onRushToggle() {
+        const on = document.getElementById('rush').checked;
+        document.getElementById('rushFeeWrap').style.display = on ? 'flex' : 'none';
+        if (! on) { document.getElementById('rush_fee').value = ''; }
         updatePrice();
     }
     function setBackPocketAll() {

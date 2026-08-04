@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 class Client extends Model
 {
     protected $fillable = [
-        'name', 'contact_number', 'company',
+        'name', 'last_name', 'contact_number', 'company',
         'office_address', 'delivery_address', 'tin',
         'created_by',
     ];
@@ -19,6 +19,32 @@ class Client extends Model
     protected function name(): Attribute
     {
         return Attribute::make(set: fn ($v) => Str::title(trim((string) $v)));
+    }
+
+    /** The surname is held apart so the client list can sort by family name. */
+    protected function lastName(): Attribute
+    {
+        return Attribute::make(set: fn ($v) => filled($v) ? Str::title(trim((string) $v)) : $v);
+    }
+
+    /** "Juan Dela Cruz" — what to show wherever the client is named. */
+    public function fullName(): string
+    {
+        return trim($this->name.' '.$this->last_name);
+    }
+
+    /** "Dela Cruz, Juan" — for lists that read better by surname. */
+    public function listName(): string
+    {
+        return filled($this->last_name)
+            ? trim($this->last_name.', '.$this->name)
+            : (string) $this->name;
+    }
+
+    /** Client list ordered by surname, then first name. */
+    public function scopeBySurname($query)
+    {
+        return $query->orderByRaw('COALESCE(NULLIF(last_name, ""), name)')->orderBy('name');
     }
 
     /** Same for the company name (left blank if empty). */

@@ -22,6 +22,10 @@ class OrderStatusTest extends TestCase
         $this->actingAs($user)->post('/orders', [
             'order_number' => 'IC2026-09700',
             'client_name' => 'Status Test Co',
+            'client_last_name' => 'Cruz',
+            'client_contact' => '0917-000-0000',
+            'client_office_address' => 'Angeles City',
+            'client_delivery_address' => 'Angeles City',
             'due_date' => now()->addWeeks(2)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 10],

@@ -131,17 +131,29 @@ class OrderDocument extends Model
             ];
         }
 
+        // A rush job carries its own agreed fee, shown as its own line so the
+        // client can see what the rush cost them.
+        if ($order->rushAmount() > 0) {
+            $items[] = [
+                'description' => 'Rush fee',
+                'size' => '',
+                'quantity' => 1,
+                'unit_price' => $order->rushAmount(),
+                'addon' => true,
+            ];
+        }
+
         return [
             'number' => self::numberFor($order, $type),
             'items' => $items,
             'fields' => [
                 // Bill to
-                'bill_name' => $order->client?->name ?? $order->customer_name,
+                'bill_name' => $order->client?->fullName() ?: $order->customer_name,
                 'company_name' => $order->client?->company,
                 'bill_address' => $order->client?->delivery_address ?: $order->client?->office_address,
                 'company_address' => $order->client?->office_address ?: $order->client?->delivery_address,
                 'bill_tin' => $order->client?->tin,
-                'contact_person' => $order->client?->name ?? $order->customer_name,
+                'contact_person' => $order->client?->fullName() ?: $order->customer_name,
                 'contact_number' => $order->client?->contact_number,
                 // Job details
                 'date_ordered' => $order->created_at?->format('Y-m-d'),

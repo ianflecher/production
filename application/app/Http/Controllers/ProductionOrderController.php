@@ -39,7 +39,8 @@ class ProductionOrderController extends Controller
     public function create(): View
     {
         return view('orders.create', [
-            'clients' => Client::orderBy('name')->get(),
+            // Listed surname-first so the office can find a client by family name.
+            'clients' => Client::bySurname()->get(),
             'decorationMethods' => ProductionOrder::DECORATION_METHODS,
             'cuttingTypes' => ProductionOrder::CUTTING_TYPES,
             'products' => \App\Services\PricingService::products(),
@@ -99,13 +100,18 @@ class ProductionOrderController extends Controller
             // Typed by the account officer (their own numbering, e.g. IC2026-00016).
             'order_number' => ['required', 'string', 'max:50', 'unique:production_orders,order_number'],
 
-            // Existing client OR a new one typed in.
+            // Existing client OR a new one typed in. For a NEW client every
+            // detail except company and TIN is required, so half-filled
+            // records don't reach the database — the officer is told exactly
+            // which ones are missing instead of finding out later.
             'client_id' => ['nullable', 'integer', 'exists:clients,id'],
             'client_name' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
-            'client_contact' => ['nullable', 'string', 'max:255'],
+            'client_last_name' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
+            'client_contact' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
+            'client_office_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
+            'client_delivery_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
+            // Genuinely optional.
             'client_company' => ['nullable', 'string', 'max:255'],
-            'client_office_address' => ['nullable', 'string', 'max:255'],
-            'client_delivery_address' => ['nullable', 'string', 'max:255'],
             'client_tin' => ['nullable', 'string', 'max:50'],
 
             'description' => ['nullable', 'string', 'max:1000'],
@@ -129,6 +135,15 @@ class ProductionOrderController extends Controller
             'massprod_priority' => ['nullable', 'boolean'],
             'skip_sample' => ['nullable', 'boolean'],
             'unit_price_override' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            // Rush: the fee is agreed per job, so it must be entered when ticked.
+            'rush' => ['nullable', 'boolean'],
+            'rush_fee' => ['nullable', 'required_if:rush,1', 'numeric', 'min:0', 'max:10000000'],
+        ], [
+            'client_last_name.required_without' => "Enter the client's last name.",
+            'client_contact.required_without' => 'Enter the contact number.',
+            'client_office_address.required_without' => 'Enter the office address.',
+            'client_delivery_address.required_without' => 'Enter the delivery address.',
+            'rush_fee.required_if' => 'Enter the rush fee, or untick Rush order.',
         ]);
 
         // A custom apparel type (e.g. Rash Guard) isn't in the price list, so it
@@ -169,10 +184,16 @@ class ProductionOrderController extends Controller
             $unitPrice = $quote['unit']; // null when a quotation is needed (>100)
         }
 
-        // Total = (unit x qty) + back-pocket charge, less the discount, then +12% VAT when ticked.
+        // A rush order carries a one-off fee agreed for that job.
+        $rush = (bool) ($data['rush'] ?? false);
+        $rushFee = $rush ? round((float) ($data['rush_fee'] ?? 0), 2) : null;
+
+        // Total = (unit x qty) + back pocket + rush, less the discount, then +12% VAT when ticked.
         $vat = (bool) ($data['vat_inclusive'] ?? false);
         $discount = (float) ($data['discount_amount'] ?? 0);
-        $totalPrice = ProductionOrder::computeTotal($unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount);
+        $totalPrice = ProductionOrder::computeTotal(
+            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee
+        );
 
         $clientFields = [
             'contact_number' => $data['client_contact'] ?? null,
@@ -186,13 +207,14 @@ class ProductionOrderController extends Controller
             ? Client::findOrFail($data['client_id'])
             : Client::create($clientFields + [
                 'name' => $data['client_name'],
+                'last_name' => $data['client_last_name'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
 
         $order = ProductionOrder::createJobOrder([
             'order_number' => $data['order_number'],
             'client_id' => $client->id,
-            'customer_name' => $client->name,
+            'customer_name' => $client->fullName(),
             'product_type' => $data['product_type'],
             'description' => $data['description'] ?? null,
             'quantity' => $data['quantity'],
@@ -201,6 +223,8 @@ class ProductionOrderController extends Controller
             'back_pocket_qty' => $backPocketQty,
             'massprod_priority' => (bool) ($data['massprod_priority'] ?? false),
             'skip_sample' => (bool) ($data['skip_sample'] ?? false),
+            'rush' => $rush,
+            'rush_fee' => $rushFee,
             'unit_price' => $unitPrice,
             'total_price' => $totalPrice,
             'vat_inclusive' => $vat,
@@ -224,7 +248,7 @@ class ProductionOrderController extends Controller
 
         return redirect()
             ->route('orders.show', $order)
-            ->with('success', "Order {$order->order_number} created for {$client->name} ({$order->quantity} pcs). Upload the client reference, then send it to an artist for the layout.");
+            ->with('success', "Order {$order->order_number} created for {$client->fullName()} ({$order->quantity} pcs). Upload the client reference, then send it to an artist for the layout.");
     }
 
     public function edit(ProductionOrder $order): View
@@ -259,10 +283,11 @@ class ProductionOrderController extends Controller
 
         $data = $request->validate([
             'client_name' => ['required', 'string', 'max:255'],
-            'client_contact' => ['nullable', 'string', 'max:255'],
+            'client_last_name' => ['required', 'string', 'max:255'],
+            'client_contact' => ['required', 'string', 'max:255'],
             'client_company' => ['nullable', 'string', 'max:255'],
-            'client_office_address' => ['nullable', 'string', 'max:255'],
-            'client_delivery_address' => ['nullable', 'string', 'max:255'],
+            'client_office_address' => ['required', 'string', 'max:255'],
+            'client_delivery_address' => ['required', 'string', 'max:255'],
             'client_tin' => ['nullable', 'string', 'max:50'],
 
             'description' => ['nullable', 'string', 'max:1000'],
@@ -285,6 +310,14 @@ class ProductionOrderController extends Controller
             'massprod_priority' => ['nullable', 'boolean'],
             'skip_sample' => ['nullable', 'boolean'],
             'unit_price_override' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            'rush' => ['nullable', 'boolean'],
+            'rush_fee' => ['nullable', 'required_if:rush,1', 'numeric', 'min:0', 'max:10000000'],
+        ], [
+            'client_last_name.required' => "Enter the client's last name.",
+            'client_contact.required' => 'Enter the contact number.',
+            'client_office_address.required' => 'Enter the office address.',
+            'client_delivery_address.required' => 'Enter the delivery address.',
+            'rush_fee.required_if' => 'Enter the rush fee, or untick Rush order.',
         ]);
 
         if ($data['product_type'] === '__other__') {
@@ -312,11 +345,16 @@ class ProductionOrderController extends Controller
         $unitPrice = ! empty($data['unit_price_override']) ? (float) $data['unit_price_override'] : $quote['unit'];
         $vat = (bool) ($data['vat_inclusive'] ?? false);
         $discount = (float) ($data['discount_amount'] ?? 0);
-        $totalPrice = ProductionOrder::computeTotal($unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount);
+        $rush = (bool) ($data['rush'] ?? false);
+        $rushFee = $rush ? round((float) ($data['rush_fee'] ?? 0), 2) : null;
+        $totalPrice = ProductionOrder::computeTotal(
+            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee
+        );
 
         // Keep the linked client's details fixed up too.
         $order->client?->update([
             'name' => $data['client_name'],
+            'last_name' => $data['client_last_name'],
             'contact_number' => $data['client_contact'] ?? null,
             'company' => $data['client_company'] ?? null,
             'office_address' => $data['client_office_address'] ?? null,
@@ -342,7 +380,7 @@ class ProductionOrderController extends Controller
 
         // NOTE: description is edited on the job order sheet, not here — don't touch it.
         $order->update([
-            'customer_name' => $data['client_name'],
+            'customer_name' => trim($data['client_name'].' '.$data['client_last_name']),
             'product_type' => $data['product_type'],
             'quantity' => $data['quantity'],
             'due_date' => $data['due_date'],
@@ -353,6 +391,8 @@ class ProductionOrderController extends Controller
             'vat_inclusive' => $vat,
             'discount_amount' => $discount,
             'discount_note' => $data['discount_note'] ?? null,
+            'rush' => $rush,
+            'rush_fee' => $rushFee,
         ]);
 
         return redirect()->route('orders.show', $order)->with('success', "Order {$order->order_number} updated.".$routingNote);

@@ -52,6 +52,7 @@ class ProductionOrder extends Model
         'order_number', 'brief_token', 'brief_expires_at', 'client_id', 'customer_name', 'product_type', 'description',
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
+        'rush', 'rush_fee',
         'unit_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
         'quantity', 'due_date', 'status', 'completed_at', 'created_by',
     ];
@@ -66,6 +67,8 @@ class ProductionOrder extends Model
             'back_pocket_qty' => 'integer',
             'massprod_priority' => 'boolean',
             'skip_sample' => 'boolean',
+            'rush' => 'boolean',
+            'rush_fee' => 'decimal:2',
             'needs_sticker' => 'boolean',
             'unit_price' => 'decimal:2',
             'total_price' => 'decimal:2',
@@ -149,17 +152,24 @@ class ProductionOrder extends Model
         return $this->jobOrder?->addonLabel();
     }
 
+    /** The rush charge, or zero when the order isn't a rush job. */
+    public function rushAmount(): float
+    {
+        return $this->rush ? (float) $this->rush_fee : 0.0;
+    }
+
     public function pricingBreakdown(): array
     {
         $garment = $this->unit_price !== null ? (float) $this->unit_price * (int) $this->quantity : null;
 
         if ($garment === null) {
-            return ['subtotal' => null, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
+            return ['subtotal' => null, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'rush' => 0.0, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
         }
 
         $backPocket = $this->backPocketAmount();
         $addon = $this->addonAmount();
-        $gross = $garment + $backPocket + $addon;        // before discount
+        $rush = $this->rushAmount();
+        $gross = $garment + $backPocket + $addon + $rush;   // before discount
         $discount = min((float) $this->discount_amount, $gross);
         $vatable = round($gross - $discount, 2);
         $vat = $this->vat_inclusive ? round($vatable * self::VAT_RATE, 2) : 0.0;
@@ -170,6 +180,7 @@ class ProductionOrder extends Model
             'back_pocket_qty' => $this->backPocketCount(),
             'addon' => round($addon, 2),
             'addon_label' => $this->addonLabel(),
+            'rush' => round($rush, 2),
             'discount' => round($discount, 2),
             'vatable' => $vatable,
             'vat' => $vat,
@@ -194,13 +205,15 @@ class ProductionOrder extends Model
      * Compute the total for a given set of figures (used when saving an order,
      * before the model is persisted).
      */
-    public static function computeTotal(?float $unitPrice, int $qty, float $discount = 0, bool $vat = false, float $backPocketAmount = 0): ?float
+    public static function computeTotal(?float $unitPrice, int $qty, float $discount = 0, bool $vat = false, float $backPocketAmount = 0, float $extras = 0): ?float
     {
         if ($unitPrice === null) {
             return null;
         }
 
-        $vatable = max(0, ($unitPrice * $qty) + $backPocketAmount - $discount);
+        // $extras covers one-off charges on the job rather than per piece —
+        // the rush fee, and the Step 4 add-on.
+        $vatable = max(0, ($unitPrice * $qty) + $backPocketAmount + $extras - $discount);
 
         return round($vat ? $vatable * (1 + self::VAT_RATE) : $vatable, 2);
     }
