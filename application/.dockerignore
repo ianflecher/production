@@ -1,6 +1,5 @@
 .git
 .github
-
 node_modules
 vendor
 
@@ -18,10 +17,6 @@ storage/framework/sessions/*
 storage/framework/views/*
 
 tests
-
-.phpunit.cache
-.phpunit.result.cache
-
 .idea
 .vscode
 .DS_Store
