@@ -1,22 +1,16 @@
-# ================================
-# Stage 1: Build frontend assets
-# ================================
 FROM node:22-alpine AS frontend
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
-RUN npm ci
+RUN npm install
 
 COPY . .
 
 RUN npm run build
 
 
-# ================================
-# Stage 2: Laravel runtime
-# ================================
 FROM php:8.3-cli
 
 WORKDIR /app
@@ -28,24 +22,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzip-dev \
     libonig-dev \
     libxml2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo_mysql \
         mbstring \
         zip \
         bcmath \
+        gd \
     && rm -rf /var/lib/apt/lists/*
 
-# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-
-# ================================
-# Copy Laravel source
-# ================================
 COPY app ./app
 COPY bootstrap ./bootstrap
 COPY config ./config
 COPY database ./database
+COPY public ./public
 COPY resources ./resources
 COPY routes ./routes
 COPY storage ./storage
@@ -54,32 +49,14 @@ COPY artisan ./
 COPY composer.json ./
 COPY composer.lock ./
 
-
-# ================================
-# Install PHP dependencies
-# ================================
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader
 
-
-# ================================
-# Copy public files
-# ================================
-RUN mkdir -p public
-
-COPY public ./public
-
-# Replace Vite build with the one
-# produced in frontend stage
 COPY --from=frontend /app/public/build ./public/build
 
-
-# ================================
-# Laravel writable folders
-# ================================
 RUN mkdir -p \
     storage/framework/cache \
     storage/framework/sessions \
@@ -88,8 +65,4 @@ RUN mkdir -p \
     bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-
-# ================================
-# Run Laravel
-# ================================
-CMD ["sh", "-c", "php artisan optimize:clear && php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
+CMD ["sh", "-c", "exec php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
