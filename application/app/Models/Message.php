@@ -19,16 +19,15 @@ class Message extends Model
     }
 
     /**
-     * Who to answer. Shared accounts — the mover's especially — carry the name
-     * the person typed, because "Mover" alone doesn't tell anyone who asked.
+     * Who to answer. On a shared login that is the name the person typed —
+     * the account it came through is noise on the thread, and the sender_id is
+     * still on the row for anyone who needs it.
      */
     public function senderLabel(): string
     {
-        $account = $this->sender?->name ?? 'Someone';
-
-        return filled($this->sender_name) && $this->sender_name !== $account
-            ? $this->sender_name.' ('.$account.')'
-            : $account;
+        return filled($this->sender_name)
+            ? $this->sender_name
+            : ($this->sender?->name ?? 'Someone');
     }
 
     public function order()

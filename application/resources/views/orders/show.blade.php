@@ -736,10 +736,10 @@
                             @if (! $isLeader || in_array($task->status, ['complete', 'cancelled']))
                                 {{-- Floor accounts are shared, so show the name typed
                                      at the station when there is one. --}}
+                                {{-- The person, not the login they borrowed. The
+                                     account is still on the row for anyone who
+                                     needs it. --}}
                                 {{ $task->operator_name ?: ($task->assignee?->name ?? '—') }}
-                                @if ($task->operator_name && $task->assignee && trim(mb_strtolower($task->operator_name)) !== trim(mb_strtolower($task->assignee->name)))
-                                    <div style="font-size: 0.72rem; color: var(--ink-3);">on {{ $task->assignee->name }}'s account</div>
-                                @endif
                             @else
                                 @php $teamAgents = $task->team ? $agents->where('job_role', $task->team) : collect(); @endphp
                                 @if ($task->team === null)

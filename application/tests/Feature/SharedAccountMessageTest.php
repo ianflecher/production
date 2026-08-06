@@ -68,7 +68,13 @@ class SharedAccountMessageTest extends TestCase
 
         $message = Message::firstOrFail();
         $this->assertSame('Louiza', $message->sender_name);
-        $this->assertSame('Louiza (Mover)', $message->senderLabel());
+
+        // Just the person. The account it came through is noise on the thread.
+        $this->assertSame('Louiza', $message->senderLabel());
+        $this->assertStringNotContainsString('Mover', $message->senderLabel());
+
+        // Still recorded, for anyone who needs to know which login it was.
+        $this->assertNotNull($message->sender_id);
     }
 
     public function test_the_name_is_remembered_for_the_shift(): void

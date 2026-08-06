@@ -127,9 +127,6 @@
 
                 @if ($s)
                     <p style="margin:0.5rem 0 0.2rem; font-weight:600;">👤 {{ $s->operator() }}</p>
-                    @if ($s->loggedUnderDifferentAccount())
-                        <p style="font-size:0.74rem; color:var(--ink-3); margin:0;">logged under {{ $s->user->name }}</p>
-                    @endif
                     <p style="font-size:0.82rem; color:var(--ink-3); margin:0;">
                         Since {{ $s->started_at->format('M j, g:i A') }} · {{ $s->duration() }}
                         @if ($s->order) · <a href="{{ route('orders.show', $s->order) }}">{{ $s->order->order_number }}</a> @endif
@@ -234,9 +231,6 @@
                                 <td style="font-weight:600;">{{ $h->stationLabel() }}</td>
                                 <td>
                                     {{ $h->operator() }}
-                                    @if ($h->loggedUnderDifferentAccount())
-                                        <div style="font-size:0.72rem; color:var(--ink-3);">acct: {{ $h->user->name }}</div>
-                                    @endif
                                 </td>
                                 <td>
                                     @if ($h->order)<a href="{{ route('orders.show', $h->order) }}">{{ $h->order->order_number }}</a>@else — @endif
