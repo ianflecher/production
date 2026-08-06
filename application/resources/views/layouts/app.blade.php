@@ -275,233 +275,26 @@
                         if (d && d.v && d.v !== version) location.reload();
                     })
                     .catch(function () {});
-            }, 5000);
+            // Every open tab in the shop runs this, so the interval is what
+            // decides the background load: at five seconds, 34 people asking
+            // was already more than the server could answer. Fifteen keeps the
+            // screens honest without the app spending its day being asked
+            // whether anything happened.
+            }, 15000);
         })();
 
 
-        /* ---------- Simple in-app notification with sound ---------- */
-    (function () {
-        const NOTIF_URL = @json(route('poll.notifications'));
+        /* ---------- Staying up to date ----------
+           There is no notification polling. Every open tab used to ask the
+           server for new notifications every six seconds AND for a data
+           fingerprint every five, which for a shop this size added up to
+           more requests per second than the server could answer -- so the
+           app spent its time telling people nothing had happened.
 
-        let audioContext = null;
-
-        /*
-         * Browsers require at least one user interaction before audio
-         * is allowed. The first click or key press unlocks the sound.
-         */
-        function unlockAudio() {
-            const AudioContextClass =
-                window.AudioContext || window.webkitAudioContext;
-
-            if (!AudioContextClass) {
-                return null;
-            }
-
-            if (!audioContext) {
-                audioContext = new AudioContextClass();
-            }
-
-            if (audioContext.state === 'suspended') {
-                audioContext.resume().catch(function () {});
-            }
-
-            return audioContext;
-        }
-
-        ['click', 'keydown', 'pointerdown'].forEach(function (eventName) {
-            window.addEventListener(eventName, unlockAudio, {
-                once: true
-            });
-        });
-
-        /*
-         * Generates a short two-tone sound.
-         * No MP3 or sound file is required.
-         */
-        function playNotificationSound() {
-            try {
-                const context = unlockAudio();
-
-                if (!context || context.state !== 'running') {
-                    return;
-                }
-
-                const notes = [
-                    { frequency: 880, delay: 0 },
-                    { frequency: 1175, delay: 0.15 }
-                ];
-
-                notes.forEach(function (note) {
-                    const oscillator = context.createOscillator();
-                    const gain = context.createGain();
-                    const startTime = context.currentTime + note.delay;
-
-                    oscillator.type = 'sine';
-                    oscillator.frequency.setValueAtTime(
-                        note.frequency,
-                        startTime
-                    );
-
-                    gain.gain.setValueAtTime(0.0001, startTime);
-                    gain.gain.exponentialRampToValueAtTime(
-                        0.22,
-                        startTime + 0.02
-                    );
-                    gain.gain.exponentialRampToValueAtTime(
-                        0.0001,
-                        startTime + 0.3
-                    );
-
-                    oscillator.connect(gain);
-                    gain.connect(context.destination);
-
-                    oscillator.start(startTime);
-                    oscillator.stop(startTime + 0.32);
-                });
-            } catch (error) {
-                console.warn('Notification sound failed:', error);
-            }
-        }
-
-        function createToastContainer() {
-            let container = document.getElementById(
-                'simpleNotificationContainer'
-            );
-
-            if (container) {
-                return container;
-            }
-
-            container = document.createElement('div');
-            container.id = 'simpleNotificationContainer';
-
-            container.style.cssText = [
-                'position:fixed',
-                'right:20px',
-                'bottom:20px',
-                'z-index:10000',
-                'display:flex',
-                'flex-direction:column',
-                'gap:10px',
-                'width:min(360px,calc(100vw - 40px))',
-                'pointer-events:none'
-            ].join(';');
-
-            document.body.appendChild(container);
-
-            return container;
-        }
-
-        function showToast(notification) {
-            const container = createToastContainer();
-            const toast = document.createElement('div');
-
-            toast.style.cssText = [
-                'background:#0f172a',
-                'color:#ffffff',
-                'border:1px solid rgba(255,255,255,0.12)',
-                'border-radius:12px',
-                'padding:14px 16px',
-                'box-shadow:0 12px 32px rgba(2,6,23,0.35)',
-                'cursor:pointer',
-                'pointer-events:auto',
-                'opacity:0',
-                'transform:translateY(12px)',
-                'transition:opacity .2s ease,transform .2s ease'
-            ].join(';');
-
-            const title = document.createElement('div');
-            title.textContent = notification.title || 'New notification';
-            title.style.cssText =
-                'font-size:14px;font-weight:700;margin-bottom:4px;';
-
-            const body = document.createElement('div');
-            body.textContent = notification.body || '';
-            body.style.cssText =
-                'font-size:13px;line-height:1.45;color:#cbd5e1;';
-
-            toast.appendChild(title);
-            toast.appendChild(body);
-
-            toast.addEventListener('click', function () {
-                if (notification.url) {
-                    window.location.href = notification.url;
-                    return;
-                }
-
-                removeToast(toast);
-            });
-
-            container.appendChild(toast);
-
-            requestAnimationFrame(function () {
-                toast.style.opacity = '1';
-                toast.style.transform = 'translateY(0)';
-            });
-
-            setTimeout(function () {
-                removeToast(toast);
-            }, 8000);
-        }
-
-        function removeToast(toast) {
-            if (!toast || !toast.parentNode) {
-                return;
-            }
-
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(8px)';
-
-            setTimeout(function () {
-                toast.remove();
-            }, 250);
-        }
-
-        function displayNotifications(notifications) {
-            if (!Array.isArray(notifications) || notifications.length === 0) {
-                return;
-            }
-
-            // Play only one sound even when several notifications arrive.
-            playNotificationSound();
-
-            notifications.forEach(function (notification) {
-                showToast(notification);
-            });
-        }
-
-        function pollNotifications() {
-            fetch(NOTIF_URL, {
-                cache: 'no-store',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                }
-            })
-                .then(function (response) {
-                    if (!response.ok) {
-                        throw new Error(
-                            'Notification request failed: ' +
-                            response.status
-                        );
-                    }
-
-                    return response.json();
-                })
-                .then(function (data) {
-                    displayNotifications(data.notifications || []);
-                })
-                .catch(function (error) {
-                    console.warn('Notification polling failed:', error);
-                });
-        }
-
-        // Initial check after page load.
-        setTimeout(pollNotifications, 1500);
-
-        // Check for new notifications every six seconds.
-        setInterval(pollNotifications, 6000);
-    })();
+           The page now simply reloads itself when the data behind it
+           actually changes (see the version check above). Alerts that need
+           to reach someone who is not looking at the screen go out as web
+           push, which the server sends -- nothing has to keep asking. */
     </script>
     @else
     <main class="guest-main">

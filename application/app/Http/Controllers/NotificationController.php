@@ -11,24 +11,6 @@ class NotificationController extends Controller
      * Return the signed-in user's pending desktop alerts and immediately mark
      * them delivered, so each one pops up exactly once.
      */
-    public function poll(Request $request)
-    {
-        $pending = AppNotification::pendingFor($request->user());
-
-        if ($pending->isNotEmpty()) {
-            AppNotification::whereIn('id', $pending->pluck('id'))->update(['delivered_at' => now()]);
-        }
-
-        return response()->json([
-            'notifications' => $pending->map(fn ($n) => [
-                'id' => $n->id,
-                'title' => $n->title,
-                'body' => $n->body,
-                'url' => $n->url,
-            ])->values(),
-        ]);
-    }
-
     /** Store a browser's Web Push subscription so we can reach it when closed. */
     public function subscribe(Request $request)
     {

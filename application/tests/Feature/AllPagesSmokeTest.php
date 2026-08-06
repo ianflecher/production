@@ -59,7 +59,6 @@ class AllPagesSmokeTest extends TestCase
             'finance' => ['/finance'],
             'finance export' => ['/finance/export'],
             'poll version' => ['/poll/version'],
-            'poll notifications' => ['/poll/notifications'],
         ];
     }
 

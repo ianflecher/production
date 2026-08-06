@@ -53,10 +53,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Live updates: pages poll this and reload themselves when data changed.
     Route::get('/poll/version', fn () => ['v' => \App\Services\DataVersion::current()])->name('poll.version');
 
-    // Desktop alerts: the page polls this, shows any new ones, then marks them delivered.
-    Route::get('/poll/notifications', [\App\Http\Controllers\NotificationController::class, 'poll'])->name('poll.notifications');
-
-    // Web Push: browser opts in (works even when closed).
+    // Web Push: browser opts in (works even when closed). This is how alerts
+    // reach someone now — the server sends them. Nothing asks on a timer.
     Route::post('/push/subscribe', [\App\Http\Controllers\NotificationController::class, 'subscribe'])->name('push.subscribe');
     Route::post('/push/unsubscribe', [\App\Http\Controllers\NotificationController::class, 'unsubscribe'])->name('push.unsubscribe');
 
