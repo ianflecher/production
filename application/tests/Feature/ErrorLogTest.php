@@ -12,7 +12,13 @@ class ErrorLogTest extends TestCase
 {
     use RefreshDatabase;
 
-    private string $backup = '';
+    /**
+     * The log as it was before this test touched it. Null means "not saved
+     * yet" — an EMPTY string is a perfectly normal log and must still be put
+     * back, or a test run leaves its own fixtures sitting on the live errors
+     * page for the office to read as real failures.
+     */
+    private ?string $backup = null;
 
     /** Put a known log in place so the assertions don't depend on real history. */
     private function writeLog(string $contents): void
@@ -23,8 +29,8 @@ class ErrorLogTest extends TestCase
             mkdir(dirname($path), 0777, true);
         }
 
-        if ($this->backup === '' && is_file($path)) {
-            $this->backup = file_get_contents($path);
+        if ($this->backup === null) {
+            $this->backup = is_file($path) ? file_get_contents($path) : '';
         }
 
         file_put_contents($path, $contents);
@@ -32,8 +38,8 @@ class ErrorLogTest extends TestCase
 
     protected function tearDown(): void
     {
-        // Never leave the real log truncated.
-        if ($this->backup !== '') {
+        // Never leave the real log holding this test's invented entries.
+        if ($this->backup !== null) {
             file_put_contents(ErrorLog::path(), $this->backup);
         }
 
