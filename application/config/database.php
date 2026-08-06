@@ -61,7 +61,19 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+
+                // Opening a connection costs far more than running a query: on
+                // this PC about 8ms against 0.16ms, and against a database over
+                // the internet it is TCP + TLS + auth, several round trips —
+                // hundreds of milliseconds before any work is done. Holding the
+                // connection open lets later requests in the same process skip
+                // all of that.
+                //
+                // Off by default: the office database is on localhost, where
+                // there is nothing to save. A hosted deployment sets
+                // DB_PERSISTENT=true.
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', false) ? true : null,
+            ], fn ($value) => $value !== null) : [],
         ],
 
         'mariadb' => [

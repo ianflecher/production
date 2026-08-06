@@ -268,12 +268,60 @@ Route::delete('/users/{user}', [
 
 use Illuminate\Support\Facades\DB;
 
+/**
+ * How far away the database is, split into the two things that actually cost
+ * time. The original measured them together, which read as "the database is
+ * slow" when nearly all of it was the cost of opening the connection.
+ *
+ * Behind a login: it reports where the database is and how it is reached, which
+ * is nobody's business but the shop's.
+ */
 Route::get('/db-test', function () {
-    $start = microtime(true);
+    // Time a connection of our own rather than dropping the app's: closing the
+    // live one would break the request that is running and defeat the whole
+    // point of holding connections open.
+    $connecting = null;
+    $config = config('database.connections.'.config('database.default'));
 
-    DB::select('SELECT 1');
+    if (($config['driver'] ?? null) === 'mysql') {
+        $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s',
+            $config['host'], $config['port'] ?? 3306, $config['database']);
 
-    $ms = round((microtime(true) - $start) * 1000, 2);
+        $t = microtime(true);
+        $probe = new PDO($dsn, $config['username'], $config['password'], $config['options'] ?? []);
+        $connecting = (microtime(true) - $t) * 1000;
+        $probe = null;
+    }
 
-    return "Database response: {$ms} ms";
-});
+    $t = microtime(true);
+    DB::select('SELECT 1');                 // on the connection already open
+    $queryOnly = (microtime(true) - $t) * 1000;
+
+    $t = microtime(true);
+    for ($i = 0; $i < 10; $i++) {
+        DB::select('SELECT 1');
+    }
+    $perQuery = ((microtime(true) - $t) * 1000) / 10;
+
+    $verdict = match (true) {
+        $connecting === null => 'Connection timing is only measured for MySQL.',
+        $connecting > 50 => "Most of the wait is opening the connection, not the database\n".
+            "itself. Two things fix that: put the database in the same region as\n".
+            "the app, and set DB_PERSISTENT=true so the connection is reused\n".
+            'instead of rebuilt from scratch on every single request.',
+        default => 'Connecting is cheap here — the database is close by.',
+    };
+
+    return response()->make(sprintf(
+        "Opening a connection   : %s   <-- paid once per request\n".
+        "One query once open    : %8.2f ms\n".
+        "Average of ten queries : %8.2f ms\n".
+        "Connections reused     : %s\n".
+        "\n%s\n",
+        $connecting === null ? '     n/a  ' : sprintf('%8.2f ms', $connecting),
+        $queryOnly,
+        $perQuery,
+        ($config['options'][PDO::ATTR_PERSISTENT] ?? false) ? 'yes' : 'no (DB_PERSISTENT)',
+        $verdict
+    ), 200, ['Content-Type' => 'text/plain']);
+})->middleware(['auth']);
