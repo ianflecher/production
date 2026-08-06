@@ -22,20 +22,18 @@
                  pre-filled with the signed-in artist's own PC address so they
                  only type the folder + file after it (always back-slashes). --}}
             @php
-                $artistIps = [
-                    'rommel'  => '192.168.150.232',
-                    'maru'    => '192.168.150.233',
-                    'ian'     => '192.168.150.238',
-                    'jc'      => '192.168.150.252',
-                    'dave'    => '192.168.150.249',
-                    'cristal' => '192.168.150.242',
-                    'mick'    => '192.168.150.227',
-                ];
-                $me = strtolower(auth()->user()->name ?? '');
-                $ipPrefix = '';
-                foreach ($artistIps as $who => $ip) {
-                    if (str_contains($me, $who)) { $ipPrefix = '\\\\'.$ip.'\\'; break; }
-                }
+                // The address of the PC asking for this page — read from the
+                // connection, not from a list. Nothing to keep up to date, and
+                // it is right even after the router hands that PC a new one.
+                //
+                // Only an office-network address is offered: reached over the
+                // tunnel from outside, what the server sees is the tunnel, not
+                // the artist's machine, and a wrong address here is worse than
+                // an empty box.
+                $ip = request()->ip();
+                $ipPrefix = \App\Services\ServerIp::isPrivate((string) $ip)
+                    ? '\\\\'.$ip.'\\'
+                    : '';
             @endphp
             @foreach ($slots as $key => $label)
                 <div class="field" style="max-width: 520px;">
