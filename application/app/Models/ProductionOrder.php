@@ -352,6 +352,40 @@ class ProductionOrder extends Model
     public const MOVER_LAST_STEP = 'Inventory';
 
     /**
+     * May this person open this job order?
+     *
+     * The calendar shows every job to everybody — it is the company's capacity
+     * in one view, and hiding half of it makes the picture a lie. Opening one
+     * is different: leaders, supervisors and admin can open any, everyone else
+     * only the jobs that are theirs.
+     *
+     * "Theirs" means what it means for that role: the officer who took the
+     * order, an artist or operator with a step on it, and for the mover a job
+     * that has reached the floor.
+     */
+    public function openableBy(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        // isLeader() already covers the supervisor and the super admin.
+        if ($user->isLeader()) {
+            return true;
+        }
+
+        if ($user->isSales()) {
+            return $this->created_by === $user->id;
+        }
+
+        if ($user->isMover()) {
+            return $this->reachedTheFloorAt() !== null;
+        }
+
+        return $this->tasks->contains('assigned_to', $user->id);
+    }
+
+    /**
      * A delivered or cancelled job is finished business — its thread stays
      * readable as a record of what happened, but nothing more is added to it.
      */

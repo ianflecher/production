@@ -34,6 +34,13 @@ class CalendarLinkTest extends TestCase
 
         $order->jobOrder()->create(['status' => 'draft', 'created_by' => $sales->id]);
 
+        // On the floor — which is what lets the mover open it at all.
+        $order->tasks()->create([
+            'sequence' => 1, 'stage' => 3, 'department' => 'Printer',
+            'status' => 'in_progress', 'approver_role' => 'leader',
+            'released_at' => now()->subHour(),
+        ]);
+
         return $order->fresh();
     }
 

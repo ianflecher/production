@@ -41,8 +41,9 @@ class CalendarController extends Controller
          * INDIVIDUAL ORDERS VISIBLE ON THE CALENDAR
          * =========================================================
          *
-         * Sales agents see only the orders they created.
-         * Leaders and administrators see all orders.
+         * Everyone sees every job: the calendar is the company's capacity in
+         * one view, and a half-empty one is misleading. Who may OPEN a job is a
+         * separate question — see ProductionOrder::openableBy().
          */
         $visibleOrdersQuery = ProductionOrder::query()
             ->whereNotNull('due_date')
@@ -51,14 +52,8 @@ class CalendarController extends Controller
                 $monthEnd->toDateString(),
             ]);
 
-        if ($user->isSales()) {
-            $visibleOrdersQuery->where(
-                'created_by',
-                $user->id
-            );
-        }
-
         $ordersByDay = $visibleOrdersQuery
+            ->with('tasks')
             ->orderBy('due_date')
             ->orderBy('order_number')
             ->get()
@@ -175,17 +170,17 @@ class CalendarController extends Controller
                 $upcomingEnd->toDateString(),
             ]);
 
-        if ($user->isSales()) {
-            $upcomingQuery->where(
-                'created_by',
-                $user->id
-            );
-        }
-
+        // The grid is the whole shop's capacity; the deadline list is a
+        // to-do. Nobody needs reminding of a deadline they cannot act on, so
+        // this one is narrowed to the person's own jobs (all of them, for a
+        // leader or the admin).
         $upcoming = $upcomingQuery
+            ->with('tasks')
             ->orderBy('due_date')
             ->orderBy('order_number')
-            ->get();
+            ->get()
+            ->filter(fn (ProductionOrder $order) => $order->openableBy($user))
+            ->values();
 
         return view('calendar', [
             'cursor' => $cursor,

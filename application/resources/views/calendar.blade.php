@@ -305,13 +305,14 @@
                                                     };
                                                 @endphp
 
-                                                <a
-                                                    href="{{ $jobLink($order) }}"
-                                                    class="cal-pill {{ $class }}"
-                                                    data-tip="{{ $order->order_number }} · {{ $order->customer_name }} · {{ number_format($order->quantity) }} pcs · due {{ $order->due_date->format('M j') }}"
+                                                @php $canOpen = $order->openableBy($viewer); @endphp
+                                                <{{ $canOpen ? 'a' : 'span' }}
+                                                    @if ($canOpen) href="{{ $jobLink($order) }}" @endif
+                                                    class="cal-pill {{ $class }} {{ $canOpen ? '' : 'is-locked' }}"
+                                                    data-tip="{{ $order->order_number }} · {{ $order->customer_name }} · {{ number_format($order->quantity) }} pcs · due {{ $order->due_date->format('M j') }}{{ $canOpen ? '' : ' · not your job order' }}"
                                                 >
                                                     {{ $order->order_number }} · {{ number_format($order->quantity) }} pcs
-                                                </a>
+                                                </{{ $canOpen ? 'a' : 'span' }}>
                                             @endforeach
                                         </div>
 
@@ -381,9 +382,10 @@
                                         };
                                     @endphp
 
-                                    <a
-                                        href="{{ $jobLink($order) }}"
-                                        class="mobile-order"
+                                    @php $canOpen = $order->openableBy($viewer); @endphp
+                                    <{{ $canOpen ? 'a' : 'span' }}
+                                        @if ($canOpen) href="{{ $jobLink($order) }}" @endif
+                                        class="mobile-order {{ $canOpen ? '' : 'is-locked' }}"
                                         style="--order-color: {{ $mobileColor }};"
                                     >
                                         <span class="mobile-order-stripe" aria-hidden="true"></span>
@@ -392,7 +394,7 @@
                                             <span>{{ $order->customer_name }} · {{ str_replace('_', ' ', ucfirst($order->status)) }}</span>
                                         </span>
                                         <span class="mobile-order-qty">{{ number_format($order->quantity) }} pcs</span>
-                                    </a>
+                                    </{{ $canOpen ? 'a' : 'span' }}>
                                 @endforeach
                             </div>
                         @endif
