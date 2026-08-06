@@ -103,7 +103,16 @@
                         <div class="msg-client">{{ $t['order']->client?->name ?? $t['order']->customer_name }}</div>
                         <div class="msg-prev {{ $t['unread'] ? 'unread' : '' }}">
                             @if ($t['last'])
-                                <span style="color: var(--ink-3);">{{ $t['last']->sender_id === auth()->id() ? 'You' : $t['last']->sender?->name }}:</span>
+                                {{-- The person who typed it, not the login they
+                                     used — several movers share one account. --}}
+                                @php
+                                    // "You" only when it really was you. On a
+                                    // shared login the last message may be a
+                                    // different mover's, so it gets their name.
+                                    $mine = $t['last']->sender_id === auth()->id()
+                                        && ! auth()->user()->sharesAccount();
+                                @endphp
+                                <span style="color: var(--ink-3);">{{ $mine ? 'You' : $t['last']->senderLabel() }}:</span>
                                 {{ $t['last']->preview() }}
                             @else
                                 <span style="font-style: italic;">No messages yet</span>

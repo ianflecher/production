@@ -159,4 +159,66 @@ class SharedAccountMessageTest extends TestCase
     {
         $this->assertSame('', $this->order()->moverNames());
     }
+
+    // ---- What the reader sees ----------------------------------------------
+
+    public function test_the_inbox_preview_names_the_person_not_the_login(): void
+    {
+        $order = $this->order();
+        $mover = $this->mover();
+
+        $this->actingAs($mover)->post("/messages/{$order->id}", [
+            'sender_name' => 'Mike', 'body' => 'hey you',
+        ]);
+
+        // The account is called "Mover"; the person is Mike.
+        $this->actingAs(User::find($order->created_by))->get('/messages')
+            ->assertOk()
+            ->assertSee('Mike:', false)
+            ->assertDontSee('Mover:', false);
+    }
+
+    public function test_another_mover_is_not_shown_as_you(): void
+    {
+        $order = $this->order();
+        $mover = $this->mover();
+
+        // Mike writes, then Louiza opens the same login later.
+        $this->actingAs($mover)->post("/messages/{$order->id}", [
+            'sender_name' => 'Mike', 'body' => 'hey you',
+        ]);
+        session(['sender_name' => 'Louiza']);
+
+        $this->actingAs($mover)->get('/messages')
+            ->assertOk()
+            ->assertSee('Mike:', false)
+            ->assertDontSee('You:', false);
+    }
+
+    public function test_every_message_on_a_shared_login_carries_a_name(): void
+    {
+        $order = $this->order();
+        $mover = $this->mover();
+
+        $this->actingAs($mover)->post("/messages/{$order->id}", [
+            'sender_name' => 'Mike', 'body' => 'hey you',
+        ]);
+
+        // Otherwise it sits on "my" side of the thread with nobody's name on it.
+        $this->actingAs($mover)->get("/messages/{$order->id}")
+            ->assertOk()
+            ->assertSee('>Mike</div>', false);
+    }
+
+    public function test_a_personal_login_still_says_you(): void
+    {
+        $order = $this->order();
+        $sales = User::find($order->created_by);
+
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'mine']);
+
+        $this->actingAs($sales)->get('/messages')
+            ->assertOk()
+            ->assertSee('You:', false);
+    }
 }

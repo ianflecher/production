@@ -143,11 +143,18 @@
 <div class="card panel">
     <div class="thread" id="thread">
         @forelse ($messages as $m)
-            @php $mine = $m->sender_id === auth()->id(); @endphp
+            @php
+                // On a shared login "mine" is not the same as "this account's":
+                // another mover's message would otherwise sit on my side of the
+                // thread with nobody's name on it.
+                $mine = $m->sender_id === auth()->id()
+                    && (! auth()->user()->sharesAccount()
+                        || $m->sender_name === session('sender_name'));
+            @endphp
             <div class="bubble-row {{ $mine ? 'mine' : '' }}">
-                @unless ($mine)
+                @if (! $mine || auth()->user()->sharesAccount())
                     <div class="who">{{ $m->senderLabel() }}</div>
-                @endunless
+                @endif
                 <div class="bubble">
                     @if (filled($m->body))<div class="text">{!! $m->bodyWithMentions() !!}</div>@endif
 
