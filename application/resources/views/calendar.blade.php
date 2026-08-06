@@ -5,6 +5,19 @@
 
 @section('content')
 
+@php
+    // Where a job on the calendar opens.
+    //
+    // The order page leads with payments, pricing and the client's details —
+    // the account officer's and the leader's business. Everyone else clicking a
+    // job on a calendar wants the job order sheet: what is being made, in what
+    // sizes, on which machine.
+    $viewer = auth()->user();
+    $jobLink = fn ($order) => ($viewer->isSales() || $viewer->isLeader())
+        ? route('orders.show', $order)
+        : route('orders.job-order', $order);
+@endphp
+
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/calendar.css') }}?v={{ filemtime(public_path('css/calendar.css')) }}">
 @endpush
@@ -293,7 +306,7 @@
                                                 @endphp
 
                                                 <a
-                                                    href="{{ route('orders.show', $order) }}"
+                                                    href="{{ $jobLink($order) }}"
                                                     class="cal-pill {{ $class }}"
                                                     data-tip="{{ $order->order_number }} · {{ $order->customer_name }} · {{ number_format($order->quantity) }} pcs · due {{ $order->due_date->format('M j') }}"
                                                 >
@@ -369,7 +382,7 @@
                                     @endphp
 
                                     <a
-                                        href="{{ route('orders.show', $order) }}"
+                                        href="{{ $jobLink($order) }}"
                                         class="mobile-order"
                                         style="--order-color: {{ $mobileColor }};"
                                     >
@@ -421,7 +434,7 @@
                             $overdue = $order->due_date->lt($today);
                         @endphp
 
-                        <a href="{{ route('orders.show', $order) }}" class="deadline-item">
+                        <a href="{{ $jobLink($order) }}" class="deadline-item">
                             <span class="deadline-date {{ $overdue ? 'is-overdue' : '' }}">
                                 <span class="deadline-date-month">{{ $order->due_date->format('M') }}</span>
                                 <span class="deadline-date-day">{{ $order->due_date->format('j') }}</span>
