@@ -48,7 +48,33 @@
             <div style="font-size: 0.9rem; color: var(--ink-1); margin-bottom: 0.8rem; line-height: 1.6; background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 6px; padding: 0.7rem 0.9rem;">
                 Add the folder and file name after the IP — e.g. <code>\\192.168.1.1\sample\sample</code>.
                 <strong>Use back-slashes <code>\\</code> — not <code>//</code>.</strong><br>
-                Please make sure the folder is <strong>shared to Everyone</strong> and not private — if you need help, ask the IT administrator.
+                Please make sure the folder is <strong>shared to Everyone</strong> and not private.
+
+                {{-- The two things artists get stuck on, shown rather than
+                     explained. Nothing downloads until the guide is opened. --}}
+                <details class="path-help">
+                    <summary>Show me how &mdash; sharing a folder and copying a file path</summary>
+
+                    <div class="path-help-videos">
+                        @foreach ([
+                            'Share your folder so others can open it' => 'folder sharing.mp4',
+                            'Copy the file path of your file' => 'folder file copy.mp4',
+                        ] as $caption => $file)
+                            <figure>
+                                <figcaption>{{ $loop->iteration }}. {{ $caption }}</figcaption>
+                                <video controls preload="none" playsinline
+                                       src="{{ asset(rawurlencode($file)) }}">
+                                    Your browser can't play this video —
+                                    <a href="{{ asset(rawurlencode($file)) }}">download it instead</a>.
+                                </video>
+                            </figure>
+                        @endforeach
+                    </div>
+
+                    <p style="margin: 0.6rem 0 0; font-size: 0.82rem; color: var(--ink-2);">
+                        Still stuck after watching? Ask the IT administrator.
+                    </p>
+                </details>
             </div>
         @elseif ($slots !== [])
             @foreach ($slots as $key => $label)
