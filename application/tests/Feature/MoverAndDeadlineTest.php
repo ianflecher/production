@@ -157,6 +157,11 @@ class MoverAndDeadlineTest extends TestCase
         $mover = $this->mover();
         $order = $this->order(['order_number' => 'IC2026-06620']);
 
+        // A job becomes hers when it reaches the printer; before that it is
+        // still the account officer's and the artist's.
+        $this->stepAt($order, 'Printer', 3, 'in_progress');
+        $order->tasks()->where('department', 'Printer')->update(['released_at' => now()->subHour()]);
+
         // She holds no task on this order and didn't create it, yet the thread
         // is hers to read and she can be mentioned by name.
         $this->actingAs($mover)->get("/messages/{$order->id}")

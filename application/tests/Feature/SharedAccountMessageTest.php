@@ -27,7 +27,7 @@ class SharedAccountMessageTest extends TestCase
     {
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
 
-        return ProductionOrder::create([
+        $order = ProductionOrder::create([
             'order_number' => 'IC2026-05500',
             'customer_name' => 'Shared Co',
             'product_type' => 'round_neck',
@@ -36,6 +36,15 @@ class SharedAccountMessageTest extends TestCase
             'status' => 'active',
             'created_by' => $sales->id,
         ]);
+
+        // On the floor, which is what makes it the mover's to talk on.
+        $order->tasks()->create([
+            'sequence' => 1, 'stage' => 3, 'department' => 'Printer',
+            'status' => 'in_progress', 'approver_role' => 'leader',
+            'released_at' => now()->subHour(),
+        ]);
+
+        return $order->fresh();
     }
 
     public function test_the_mover_account_is_known_to_be_shared(): void
@@ -111,7 +120,7 @@ class SharedAccountMessageTest extends TestCase
         $order = $this->order();
         $artist = User::factory()->create(['job_role' => User::JOB_ARTIST, 'name' => 'Maru', 'is_active' => true]);
         $order->tasks()->create([
-            'sequence' => 1, 'stage' => 1, 'department' => 'Layout',
+            'sequence' => 2, 'stage' => 1, 'department' => 'Layout',
             'status' => 'ready', 'approver_role' => 'leader', 'assigned_to' => $artist->id,
         ]);
 

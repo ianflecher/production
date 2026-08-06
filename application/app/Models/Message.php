@@ -125,8 +125,14 @@ class Message extends Model
      */
     public static function canAccess(User $user, ProductionOrder $order): bool
     {
+        // A job becomes the mover's when it reaches the printer — before that
+        // it is still the account officer's and the artist's. From then on she
+        // reads the whole thread, background included.
+        if ($user->isMover()) {
+            return $order->loadMissing('tasks')->reachedTheFloorAt() !== null;
+        }
+
         return $user->isLeader()
-            || $user->isMover()
             || ($user->isSales() && $order->created_by === $user->id)
             || $order->tasks()->where('assigned_to', $user->id)->exists();
     }
@@ -135,8 +141,9 @@ class Message extends Model
     public static function accessibleOrderIds(User $user): \Illuminate\Support\Collection
     {
         return ProductionOrder::query()
-            // The mover follows every job, so every thread is hers to read —
-            // same as a leader.
+            // The mover follows every job once it reaches the floor; the
+            // printer check happens where the list is built, since it reads the
+            // task timestamps.
             ->when(! $user->isLeader() && ! $user->isMover(), function ($q) use ($user) {
                 $q->where(function ($w) use ($user) {
                     $w->where('created_by', $user->id)

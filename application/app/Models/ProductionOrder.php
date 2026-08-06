@@ -339,6 +339,71 @@ class ProductionOrder extends Model
     }
 
     /**
+     * The mover's slice of a job: the shop floor, from the printer through to
+     * the finished pieces being counted in.
+     *
+     * She follows work through the machines. What happens before the printer is
+     * the account officer's and the artist's — the enquiry, the layout, the
+     * mockup, the leader's sign-off — and what happens after inventory is the
+     * account officer handing over to the client. Neither is hers to chase.
+     */
+    public const MOVER_FIRST_STEP = 'Printer';
+
+    public const MOVER_LAST_STEP = 'Inventory';
+
+    /**
+     * A delivered or cancelled job is finished business — its thread stays
+     * readable as a record of what happened, but nothing more is added to it.
+     */
+    public function conversationClosed(): bool
+    {
+        return in_array($this->status, ['complete', 'cancelled'], true);
+    }
+
+    /**
+     * The steps a given person is shown on this order. Everyone sees the whole
+     * pipeline except the mover, who sees her slice of it.
+     *
+     * The slice is taken by POSITION in the line, not by stage number: the
+     * artist's export sits in the same stage as the printer but comes before
+     * it, and it is not hers.
+     */
+    public function stepsVisibleTo(?User $user)
+    {
+        $tasks = $this->tasks->sortBy([['stage', 'asc'], ['sequence', 'asc']])->values();
+
+        if (! $user?->isMover()) {
+            return $tasks;
+        }
+
+        $from = $tasks->search(fn ($t) => $t->department === self::MOVER_FIRST_STEP);
+        $to = $tasks->search(fn ($t) => $t->department === self::MOVER_LAST_STEP);
+
+        if ($from === false || $to === false || $to < $from) {
+            return $tasks->take(0);
+        }
+
+        return $tasks->slice($from, $to - $from + 1)->values();
+    }
+
+    /**
+     * When this job reached the printer — the moment it became the mover's to
+     * follow. Null while it is still with the artist or the account officer.
+     */
+    public function reachedTheFloorAt(): ?\Illuminate\Support\Carbon
+    {
+        return $this->tasks->firstWhere('department', self::MOVER_FIRST_STEP)?->released_at;
+    }
+
+    /** When the finished pieces were counted in, closing her slice. */
+    public function leftTheFloorAt(): ?\Illuminate\Support\Carbon
+    {
+        $inventory = $this->tasks->firstWhere('department', self::MOVER_LAST_STEP);
+
+        return $inventory?->status === 'complete' ? $inventory->approved_at : null;
+    }
+
+    /**
      * The movers who followed this job, in the order they first spoke.
      *
      * They close no step, so there is no operator name to read off one — what
@@ -1043,12 +1108,14 @@ class ProductionOrder extends Model
                 // Nothing to "do" — it lands on the approver's desk immediately.
                 $task->status = 'for_checking';
                 $task->submitted_at = now();
+                $task->released_at ??= now();
                 $task->save();
 
                 continue;
             }
 
             $task->status = 'ready';
+            $task->released_at ??= now();
 
             if ($task->auto_assign && ! $task->assigned_to) {
                 // Keep the same artist across the design → template steps: reuse
@@ -1096,6 +1163,7 @@ class ProductionOrder extends Model
             }
             if (self::prerequisitesMet($held->department, $stageTasks)) {
                 $held->status = 'ready';
+                $held->released_at ??= now();
                 if ($held->auto_assign && ! $held->assigned_to) {
                     $staff = StaffAssigner::next($held->team);
                     if ($staff) {

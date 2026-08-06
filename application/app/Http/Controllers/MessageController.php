@@ -27,11 +27,18 @@ class MessageController extends Controller
             // files come too: the inbox preview describes a photo-only message.
             ->with([
                 'client',
+                'tasks',
                 'messages' => fn ($q) => $q->latest('id')->limit(1),
                 'messages.sender',
                 'messages.files',
             ])
-            ->get();
+            ->get()
+            // A job still with the artist or the account officer is not the
+            // mover's yet — listing it would only open onto an empty thread.
+            ->when($me->isMover(), fn ($all) => $all->filter(
+                fn ($order) => $order->reachedTheFloorAt() !== null
+            ))
+            ->values();
 
         $threads = $orders->map(function ($order) use ($me) {
             $last = $order->messages->first();
@@ -59,6 +66,10 @@ class MessageController extends Controller
         $me = $request->user();
         abort_unless(Message::canAccess($me, $order), 403);
 
+        $order->load('tasks');
+
+        // Once a job is hers, the whole conversation is hers — chopping it at
+        // the printer only hid the background to what she is chasing.
         $messages = $order->messages()->with(['sender', 'mentions', 'files'])->orderBy('id')->get();
 
         Message::markRead($me, $order->id);
@@ -76,6 +87,14 @@ class MessageController extends Controller
     {
         $me = $request->user();
         abort_unless(Message::canAccess($me, $order), 403);
+
+        // A delivered or cancelled job is finished business. The thread stays
+        // readable as a record of what happened; nothing more gets added to it.
+        if ($order->conversationClosed()) {
+            return back()->withErrors([
+                'body' => 'This job order is '.strtolower($order->statusLabel()).' — its conversation is closed.',
+            ])->withInput();
+        }
 
         $data = $request->validate([
             // Either is enough — a photo on its own is a perfectly good message.

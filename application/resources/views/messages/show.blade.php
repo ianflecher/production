@@ -29,6 +29,8 @@
     .who-am-i label { font-size: 0.8rem; font-weight: 600; color: var(--ink-1); margin: 0; }
     .who-am-i input { width: 190px; }
     .who-am-i .hint { font-size: 0.76rem; color: var(--ink-3); }
+    .thread-closed { margin-top: 0.9rem; padding: 0.7rem 0.95rem; border-radius: 10px;
+                     background: var(--border); color: var(--ink-2); font-size: 0.88rem; }
 
     /* Where the job is, sitting above the conversation about it. */
     .pipeline-peek { margin-bottom: 1rem; padding: 0.85rem 1.05rem; }
@@ -75,7 +77,10 @@
         </p>
     </div>
     <a href="{{ route('messages.index') }}" class="btn btn-ghost">← All messages</a>
-    <a href="{{ route('orders.show', $order) }}" class="btn btn-primary">Open job order</a>
+    {{-- The job order SHEET, not the order admin page — that one opens on
+         payments and pricing, which is the account officer's business, not the
+         floor's. --}}
+    <a href="{{ route('orders.job-order', $order) }}" class="btn btn-primary">Open job order</a>
 </div>
 
 @include('partials.delay-alert', ['order' => $order])
@@ -84,22 +89,32 @@
      every thread here is somebody asking how far it has got, so the answer sits
      with the question instead of a page away. --}}
 @php
-    [$doneSteps, $totalSteps] = $order->progress();
+    // The mover is shown her slice of the line — printer through inventory —
+    // so the count and the bar describe what she is actually following.
+    $steps = $order->stepsVisibleTo(auth()->user());
+    $totalSteps = $steps->count();
+    $doneSteps = $steps->where('status', 'complete')->count();
     $pct = $totalSteps ? round($doneSteps / $totalSteps * 100) : 0;
-    $currentStep = $order->currentStep();
+
+    $currentStep = $steps->whereIn('status', ['ready', 'in_progress', 'for_checking', 'revision_required'])->first();
+    $nextStep = $currentStep
+        ? $steps->first(fn ($t) => $t->stage > $currentStep->stage && ! in_array($t->status, ['complete', 'cancelled'], true))
+        : $steps->first(fn ($t) => ! in_array($t->status, ['complete', 'cancelled'], true));
 @endphp
 
 <div class="card panel pipeline-peek">
     <div class="pipeline-peek-head">
         <strong>{{ $doneSteps }} of {{ $totalSteps }} steps done</strong>
         <span class="pipeline-peek-now">
-            @if ($order->status === 'complete')
+            @if ($totalSteps === 0)
+                Not on the floor yet
+            @elseif ($doneSteps === $totalSteps)
                 Finished
             @else
-                <span class="lbl">Now at</span> {{ $order->currentStepLabel() }}
-                @if ($who = $currentStep?->assignee?->name)<span class="muted-inline">— {{ $who }}</span>@endif
-                @if ($next = $order->nextStepLabel())
-                    <span class="arrow">&rarr;</span> <span class="lbl">Next</span> {{ $next }}
+                <span class="lbl">Now at</span> {{ $currentStep?->department ?? 'Not started' }}
+                @if ($who = ($currentStep?->operator_name ?: $currentStep?->assignee?->name))<span class="muted-inline">— {{ $who }}</span>@endif
+                @if ($nextStep)
+                    <span class="arrow">&rarr;</span> <span class="lbl">Next</span> {{ $nextStep->department }}
                 @endif
             @endif
         </span>
@@ -112,7 +127,7 @@
     <details class="pipeline-peek-all">
         <summary>Every step</summary>
         <ol>
-            @foreach ($order->tasks->sortBy([['stage', 'asc'], ['sequence', 'asc']]) as $t)
+            @foreach ($steps as $t)
                 <li @class(['is-done' => $t->status === 'complete', 'is-now' => $t->id === $currentStep?->id])>
                     <span class="dept">{{ $t->department }}</span>
                     @include('partials.status', ['status' => $t->status])
@@ -159,6 +174,13 @@
         <div id="end"></div>
     </div>
 
+    @if ($order->conversationClosed())
+        {{-- Finished business. The thread stays readable as the record of what
+             happened; nothing more gets added to it. --}}
+        <div class="thread-closed">
+            🔒 This job order is <strong>{{ $order->statusLabel() }}</strong> — the conversation is closed.
+        </div>
+    @else
     @if (auth()->user()->sharesAccount())
         {{-- Several people share this login, so a message signed with the
              account name tells nobody who to answer. Typed once and kept for
@@ -197,7 +219,9 @@
 
     <div>
         <div style="font-size: 0.74rem; color: var(--ink-3); margin-top: 0.9rem;">In this conversation:</div>
-        <div class="people">
+        @endif
+
+    <div class="people">
             @foreach ($participants as $p)
                 <span class="chip">{{ $p->name }}</span>
             @endforeach

@@ -46,7 +46,7 @@ class Task extends Model
     protected $fillable = [
         'production_order_id', 'sequence', 'stage', 'department', 'team', 'instructions',
         'assigned_to', 'operator_name', 'status', 'approver_role', 'auto_assign', 'auto_submit',
-        'revision_note', 'revision_count', 'submitted_at', 'approved_at',
+        'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at',
     ];
 
     protected function casts(): array
@@ -54,6 +54,7 @@ class Task extends Model
         return [
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
+            'released_at' => 'datetime',
             'auto_assign' => 'boolean',
             'auto_submit' => 'boolean',
         ];
