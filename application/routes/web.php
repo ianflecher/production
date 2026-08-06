@@ -213,8 +213,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/books/export', [BookkeepingController::class, 'export'])->name('books.export');
     });
 
-    // -------- Order viewing + calendar: Sales, Leader, Super Admin --------
-    Route::middleware('role:sales,leader,super_admin')->group(function () {
+    // -------- Order viewing + calendar: Sales, Leader, Super Admin, Mover --------
+    // The mover reads job orders to chase progress round the floor. Read-only:
+    // creating, editing, payments and approvals all live in other groups.
+    Route::middleware('role:sales,leader,super_admin,mover')->group(function () {
         Route::get('/orders', [ProductionOrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{order}', [ProductionOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
         Route::get('/orders/{order}/job-order', [ProductionOrderController::class, 'jobOrder'])->whereNumber('order')->name('orders.job-order');

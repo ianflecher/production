@@ -37,8 +37,16 @@
     </h2>
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(310px, 1fr)); gap:1rem; margin-bottom:1.6rem;">
         @foreach ($stations as $p)
-            @php $s = $p['session']; @endphp
-            <div class="card panel" style="border-left:4px solid {{ $s ? 'var(--success-ink)' : 'color-mix(in srgb, '.$gc.' 45%, #fff)' }};">
+            @php
+                $s = $p['session'];
+                // A station holding a job past its date gets a red edge, so a late
+                // machine stands out from the grid without reading a word.
+                $lateHere = collect($p['orders'])->contains(fn ($o) => $o->delayState() === 'delayed');
+                $edge = $lateHere
+                    ? 'var(--danger-ink, #dc2626)'
+                    : ($s ? 'var(--success-ink)' : 'color-mix(in srgb, '.$gc.' 45%, #fff)');
+            @endphp
+            <div class="card panel" style="border-left:4px solid {{ $edge }};">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; flex-wrap:wrap;">
                     <h2 style="font-size:0.95rem; margin:0;">{{ $p['label'] }}</h2>
                     @if ($s)
@@ -48,7 +56,16 @@
                     @endif
 
                     {{-- Work waiting on this machine, visible without opening the form. --}}
-                    @php $waiting = $p['orders']->count(); @endphp
+                    @php
+                        $waiting = $p['orders']->count();
+                        $lateCount = collect($p['orders'])->filter(fn ($o) => $o->delayState() === 'delayed')->count();
+                    @endphp
+                    @if ($lateCount > 0)
+                        <span class="delay-chip is-late">
+                            <span class="delay-alert-dot" aria-hidden="true"></span>
+                            {{ $lateCount }} LATE
+                        </span>
+                    @endif
                     @if ($waiting > 0)
                         <span class="badge" style="background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;">
                             <span class="dot"></span>{{ $waiting }} TO {{ $p['key'] === 'sticker' ? 'PRINT' : ($group === 'Printing' ? 'PRINT' : 'DO') }}
@@ -62,10 +79,28 @@
                          stickers (printed as a batch) and mass production, which
                          is the rest of the order after the approved sample. --}}
                     <div style="margin-top:0.5rem; font-size:0.78rem; color:var(--ink-2); line-height:1.5;">
-                        @foreach ($p['orders'] as $o)
+                        {{-- Late jobs to the top: whoever takes this station should
+                             see what is holding the shop up first. --}}
+                        @php
+                            $queue = collect($p['orders'])->sortBy(fn ($o) => match ($o->delayState()) {
+                                'delayed' => 0,
+                                'at_risk' => 1,
+                                default => 2,
+                            })->values();
+                        @endphp
+                        @foreach ($queue as $o)
                             @php $step = $o->station_step ?? null; @endphp
-                            <div>
+                            <div @class(['station-job', 'is-late' => $o->delayState()])>
                                 <strong>{{ $o->order_number }}</strong>
+
+                                {{-- The floor is who can actually do something about
+                                     a late job, so the warning belongs here too. --}}
+                                @if ($delay = $o->delayState())
+                                    <span class="delay-chip {{ $delay === 'delayed' ? 'is-late' : 'is-at-risk' }}">
+                                        <span class="delay-alert-dot" aria-hidden="true"></span>
+                                        {{ $delay === 'delayed' ? 'DELAYED' : 'DUE TODAY' }}
+                                    </span>
+                                @endif
 
                                 @if ($p['key'] === 'sticker')
                                     · <span style="font-weight:700;">{{ number_format($o->quantity) }} pcs</span>

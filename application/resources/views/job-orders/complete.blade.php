@@ -180,6 +180,13 @@
     <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back to {{ $backLabel }}</a>
 </div>
 
+{{-- The operator opening this sheet is the one who can act on a late job, so
+     the warning rides along with the work. Screen only — it isn't part of the
+     printed document. --}}
+<div class="no-print" style="max-width:820px; margin:0 auto;">
+    @include('partials.delay-alert', ['order' => $order, 'size' => 'big'])
+</div>
+
 <div class="complete-doc">
     @unless ($scope)
     {{-- PAGE 1: MOCKUP (or LAYOUT until the mockup exists) --}}

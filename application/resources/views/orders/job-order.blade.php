@@ -42,6 +42,10 @@
     }
 </style>
 
+<div class="no-print">
+    @include('partials.delay-alert', ['order' => $order, 'size' => 'big'])
+</div>
+
 <div class="jo-actions no-print">
     @if (auth()->user()->canCreateOrders() && $jo)
         @if ($jo->status === 'draft')

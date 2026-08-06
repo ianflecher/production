@@ -339,7 +339,7 @@ class Task extends Model
             'Raw materials' => 'waiting at the raw materials desk',
             'Inventory' => 'waiting at the inventory desk',
             'Release to client' => 'with the account officer, to hand over to the client',
-            'Produce sample for client' => 'with the mover, on its way to the account officer',
+            'Produce sample for client' => 'with the account officer, to show the client',
             'Sticker' => 'waiting at the sticker printer',
             'Printer', 'Mass production' => 'waiting at '.($this->order->jobOrder?->printerLabel() ?: 'the printer'),
             default => 'waiting at the '.strtolower($this->department).' station',

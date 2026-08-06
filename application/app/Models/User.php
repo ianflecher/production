@@ -19,6 +19,9 @@ class User extends Authenticatable
     public const ROLE_FINANCE = 'finance';
     public const ROLE_AGENT = 'agent';
 
+    /** Walks the floor and chases progress; reads job orders, changes nothing. */
+    public const ROLE_MOVER = 'mover';
+
     /**
      * What "Reset password" puts an account back to, and what a seeded account
      * starts with. Staff are told this and change it themselves — deliberate
@@ -138,6 +141,10 @@ class User extends Authenticatable
             // so every leader page (approvals, users, orders, calendar) 403'd
             // even though UserController already scopes the user list for them.
             'supervisor' => self::ROLE_LEADER,
+            // The mover walks the floor chasing progress, so she needs to READ
+            // every job order and see where each one is stuck. She gets the
+            // viewing pages only — nothing that changes an order.
+            'mover' => self::ROLE_MOVER,
             default => self::ROLE_AGENT,
         };
     }
@@ -263,6 +270,11 @@ class User extends Authenticatable
         return $this->role === self::ROLE_FINANCE;
     }
 
+    public function isMover(): bool
+    {
+        return $this->role === self::ROLE_MOVER;
+    }
+
     /** Finance, leaders and super admins may see the payments ledger. */
     public function canManageFinance(): bool
     {
@@ -311,6 +323,7 @@ class User extends Authenticatable
             self::ROLE_LEADER => 'Leader',
             self::ROLE_SALES => 'Account Officer',
             self::ROLE_FINANCE => 'Finance',
+            self::ROLE_MOVER => 'Mover',
             default => 'Agent',
         };
     }

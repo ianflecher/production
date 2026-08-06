@@ -107,6 +107,8 @@
     @endif
 </div>
 
+@include('partials.delay-alert', ['order' => $order, 'size' => 'big'])
+
 @php
     $canRecordPayment = auth()->user()->canCreateOrders();
     $decoLabels = collect($order->decoration_methods ?? [])->map(fn ($m) => \App\Models\ProductionOrder::DECORATION_METHODS[$m] ?? $m);

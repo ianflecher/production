@@ -356,6 +356,19 @@
                                             </span>
                                         @endif
 
+                                        {{-- A job that is late, or due today and
+                                             still on the floor, plus where it is
+                                             stuck — so the row says who to chase. --}}
+                                        @if ($delay = $order->delayState())
+                                            <span class="delay-chip {{ $delay === 'delayed' ? 'is-late' : 'is-at-risk' }}">
+                                                <span class="delay-alert-dot" aria-hidden="true"></span>
+                                                {{ $order->delayLabel() }}
+                                            </span>
+                                            <span class="due-date-note" style="display:block; margin-top:0.15rem;">
+                                                at {{ $order->currentStepLabel() }}@if ($n = $order->nextStepLabel()) &rarr; {{ $n }}@endif
+                                            </span>
+                                        @endif
+
                                     </div>
                                 </td>
 

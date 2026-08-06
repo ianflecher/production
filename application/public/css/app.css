@@ -647,3 +647,123 @@
             body { font-size: 17px; }
             .content { max-width: 2440px; padding: 2.4rem 3.4rem 4rem; }
         }
+
+        /* ---- "Show me how" video guide on the artist's file-path field ----
+           Artists get stuck on two things: sharing the folder, and copying the
+           path. The clips answer both without anyone chasing IT. Collapsed by
+           default and preload="none", so nothing downloads unasked. */
+        .path-help { margin-top: 0.7rem; }
+        .path-help > summary {
+            cursor: pointer; display: inline-block;
+            font-weight: 600; font-size: 0.85rem; color: var(--accent-ink, #1d4ed8);
+            padding: 0.3rem 0; user-select: none;
+        }
+        .path-help > summary:hover { text-decoration: underline; }
+        .path-help[open] > summary { margin-bottom: 0.5rem; }
+
+        .path-help-videos {
+            display: grid; gap: 0.9rem;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+        .path-help-videos figure { margin: 0; }
+        .path-help-videos figcaption {
+            font-size: 0.8rem; font-weight: 600; color: var(--ink-1);
+            margin-bottom: 0.35rem;
+        }
+        .path-help-videos video {
+            width: 100%; max-width: 100%; display: block;
+            background: #000; border: 1px solid var(--border); border-radius: 8px;
+        }
+
+        /* ---- Deadline alert -------------------------------------------------
+           A job due today that is still on the floor, or one already past its
+           date. Loud on purpose: the mover and the leaders should spot it from
+           across the room without reading anything. */
+        .delay-alert {
+            border-radius: 10px; padding: 0.7rem 0.95rem; margin-bottom: 1rem;
+            border: 1px solid transparent; border-left-width: 5px;
+            font-size: 0.88rem; line-height: 1.5;
+        }
+        .delay-alert.is-late {
+            background: #fee2e2; border-color: #dc2626; color: #7f1d1d;
+        }
+        .delay-alert.is-at-risk {
+            background: #fff7ed; border-color: #f97316; color: #7c2d12;
+        }
+        .delay-alert-head {
+            display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+            letter-spacing: 0.02em;
+        }
+        .delay-alert-head strong { font-size: 0.95rem; }
+        .delay-alert-when { font-weight: 500; opacity: 0.9; }
+
+        /* Pulsing dot — motion is what catches the eye on a wall screen. */
+        .delay-alert-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: currentColor; flex: none;
+            animation: delay-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes delay-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: 0.35; transform: scale(0.8); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .delay-alert-dot { animation: none; }
+        }
+
+        .delay-alert-where {
+            display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+            margin-top: 0.45rem; padding-top: 0.45rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.09);
+        }
+        .delay-alert-step { display: inline-flex; align-items: baseline; gap: 0.32rem; }
+        .delay-alert-lbl {
+            text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em;
+            font-weight: 700; opacity: 0.65;
+        }
+        .delay-alert-who { font-weight: 500; opacity: 0.85; }
+        .delay-alert-arrow { opacity: 0.5; font-size: 1rem; }
+
+        /* Compact form for list rows. */
+        .delay-chip {
+            display: inline-flex; align-items: center; gap: 0.32rem;
+            border-radius: 999px; padding: 0.12rem 0.5rem;
+            font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+        .delay-chip.is-late { background: #fee2e2; color: #991b1b; }
+        .delay-chip.is-at-risk { background: #ffedd5; color: #9a3412; }
+        .delay-chip .delay-alert-dot { width: 7px; height: 7px; }
+
+        /* A late job in a station's queue — tinted so the row reads as urgent
+           even before anyone notices the chip. */
+        .station-job.is-late {
+            background: #fef2f2; border-radius: 6px;
+            margin: 0 -0.25rem; padding: 0.1rem 0.25rem;
+        }
+
+        /* ---- Big deadline banner ---------------------------------------------
+           On the pages the floor works from, the warning has to be readable
+           standing back from the screen, not squinting at a chip. */
+        .delay-alert.is-big {
+            border-left-width: 8px; border-radius: 12px;
+            padding: 1.1rem 1.3rem; margin-bottom: 1.2rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+        .delay-alert.is-big .delay-alert-head { gap: 0.7rem; }
+        .delay-alert.is-big .delay-alert-head strong {
+            font-size: 1.6rem; line-height: 1.15; letter-spacing: 0.01em;
+        }
+        .delay-alert.is-big .delay-alert-dot { width: 16px; height: 16px; }
+        .delay-alert.is-big .delay-alert-when { font-size: 0.95rem; }
+        .delay-alert.is-big .delay-alert-where {
+            margin-top: 0.7rem; padding-top: 0.7rem; gap: 0.7rem;
+            font-size: 1.05rem;
+        }
+        .delay-alert.is-big .delay-alert-lbl { font-size: 0.72rem; }
+        .delay-alert.is-big .delay-alert-arrow { font-size: 1.3rem; }
+
+        @media (max-width: 640px) {
+            .delay-alert.is-big { padding: 0.85rem 1rem; }
+            .delay-alert.is-big .delay-alert-head strong { font-size: 1.25rem; }
+        }

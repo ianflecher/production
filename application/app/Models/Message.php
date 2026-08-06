@@ -114,6 +114,7 @@ class Message extends Model
     public static function canAccess(User $user, ProductionOrder $order): bool
     {
         return $user->isLeader()
+            || $user->isMover()
             || ($user->isSales() && $order->created_by === $user->id)
             || $order->tasks()->where('assigned_to', $user->id)->exists();
     }
@@ -122,7 +123,9 @@ class Message extends Model
     public static function accessibleOrderIds(User $user): \Illuminate\Support\Collection
     {
         return ProductionOrder::query()
-            ->when(! $user->isLeader(), function ($q) use ($user) {
+            // The mover follows every job, so every thread is hers to read —
+            // same as a leader.
+            ->when(! $user->isLeader() && ! $user->isMover(), function ($q) use ($user) {
                 $q->where(function ($w) use ($user) {
                     $w->where('created_by', $user->id)
                         ->orWhereHas('tasks', fn ($t) => $t->where('assigned_to', $user->id));

@@ -338,6 +338,108 @@ class ProductionOrder extends Model
         return [$tasks->where('status', 'complete')->count(), $tasks->count()];
     }
 
+    /* ==================== Running late ==================== */
+
+    /** Nothing can be late once it's finished, cancelled or paused. */
+    public function chasesDeadline(): bool
+    {
+        return $this->status === 'active' && $this->due_date !== null;
+    }
+
+    /**
+     * How this job stands against its due date:
+     *   'delayed'  — the day has passed and it still isn't out the door
+     *   'at_risk'  — it's due TODAY and still on the floor
+     *   null       — nothing to worry about
+     */
+    public function delayState(): ?string
+    {
+        if (! $this->chasesDeadline()) {
+            return null;
+        }
+
+        $due = $this->due_date->copy()->startOfDay();
+        $today = now()->startOfDay();
+
+        if ($due->lt($today)) {
+            return 'delayed';
+        }
+
+        return $due->eq($today) ? 'at_risk' : null;
+    }
+
+    /** Plain wording for the banner. */
+    public function delayLabel(): ?string
+    {
+        return match ($this->delayState()) {
+            'delayed' => 'PROJECT DELAYED',
+            'at_risk' => 'PROJECT MAY BE DELAYED',
+            default => null,
+        };
+    }
+
+    /** How many days past due, for spelling out how bad it is. */
+    public function daysLate(): int
+    {
+        if ($this->delayState() !== 'delayed') {
+            return 0;
+        }
+
+        return (int) $this->due_date->copy()->startOfDay()->diffInDays(now()->startOfDay());
+    }
+
+    /**
+     * The step the job is sitting on right now — the earliest one that has been
+     * released to somebody and isn't finished. Null when nothing is moving.
+     */
+    public function currentStep(): ?Task
+    {
+        return $this->tasks
+            ->whereIn('status', ['ready', 'in_progress', 'for_checking', 'revision_required'])
+            ->sortBy([['stage', 'asc'], ['sequence', 'asc']])
+            ->first();
+    }
+
+    /**
+     * What picks the job up once the current step is signed off. Looks past
+     * everything still open at the current step, so it names the genuine next
+     * stop rather than a sibling running alongside.
+     */
+    public function nextStep(): ?Task
+    {
+        $open = $this->tasks
+            ->whereNotIn('status', ['complete', 'cancelled'])
+            ->sortBy([['stage', 'asc'], ['sequence', 'asc']]);
+
+        $current = $this->currentStep();
+
+        // Nothing released yet — whatever is first in the queue is what's next.
+        if (! $current) {
+            return $open->first();
+        }
+
+        // Steps sharing the current stage run alongside it, not after it.
+        return $open->first(fn ($t) => $t->stage > $current->stage);
+    }
+
+    /** Where the job is, in words the office uses. */
+    public function currentStepLabel(): string
+    {
+        $step = $this->currentStep();
+
+        if (! $step) {
+            return $this->status === 'complete' ? 'Finished' : 'Not started';
+        }
+
+        return $step->department;
+    }
+
+    /** What happens after the current step, or null when this is the last one. */
+    public function nextStepLabel(): ?string
+    {
+        return $this->nextStep()?->department;
+    }
+
     /* ==================== Pipeline construction ==================== */
 
     /**
@@ -383,8 +485,6 @@ class ProductionOrder extends Model
         'Pairing' => 'Pairing',
         'Sewing' => 'Sewing',
         'Quality control' => 'Quality Control',
-        // The mover carries the finished sample to the account officer.
-        'Produce sample for client' => 'Mover',
     ];
 
     /**
@@ -602,9 +702,11 @@ class ProductionOrder extends Model
             }
             $add(8, 'Quality control', $prod);
 
-            // 9 — after QC the mover carries the first sample to the account officer,
-            // who shows the client and approves it before the rest is made.
-            $add(9, 'Produce sample for client', $prod, 'sales');
+            // 9 — once QC passes, the first sample is for the account officer to
+            // show the client. Nobody "works" this step, so it lands straight on
+            // Sample Review rather than waiting at a station for someone to
+            // close it — carrying it across the room isn't a system step.
+            $add(9, 'Produce sample for client', $prod, 'sales', true);
         }
 
         // 10 — mass production (prints the whole batch; the entire order when the

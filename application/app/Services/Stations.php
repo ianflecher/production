@@ -85,16 +85,8 @@ class Stations
             ];
         }
 
-        // Mover: handles material movement between stations
-        $stations['mover'] = [
-            'label' => 'Mover',
-            'group' => 'Production Line',
-            // The mover carries work between machines but does NOT finish those
-            // steps — cutting, pairing, sewing and QC are closed by the people on
-            // those stations. The one step the mover owns is taking the finished
-            // sample to the account officer.
-            'departments' => ['Produce sample for client'],
-        ];
+        // The mover has no station: she walks the floor reading job orders and
+        // chasing progress, and closes no step of her own.
 
         // The "Inventory" step is handled by the finished-products desk
         // (products page), not a machine station, so it has no station board tile.
@@ -146,9 +138,8 @@ class Stations
             'sewing' => $sewings,
             'quality control' => $qcs,
             'qc' => $qcs,
-            'mover' => ['mover'],
             // The old broad "production" role covers the whole line.
-            'production' => array_merge($cuttings, $pairings, $sewings, $qcs, ['mover']),
+            'production' => array_merge($cuttings, $pairings, $sewings, $qcs),
         ];
 
         return $map[strtolower(trim((string) $user->job_role))] ?? [];

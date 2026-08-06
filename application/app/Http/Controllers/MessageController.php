@@ -164,7 +164,11 @@ class MessageController extends Controller
 
     /**
      * Everyone in an order's conversation: the officer who owns it, whoever is
-     * assigned to its tasks, and the leaders/admins.
+     * assigned to its tasks, the leaders/admins — and the mover.
+     *
+     * The mover is in every conversation whether or not she holds a task on it,
+     * because chasing a job is her whole job: she has to be reachable by name on
+     * any order without someone first assigning her something.
      */
     private function participants(ProductionOrder $order)
     {
@@ -174,7 +178,8 @@ class MessageController extends Controller
             ->where(function ($q) use ($ids, $order) {
                 $q->whereIn('id', $ids)
                     ->orWhere('id', $order->created_by)
-                    ->orWhereIn('job_role', [User::ROLE_LEADER, User::ROLE_SUPER_ADMIN]);
+                    ->orWhereIn('job_role', [User::ROLE_LEADER, User::ROLE_SUPER_ADMIN])
+                    ->orWhereRaw('LOWER(TRIM(job_role)) = ?', ['mover']);
             })
             ->orderBy('name')
             ->get();

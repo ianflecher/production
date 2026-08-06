@@ -128,12 +128,18 @@ class DemoDataSeeder extends Seeder
     /** Clear only the business tables, so the seeder can be re-run freely. */
     private function wipe(): void
     {
+        // Everything in truncate-business-data.sql except push_subscriptions —
+        // those are real browser registrations belonging to staff, and wiping
+        // them would quietly unsubscribe people from their alerts.
         $tables = [
-            'message_reads', 'message_files', 'messages',
+            'message_reads', 'message_files', 'message_mentions', 'messages',
             'task_files', 'tasks', 'order_documents', 'payments',
             'material_requests', 'order_items', 'job_order_files', 'job_orders',
             'product_receipts', 'product_movements', 'product_items',
             'stock_movements', 'inventory_items',
+            // Station sessions point at orders. Left behind, a re-seed leaves
+            // operators "running" jobs that no longer exist.
+            'station_sessions',
             'production_orders', 'clients', 'expenses', 'app_notifications',
             'attendances',
         ];
@@ -216,6 +222,17 @@ class DemoDataSeeder extends Seeder
             // Finished jobs were ordered in the past; live ones are due ahead.
             $done = in_array($stop, ['complete', 'cancelled'], true);
             $due = $done ? now()->subWeeks($weeks - 6)->startOfDay() : now()->addWeeks($weeks)->startOfDay();
+
+            // A real shop is never all green: leave a couple of live jobs sitting
+            // on or past their date so the deadline alerts have something to show.
+            if (! $done) {
+                if ($i % 7 === 3) {
+                    $due = now()->subDays(2 + ($i % 4))->startOfDay();   // already late
+                } elseif ($i % 7 === 5) {
+                    $due = now()->startOfDay();                          // due today
+                }
+            }
+
             $placed = (clone $due)->subWeeks(4);
 
             // Every fourth job is a rush, and a couple carry a discount.
