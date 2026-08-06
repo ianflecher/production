@@ -64,7 +64,9 @@ class MessageController extends Controller
         Message::markRead($me, $order->id);
 
         return view('messages.show', [
-            'order' => $order->load('client'),
+            // Tasks come along so the thread can show where the job actually
+            // is — most of what gets asked here is "how far has this got?".
+            'order' => $order->load(['client', 'tasks.assignee']),
             'messages' => $messages,
             'participants' => $this->participants($order),
         ]);

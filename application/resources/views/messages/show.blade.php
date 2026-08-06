@@ -29,6 +29,20 @@
     .who-am-i label { font-size: 0.8rem; font-weight: 600; color: var(--ink-1); margin: 0; }
     .who-am-i input { width: 190px; }
     .who-am-i .hint { font-size: 0.76rem; color: var(--ink-3); }
+
+    /* Where the job is, sitting above the conversation about it. */
+    .pipeline-peek { margin-bottom: 1rem; padding: 0.85rem 1.05rem; }
+    .pipeline-peek-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; font-size: 0.88rem; }
+    .pipeline-peek-now { color: var(--ink-1); }
+    .pipeline-peek .lbl { text-transform: uppercase; font-size: 0.66rem; letter-spacing: 0.06em; font-weight: 700; color: var(--ink-3); }
+    .pipeline-peek .arrow { opacity: 0.45; margin: 0 0.15rem; }
+    .pipeline-peek .muted-inline { color: var(--ink-3); }
+    .pipeline-peek-all { margin-top: 0.6rem; }
+    .pipeline-peek-all > summary { cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--accent-ink, #1d4ed8); }
+    .pipeline-peek-all ol { margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.82rem; }
+    .pipeline-peek-all li { padding: 0.15rem 0; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+    .pipeline-peek-all li.is-done .dept { color: var(--ink-3); text-decoration: line-through; }
+    .pipeline-peek-all li.is-now { font-weight: 700; }
     .mention { font-weight: 700; color: #1d4ed8; background: rgba(29,78,216,0.10); border-radius: 5px; padding: 0 3px; }
     .msg-photo { display: block; margin-top: 0.45rem; }
     .msg-photo img { max-width: 260px; max-height: 260px; width: auto; height: auto; border-radius: 10px; display: block; }
@@ -62,6 +76,53 @@
     </div>
     <a href="{{ route('messages.index') }}" class="btn btn-ghost">← All messages</a>
     <a href="{{ route('orders.show', $order) }}" class="btn btn-primary">Open job order</a>
+</div>
+
+@include('partials.delay-alert', ['order' => $order])
+
+{{-- Where the job actually is, right above the conversation about it. Nearly
+     every thread here is somebody asking how far it has got, so the answer sits
+     with the question instead of a page away. --}}
+@php
+    [$doneSteps, $totalSteps] = $order->progress();
+    $pct = $totalSteps ? round($doneSteps / $totalSteps * 100) : 0;
+    $currentStep = $order->currentStep();
+@endphp
+
+<div class="card panel pipeline-peek">
+    <div class="pipeline-peek-head">
+        <strong>{{ $doneSteps }} of {{ $totalSteps }} steps done</strong>
+        <span class="pipeline-peek-now">
+            @if ($order->status === 'complete')
+                Finished
+            @else
+                <span class="lbl">Now at</span> {{ $order->currentStepLabel() }}
+                @if ($who = $currentStep?->assignee?->name)<span class="muted-inline">— {{ $who }}</span>@endif
+                @if ($next = $order->nextStepLabel())
+                    <span class="arrow">&rarr;</span> <span class="lbl">Next</span> {{ $next }}
+                @endif
+            @endif
+        </span>
+    </div>
+
+    <div class="progress" style="height:9px;">
+        <div style="width: {{ $pct }}%; background: linear-gradient(90deg, var(--brand), #a855f7 50%, var(--accent));"></div>
+    </div>
+
+    <details class="pipeline-peek-all">
+        <summary>Every step</summary>
+        <ol>
+            @foreach ($order->tasks->sortBy([['stage', 'asc'], ['sequence', 'asc']]) as $t)
+                <li @class(['is-done' => $t->status === 'complete', 'is-now' => $t->id === $currentStep?->id])>
+                    <span class="dept">{{ $t->department }}</span>
+                    @include('partials.status', ['status' => $t->status])
+                    @if ($t->operator_name || $t->assignee)
+                        <span class="muted-inline">{{ $t->operator_name ?: $t->assignee?->name }}</span>
+                    @endif
+                </li>
+            @endforeach
+        </ol>
+    </details>
 </div>
 
 <div class="card panel">

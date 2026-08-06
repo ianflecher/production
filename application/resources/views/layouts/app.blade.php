@@ -84,13 +84,10 @@
                         Calendar
                     </a>
                 @elseif (auth()->user()->isMover())
-                    {{-- The mover walks the floor asking why a job is taking so
-                         long, so she gets the job orders and the calendar to read
-                         — no buttons that change anything. --}}
-                    <a href="{{ route('orders.index') }}" class="nav-item {{ request()->routeIs('orders.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-                        Job Orders
-                    </a>
+                    {{-- The mover works from the conversations: each thread now
+                         carries the job's pipeline, so a separate Job Orders tab
+                         was a second way to the same thing. The pages are still
+                         reachable — "Open job order" sits in every thread. --}}
                     <a href="{{ route('calendar') }}" class="nav-item {{ request()->routeIs('calendar') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                         Calendar
