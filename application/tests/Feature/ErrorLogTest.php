@@ -127,6 +127,32 @@ class ErrorLogTest extends TestCase
         $this->assertSame(0, ErrorLog::countRecent(7));
     }
 
+    /**
+     * The log shrinking must not cost us an error.
+     *
+     * PHP caches stat results per path, so after a rotate or truncate
+     * filesize() can still report the old, larger size. Reading the "tail"
+     * from a stale size lands at the start of the file and then throws away
+     * the first line -- which is a real error nobody would ever see.
+     */
+    public function test_a_shrunken_log_still_reports_its_first_error(): void
+    {
+        $path = ErrorLog::path();
+        $now = now()->format('Y-m-d H:i:s');
+
+        // Make it big, and read it so the stat cache holds the large size.
+        $this->writeLog(str_repeat($this->line($now, 'production', 'ERROR', 'noise'), 50_000));
+        $this->assertGreaterThan(2_097_152, strlen(file_get_contents($path)), 'the log needs to exceed the tail cap');
+
+        // Now it shrinks, exactly as a rotate would leave it.
+        file_put_contents($path, str_repeat($this->line($now, 'production', 'ERROR', 'after the rotate'), 3));
+
+        $errors = ErrorLog::recent(7);
+
+        $this->assertCount(1, $errors);
+        $this->assertSame(3, $errors[0]['count'], 'the first line was dropped');
+    }
+
     // ---- The page ----------------------------------------------------------
 
     public function test_a_leader_can_see_the_errors_page(): void

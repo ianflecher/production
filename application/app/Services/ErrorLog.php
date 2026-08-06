@@ -123,12 +123,17 @@ class ErrorLog
     /** The last $bytes of a file, starting from a whole line. */
     private static function tail(string $file, int $bytes): string
     {
-        $size = filesize($file);
         $handle = fopen($file, 'rb');
 
         if ($handle === false) {
             return '';
         }
+
+        // Measure from the open handle rather than filesize(). PHP caches stat
+        // results per path, so after the log is rotated or truncated filesize()
+        // can still report the old, larger size — and the seek below would then
+        // skip a line that is actually the first one in the file.
+        $size = fstat($handle)['size'] ?? 0;
 
         if ($size > $bytes) {
             fseek($handle, -$bytes, SEEK_END);
