@@ -141,9 +141,15 @@ class Message extends Model
     public static function accessibleOrderIds(User $user): \Illuminate\Support\Collection
     {
         return ProductionOrder::query()
-            // The mover follows every job once it reaches the floor; the
-            // printer check happens where the list is built, since it reads the
-            // task timestamps.
+            // A job becomes the mover's when it reaches the printer. This is
+            // the one place that decides it, so her unread badge counts the
+            // same threads her inbox lists — otherwise the badge promises
+            // messages on jobs she cannot open.
+            ->when($user->isMover(), fn ($q) => $q->whereHas(
+                'tasks',
+                fn ($t) => $t->where('department', ProductionOrder::MOVER_FIRST_STEP)
+                    ->whereNotNull('released_at')
+            ))
             ->when(! $user->isLeader() && ! $user->isMover(), function ($q) use ($user) {
                 $q->where(function ($w) use ($user) {
                     $w->where('created_by', $user->id)

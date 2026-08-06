@@ -211,4 +211,67 @@ class MoverSeesTheFloorOnlyTest extends TestCase
             ->assertOk()
             ->assertSee(route('orders.job-order', $order), false);
     }
+
+    // ---- The unread badge --------------------------------------------------
+
+    public function test_the_badge_does_not_count_jobs_that_are_not_hers(): void
+    {
+        $order = $this->order();
+        $sales = User::find($order->created_by);
+        $mover = $this->mover();
+
+        $this->said($order, $sales, 'still waiting on the downpayment', now()->subDay());
+
+        // Promising unread messages on a job she cannot open is worse than no
+        // badge at all — she clicks it and finds nothing.
+        $this->assertSame(0, Message::unreadFor($mover->id));
+    }
+
+    public function test_the_badge_counts_it_once_it_reaches_the_printer(): void
+    {
+        $order = $this->order();
+        $sales = User::find($order->created_by);
+        $mover = $this->mover();
+
+        $this->said($order, $sales, 'printer has it now', now()->subMinutes(10));
+        $this->reachedTheFloor($order, now()->subHour());
+
+        $this->assertSame(1, Message::unreadFor($mover->id));
+    }
+
+    public function test_the_badge_matches_what_her_inbox_lists(): void
+    {
+        $hers = $this->order();
+        $sales = User::find($hers->created_by);
+        $mover = $this->mover();
+
+        $notHers = ProductionOrder::create([
+            'order_number' => 'IC2026-08801', 'customer_name' => 'Not Hers',
+            'product_type' => 'round_neck', 'quantity' => 5,
+            'due_date' => now()->addWeek(), 'status' => 'active', 'created_by' => $sales->id,
+        ]);
+
+        $this->said($hers, $sales, 'on the floor', now()->subMinutes(5));
+        $this->said($notHers, $sales, 'still with the artist', now()->subMinutes(5));
+        $this->reachedTheFloor($hers, now()->subHour());
+
+        $this->assertSame(1, Message::unreadFor($mover->id), 'one thread, one unread');
+
+        $this->actingAs($mover)->get('/messages')
+            ->assertOk()
+            ->assertSee($hers->order_number, false)
+            ->assertDontSee($notHers->order_number, false);
+    }
+
+    public function test_everyone_else_is_counted_as_before(): void
+    {
+        $order = $this->order();
+        $sales = User::find($order->created_by);
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        $this->said($order, $sales, 'anything', now());
+
+        // Not on the floor yet, but a leader sees the whole shop regardless.
+        $this->assertSame(1, Message::unreadFor($leader->id));
+    }
 }

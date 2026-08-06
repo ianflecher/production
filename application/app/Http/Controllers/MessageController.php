@@ -32,13 +32,9 @@ class MessageController extends Controller
                 'messages.sender',
                 'messages.files',
             ])
-            ->get()
-            // A job still with the artist or the account officer is not the
-            // mover's yet — listing it would only open onto an empty thread.
-            ->when($me->isMover(), fn ($all) => $all->filter(
-                fn ($order) => $order->reachedTheFloorAt() !== null
-            ))
-            ->values();
+            // Which orders are this person's is decided by accessibleOrderIds
+            // above — including the mover's "once it reaches the printer".
+            ->get();
 
         $threads = $orders->map(function ($order) use ($me) {
             $last = $order->messages->first();
