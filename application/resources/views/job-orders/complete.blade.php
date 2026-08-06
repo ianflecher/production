@@ -171,6 +171,9 @@
         // Approvals, the floor from the station board, sales from the job order.
         [$backUrl, $backLabel] = match (true) {
             $u->isLeader() => [route('approvals'), 'approvals'],
+            // The mover has no station and no task list — her way in is the
+            // conversation about the job.
+            $u->isMover() => [route('messages.show', $order), 'messages'],
             $u->canUseStations() => [route('stations.index'), 'stations'],
             $u->canManageInventory() => [route('inventory.requests'), 'material requests'],
             $u->canManageProducts() => [route('products.index'), 'inventory'],

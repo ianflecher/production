@@ -29,7 +29,15 @@
         <p class="muted">{{ $order->order_number }} · {{ $order->customer_name }} — build the layout from the design below.</p>
     </div>
     {{-- Shown via orders.references (office) and tasks.references (artists). --}}
-    @php $backUrl = (auth()->user()->isSales() || auth()->user()->isLeader()) ? route('orders.show', $order) : route('tasks.mine'); @endphp
+    @php
+        $u = auth()->user();
+        $backUrl = match (true) {
+            $u->isSales() || $u->isLeader() => route('orders.show', $order),
+            // No task list for the mover — she comes in from the conversation.
+            $u->isMover() => route('messages.show', $order),
+            default => route('tasks.mine'),
+        };
+    @endphp
     <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back</a>
 </div>
 

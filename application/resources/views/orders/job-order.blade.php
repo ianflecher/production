@@ -82,8 +82,19 @@
     <button onclick="window.print()" class="btn btn-ghost btn-sm">🖨 Print</button>
     {{-- This sheet is shown to office staff (orders.job-order) AND to artists
          (tasks.job-order), so send each back somewhere they can actually open. --}}
-    @php $backUrl = (auth()->user()->isSales() || auth()->user()->isLeader()) ? route('orders.show', $order) : route('tasks.mine'); @endphp
-    <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back</a>
+    @php
+        $u = auth()->user();
+
+        // Send each person back somewhere they can actually use. The mover has
+        // no task list — she works from the conversations, so back means the
+        // thread for this job, not an empty My Tasks she has no link to.
+        [$backUrl, $backLabel] = match (true) {
+            $u->isSales() || $u->isLeader() => [route('orders.show', $order), 'order'],
+            $u->isMover() => [route('messages.show', $order), 'messages'],
+            default => [route('tasks.mine'), 'my tasks'],
+        };
+    @endphp
+    <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back to {{ $backLabel }}</a>
 </div>
 
 @include('partials.job-order-sheet', ['order' => $order])
