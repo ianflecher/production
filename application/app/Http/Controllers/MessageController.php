@@ -80,7 +80,17 @@ class MessageController extends Controller
             'body' => ['nullable', 'string', 'max:5000'],
             'files' => ['nullable', 'array', 'max:10'],
             'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf', 'max:65536'],
+            // Shared accounts say who is actually typing.
+            'sender_name' => [$me->sharesAccount() ? 'required' : 'nullable', 'string', 'max:100'],
+        ], [
+            'sender_name.required' => 'Type your name first — this account is shared, so the message needs to say who it is from.',
         ]);
+
+        // Remembered for the rest of the shift, so it is typed once rather than
+        // before every message.
+        if ($me->sharesAccount()) {
+            $request->session()->put('sender_name', trim($data['sender_name']));
+        }
 
         $body = trim((string) ($data['body'] ?? ''));
         $hasFiles = $request->hasFile('files');
@@ -94,6 +104,7 @@ class MessageController extends Controller
         $message = Message::create([
             'production_order_id' => $order->id,
             'sender_id' => $me->id,
+            'sender_name' => $me->sharesAccount() ? trim($data['sender_name']) : null,
             'body' => $body !== '' ? $body : null,
         ]);
 

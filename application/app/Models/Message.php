@@ -11,11 +11,24 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Message extends Model
 {
-    protected $fillable = ['production_order_id', 'sender_id', 'body'];
+    protected $fillable = ['production_order_id', 'sender_id', 'sender_name', 'body'];
 
     public function sender()
     {
         return $this->belongsTo(User::class, 'sender_id');
+    }
+
+    /**
+     * Who to answer. Shared accounts — the mover's especially — carry the name
+     * the person typed, because "Mover" alone doesn't tell anyone who asked.
+     */
+    public function senderLabel(): string
+    {
+        $account = $this->sender?->name ?? 'Someone';
+
+        return filled($this->sender_name) && $this->sender_name !== $account
+            ? $this->sender_name.' ('.$account.')'
+            : $account;
     }
 
     public function order()

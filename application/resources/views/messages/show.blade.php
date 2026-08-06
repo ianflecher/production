@@ -6,12 +6,29 @@
 @section('content')
 <style>
     .thread { display: flex; flex-direction: column; gap: 0.7rem; max-height: 56vh; overflow-y: auto; padding: 0.4rem; }
-    .bubble-row { display: flex; flex-direction: column; }
+    /* Shrink to the words. Without this the row stretches its child, so "ok"
+       got the same slab as a paragraph. */
+    .bubble-row { display: flex; flex-direction: column; align-items: flex-start; }
     .bubble-row.mine { align-items: flex-end; }
     .who { font-size: 0.72rem; color: var(--ink-3); margin-bottom: 0.18rem; padding: 0 0.35rem; }
-    .bubble { max-width: min(68ch, 82%); padding: 0.6rem 0.85rem; border-radius: 14px; background: var(--border); font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    /* pre-wrap belongs on the message text alone. On the bubble it also kept
+       the template's own newlines and indentation, so a two-letter message
+       came out as tall as a paragraph. */
+    .bubble { max-width: min(68ch, 82%); padding: 0.5rem 0.8rem; border-radius: 14px; background: var(--border); font-size: 0.9rem; line-height: 1.45; word-break: break-word; }
+    /* Inline so a short message and its time share one line instead of the
+       time claiming a whole row to itself. */
+    .bubble .text { white-space: pre-wrap; display: inline; }
     .bubble-row.mine .bubble { background: var(--sidebar-bg); color: #fff; }
-    .bubble .when { display: block; margin-top: 0.3rem; font-size: 0.7rem; opacity: 0.7; }
+    /* The time tucks in beside short messages instead of taking a line of its
+       own, and drops below only when the text actually fills the width. */
+    .bubble .when { float: right; margin: 0.35rem 0 0 0.6rem; font-size: 0.68rem; opacity: 0.6; }
+    .bubble::after { content: ''; display: block; clear: both; }
+
+    /* Name box for shared logins. */
+    .who-am-i { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0.6rem 0 0.2rem; }
+    .who-am-i label { font-size: 0.8rem; font-weight: 600; color: var(--ink-1); margin: 0; }
+    .who-am-i input { width: 190px; }
+    .who-am-i .hint { font-size: 0.76rem; color: var(--ink-3); }
     .mention { font-weight: 700; color: #1d4ed8; background: rgba(29,78,216,0.10); border-radius: 5px; padding: 0 3px; }
     .msg-photo { display: block; margin-top: 0.45rem; }
     .msg-photo img { max-width: 260px; max-height: 260px; width: auto; height: auto; border-radius: 10px; display: block; }
@@ -53,12 +70,10 @@
             @php $mine = $m->sender_id === auth()->id(); @endphp
             <div class="bubble-row {{ $mine ? 'mine' : '' }}">
                 @unless ($mine)
-                    <div class="who">{{ $m->sender?->name ?? 'Someone' }}</div>
+                    <div class="who">{{ $m->senderLabel() }}</div>
                 @endunless
                 <div class="bubble">
-                    @if (filled($m->body))
-                        {!! $m->bodyWithMentions() !!}
-                    @endif
+                    @if (filled($m->body))<div class="text">{!! $m->bodyWithMentions() !!}</div>@endif
 
                     @foreach ($m->files as $f)
                         @if ($f->isImage())
@@ -83,7 +98,20 @@
         <div id="end"></div>
     </div>
 
-    <form method="POST" action="{{ route('messages.store', $order) }}" class="composer" enctype="multipart/form-data">
+    @if (auth()->user()->sharesAccount())
+        {{-- Several people share this login, so a message signed with the
+             account name tells nobody who to answer. Typed once and kept for
+             the shift, the way an operator's name is at a station. --}}
+        <div class="who-am-i">
+            <label for="senderName">Your name</label>
+            <input id="senderName" name="sender_name" form="composerForm" type="text" maxlength="100" required
+                   value="{{ old('sender_name', session('sender_name')) }}"
+                   placeholder="e.g. Louiza" autocomplete="off">
+            <span class="hint">This account is shared — messages are signed with the name you type.</span>
+        </div>
+    @endif
+
+    <form method="POST" action="{{ route('messages.store', $order) }}" class="composer" id="composerForm" enctype="multipart/form-data">
         @csrf
         <div style="flex:1; min-width:200px;">
             <textarea name="body" id="composerBody" rows="2" maxlength="5000" autocomplete="off"

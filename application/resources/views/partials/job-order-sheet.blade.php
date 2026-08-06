@@ -206,7 +206,10 @@
         <tr><td class="lbl-l">Press Operator:</td><td colspan="3">{{ $who(array_values(\App\Models\ProductionOrder::DECORATION_METHODS)) }}</td></tr>
         <tr><td class="lbl-l">Lazer Cutter Operator:</td><td colspan="3">{{ $who(['Laser cutting', 'Manual cutting']) }}</td></tr>
         <tr><td class="lbl-l">Pairing:</td><td colspan="3">{{ $who(['Pairing']) }}</td></tr>
-        <tr><td class="lbl-l">Mover:</td><td colspan="3">{{ $who(['Produce sample for client']) }}</td></tr>
+        {{-- The mover closes no step, so there is no operator name to read off
+             one. Who followed this job is who signed a message on it — several
+             people share the one login, and each types their own name. --}}
+        <tr><td class="lbl-l">Mover:</td><td colspan="3">{{ $order->moverNames() ?: '' }}</td></tr>
         @if ($jo?->needs_embroidery)
             <tr>
                 <td class="lbl-l">Embroidery:</td>

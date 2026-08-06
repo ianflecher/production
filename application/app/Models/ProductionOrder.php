@@ -338,6 +338,24 @@ class ProductionOrder extends Model
         return [$tasks->where('status', 'complete')->count(), $tasks->count()];
     }
 
+    /**
+     * The movers who followed this job, in the order they first spoke.
+     *
+     * They close no step, so there is no operator name to read off one — what
+     * says a mover was on this job is that they wrote on it, and because the
+     * login is shared each of them signs with their own name.
+     */
+    public function moverNames(): string
+    {
+        return $this->messages()
+            ->whereNotNull('sender_name')
+            ->whereHas('sender', fn ($q) => $q->whereRaw('LOWER(TRIM(job_role)) = ?', ['mover']))
+            ->orderBy('id')
+            ->pluck('sender_name')
+            ->unique()
+            ->join(', ');
+    }
+
     /* ==================== Running late ==================== */
 
     /** Nothing can be late once it's finished, cancelled or paused. */

@@ -275,6 +275,17 @@ class User extends Authenticatable
         return $this->role === self::ROLE_MOVER;
     }
 
+    /**
+     * One login, many people. Several movers walk the floor under the same
+     * account, the way the machine stations are shared — so anything they
+     * write has to carry the name of whoever actually wrote it, or nobody
+     * knows who to answer.
+     */
+    public function sharesAccount(): bool
+    {
+        return $this->isMover();
+    }
+
     /** Finance, leaders and super admins may see the payments ledger. */
     public function canManageFinance(): bool
     {
