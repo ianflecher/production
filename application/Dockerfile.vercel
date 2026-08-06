@@ -65,4 +65,15 @@ RUN mkdir -p \
     bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-CMD ["sh", "-c", "exec php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
+# Compile the Blade templates and the route table into the image. Without this
+# the first request to every page compiles it on the spot, which is slow and
+# needs a writable disk at runtime. Neither step reads the environment, so it
+# is safe to bake in (config:cache is NOT — it would freeze build-time env).
+RUN php artisan view:cache && php artisan route:cache
+
+# The schema has to match the code before the first request. Nothing ran
+# migrations here, so every column added since the database was created was
+# missing and each page 500'd on a SQL error. If the database is unreachable
+# the container now fails to start, which is louder and easier to diagnose
+# than a site that answers 500 to everything.
+CMD ["sh", "-c", "php artisan migrate --force && exec php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
