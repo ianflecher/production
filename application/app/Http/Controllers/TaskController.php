@@ -105,6 +105,70 @@ class TaskController extends Controller
         return view('orders.references', ['order' => $order]);
     }
 
+    /**
+     * Correct the network path on an export step that has already been sent.
+     *
+     * The step completes the moment the path is handed over, so a typo, or a
+     * file that has since been moved or renamed, used to leave production
+     * pointed at nothing with no way for the artist to put it right. They can
+     * now edit it and send it again; the step stays complete, because the work
+     * was done — only its address changed.
+     */
+    public function updatePath(Request $request, int $taskId): RedirectResponse
+    {
+        $user = $request->user();
+
+        $task = Task::with('files')
+            ->when(! $user->isLeader(), fn ($q) => $q->where('assigned_to', $user->id))
+            ->findOrFail($taskId);
+
+        abort_unless($task->usesFilePath(), 404);
+
+        $slots = $task->fileSlots();
+
+        $rules = [];
+        $messages = [];
+        foreach ($slots as $key => $label) {
+            $rules["paths.$key"] = ['required', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
+            $messages["paths.$key.required"] = "Enter the file path for the {$label}.";
+        }
+        $request->validate($rules, $messages);
+
+        $changed = [];
+
+        foreach ($slots as $key => $label) {
+            $path = trim((string) $request->input("paths.$key"));
+
+            // The newest file carrying this label is the one production reads.
+            $file = $task->files()->where('label', $label)->orderByDesc('id')->first();
+
+            if (! $file) {
+                $task->files()->create([
+                    'path' => null,
+                    'external_path' => $path,
+                    'original_name' => basename(str_replace('\\', '/', $path)) ?: $path,
+                    'label' => $label,
+                    'round' => (int) $task->revision_count + 1,
+                    'uploaded_by' => $user->id,
+                ]);
+                $changed[] = $label;
+
+                continue;
+            }
+
+            if ($file->external_path !== $path) {
+                $file->update(['external_path' => $path, 'uploaded_by' => $user->id]);
+                $changed[] = $label;
+            }
+        }
+
+        if ($changed === []) {
+            return back()->with('success', 'Nothing changed — the paths are the same as before.');
+        }
+
+        return back()->with('success', 'Sent again: '.implode(', ', $changed).'. Production sees the new location.');
+    }
+
     public function start(Request $request, int $taskId): RedirectResponse
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
@@ -222,7 +286,9 @@ class TaskController extends Controller
         $rules = [];
         $messages = [];
         foreach ($slots as $key => $label) {
-            $rules["paths.$key"] = ['required', 'string', 'max:1024'];
+            // The box arrives pre-filled with the PC's address, so "not empty"
+            // was never enough — it has to point at an actual file.
+            $rules["paths.$key"] = ['required', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
             $messages["paths.$key.required"] = "Enter the file path for the {$label}.";
         }
         $request->validate($rules, $messages);

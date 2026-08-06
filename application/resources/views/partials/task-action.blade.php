@@ -1,3 +1,34 @@
+{{-- A handed-over path can turn out wrong long after the step is done: a typo,
+     or somebody moves or renames the file. Production still has to find it, so
+     the address stays editable — and deliberately OUTSIDE the status checks
+     below, because finishing the export can finish the whole order, and that
+     is exactly when a wrong path is most annoying to be stuck with. --}}
+@if ($task->usesFilePath() && $task->status === 'complete' && $task->files->isNotEmpty())
+    @php $pathSlots = $task->fileSlots(); @endphp
+    <details class="path-help" style="margin-bottom:0.8rem;">
+        <summary>File moved or path wrong? Edit and send again</summary>
+
+        <form method="POST" action="{{ route('tasks.path.update', $task->id) }}" style="margin-top:0.6rem;">
+            @csrf
+            @foreach ($pathSlots as $key => $label)
+                @php $current = $task->files->where('label', $label)->sortByDesc('id')->first(); @endphp
+                <div class="field" style="max-width: 520px;">
+                    <label for="edit_{{ $key }}_{{ $task->id }}">{{ $label }} — file path</label>
+                    <input id="edit_{{ $key }}_{{ $task->id }}" type="text" name="paths[{{ $key }}]"
+                           class="no-caps" value="{{ old('paths.'.$key, $current?->external_path) }}"
+                           placeholder="\\server\FolderName\file..." required maxlength="1024">
+                </div>
+            @endforeach
+
+            <p style="font-size:0.82rem; color:var(--ink-2); margin:0.2rem 0 0.6rem;">
+                Whoever opens the work sheet next gets the new location. The step stays done.
+            </p>
+
+            <button class="btn btn-primary btn-sm">Send the corrected path</button>
+        </form>
+    </details>
+@endif
+
 @if ($task->order->status !== 'active')
     <p class="muted">This order is <strong>{{ $task->order->statusLabel() }}</strong>.</p>
 @elseif ($task->status === 'todo')

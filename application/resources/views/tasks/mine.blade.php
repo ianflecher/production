@@ -831,6 +831,14 @@
                                         <code style="font-family: ui-monospace, Consolas, monospace; color: var(--ink);">{{ $ef->external_path ?? $ef->original_name }}</code>
                                     </div>
                                 @endforeach
+
+                                {{-- A finished order has no open step, so without
+                                     this there is no way back to a path that
+                                     turned out wrong or whose file has moved. --}}
+                                <a href="{{ route('tasks.show', $exportTask->id) }}"
+                                   style="display:inline-block; margin-top:0.35rem; font-size:0.74rem; font-weight:600;">
+                                    ✎ Edit path and send again
+                                </a>
                             </div>
                         @endif
 

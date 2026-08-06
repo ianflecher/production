@@ -112,6 +112,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/my-tasks/{taskId}/job-order', [TaskController::class, 'jobOrder'])->whereNumber('taskId')->name('tasks.job-order');
     Route::get('/my-tasks/{taskId}/reference', [TaskController::class, 'references'])->whereNumber('taskId')->name('tasks.references');
     Route::post('/my-tasks/{taskId}/start', [TaskController::class, 'start'])->whereNumber('taskId')->name('tasks.start');
+    // Correct a file path already handed to production (typo, moved file).
+    Route::post('/my-tasks/{taskId}/path', [TaskController::class, 'updatePath'])->whereNumber('taskId')->name('tasks.path.update');
     Route::post('/my-tasks/{taskId}/hold', [TaskController::class, 'hold'])->whereNumber('taskId')->name('tasks.hold');
     Route::post('/my-tasks/{taskId}/resume', [TaskController::class, 'resume'])->whereNumber('taskId')->name('tasks.resume');
     Route::post('/my-tasks/{taskId}/submit', [TaskController::class, 'submit'])->whereNumber('taskId')->name('tasks.submit');
