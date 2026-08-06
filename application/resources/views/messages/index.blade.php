@@ -33,6 +33,16 @@
     .msg-prev.unread { color: var(--ink); font-weight: 600; }
     .msg-meta { text-align: right; flex: 0 0 auto; font-size: 0.74rem; color: var(--ink-3); }
     .msg-badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 99px; background: #E31B23; color: #fff; font-weight: 700; font-size: 0.72rem; line-height: 20px; text-align: center; }
+
+    /* Where the job stands, beside its number. */
+    .stage-tag {
+        display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.5rem;
+        border-radius: 99px; font-size: 0.68rem; font-weight: 700;
+        letter-spacing: 0.02em; vertical-align: middle; white-space: nowrap;
+    }
+    .stage-tag.is-live { background: #e0edff; color: #1d4ed8; }
+    .stage-tag.is-done { background: #dcfce7; color: #15803d; }
+    .stage-tag.is-off { background: var(--border); color: var(--ink-3); }
 </style>
 
 <div class="page-head">
@@ -65,7 +75,31 @@
                     <span class="jo-tag">JO</span>
 
                     <div class="msg-mid">
-                        <div class="msg-name">{{ $t['order']->order_number }}</div>
+                        <div class="msg-name">
+                            {{ $t['order']->order_number }}
+
+                            {{-- Where the job stands, so the inbox answers the
+                                 question most of these threads are asking
+                                 without anyone opening them. The mover's steps
+                                 are her slice of the line, so her badge names a
+                                 step she actually follows. --}}
+                            @php
+                                $order = $t['order'];
+                                $steps = $order->stepsVisibleTo(auth()->user());
+                                $atStep = $steps->whereIn('status', ['ready', 'in_progress', 'for_checking', 'revision_required'])->first();
+
+                                [$stageLabel, $stageClass] = match (true) {
+                                    $order->status === 'cancelled' => ['Cancelled', 'is-off'],
+                                    $order->status === 'on_hold' => ['On hold', 'is-off'],
+                                    $order->status === 'complete' => ['Complete', 'is-done'],
+                                    $steps->isEmpty() => ['Not started', 'is-off'],
+                                    $steps->every(fn ($s) => $s->status === 'complete') => ['Complete', 'is-done'],
+                                    $atStep !== null => [$atStep->department, 'is-live'],
+                                    default => ['Not started', 'is-off'],
+                                };
+                            @endphp
+                            <span class="stage-tag {{ $stageClass }}">{{ $stageLabel }}</span>
+                        </div>
                         <div class="msg-client">{{ $t['order']->client?->name ?? $t['order']->customer_name }}</div>
                         <div class="msg-prev {{ $t['unread'] ? 'unread' : '' }}">
                             @if ($t['last'])
