@@ -1,3 +1,6 @@
+# ==========================================
+# STAGE 1: Build Vite frontend
+# ==========================================
 FROM node:22-alpine AS frontend
 
 WORKDIR /app
@@ -11,6 +14,9 @@ COPY . .
 RUN npm run build
 
 
+# ==========================================
+# STAGE 2: Laravel PHP runtime
+# ==========================================
 FROM php:8.3-cli
 
 WORKDIR /app
@@ -34,8 +40,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gd \
     && rm -rf /var/lib/apt/lists/*
 
+
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+
+# ==========================================
+# Copy Laravel application
+# ==========================================
 COPY app ./app
 COPY bootstrap ./bootstrap
 COPY config ./config
@@ -49,14 +61,26 @@ COPY artisan ./
 COPY composer.json ./
 COPY composer.lock ./
 
+
+# ==========================================
+# Install PHP dependencies
+# ==========================================
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader
 
+
+# ==========================================
+# Copy compiled Vite assets
+# ==========================================
 COPY --from=frontend /app/public/build ./public/build
 
+
+# ==========================================
+# Laravel writable directories
+# ==========================================
 RUN mkdir -p \
     storage/framework/cache \
     storage/framework/sessions \
@@ -65,15 +89,19 @@ RUN mkdir -p \
     bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# Compile the Blade templates and the route table into the image. Without this
-# the first request to every page compiles it on the spot, which is slow and
-# needs a writable disk at runtime. Neither step reads the environment, so it
-# is safe to bake in (config:cache is NOT — it would freeze build-time env).
-RUN php artisan view:cache && php artisan route:cache
 
-# The schema has to match the code before the first request. Nothing ran
-# migrations here, so every column added since the database was created was
-# missing and each page 500'd on a SQL error. If the database is unreachable
-# the container now fails to start, which is louder and easier to diagnose
-# than a site that answers 500 to everything.
-CMD ["sh", "-c", "exec php -S 0.0.0.0:${PORT} -t public vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
+# ==========================================
+# Precompile Blade views
+# ==========================================
+RUN php artisan view:cache
+
+
+# ==========================================
+# Start Laravel
+#
+# IMPORTANT:
+# Laravel's server.php expects the current
+# working directory to be /app/public.
+# Vercel automatically provides $PORT.
+# ==========================================
+CMD ["sh", "-c", "cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
