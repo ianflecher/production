@@ -144,6 +144,49 @@
         text-align: center; font-size: .74rem; color: var(--lg-ink-3); letter-spacing: .04em;
     }
 
+    @if (! empty($demoLogins))
+    /* ---------- Demo sign-in hints (demo deployments only) ---------- */
+    .demo-logins {
+        margin-top: 1.5rem; padding-top: 1.2rem;
+        border-top: 1px dashed var(--lg-border);
+    }
+    .demo-head {
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: .6rem; flex-wrap: wrap; margin-bottom: .7rem;
+        font-size: .8rem; color: var(--lg-ink-2);
+    }
+    .demo-head code {
+        background: rgba(0,0,0,.06); border-radius: 4px; padding: 0 .3rem;
+        font-size: .78rem;
+    }
+    .demo-grid {
+        display: grid; gap: .4rem;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+    .demo-account {
+        display: flex; flex-direction: column; gap: .1rem; text-align: left;
+        padding: .45rem .6rem; border: 1px solid var(--lg-border);
+        border-radius: 9px; background: #fff; cursor: pointer;
+        font: inherit; color: inherit; transition: border-color .12s, background .12s;
+    }
+    .demo-account:hover, .demo-account:focus-visible {
+        border-color: var(--lg-accent, #2563eb);
+        background: rgba(37,99,235,.05);
+    }
+    .demo-account.is-picked {
+        border-color: var(--lg-accent, #2563eb);
+        background: rgba(37,99,235,.10);
+    }
+    .demo-role { font-weight: 700; font-size: .8rem; }
+    .demo-email {
+        font-size: .68rem; color: var(--lg-ink-3);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .demo-note {
+        margin: .6rem 0 0; font-size: .72rem; color: var(--lg-ink-3); text-align: center;
+    }
+    @endif
+
     /* ---------- Responsive ---------- */
     @media (max-width: 720px) {
         .login { justify-content: center; padding: 1.5rem; background-position: center top; }
@@ -204,6 +247,32 @@
             <button type="submit" class="btn-login">Log in</button>
         </form>
 
+        @if (! empty($demoLogins))
+            {{-- A demo deployment only. Showing somebody the system means
+                 showing them each role, and handing over seven logins one at a
+                 time makes that tedious. Never rendered where the data is
+                 real -- see config('app.demo_logins'). --}}
+            <div class="demo-logins">
+                <div class="demo-head">
+                    <strong>Demo &mdash; pick a role</strong>
+                    <span>password <code>{{ $demoPassword }}</code> for all of them</span>
+                </div>
+
+                <div class="demo-grid">
+                    @foreach ($demoLogins as $account)
+                        <button type="button" class="demo-account"
+                                data-email="{{ $account['email'] }}"
+                                title="{{ $account['note'] }}">
+                            <span class="demo-role">{{ $account['role'] }}</span>
+                            <span class="demo-email">{{ $account['email'] }}</span>
+                        </button>
+                    @endforeach
+                </div>
+
+                <p class="demo-note">Sample data. Nothing here is a real order.</p>
+            </div>
+        @endif
+
         <p class="login-foot">
             Internal system &middot; Authorized Imprint Customs staff only
         </p>
@@ -224,5 +293,29 @@
             input.focus();
         });
     })();
+
+    @if (! empty($demoLogins))
+    /* Fill the form from a demo account, so a tour is one click per role
+       rather than typing an address and a password each time. Nothing is
+       submitted automatically -- the person still presses Log in. */
+    (function () {
+        var accounts = document.querySelectorAll('.demo-account');
+        if (!accounts.length) return;
+
+        var email = document.getElementById('email');
+        var password = document.getElementById('password');
+
+        accounts.forEach(function (button) {
+            button.addEventListener('click', function () {
+                accounts.forEach(function (b) { b.classList.remove('is-picked'); });
+                button.classList.add('is-picked');
+
+                email.value = button.dataset.email;
+                password.value = @json($demoPassword ?? '');
+                password.focus();
+            });
+        });
+    })();
+    @endif
 </script>
 @endsection

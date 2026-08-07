@@ -17,6 +17,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Demo sign-in hints
+    |--------------------------------------------------------------------------
+    |
+    | Shows a list of accounts on the login page so somebody being given a tour
+    | can switch roles without being handed credentials one at a time.
+    |
+    | OFF unless a deployment says otherwise, and it must stay that way: the
+    | office runs this same code against the real shop, where printing logins on
+    | the front door would be daft. Turn it on ONLY where the data is invented.
+    |
+    */
+
+    'demo_logins' => (bool) env('DEMO_LOGINS', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

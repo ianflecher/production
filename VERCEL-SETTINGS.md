@@ -25,6 +25,17 @@ every single request — including the login page, which barely touches the data
 | `CACHE_STORE` | `file` | Same reasoning: the default caches into the database, which is the slow thing here. |
 | `LOG_CHANNEL` | `stderr` | Otherwise errors go to a file inside a container you cannot open. This puts them in Vercel's log viewer. |
 
+## Demo only
+
+| Variable | Value | Why |
+|---|---|---|
+| `DEMO_LOGINS` | `true` | Lists an account per role on the login page, with one click to fill the form, so somebody being shown the system can switch roles without being handed seven logins one at a time. |
+
+**Set this only where the data is invented.** It prints working credentials on
+the front door. It is off unless a deployment says otherwise, and the office
+must never have it — nothing about it reaches the page when it is off, not the
+accounts, not the password, not even the stylesheet.
+
 ## The one thing settings cannot fix
 
 If the Aiven database and the Vercel deployment are in **different regions**, every

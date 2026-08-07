@@ -22,7 +22,16 @@ class LoginController extends Controller
 
     public function show(): View
     {
-        return view('auth.login');
+        return view('auth.login', [
+            // Empty unless a deployment has declared its data invented.
+            'demoLogins' => \App\Support\DemoLogins::all(),
+            // Only where the hints are on. Otherwise this reaches the page
+            // through the fill-the-form script, and the whole point was that a
+            // real deployment prints nothing.
+            'demoPassword' => \App\Support\DemoLogins::enabled()
+                ? \App\Support\DemoLogins::password()
+                : null,
+        ]);
     }
 
     public function login(Request $request): RedirectResponse
