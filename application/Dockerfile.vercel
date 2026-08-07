@@ -126,6 +126,23 @@ RUN php artisan view:cache && php artisan route:cache
 
 
 # ==========================================
+# This deployment is the demo
+#
+# Lists an account per role on the login
+# page so the system can be shown without
+# handing over nine logins one at a time.
+#
+# It prints working credentials, so it only
+# belongs where the data is invented. If this
+# deployment is ever pointed at the real
+# shop, delete this line. Setting
+# DEMO_LOGINS in the Vercel dashboard
+# overrides it either way.
+# ==========================================
+ENV DEMO_LOGINS=true
+
+
+# ==========================================
 # Start Laravel
 #
 # IMPORTANT:

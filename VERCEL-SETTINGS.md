@@ -27,14 +27,17 @@ every single request — including the login page, which barely touches the data
 
 ## Demo only
 
-| Variable | Value | Why |
-|---|---|---|
-| `DEMO_LOGINS` | `true` | Lists an account per role on the login page, with one click to fill the form, so somebody being shown the system can switch roles without being handed seven logins one at a time. |
+`DEMO_LOGINS=true` is **already set in `Dockerfile.vercel`**, so there is nothing
+to do in the dashboard — this deployment lists an account per role on its login
+page, one click filling the form.
 
-**Set this only where the data is invented.** It prints working credentials on
-the front door. It is off unless a deployment says otherwise, and the office
-must never have it — nothing about it reaches the page when it is off, not the
-accounts, not the password, not even the stylesheet.
+**It only belongs where the data is invented.** If this deployment is ever
+pointed at the real shop, delete that line from the Dockerfile. Setting
+`DEMO_LOGINS` in the Vercel dashboard overrides the image either way.
+
+It is off everywhere else, and the office must never have it. When off, nothing
+about it reaches the page — not the accounts, not the password, not even the
+stylesheet.
 
 ## The one thing settings cannot fix
 
