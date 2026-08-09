@@ -47,11 +47,17 @@ class MessageController extends Controller
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
+        // One query for the whole page's unread counts, rather than two per row.
+        $unread = Message::unreadCountsForOrders(
+            $me,
+            $orders->getCollection()->pluck('id')->all()
+        );
+
         $threads = $orders->setCollection(
             $orders->getCollection()->map(fn ($order) => [
                 'order' => $order,
                 'last' => $order->messages->first(),
-                'unread' => Message::unreadInOrder($me, $order->id),
+                'unread' => (int) ($unread[$order->id] ?? 0),
             ])
         );
 

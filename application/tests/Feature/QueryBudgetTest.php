@@ -65,7 +65,7 @@ class QueryBudgetTest extends TestCase
             ['Bookkeeping', '/books', 20],
             ['Finance', '/finance', 24],
             ['Users', '/users', 20],
-            ['Messages', '/messages', 48],
+            ['Messages', '/messages', 26],
             ['Job order sheet', "/orders/{$order->id}/job-order", 26],
             ['Material requests', '/material-requests', 20],
         ];
