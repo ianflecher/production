@@ -10,9 +10,11 @@
 @endpush
 
 @php
-    $totalItems = $items->count();
-    $outCount = $items->filter(fn ($item) => (float) $item->quantity <= 0)->count();
+    // Counted across the whole sheet by the controller, not the page on screen.
+    $totalItems = $totalCount;
     $inStockCount = $totalItems - $outCount;
+
+    $isFiltered = $search !== '' || $category !== '' || $color !== '' || $size !== '';
 @endphp
 
 
@@ -191,57 +193,75 @@
                 </div>
             </div>
 
-            @if ($items->isNotEmpty())
-                <div class="inv-stock-controls">
+            @if ($totalCount > 0)
+                {{-- Filtering happens in the database, so it reaches the whole
+                     stock sheet rather than the page being shown. --}}
+                <form method="GET" action="{{ route('inventory.index') }}" id="invFilterForm" class="inv-stock-controls">
                     @if ($outCount > 0)
                         <span class="inv-out-badge">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            {{ $outCount }} out of stock
+                            {{ number_format($outCount) }} out of stock
                         </span>
                     @endif
 
-                    @php
-                        $colorOptions = $items->pluck('color')->map(fn ($c) => trim((string) $c))->filter()->unique()->sort()->values();
-                        $sizeOptions = $items->pluck('size')->map(fn ($s) => trim((string) $s))->filter()->unique()->sort()->values();
-                    @endphp
-                    <select id="invCategory" class="inv-cat-filter" aria-label="Filter by category">
+                    <select name="category" id="invCategory" class="inv-cat-filter" aria-label="Filter by category">
                         <option value="">All categories</option>
                         @foreach (\App\Models\InventoryItem::CATEGORIES as $key => $label)
-                            <option value="{{ $key }}">{{ $label }}</option>
+                            <option value="{{ $key }}" @selected($category === $key)>{{ $label }}</option>
                         @endforeach
                     </select>
 
-                    <select id="invColor" class="inv-cat-filter" aria-label="Filter by color">
+                    <select name="color" id="invColor" class="inv-cat-filter" aria-label="Filter by color">
                         <option value="">All colors</option>
                         @foreach ($colorOptions as $c)
-                            <option value="{{ strtolower($c) }}">{{ $c }}</option>
+                            <option value="{{ $c }}" @selected($color === $c)>{{ $c }}</option>
                         @endforeach
                     </select>
 
-                    <select id="invSize" class="inv-cat-filter" aria-label="Filter by size">
+                    <select name="size" id="invSize" class="inv-cat-filter" aria-label="Filter by size">
                         <option value="">All sizes</option>
                         @foreach ($sizeOptions as $s)
-                            <option value="{{ strtolower($s) }}">{{ $s }}</option>
+                            <option value="{{ $s }}" @selected($size === $s)>{{ $s }}</option>
                         @endforeach
                     </select>
 
                     <div class="inv-search">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="search" id="invSearch" placeholder="Search name, code, size, color…" autocomplete="off" aria-label="Search materials">
+                        <input type="search" name="q" value="{{ $search }}" id="invSearch" placeholder="Search name, code, size, color…" autocomplete="off" aria-label="Search materials">
                     </div>
 
-                    <span id="invCount" class="inv-count"></span>
-                </div>
+                    <button type="submit" class="btn btn-sm">Search</button>
+
+                    @if ($isFiltered)
+                        <a href="{{ route('inventory.index') }}" class="btn btn-sm">Clear</a>
+                    @endif
+
+                    <span class="inv-count">
+                        @if ($items->total() === 0)
+                            No matches
+                        @elseif ($items->hasPages())
+                            Showing {{ number_format($items->firstItem()) }}–{{ number_format($items->lastItem()) }} of {{ number_format($items->total()) }}
+                        @endif
+                    </span>
+                </form>
             @endif
         </div>
 
-        @if ($items->isEmpty())
+        @if ($totalCount === 0)
             <div class="inv-empty">
                 <div class="inv-empty-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/></svg>
                 </div>
                 <h3>No materials yet</h3>
                 <p>Add your first material above or import an existing CSV inventory file.</p>
+            </div>
+        @elseif ($items->isEmpty())
+            <div class="inv-empty">
+                <div class="inv-empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </div>
+                <h3>No matching materials</h3>
+                <p>Try another material name, or clear the filters.</p>
             </div>
         @else
             <div class="inv-table-wrap">
@@ -346,13 +366,9 @@
                 </table>
             </div>
 
-            <div id="invEmpty" hidden class="inv-empty">
-                <div class="inv-empty-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                </div>
-                <h3>No matching materials</h3>
-                <p>Try another material name or unit.</p>
-            </div>
+            @if ($items->hasPages())
+                <div class="list-pager">{{ $items->links() }}</div>
+            @endif
         @endif
     </section>
 </div>
@@ -473,96 +489,15 @@
     })();
 
     (function () {
-        var search = document.getElementById('invSearch');
-        var category = document.getElementById('invCategory');
-        var color = document.getElementById('invColor');
-        var size = document.getElementById('invSize');
-        var body = document.getElementById('invBody');
-        var emptyMsg = document.getElementById('invEmpty');
-        var countEl = document.getElementById('invCount');
+        // The filters run on the server now; changing a dropdown just asks for
+        // the filtered page instead of hiding rows that are already loaded.
+        var form = document.getElementById('invFilterForm');
+        if (!form) return;
 
-        if (!search || !body) return;
-
-        var rows = Array.prototype.slice.call(body.querySelectorAll('tr[data-search]'));
-        var total = rows.length;
-
-        /*
-         * Colour and size only offer what the chosen category actually has —
-         * picking BOND PAPER shouldn't leave you scrolling past shirt colours
-         * and shirt sizes that can never match.
-         */
-        function narrowOptions() {
-            if (!category) return;
-            var cat = category.value;
-
-            function rebuild(select, attr, allLabel) {
-                if (!select) return;
-                var keep = select.value;
-                var values = [];
-
-                rows.forEach(function (row) {
-                    if (cat && row.getAttribute('data-category') !== cat) return;
-                    var v = row.getAttribute(attr);
-                    if (v && values.indexOf(v) === -1) values.push(v);
-                });
-
-                values.sort();
-
-                select.innerHTML = '';
-                var all = document.createElement('option');
-                all.value = '';
-                all.textContent = allLabel;
-                select.appendChild(all);
-
-                values.forEach(function (v) {
-                    var opt = document.createElement('option');
-                    opt.value = v;
-                    opt.textContent = v.toUpperCase();
-                    select.appendChild(opt);
-                });
-
-                // Hold on to the current choice when it still applies.
-                select.value = values.indexOf(keep) !== -1 ? keep : '';
-            }
-
-            rebuild(color, 'data-color', 'All colors');
-            rebuild(size, 'data-size', 'All sizes');
-        }
-
-        function apply() {
-            var query = search.value.trim().toLowerCase();
-            var cat = category ? category.value : '';
-            var col = color ? color.value : '';
-            var sz = size ? size.value : '';
-            var shown = 0;
-
-            rows.forEach(function (row) {
-                var matchesText = !query || row.getAttribute('data-search').indexOf(query) !== -1;
-                var matchesCat = !cat || row.getAttribute('data-category') === cat;
-                var matchesColor = !col || row.getAttribute('data-color') === col;
-                var matchesSize = !sz || row.getAttribute('data-size') === sz;
-                var visible = matchesText && matchesCat && matchesColor && matchesSize;
-                row.hidden = !visible;
-                if (visible) shown++;
-            });
-
-            if (emptyMsg) emptyMsg.hidden = shown !== 0;
-            if (countEl) {
-                countEl.textContent = (query || cat || col || sz)
-                    ? 'Showing ' + shown + ' of ' + total
-                    : total + (total === 1 ? ' item' : ' items');
-            }
-        }
-
-        search.addEventListener('input', apply);
-        // Changing the category re-offers colour and size before filtering.
-        if (category) {
-            category.addEventListener('change', function () { narrowOptions(); apply(); });
-        }
-        [color, size].forEach(function (el) { if (el) el.addEventListener('change', apply); });
-
-        narrowOptions();
-        apply();
+        ['invCategory', 'invColor', 'invSize'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('change', function () { form.submit(); });
+        });
     })();
 </script>
 @endif

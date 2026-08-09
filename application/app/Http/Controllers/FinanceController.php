@@ -34,7 +34,7 @@ class FinanceController extends Controller
         $search = trim((string) $request->query('q', ''));
         $method = $request->query('method');
 
-        $payments = $this->filtered($request)->paginate(50)->withQueryString();
+        $payments = $this->filtered($request)->paginate(self::PER_PAGE)->withQueryString();
 
         // Totals span ALL payments, not just the current page/filter.
         $totalCollected = (float) Payment::sum('amount');

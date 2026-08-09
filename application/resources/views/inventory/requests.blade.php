@@ -84,6 +84,10 @@
             </div>
         @endforeach
     </div>
+
+    @if ($pending->hasPages())
+        <div class="list-pager" style="margin-bottom: 1.6rem;">{{ $pending->links() }}</div>
+    @endif
 @endif
 
 <div class="card panel">

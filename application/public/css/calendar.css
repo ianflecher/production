@@ -500,24 +500,28 @@
         background: linear-gradient(90deg, #fb923c, #f97316);
     }
 
+    /* A full day takes no more work, so it reads red like the legend says — not
+       the yellow it used to, which sat BELOW "near capacity" orange on the ramp
+       and doubled as the "on hold" colour. The ramp now only ever escalates:
+       blue (open) → orange (near) → red (full) → deep red (over). */
     .cap-full {
-        color: #854d0e;
-        border-color: #fde68a;
-        background: #fffbeb;
-    }
-
-    .cap-full .cal-capacity-bar {
-        background: linear-gradient(90deg, #facc15, #ca8a04);
-    }
-
-    .cap-over {
         color: #b91c1c;
-        border-color: #fecaca;
+        border-color: #fca5a5;
         background: #fef2f2;
     }
 
+    .cap-full .cal-capacity-bar {
+        background: linear-gradient(90deg, #f87171, #dc2626);
+    }
+
+    .cap-over {
+        color: #7f1d1d;
+        border-color: #f87171;
+        background: #fee2e2;
+    }
+
     .cap-over .cal-capacity-bar {
-        background: linear-gradient(90deg, #fb7185, var(--cal-red));
+        background: linear-gradient(90deg, #dc2626, #7f1d1d);
     }
 
     .cal-orders {
@@ -595,11 +599,41 @@
         align-items: center;
         margin-top: 0.1rem;
         padding: 0.18rem 0.35rem;
+        border: 1px solid var(--border);
         border-radius: 7px;
         color: var(--ink-3);
         background: #f8fafc;
         font-size: 0.58rem;
         font-weight: 700;
+        cursor: pointer;
+    }
+
+    .cal-more:hover {
+        color: var(--cal-blue, #2563eb);
+        border-color: currentColor;
+    }
+
+    /* The overflow orders are in the page all along — the toggle just shows
+       them, so nothing on a busy day is unreachable. */
+    .cal-pill.is-extra { display: none; }
+
+    .cal-day-expanded .cal-pill.is-extra { display: block; }
+
+    /* Names the set of colours that follows, so an order colour is never read
+       as a capacity colour. */
+    .legend-group {
+        font-size: 0.62rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--ink-3);
+    }
+
+    .legend-sep {
+        width: 1px;
+        align-self: stretch;
+        margin: 0.1rem 0.3rem;
+        background: var(--border);
     }
 
     .calendar-legend {

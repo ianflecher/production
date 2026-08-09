@@ -26,9 +26,14 @@ use Illuminate\Support\Carbon;
  */
 class DemoDataSeeder extends Seeder
 {
-    /** Where each demo order should stop along the pipeline. */
+    /**
+     * Where each demo order should stop along the pipeline.
+     *
+     * The third number only spreads the generated repeats apart — due dates are
+     * set in makeOrders() from the deadline group, not from this.
+     */
     private const PLAN = [
-        // [product, qty spread, weeks until due, how far it got, notes]
+        // [product, qty spread, spread hint, how far it got]
         ['round_neck',    ['S' => 4, 'M' => 8, 'L' => 6, 'XL' => 2],   3, 'new'],
         ['polo',          ['M' => 10, 'L' => 10, 'XL' => 4],           4, 'layout'],
         ['jacket_hoodie', ['M' => 6, 'L' => 8, 'XL' => 4, '2XL' => 2], 5, 'design'],
@@ -68,6 +73,14 @@ class DemoDataSeeder extends Seeder
         ['Rosalie', 'Pineda', 'Pineda Bakeshop', '0912-778-4406', 'Apalit, Pampanga'],
         ['Antonio', 'Salazar', 'Salazar Sports League', '0930-556-1194', 'Sta. Ana, Pampanga'],
     ];
+
+    /**
+     * How many orders to end up with. The hand-written PLAN above supplies the
+     * first few and sets the tone; the rest are cycled from it so the list is
+     * long enough to page through and to search against — which is the only way
+     * to see the order list behave the way it will after a busy year.
+     */
+    private const TOTAL_ORDERS = 130;
 
     /** Print type / add-on combinations, cycled across the orders. */
     private const ROUTING = [
@@ -206,34 +219,161 @@ class DemoDataSeeder extends Seeder
         return $clients;
     }
 
+    /** How many live jobs sit past their due date, and how many are due today. */
+    private const DELAYED_ORDERS = 5;
+
+    private const AT_RISK_ORDERS = 5;
+
+    /**
+     * Stops that leave a job ACTIVE. Only an active job chases its deadline —
+     * a held, cancelled or finished one never reads as delayed — so the late
+     * and due-today jobs have to be drawn from these.
+     */
+    private const LIVE_STOPS = ['new', 'layout', 'design', 'production', 'sample', 'massprod'];
+
+    /**
+     * One stop per station, used for the jobs that are behind. A shop in trouble
+     * is stuck in ten different places, not ten times in the same place, so each
+     * late and at-risk job is halted somewhere else along the line.
+     *
+     * These run in pipeline order, and each leaves a different department as the
+     * job's current step.
+     */
+    private const STUCK_STATIONS = [
+        'layout',            // Layout
+        'design',            // Final mockup
+        'at_export',         // Export
+        'at_cutting',        // Cutting
+        'at_pairing',        // Pairing
+        'at_sewing',         // Sewing
+        'at_qc',             // Quality control
+        'at_sample_review',  // Produce sample for client
+        'at_massprod',       // Mass production
+        'at_inventory',      // Inventory
+    ];
+
+    /**
+     * A single date booked to the daily ceiling, so the order form can be seen
+     * refusing more work. Kept off the spread below by using an even day offset
+     * (the spread walks odd ones), so nothing else lands on it.
+     */
+    private const FULL_DAY_OFFSET = 30;
+
+    private const FULL_DAY_ORDERS = 4;
+
+    /**
+     * The full run of orders: the hand-written PLAN first, then cycled repeats
+     * to reach TOTAL_ORDERS.
+     *
+     * The repeats lean towards finished and cancelled work, because that is what
+     * a back catalogue actually looks like — a shop has one screen of live jobs
+     * and years of closed ones behind it. Quantities are nudged per round so the
+     * rows aren't visibly identical copies.
+     *
+     * Each entry also carries how its deadline should fall — 'late', 'today',
+     * 'ahead' or 'past'. Assigning that here, rather than letting it fall out of
+     * an index trick, is what makes the counts exact.
+     *
+     * @return array<int, array{0: string, 1: array<string, int>, 2: int, 3: string, 4: string}>
+     */
+    private function plan(): array
+    {
+        $plan = self::PLAN;
+        $backlog = ['complete', 'complete', 'complete', 'complete', 'cancelled', 'hold', 'production', 'massprod'];
+
+        for ($i = count($plan); $i < self::TOTAL_ORDERS; $i++) {
+            [$product, $sizes, $weeks] = self::PLAN[$i % count(self::PLAN)];
+
+            $round = intdiv($i, count(self::PLAN));
+
+            $plan[] = [
+                $product,
+                array_map(fn ($n) => max(1, $n + (($i * 7 + $round * 3) % 9) - 4), $sizes),
+                $weeks + $round * 4,
+                $backlog[$i % count($backlog)],
+            ];
+        }
+
+        // Finished and cancelled work was due back when it was made; everything
+        // still live is due ahead, until the two groups below are carved out.
+        foreach ($plan as $i => $entry) {
+            $plan[$i][4] = in_array($entry[3], ['complete', 'cancelled'], true) ? 'past' : 'ahead';
+        }
+
+        // Carve the late and due-today jobs out of the live ones, taken from the
+        // end so the hand-written openers at the top keep their intended shape.
+        // Each gets its own station, so the two groups together cover the line.
+        $live = array_reverse(array_keys(array_filter(
+            $plan,
+            fn ($entry) => in_array($entry[3], self::LIVE_STOPS, true)
+        )));
+
+        $behind = array_slice($live, 0, self::DELAYED_ORDERS + self::AT_RISK_ORDERS);
+
+        foreach ($behind as $n => $i) {
+            $plan[$i][3] = self::STUCK_STATIONS[$n % count(self::STUCK_STATIONS)];
+            $plan[$i][4] = $n < self::DELAYED_ORDERS ? 'late' : 'today';
+        }
+
+        // Finally, the jobs that fill one date to the daily ceiling. Appended
+        // after the carve-out above so they are never picked as late work.
+        $perOrder = intdiv(ProductionOrder::DAILY_CAPACITY, self::FULL_DAY_ORDERS);
+
+        for ($n = 0; $n < self::FULL_DAY_ORDERS; $n++) {
+            // Split into sizes that add up exactly, so the day lands on the cap
+            // rather than near it.
+            $half = intdiv($perOrder, 2);
+
+            $plan[] = [
+                ['round_neck', 'polo', 'jacket_hoodie', 'riding_jersey'][$n % 4],
+                ['M' => $half, 'L' => $perOrder - $half],
+                4,
+                ['at_pairing', 'at_sewing', 'at_export', 'at_massprod'][$n % 4],
+                'capacity',
+            ];
+        }
+
+        return $plan;
+    }
+
     /** @return array<int, ProductionOrder> */
     private function makeOrders(array $clients, User $sales, User $leader): array
     {
         $orders = [];
         $year = now()->year;
 
-        foreach (self::PLAN as $i => [$product, $sizes, $weeks, $stop]) {
+        // Counters that walk each group along the calendar, so no two jobs in a
+        // group land on the same day and the deadlines read as a spread rather
+        // than a stack.
+        $lateNth = 0;
+        $aheadNth = 0;
+        $pastNth = 0;
+
+        foreach ($this->plan() as $i => [$product, $sizes, $weeks, $stop, $deadline]) {
             $client = $clients[$i % count($clients)];
             [$printType, $cutting, $addon, $addonPrice] = self::ROUTING[$i % count(self::ROUTING)];
 
             $qty = array_sum($sizes);
             $quote = \App\Services\PricingService::quote($product, $qty);
 
-            // Finished jobs were ordered in the past; live ones are due ahead.
-            $done = in_array($stop, ['complete', 'cancelled'], true);
-            $due = $done ? now()->subWeeks($weeks - 6)->startOfDay() : now()->addWeeks($weeks)->startOfDay();
+            $today = now()->startOfDay();
 
-            // A real shop is never all green: leave a couple of live jobs sitting
-            // on or past their date so the deadline alerts have something to show.
-            if (! $done) {
-                if ($i % 7 === 3) {
-                    $due = now()->subDays(2 + ($i % 4))->startOfDay();   // already late
-                } elseif ($i % 7 === 5) {
-                    $due = now()->startOfDay();                          // due today
-                }
-            }
+            $due = match ($deadline) {
+                // Past the date and still on the floor: 2, 4, 6… days over, so
+                // the list shows a range of "days overdue" rather than one value.
+                'late' => $today->copy()->subDays(2 + 2 * $lateNth++),
+                // Due today — "may be delayed" while it is still being worked.
+                'today' => $today->copy(),
+                // Finished work was due back when it was made.
+                'past' => $today->copy()->subDays(14 + 5 * $pastNth++),
+                // The one date deliberately booked out to the daily ceiling.
+                'capacity' => $today->copy()->addDays(self::FULL_DAY_OFFSET),
+                // Live work runs forward from tomorrow, one job every couple of
+                // days, so the calendar fills out month after month.
+                default => $today->copy()->addDays(1 + 2 * $aheadNth++),
+            };
 
-            $placed = (clone $due)->subWeeks(4);
+            $placed = $due->copy()->subWeeks(4);
 
             // Every fourth job is a rush, and a couple carry a discount.
             $rush = $i % 4 === 1;
@@ -263,7 +403,10 @@ class DemoDataSeeder extends Seeder
                 'status' => 'active',
                 'created_at' => $placed,
                 'updated_at' => $placed,
-            ], [], null);
+                // The cutting type comes from the routing table above. Passing it
+                // is what puts a Cutting step in the pipeline — without it the
+                // line skips straight from printing to pairing.
+            ], [], $cutting);
 
             foreach ($sizes as $size => $n) {
                 $order->items()->create(['size' => $size, 'quantity' => $n]);
@@ -335,11 +478,26 @@ class DemoDataSeeder extends Seeder
 
         $this->completeStage($order, 2);
 
-        // How far down the line the job got.
+        // How far down the line the job got. A held job stops part-way — running
+        // it to the end would finish it, and hold() does nothing to a job that
+        // is already complete.
+        //
+        // The at_* stops halt one stage short of a named station, so that station
+        // is left as the job's current step — that is how a stuck job is made to
+        // be stuck somewhere in particular.
         $until = match ($stop) {
+            'at_export' => 2,           // waiting at Export
+            'at_cutting' => 3,          // waiting at Cutting
             'production' => 5,
+            'at_pairing' => 5,          // waiting at Pairing
+            'at_sewing' => 6,           // waiting at Sewing
+            'at_qc' => 7,               // waiting at Quality control
+            'at_sample_review' => 8,    // waiting on the client's sample
             'sample' => 9,
+            'at_massprod' => 9,         // waiting at Mass production
+            'hold' => 10,
             'massprod' => 11,
+            'at_inventory' => 14,       // waiting to be counted into stock
             default => 16,
         };
 

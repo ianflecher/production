@@ -42,6 +42,9 @@ class ProductionOrder extends Model
      *  listed here is captured as a typed "Others" size on the order form. */
     public const SIZES = ['CS', 'FS', '2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
+    /** The order statuses, in the order the office works through them. */
+    public const STATUSES = ['active', 'on_hold', 'complete', 'cancelled'];
+
     /** Maximum pieces that may be due on any single date. */
     public const DAILY_CAPACITY = 500;
 

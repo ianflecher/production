@@ -258,7 +258,10 @@
                                             $capacityStatus = 'Available';
                                         }
 
-                                        $visibleOrders = $dayOrders->take(3);
+                                        // Every order the viewer may see is rendered; the ones past the
+                                        // third start hidden and the toggle below reveals them. They used
+                                        // to be dropped entirely, so a day with four jobs could only ever
+                                        // show three and the "+1 more" label led nowhere.
                                         $hiddenOrderCount = max(0, $dayOrders->count() - 3);
                                     @endphp
 
@@ -294,7 +297,7 @@
                                         @endif
 
                                         <div class="cal-orders">
-                                            @foreach ($visibleOrders as $order)
+                                            @foreach ($dayOrders as $order)
                                                 @php
                                                     $class = match (true) {
                                                         $order->status === 'complete' => 'st-complete',
@@ -308,7 +311,7 @@
                                                 @php $canOpen = $order->openableBy($viewer); @endphp
                                                 <{{ $canOpen ? 'a' : 'span' }}
                                                     @if ($canOpen) href="{{ $jobLink($order) }}" @endif
-                                                    class="cal-pill {{ $class }} {{ $canOpen ? '' : 'is-locked' }}"
+                                                    class="cal-pill {{ $class }} {{ $canOpen ? '' : 'is-locked' }} {{ $loop->index >= 3 ? 'is-extra' : '' }}"
                                                     data-tip="{{ $order->order_number }} · {{ $order->customer_name }} · {{ number_format($order->quantity) }} pcs · due {{ $order->due_date->format('M j') }}{{ $canOpen ? '' : ' · not your job order' }}"
                                                 >
                                                     {{ $order->order_number }} · {{ number_format($order->quantity) }} pcs
@@ -317,7 +320,13 @@
                                         </div>
 
                                         @if ($hiddenOrderCount > 0)
-                                            <span class="cal-more">+{{ $hiddenOrderCount }} more visible</span>
+                                            <button
+                                                type="button"
+                                                class="cal-more"
+                                                data-more
+                                                data-count="{{ $hiddenOrderCount }}"
+                                                aria-expanded="false"
+                                            >+{{ $hiddenOrderCount }} more</button>
                                         @endif
                                     </td>
                                 @endforeach
@@ -403,13 +412,22 @@
             @endforeach
         </div>
 
+        {{-- Split in two: the first set colours the order pills, the second the
+             day's capacity card. Read as one list they contradicted each other —
+             the same yellow meant "on hold" here and "full" there. --}}
         <div class="calendar-legend" aria-label="Calendar legend">
+            <span class="legend-group">Orders</span>
             <span class="legend-chip"><i class="legend-dot" style="--dot: #2563eb;"></i>On track</span>
             <span class="legend-chip"><i class="legend-dot" style="--dot: #dc2626;"></i>Overdue</span>
             <span class="legend-chip"><i class="legend-dot" style="--dot: #ca8a04;"></i>On hold</span>
             <span class="legend-chip"><i class="legend-dot" style="--dot: #16a34a;"></i>Completed</span>
+
+            <span class="legend-sep" aria-hidden="true"></span>
+
+            <span class="legend-group">Capacity</span>
             <span class="legend-chip"><i class="legend-dot" style="--dot: #f97316;"></i>Near capacity</span>
-            <span class="legend-chip"><i class="legend-dot" style="--dot: #b91c1c;"></i>Over capacity</span>
+            <span class="legend-chip"><i class="legend-dot" style="--dot: #dc2626;"></i>Full</span>
+            <span class="legend-chip"><i class="legend-dot" style="--dot: #7f1d1d;"></i>Over capacity</span>
         </div>
     </section>
 
@@ -517,6 +535,25 @@
 </div>
 
 <script>
+    // "+N more" reveals the rest of that day's orders in place, and folds them
+    // back again. Delegated, so it covers every day cell in the month.
+    (function () {
+        document.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-more]');
+            if (!button) return;
+
+            var cell = button.closest('td');
+            if (!cell) return;
+
+            var expanded = cell.classList.toggle('cal-day-expanded');
+
+            button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            button.textContent = expanded
+                ? 'Show less'
+                : '+' + button.getAttribute('data-count') + ' more';
+        });
+    })();
+
     (function () {
         var tip = document.createElement('div');
         tip.id = 'cal-tip';
