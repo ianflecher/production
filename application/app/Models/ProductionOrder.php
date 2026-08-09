@@ -1276,7 +1276,9 @@ class ProductionOrder extends Model
 
             if ($lines->isEmpty()) {
                 $lines = collect([(object) [
-                    'description' => $this->product_type ?: $this->customer_name,
+                    // The readable label, not the stored key — otherwise the
+                    // stock line reads "round_neck" instead of "Round Neck".
+                    'description' => $this->productLabel() ?: $this->customer_name,
                     'size' => null,
                     'quantity' => $this->quantity,
                 ]]);
@@ -1291,7 +1293,7 @@ class ProductionOrder extends Model
                 if ($qty <= 0) {
                     continue;
                 }
-                $product = trim((string) ($line->description ?? '')) ?: ($this->product_type ?: 'Products');
+                $product = trim((string) ($line->description ?? '')) ?: ($this->productLabel() ?: 'Products');
                 $byProduct[$product] = ($byProduct[$product] ?? 0) + $qty;
             }
 

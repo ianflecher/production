@@ -82,6 +82,19 @@ class DemoDataSeeder extends Seeder
      */
     private const TOTAL_ORDERS = 130;
 
+    /**
+     * How many orders to build. Defaults to TOTAL_ORDERS; set DEMO_ORDERS to
+     * load the shop up with a few years' work and see how the screens hold:
+     *
+     *     DEMO_ORDERS=1000 php artisan db:seed --class=DemoDataSeeder
+     */
+    private function totalOrders(): int
+    {
+        $requested = (int) getenv('DEMO_ORDERS');
+
+        return $requested > 0 ? $requested : self::TOTAL_ORDERS;
+    }
+
     /** Print type / add-on combinations, cycled across the orders. */
     private const ROUTING = [
         ['full_sublimation', 'laser', null, null],
@@ -198,25 +211,93 @@ class DemoDataSeeder extends Seeder
         }
     }
 
-    /** @return array<int, Client> */
+    /** Roughly how many orders each client places, on average, over the period. */
+    private const ORDERS_PER_CLIENT = 7;
+
+    /** Given names and surnames used to fill the book out beyond the regulars. */
+    private const FIRST_NAMES = [
+        'Marites', 'Ronnel', 'Jaypee', 'Kristine', 'Dennis', 'Michelle', 'Alvin', 'Jocelyn',
+        'Erwin', 'Sheila', 'Bernard', 'Cherry', 'Noel', 'Analyn', 'Rodrigo', 'Jenny',
+        'Christian', 'Rowena', 'Edgar', 'Melody', 'Renato', 'Katrina', 'Wilfredo', 'Charmaine',
+        'Efren', 'Lorna', 'Jayson', 'Girlie', 'Marlon', 'Precious',
+    ];
+
+    private const LAST_NAMES = [
+        'Manalo', 'Espiritu', 'Quiambao', 'Sicat', 'Punzalan', 'Dizon', 'Guevarra', 'Yabut',
+        'Lacsamana', 'Canlas', 'Baluyut', 'Tiglao', 'Sarmiento', 'Vergara', 'Bulaon', 'Maniago',
+        'Simbulan', 'Gozun', 'Mercado', 'Nucum', 'Feliciano', 'Pangilinan', 'Serrano', 'Tayag',
+    ];
+
+    /** Kinds of outfit that order printing, used to name the generated companies. */
+    private const COMPANY_KINDS = [
+        'Trading', 'Enterprises', 'Construction', 'Motorworks', 'Catering Services',
+        'Security Agency', 'Riders Club', 'Sports League', 'Dental Clinic', 'Bakeshop',
+        'Hardware', 'Farms', 'Water Refilling', 'Auto Supply', 'Laundry Shop',
+        'Printing Press', 'Travel & Tours', 'Basketball Team', 'Alumni Association',
+        'Barangay Council',
+    ];
+
+    private const TOWNS = [
+        'Sto. Rosario St., Angeles City', 'Balibago, Angeles City', 'Malabanias, Angeles City',
+        'Pandan, Angeles City', 'Dau, Mabalacat, Pampanga', 'Magalang, Pampanga',
+        'Porac, Pampanga', 'Apalit, Pampanga', 'Sta. Ana, Pampanga', 'Guagua, Pampanga',
+        'San Fernando, Pampanga', 'Clark Freeport Zone, Pampanga', 'Arayat, Pampanga',
+        'Mexico, Pampanga', 'Lubao, Pampanga',
+    ];
+
+    /**
+     * The client book. The hand-written regulars come first, then enough
+     * generated names that the shop has a believable spread of customers —
+     * fourteen clients sharing a thousand orders would mean every customer
+     * ordered seventy times.
+     *
+     * @return array<int, Client>
+     */
     private function makeClients(User $sales): array
     {
         $clients = [];
 
         foreach (self::CLIENTS as [$first, $last, $company, $contact, $address]) {
-            $clients[] = Client::create([
-                'name' => $first,
-                'last_name' => $last,
-                'company' => $company,
-                'contact_number' => $contact,
-                'office_address' => $address,
-                'delivery_address' => $address,
-                'tin' => $company ? sprintf('%03d-%03d-%03d-000', rand(100, 999), rand(100, 999), rand(100, 999)) : null,
-                'created_by' => $sales->id,
-            ]);
+            $clients[] = $this->makeClient($sales, $first, $last, $company, $contact, $address);
+        }
+
+        $wanted = max(count($clients), intdiv($this->totalOrders(), self::ORDERS_PER_CLIENT));
+
+        for ($n = count($clients); $n < $wanted; $n++) {
+            $first = self::FIRST_NAMES[$n % count(self::FIRST_NAMES)];
+            $last = self::LAST_NAMES[intdiv($n, 3) % count(self::LAST_NAMES)];
+
+            // Most printing is ordered by a business; the rest by individuals
+            // buying shirts for a family reunion or a team.
+            $company = $n % 3 === 2
+                ? null
+                : $last.' '.self::COMPANY_KINDS[$n % count(self::COMPANY_KINDS)];
+
+            $clients[] = $this->makeClient(
+                $sales,
+                $first,
+                $last,
+                $company,
+                sprintf('09%02d-%03d-%04d', $n % 100, 100 + ($n * 7) % 900, 1000 + ($n * 37) % 9000),
+                self::TOWNS[$n % count(self::TOWNS)]
+            );
         }
 
         return $clients;
+    }
+
+    private function makeClient(User $sales, string $first, string $last, ?string $company, string $contact, string $address): Client
+    {
+        return Client::create([
+            'name' => $first,
+            'last_name' => $last,
+            'company' => $company,
+            'contact_number' => $contact,
+            'office_address' => $address,
+            'delivery_address' => $address,
+            'tin' => $company ? sprintf('%03d-%03d-%03d-000', rand(100, 999), rand(100, 999), rand(100, 999)) : null,
+            'created_by' => $sales->id,
+        ]);
     }
 
     /** How many live jobs sit past their due date, and how many are due today. */
@@ -262,6 +343,20 @@ class DemoDataSeeder extends Seeder
     private const FULL_DAY_ORDERS = 4;
 
     /**
+     * How far the deadlines reach, in days. Orders are fanned out ACROSS these
+     * windows rather than stepped a fixed gap apart — a fixed step means the
+     * more orders there are the further out they reach, which at a thousand
+     * orders put finished work in 2018 and left the calendar looking empty.
+     *
+     * Fanning them out instead keeps a year of history and a quarter of work
+     * ahead whatever the shop's size; a busier shop simply stacks more jobs on
+     * each day, which is what a busy shop actually looks like.
+     */
+    private const PAST_WINDOW_DAYS = 365;
+
+    private const AHEAD_WINDOW_DAYS = 90;
+
+    /**
      * The full run of orders: the hand-written PLAN first, then cycled repeats
      * to reach TOTAL_ORDERS.
      *
@@ -281,7 +376,11 @@ class DemoDataSeeder extends Seeder
         $plan = self::PLAN;
         $backlog = ['complete', 'complete', 'complete', 'complete', 'cancelled', 'hold', 'production', 'massprod'];
 
-        for ($i = count($plan); $i < self::TOTAL_ORDERS; $i++) {
+        // The full-capacity day is part of the requested total, not an extra on
+        // top of it — asking for 1000 orders should give exactly 1000.
+        $upTo = max(count($plan), $this->totalOrders() - self::FULL_DAY_ORDERS);
+
+        for ($i = count($plan); $i < $upTo; $i++) {
             [$product, $sizes, $weeks] = self::PLAN[$i % count(self::PLAN)];
 
             $round = intdiv($i, count(self::PLAN));
@@ -336,27 +435,57 @@ class DemoDataSeeder extends Seeder
         return $plan;
     }
 
+    /**
+     * Which client placed the nth order.
+     *
+     * Weighted rather than round-robin: a shop has a handful of regulars who
+     * reorder constantly — the uniform club, the trucking company — and a long
+     * tail who came once for a reunion shirt. Squaring an even spread bunches
+     * the picks towards the front of the book, which is where the regulars are.
+     */
+    private function clientFor(int $nth, int $count): int
+    {
+        // Deterministic, so re-running the seeder tells the same story.
+        $spread = (($nth * 2654435761) % 1000) / 1000;
+
+        return min($count - 1, (int) floor($spread * $spread * $count));
+    }
+
+    /**
+     * Where the nth of $of live jobs falls in the coming quarter.
+     *
+     * The full-capacity day is stepped over: it is booked to exactly the daily
+     * ceiling on purpose, and one more job landing on it would tip it into
+     * "over capacity" and lose what it is there to show.
+     */
+    private function aheadOffset(int $nth, int $of): int
+    {
+        $offset = 1 + intdiv($nth * (self::AHEAD_WINDOW_DAYS - 1), $of);
+
+        return $offset === self::FULL_DAY_OFFSET ? $offset + 1 : $offset;
+    }
+
     /** @return array<int, ProductionOrder> */
     private function makeOrders(array $clients, User $sales, User $leader): array
     {
         $orders = [];
-        $year = now()->year;
 
-        // Counters that walk each group along the calendar, so no two jobs in a
-        // group land on the same day and the deadlines read as a spread rather
-        // than a stack.
+        $plan = $this->plan();
+
+        // How many orders are in each deadline group, so each group can be fanned
+        // out evenly across its own window however many there turn out to be.
+        $groupTotals = array_count_values(array_column($plan, 4));
+        $groupNth = [];
+
         $lateNth = 0;
-        $aheadNth = 0;
-        $pastNth = 0;
+        $today = now()->startOfDay();
 
-        foreach ($this->plan() as $i => [$product, $sizes, $weeks, $stop, $deadline]) {
-            $client = $clients[$i % count($clients)];
-            [$printType, $cutting, $addon, $addonPrice] = self::ROUTING[$i % count(self::ROUTING)];
-
-            $qty = array_sum($sizes);
-            $quote = \App\Services\PricingService::quote($product, $qty);
-
-            $today = now()->startOfDay();
+        // First pass: work out when each job was taken in and when it is due.
+        foreach ($plan as $i => [, , , , $deadline]) {
+            // This order's position within its own group, and how big that group
+            // is — together they place it proportionally along the group's window.
+            $nth = $groupNth[$deadline] = ($groupNth[$deadline] ?? -1) + 1;
+            $of = max(1, $groupTotals[$deadline] ?? 1);
 
             $due = match ($deadline) {
                 // Past the date and still on the floor: 2, 4, 6… days over, so
@@ -364,16 +493,40 @@ class DemoDataSeeder extends Seeder
                 'late' => $today->copy()->subDays(2 + 2 * $lateNth++),
                 // Due today — "may be delayed" while it is still being worked.
                 'today' => $today->copy(),
-                // Finished work was due back when it was made.
-                'past' => $today->copy()->subDays(14 + 5 * $pastNth++),
+                // A year of finished work behind the shop.
+                'past' => $today->copy()->subDays(14 + intdiv($nth * (self::PAST_WINDOW_DAYS - 14), $of)),
                 // The one date deliberately booked out to the daily ceiling.
                 'capacity' => $today->copy()->addDays(self::FULL_DAY_OFFSET),
-                // Live work runs forward from tomorrow, one job every couple of
-                // days, so the calendar fills out month after month.
-                default => $today->copy()->addDays(1 + 2 * $aheadNth++),
+                // Live work fanned across the coming quarter.
+                default => $today->copy()->addDays($this->aheadOffset($nth, $of)),
             };
 
-            $placed = $due->copy()->subWeeks(4);
+            $plan[$i]['due'] = $due;
+            // Lead time is not the same on every job: a plain reorder is booked a
+            // fortnight out, a big sublimation run two months.
+            $plan[$i]['placed'] = $due->copy()->subDays([14, 21, 28, 35, 42, 56][$i % 6]);
+        }
+
+        // The order book runs in the order work came in, so the numbering and the
+        // ids climb with time — otherwise the newest order by id could be due last
+        // year, and "latest first" on the list would mean nothing.
+        uasort($plan, fn ($a, $b) => $a['placed']->timestamp <=> $b['placed']->timestamp);
+
+        $perYear = [];
+
+        foreach ($plan as $i => [$product, $sizes, $weeks, $stop, $deadline]) {
+            $client = $clients[$this->clientFor($i, count($clients))];
+            [$printType, $cutting, $addon, $addonPrice] = self::ROUTING[$i % count(self::ROUTING)];
+
+            $qty = array_sum($sizes);
+            $quote = \App\Services\PricingService::quote($product, $qty);
+
+            $due = $plan[$i]['due'];
+            $placed = $plan[$i]['placed'];
+
+            // Numbered per the year the job was taken in, the way an order book is.
+            $orderYear = $placed->year;
+            $sequence = $perYear[$orderYear] = ($perYear[$orderYear] ?? 0) + 1;
 
             // Every fourth job is a rush, and a couple carry a discount.
             $rush = $i % 4 === 1;
@@ -385,7 +538,7 @@ class DemoDataSeeder extends Seeder
             $total = ProductionOrder::computeTotal($unit, $qty, $discount, $vat, 0, (float) $rushFee);
 
             $order = ProductionOrder::createJobOrder([
-                'order_number' => sprintf('IC%d-%05d', $year, $i + 1),
+                'order_number' => sprintf('IC%d-%05d', $orderYear, $sequence),
                 'client_id' => $client->id,
                 'customer_name' => $client->fullName(),
                 'product_type' => $product,
@@ -535,9 +688,16 @@ class DemoDataSeeder extends Seeder
         }
     }
 
+    /**
+     * What each client put down. Fifty percent is the shop's rule, but not every
+     * job follows it — regulars are trusted with less, walk-ins sometimes pay the
+     * lot up front — so the ledger is not a column of identical halves.
+     */
+    private const DOWNPAYMENT_SHARES = [0.5, 0.5, 0.5, 0.5, 0.3, 0.6, 0.4, 1.0, 0.5, 0.75];
+
     private function makePayments(array $orders, User $finance): void
     {
-        foreach ($orders as $order) {
+        foreach ($orders as $index => $order) {
             if ($order->status === 'cancelled' || $order->total_price === null) {
                 continue;
             }
@@ -551,19 +711,24 @@ class DemoDataSeeder extends Seeder
                 continue;
             }
 
+            $share = self::DOWNPAYMENT_SHARES[$index % count(self::DOWNPAYMENT_SHARES)];
+            $down = round($total * $share, 2);
+
             $order->payments()->create([
-                'amount' => round($total * 0.5, 2),
+                'amount' => $down,
                 'method' => $method,
-                'kind' => 'downpayment',
+                'kind' => $share >= 1.0 ? 'full' : 'downpayment',
                 'reference' => $method === 'Cash' ? null : strtoupper(bin2hex(random_bytes(4))),
-                'paid_at' => $order->created_at?->copy()->addDays(2) ?? now()->subMonth(),
+                // Some pay on the spot, some a few days later once the layout is
+                // approved and they are sure the job is going ahead.
+                'paid_at' => $order->created_at?->copy()->addDays($index % 6) ?? now()->subMonth(),
                 'recorded_by' => $finance->id,
             ]);
 
             // The balance lands when the job is finished and released.
-            if ($order->status === 'complete') {
+            if ($order->status === 'complete' && $down < $total) {
                 $order->payments()->create([
-                    'amount' => round($total - round($total * 0.5, 2), 2),
+                    'amount' => round($total - $down, 2),
                     'method' => $method,
                     'kind' => 'full',
                     'reference' => $method === 'Cash' ? null : strtoupper(bin2hex(random_bytes(4))),
@@ -606,7 +771,12 @@ class DemoDataSeeder extends Seeder
             ['other', 'Office pantry and supplies', 1400],
         ];
 
-        for ($monthsAgo = 3; $monthsAgo >= 0; $monthsAgo--) {
+        // Costs run as far back as the order history does, so the books compare
+        // like with like — a year of income against four months of rent and
+        // wages would show a shop that cannot possibly be losing money.
+        $months = (int) ceil(self::PAST_WINDOW_DAYS / 30);
+
+        for ($monthsAgo = $months; $monthsAgo >= 0; $monthsAgo--) {
             $month = now()->subMonths($monthsAgo);
 
             foreach ($recurring as [$category, $what, $amount, $day]) {
@@ -702,28 +872,71 @@ class DemoDataSeeder extends Seeder
         }
     }
 
-    /** A few job conversations, so the message tab isn't empty. */
+    /** Share of orders that have been talked about at all. */
+    private const TALKED_ABOUT_SHARE = 3;
+
+    /**
+     * Job conversations. Roughly one order in three has been discussed, which is
+     * what the inbox looks like in daily use: a wall of recent threads with the
+     * quiet jobs behind them.
+     *
+     * Most threads are marked read, so the unread badge means something — seeding
+     * every message unread would put a four-figure number on the sidebar and make
+     * the badge worth ignoring.
+     */
     private function makeMessages(array $orders, array $people): void
     {
         $people = array_values(array_filter($people));
+
         $threads = [
             ['Client confirmed the layout. Sizes are final, no more changes.', 'Noted. Sending to production today.'],
             ['Client is asking if we can move the pickup one day earlier.', 'Doable if the press finishes tonight. Let me check with the floor.', 'Confirmed, we can release a day early.'],
             ['Downpayment received, 50%. Balance on pickup.', 'Thanks — releasing the job order now.'],
             ['Reminder: this one is a rush. Please prioritise on the press.', 'Copy, queued it next after the current batch.'],
             ['Stock check: do we still have navy blue in XL?', 'Yes, 12 pcs left. Reserved for this order.'],
+            ['Client wants the logo 1cm bigger on the front. Artwork re-sent.', 'Got it, updating the layout now.', 'Reuploaded. Please check before we export.'],
+            ['Sample is ready for pickup at the front desk.', 'Client is coming Saturday morning.'],
+            ['Two pcs failed QC — stitching on the collar. Redoing them.', 'Noted, adjust the count on the release.'],
+            ['Delivery van is booked for Friday afternoon.', 'Thanks. I told the client 3pm onwards.'],
+            ['Client asked for an official receipt this time.', 'Will prepare it with the balance payment.'],
+            ['Please double check the size breakdown before cutting.', 'Checked against the JO, it matches.'],
+            ['Fabric came in a shade lighter than the swatch.', 'Client approved it over Viber, proceed.', 'Copy, running it today.'],
         ];
 
-        foreach (array_slice($orders, 0, 10) as $i => $order) {
+        foreach ($orders as $i => $order) {
+            if ($i % self::TALKED_ABOUT_SHARE !== 0) {
+                continue;
+            }
+
             $thread = $threads[$i % count($threads)];
 
+            // Recent orders were talked about recently; older ones long ago, so
+            // the inbox sorts into something believable.
+            $age = max(1, (int) min(120, abs($i - count($orders)) / 8));
+            $started = now()->subDays(rand(1, $age));
+
+            $senders = [];
+
             foreach ($thread as $n => $body) {
+                $sender = $people[($i + $n) % count($people)];
+                $senders[$sender->id] = $sender;
+
                 Message::create([
                     'production_order_id' => $order->id,
-                    'sender_id' => $people[($i + $n) % count($people)]->id,
+                    'sender_id' => $sender->id,
                     'body' => $body,
-                    'created_at' => now()->subDays(rand(1, 15))->subMinutes($n * 7),
+                    'created_at' => $started->copy()->addMinutes($n * 7),
                 ]);
+            }
+
+            // Every fifth thread is left unread, so the badge has something real
+            // to count; the rest are caught up.
+            if ($i % (self::TALKED_ABOUT_SHARE * 5) === 0) {
+                continue;
+            }
+
+            foreach ($senders as $person) {
+                Message::markRead($person, $order->id);
             }
         }
     }
