@@ -501,7 +501,7 @@ class ProductionOrderController extends Controller
     public function show(ProductionOrder $order): View
     {
         $this->assertOrderVisible($order);
-        $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles', 'materialRequests.item']);
+        $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles', 'materialRequests.item', 'payments']);
 
         return view('orders.show', [
             'order' => $order,

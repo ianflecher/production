@@ -54,7 +54,7 @@ class QueryBudgetTest extends TestCase
         $pages = [
             ['Dashboard', '/dashboard', 32],
             ['Orders list', '/orders', 20],
-            ['Order detail', "/orders/{$order->id}", 45],
+            ['Order detail', "/orders/{$order->id}", 32],
             ['New order form', '/orders/create', 18],
             ['Calendar', '/calendar', 20],
             ['Approvals', '/approvals', 22],

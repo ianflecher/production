@@ -245,7 +245,22 @@ class ProductionOrder extends Model
             return null;
         }
 
-        return max(0, (float) $this->total_price - (float) $this->payments()->sum('amount'));
+        return max(0, (float) $this->total_price - $this->paidTotal());
+    }
+
+    /**
+     * Everything paid on this order so far.
+     *
+     * The order page asks what has been paid, what is left and whether anything
+     * has been paid at all, several times over — each was its own SUM. Read the
+     * loaded payments when the caller has them, and ask the database only when
+     * nobody does.
+     */
+    private function paidTotal(): float
+    {
+        return $this->relationLoaded('payments')
+            ? (float) $this->payments->sum('amount')
+            : (float) $this->payments()->sum('amount');
     }
 
     public function tasks(): HasMany
@@ -354,7 +369,7 @@ class ProductionOrder extends Model
 
     public function totalPaid(): string
     {
-        return number_format((float) $this->payments()->sum('amount'), 2);
+        return number_format($this->paidTotal(), 2);
     }
 
     /** @return array{0: int, 1: int} completed tasks, total tasks */
