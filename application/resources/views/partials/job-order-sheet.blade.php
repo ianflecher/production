@@ -199,6 +199,12 @@
             @else
                 —
             @endif
+
+            {{-- Where it goes. The label above names the treatment; without this
+                 the floor still has to ask which part of the garment it is for. --}}
+            @if (filled($jo?->addon_note))
+                <div style="font-weight: 400; text-transform: none; white-space: pre-line;">{{ $y($jo->addon_note) }}</div>
+            @endif
         </td></tr>
         {{-- Filled in from whoever ran each station, so the sheet doesn't have to
              be written up by hand after the job. --}}
@@ -213,7 +219,7 @@
         @if ($jo?->needs_embroidery)
             <tr>
                 <td class="lbl-l">Embroidery:</td>
-                <td colspan="3" class="yellow" style="text-align: left; white-space: pre-line;">{{ $y($jo->embroidery_note) ?: 'YES' }}</td>
+                <td colspan="3" class="yellow" style="text-align: left;">YES</td>
             </tr>
         @endif
     </table>

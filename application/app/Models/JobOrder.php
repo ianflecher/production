@@ -42,10 +42,10 @@ class JobOrder extends Model
         'press',            // the ADD-ON press, matched from `addon` (default Heat press)
         'addon',            // embroidery / reflectorized / sublimated / others
         'addon_other',      // free text when addon = others
+        'addon_note',       // what the add-on covers — sleeves, left chest, collar
         'addon_price',      // what the add-on is charged at
         'fabric_press',     // the press that merges the print onto the fabric
         'needs_embroidery',
-        'embroidery_note',
         'fabric',
         'raw_materials',
         'free_logo_sticker',

@@ -55,7 +55,7 @@
 @endphp
 
 <style>
-    .complete-doc { font-family: Arial, sans-serif; counter-reset: pg; background: #e9edf3; padding: 1.2rem 0; }
+    .complete-doc { font-family: var(--font-body); counter-reset: pg; background: #e9edf3; padding: 1.2rem 0; }
     /* On screen each section is drawn as its own A4 sheet, so you can SEE the
        4 separate pages instead of one long scroll. */
     .page-section {
@@ -285,12 +285,13 @@
 
                     if ($addonName) {
                         $decoVal = $addonName.($pressName ? ' ('.$pressName.')' : '');
-                        // Embroidery still needs to say what to embroider.
-                        if ($decoKey === 'embroidery' && $jo?->embroidery_note) {
-                            $decoVal .= ' — '.$jo->embroidery_note;
+                        // What the add-on covers, then what to embroider — the
+                        // treatment on its own doesn't say where it goes.
+                        if (filled($jo?->addon_note)) {
+                            $decoVal .= ' — '.$jo->addon_note;
                         }
                     } elseif ($decoKey === 'embroidery') {
-                        $decoVal = 'EMBROIDERY'.($jo?->embroidery_note ? ' — '.$jo->embroidery_note : '');
+                        $decoVal = 'EMBROIDERY';
                     } elseif ($decoKey) {
                         $decoVal = $pressName;
                     } else {
