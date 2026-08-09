@@ -4,11 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $file->label ?? 'File' }} — on the shared drive</title>
+    @include('partials.fonts')
     <style>
-        body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: #F4F6F9; color: #17202E; margin: 0; display: grid; place-items: center; min-height: 100vh; padding: 1.5rem; }
+        /* Mirrors css/app.css — this page renders outside the app shell. */
+        :root {
+            --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --font-head: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+        }
+        body { font-family: var(--font-body); background: #F4F6F9; color: #17202E; margin: 0; display: grid; place-items: center; min-height: 100vh; padding: 1.5rem; }
         .card { background: #fff; border: 1px solid #dce3ea; border-radius: 12px; padding: 2rem; max-width: 620px; width: 100%; box-shadow: 0 2px 12px rgba(19,30,51,.06); text-align: center; }
         .icon { font-size: 3rem; line-height: 1; }
-        h1 { font-size: 1.25rem; margin: 0.6rem 0 0.2rem; }
+        h1 { font-family: var(--font-head); font-size: 1.25rem; margin: 0.6rem 0 0.2rem; }
         p { color: #58656F; margin: 0 0 1.2rem; }
         .path { font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem; background: #F4F6F9; border: 1px solid #dce3ea; border-radius: 8px; padding: 0.8rem 1rem; word-break: break-all; text-align: left; }
         .actions { margin-top: 1.1rem; display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }

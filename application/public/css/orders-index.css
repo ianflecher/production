@@ -57,7 +57,10 @@
             box-shadow 0.15s ease;
     }
 
+    /* These are links so a status filter can be shared and opened in a new tab,
+       but they are cards — the global a:hover underline does not belong on them. */
     .order-summary-card:hover {
+        text-decoration: none;
         transform: translateY(-2px);
         box-shadow: 0 11px 26px color-mix(in srgb, var(--summary-color) 22%, transparent);
     }

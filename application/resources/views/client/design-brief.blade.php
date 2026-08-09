@@ -4,18 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Design questionnaire — {{ $order->order_number }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    @include('partials.fonts')
     <style>
         :root {
+            /* Mirrors css/app.css — this page renders outside the app shell. */
+            --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --font-head: 'Space Grotesk', 'Inter', system-ui, sans-serif;
             --bg: #F4F6F9; --surface: #fff; --border: #E5E9F0; --ink: #17202E;
             --ink-2: #566172; --ink-3: #94A0AE; --brand: #E31B23; --brand-hover: #B5141A;
             --accent-soft: #eff6ff; --success: #15803d; --success-soft: #f0fdf4;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            font-family: var(--font-body);
             background: var(--bg); color: var(--ink); font-size: 16px;
             -webkit-font-smoothing: antialiased; line-height: 1.5;
         }
@@ -26,10 +27,10 @@
             display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 1rem;
             box-shadow: 0 2px 8px rgba(227,27,35,.3);
         }
-        .brand .txt strong { display: block; font-size: 1.05rem; font-weight: 700; line-height: 1; }
+        .brand .txt strong { display: block; font-family: var(--font-head); font-size: 1.05rem; font-weight: 700; line-height: 1; }
         .brand .txt small { display: block; font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
         .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.4rem 1.3rem; box-shadow: 0 1px 2px rgba(19,30,51,.04), 0 2px 10px rgba(19,30,51,.05); }
-        h1 { font-size: 1.4rem; letter-spacing: -0.02em; margin-bottom: 0.3rem; }
+        h1 { font-family: var(--font-head); font-size: 1.4rem; letter-spacing: -0.02em; margin-bottom: 0.3rem; }
         .lead { color: var(--ink-2); font-size: 0.95rem; margin-bottom: 1rem; }
         .meta { background: var(--accent-soft); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.9rem; margin-bottom: 1.4rem; }
         .saved {
