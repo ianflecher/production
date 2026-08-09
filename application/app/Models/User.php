@@ -108,8 +108,14 @@ class User extends Authenticatable
      */
     public function isPresentToday(): bool
     {
-        $override = $this->attendances->firstWhere('date', now()->toDateString())
-            ?? Attendance::where('user_id', $this->id)->whereDate('date', now()->toDateString())->first();
+        $today = now()->toDateString();
+
+        // `date` is cast to a Carbon instance, so comparing it to a date STRING
+        // never matched — every caller silently fell through to the query below,
+        // one per user, on pages that had already eager-loaded the attendances.
+        $override = $this->relationLoaded('attendances')
+            ? $this->attendances->first(fn ($a) => $a->date?->toDateString() === $today)
+            : Attendance::where('user_id', $this->id)->whereDate('date', $today)->first();
 
         if ($override) {
             return $override->status === 'present';

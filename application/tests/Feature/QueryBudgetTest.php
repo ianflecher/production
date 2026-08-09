@@ -52,7 +52,7 @@ class QueryBudgetTest extends TestCase
 
         // [label, url, budget]
         $pages = [
-            ['Dashboard', '/dashboard', 60],
+            ['Dashboard', '/dashboard', 32],
             ['Orders list', '/orders', 20],
             ['Order detail', "/orders/{$order->id}", 45],
             ['New order form', '/orders/create', 18],
@@ -64,7 +64,7 @@ class QueryBudgetTest extends TestCase
             ['Products', '/products', 22],
             ['Bookkeeping', '/books', 20],
             ['Finance', '/finance', 24],
-            ['Users', '/users', 58],
+            ['Users', '/users', 20],
             ['Messages', '/messages', 48],
             ['Job order sheet', "/orders/{$order->id}/job-order", 26],
             ['Material requests', '/material-requests', 20],

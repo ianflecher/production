@@ -344,6 +344,11 @@ class ProductionOrder extends Model
             return (bool) $this->attributes['payments_exists'];
         }
 
+        // The dashboard loads the payments themselves — no need to ask again.
+        if ($this->relationLoaded('payments')) {
+            return $this->payments->isNotEmpty();
+        }
+
         return $this->payments()->exists();
     }
 
