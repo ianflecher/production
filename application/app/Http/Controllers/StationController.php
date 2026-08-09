@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Services\Stations;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 
 /**
@@ -54,6 +55,39 @@ class StationController extends Controller
      * @param  \Illuminate\Support\Collection<int, ProductionOrder>  $orders  keyed by id
      * @param  \Illuminate\Support\Collection<string, \Illuminate\Support\Collection<int, int>>  $ordersByDepartment
      */
+    /**
+     * One page of a station's queue, late work first — whoever takes the station
+     * should see what is holding the shop up before anything else.
+     *
+     * Each station pages on its own parameter, so turning the page on the busy
+     * machine doesn't move every other card on the board.
+     *
+     * @param  \Illuminate\Support\Collection  $waiting
+     */
+    private function queuePage(string $station, $waiting): LengthAwarePaginator
+    {
+        $sorted = $waiting->sortBy(fn ($o) => match ($o->delayState()) {
+            'delayed' => 0,
+            'at_risk' => 1,
+            default => 2,
+        })->values();
+
+        $pageName = 'q_'.preg_replace('/[^a-z0-9]/i', '', $station);
+        $page = LengthAwarePaginator::resolveCurrentPage($pageName);
+
+        return new LengthAwarePaginator(
+            $sorted->forPage($page, self::PER_PAGE)->values(),
+            $sorted->count(),
+            self::PER_PAGE,
+            $page,
+            [
+                'path' => LengthAwarePaginator::resolveCurrentPath(),
+                'pageName' => $pageName,
+                'query' => request()->query(),
+            ]
+        );
+    }
+
     private static function ordersWaitingAt(string $station, $orders, $ordersByDepartment)
     {
         // A printer only gets the jobs whose job order actually picked THAT
@@ -139,13 +173,19 @@ class StationController extends Controller
                 if (! in_array($key, $allowed, true)) {
                     continue;
                 }
+                // The operator needs to know how many and what to make, so
+                // carry the job order details onto the board.
+                $waiting = self::ordersWaitingAt($key, $orders, $ordersByDepartment);
+
                 $groups[$group][] = [
                     'key' => $key,
                     'label' => $s['label'],
                     'session' => $activeByStation->get($key)?->first(),
-                    // The operator needs to know how many and what to make, so
-                    // carry the job order details onto the board.
-                    'orders' => self::ordersWaitingAt($key, $orders, $ordersByDepartment),
+                    'orders' => $waiting,
+                    // A busy station can have hundreds of jobs queued behind it.
+                    // Drawing them all made this the heaviest page in the app, so
+                    // the card shows a page at a time.
+                    'queue' => $this->queuePage($key, $waiting),
                 ];
             }
         }

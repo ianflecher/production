@@ -79,15 +79,9 @@
                          stickers (printed as a batch) and mass production, which
                          is the rest of the order after the approved sample. --}}
                     <div style="margin-top:0.5rem; font-size:0.78rem; color:var(--ink-2); line-height:1.5;">
-                        {{-- Late jobs to the top: whoever takes this station should
-                             see what is holding the shop up first. --}}
-                        @php
-                            $queue = collect($p['orders'])->sortBy(fn ($o) => match ($o->delayState()) {
-                                'delayed' => 0,
-                                'at_risk' => 1,
-                                default => 2,
-                            })->values();
-                        @endphp
+                        {{-- One page of the queue, late jobs first. Sorted and paged
+                             by the controller so the order survives paging. --}}
+                        @php $queue = $p['queue']; @endphp
                         @foreach ($queue as $o)
                             @php $step = $o->station_step ?? null; @endphp
                             <div @class(['station-job', 'is-late' => $o->delayState()])>
@@ -112,8 +106,8 @@
                                     · <span style="font-weight:700; color:var(--accent);">first sample</span>
                                 @endif
 
-                                @if ($p['key'] === 'embroidery' && filled($o->jobOrder?->embroidery_note))
-                                    <div style="color:var(--ink-2); font-weight:600;">🧵 {{ $o->jobOrder->embroidery_note }}</div>
+                                @if (filled($o->jobOrder?->addon_note))
+                                    <div style="color:var(--ink-2); font-weight:600;">🧵 {{ $o->jobOrder->addon_note }}</div>
                                 @endif
 
                                 {{-- Only what this station needs: the job order plus
@@ -122,6 +116,13 @@
                                 <a href="{{ route('orders.package', [$o, 'for' => \App\Services\Stations::scope($p['key'])]) }}" style="margin-left:0.3rem; font-size:0.73rem;">📄 open work sheet</a>
                             </div>
                         @endforeach
+
+                        @if ($queue->hasPages())
+                            <div class="station-pager">
+                                <span>Showing {{ $queue->firstItem() }}–{{ $queue->lastItem() }} of {{ number_format($queue->total()) }}</span>
+                                {{ $queue->links() }}
+                            </div>
+                        @endif
                     </div>
                 @endif
 
@@ -186,14 +187,28 @@
                                     No job order has reached this station yet.
                                 </div>
                             @else
+                                {{-- The list follows the queue above it, page for page.
+                                     Offering every waiting job put thousands of options
+                                     on this page and left the operator scrolling a
+                                     dropdown hundreds long to find the job in front
+                                     of them. Late work sorts first, so what they want
+                                     is normally on the first page; if not, turning the
+                                     page moves this list with it. --}}
                                 <select name="production_order_id" required>
                                     <option value="">— Choose job order —</option>
-                                    @foreach ($p['orders'] as $o)
+                                    @foreach ($p['queue'] as $o)
                                         <option value="{{ $o->id }}">
                                             {{ $o->order_number }} — {{ $o->customer_name }}@if ($p['key'] === 'sticker') · {{ number_format($o->quantity) }} pcs @endif
                                         </option>
                                     @endforeach
                                 </select>
+
+                                @if ($p['queue']->hasPages())
+                                    <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.25rem;">
+                                        Showing {{ $p['queue']->firstItem() }}–{{ $p['queue']->lastItem() }}
+                                        of {{ number_format($p['queue']->total()) }} waiting · turn the page above for the rest.
+                                    </div>
+                                @endif
                             @endif
 
                             <label style="margin-top:0.5rem;">Note (optional)</label>
