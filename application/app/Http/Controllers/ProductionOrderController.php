@@ -46,6 +46,9 @@ class ProductionOrderController extends Controller
         // would get slower every week the shop stays busy.
         $orders = $this->visibleOrders($request)
             ->with('tasks')
+            // Answered per row on the list, so answer it in this query rather
+            // than once per order (see hasDownpayment).
+            ->withExists('payments')
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('order_number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%")))

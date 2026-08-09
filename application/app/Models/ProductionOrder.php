@@ -315,16 +315,35 @@ class ProductionOrder extends Model
             ->exists();
     }
 
-    /** Every task in the layout stage is complete (client approved the layout). */
+    /**
+     * Every task in the layout stage is complete (client approved the layout).
+     *
+     * Read from the already-loaded tasks when the caller eager-loaded them —
+     * the order list asks this of every row, and going back to the database
+     * each time cost a query per row. Same as progress() above.
+     */
     public function layoutApproved(): bool
     {
-        $layout = $this->tasks()->where('stage', self::STAGE_LAYOUT)->get();
+        $layout = $this->relationLoaded('tasks')
+            ? $this->tasks->where('stage', self::STAGE_LAYOUT)
+            : $this->tasks()->where('stage', self::STAGE_LAYOUT)->get();
 
         return $layout->isNotEmpty() && $layout->every(fn ($t) => $t->status === 'complete');
     }
 
+    /**
+     * Has anything been paid on this order yet?
+     *
+     * A list that asks this per row should say so with withExists('payments'),
+     * which answers it in the query that fetched the orders. Without that this
+     * falls back to asking on its own, which is right for a single order.
+     */
     public function hasDownpayment(): bool
     {
+        if (array_key_exists('payments_exists', $this->attributes)) {
+            return (bool) $this->attributes['payments_exists'];
+        }
+
         return $this->payments()->exists();
     }
 
