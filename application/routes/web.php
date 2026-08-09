@@ -239,6 +239,8 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         // What has been going wrong, without opening the log file on the server.
         Route::get('/system/errors', [SystemHealthController::class, 'errors'])->name('system.errors');
+        // Clearing one only records that somebody looked; the log is untouched.
+        Route::post('/system/errors/dismiss', [SystemHealthController::class, 'dismiss'])->name('system.errors.dismiss');
 
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');

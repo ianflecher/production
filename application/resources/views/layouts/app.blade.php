@@ -277,6 +277,19 @@
         })();
 
 
+        /* Click an alert to put it away. One handler on the page catches
+           every one of them -- the flash strip up top and the ones a page
+           prints itself -- including any that arrive after a reload. */
+        document.addEventListener('click', function (e) {
+            var alert = e.target.closest('.alert-error, .alert-success');
+            if (!alert || alert.classList.contains('is-dismissed')) return;
+
+            alert.classList.add('is-dismissed');
+            // Gone from the layout once the animation has run, so it leaves no
+            // gap behind it.
+            setTimeout(function () { alert.remove(); }, 200);
+        });
+
         /* ---------- Staying up to date ----------
            There is no notification polling. Every open tab used to ask the
            server for new notifications every six seconds AND for a data

@@ -806,3 +806,19 @@
         }
         .station-pager .app-pager { justify-content: flex-end; gap: 0.4rem; }
         .station-pager .app-pager-link { min-height: 28px; padding: 0.2rem 0.5rem; font-size: 0.68rem; }
+
+        /* An alert has been read once it has been read. Clicking it puts it
+           away, so a stale "saved" or a validation warning you have already
+           dealt with stops sitting on the page. */
+        .alert-error, .alert-success { cursor: pointer; }
+        .alert-error.is-dismissed, .alert-success.is-dismissed {
+            animation: alertOut .18s ease forwards;
+            pointer-events: none;
+        }
+        @keyframes alertOut {
+            to { opacity: 0; transform: translateY(-4px); margin-bottom: 0;
+                 padding-top: 0; padding-bottom: 0; height: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .alert-error.is-dismissed, .alert-success.is-dismissed { animation: none; display: none; }
+        }

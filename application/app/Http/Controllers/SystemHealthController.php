@@ -26,4 +26,25 @@ class SystemHealthController extends Controller
             'logSize' => is_file(ErrorLog::path()) ? filesize(ErrorLog::path()) : 0,
         ]);
     }
+
+    /**
+     * Mark one failure as dealt with, so it stops sitting on the page.
+     *
+     * The log file is the record and is not edited — this only remembers that
+     * somebody looked. If the same thing fails again afterwards it reappears,
+     * because the new occurrence is later than the dismissal.
+     */
+    public function dismiss(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $data = $request->validate([
+            'fingerprint' => ['required', 'string', 'size:64'],
+        ]);
+
+        \App\Models\DismissedError::updateOrCreate(
+            ['fingerprint' => $data['fingerprint']],
+            ['dismissed_at' => now(), 'dismissed_by' => $request->user()->id],
+        );
+
+        return back()->with('success', 'Cleared. It comes back if it happens again.');
+    }
 }
