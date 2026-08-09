@@ -131,6 +131,7 @@ class DemoDataSeeder extends Seeder
         $this->makeExpenses($finance);
         $this->makeStock();
         $this->makeMessages($orders, [$sales, $leader, $finance]);
+        $this->makeShopFloorRecords($orders, $leader);
 
         $this->command?->info(sprintf(
             'Demo data ready: %d clients, %d orders, %d payments, %d expenses, %d stock items.',
@@ -534,8 +535,27 @@ class DemoDataSeeder extends Seeder
             $discount = $i % 6 === 3 ? 1000.0 : 0.0;
             $vat = $client->company !== null && $i % 3 === 0;
 
+            // The options an officer ticks on the form. Each changes something
+            // real -- the price, or the shape of the pipeline -- so a demo that
+            // never ticks them leaves those paths unseen.
+            $supportsPocket = (bool) ($quote['supports_pocket'] ?? false);
+            $backPocket = $supportsPocket && $i % 3 === 1;
+            // Sometimes every piece, sometimes only part of the run.
+            $backPocketQty = $backPocket ? ($i % 10 === 2 ? max(1, intdiv($qty, 2)) : $qty) : null;
+            $pocketAmount = $backPocket
+                ? $backPocketQty * (float) \App\Services\PricingService::backPocketFee()
+                : 0.0;
+
+            // A repeat the client already approved: no first sample, straight
+            // to the full run.
+            $skipSample = $i % 9 === 4;
+            // Jumped up the queue by the leader.
+            $massprod = $i % 11 === 6;
+            // Embroidery is stitched after sewing, so it adds its own step.
+            $embroidery = $addon === 'embroidery' || $i % 8 === 5;
+
             $unit = $quote['unit'] ?? 700.0;
-            $total = ProductionOrder::computeTotal($unit, $qty, $discount, $vat, 0, (float) $rushFee);
+            $total = ProductionOrder::computeTotal($unit, $qty, $discount, $vat, $pocketAmount, (float) $rushFee);
 
             $order = ProductionOrder::createJobOrder([
                 'order_number' => sprintf('IC%d-%05d', $orderYear, $sequence),
@@ -547,6 +567,10 @@ class DemoDataSeeder extends Seeder
                 'due_date' => $due,
                 'rush' => $rush,
                 'rush_fee' => $rushFee,
+                'back_pocket' => $backPocket,
+                'back_pocket_qty' => $backPocketQty,
+                'skip_sample' => $skipSample,
+                'massprod_priority' => $massprod,
                 'unit_price' => $unit,
                 'total_price' => $total,
                 'vat_inclusive' => $vat,
@@ -574,6 +598,7 @@ class DemoDataSeeder extends Seeder
                 'fabric_press' => JobOrder::PRINT_TYPES[$printType]['press'],
                 'addon' => $addon,
                 'addon_price' => $addonPrice,
+                'needs_embroidery' => $embroidery,
                 'fabric' => $this->fabric($product),
                 'raw_materials' => $this->materialsFor($product),
                 'neck' => 'Ribbed collar, same colour as body',
@@ -694,6 +719,119 @@ class DemoDataSeeder extends Seeder
      * lot up front — so the ledger is not a column of identical halves.
      */
     private const DOWNPAYMENT_SHARES = [0.5, 0.5, 0.5, 0.5, 0.3, 0.6, 0.4, 1.0, 0.5, 0.75];
+
+    /**
+     * The paper trail a shop leaves behind once work has actually run.
+     *
+     * Orders alone make a tidy-looking database that has never been used: no
+     * print file anybody could open, no record of who was on which machine, no
+     * finished pieces counted in, no quotation ever printed. Each of these is a
+     * screen in the app, and each looks broken when it is empty.
+     */
+    private function makeShopFloorRecords(array $orders, User $leader): void
+    {
+        $stations = array_values(array_filter(
+            array_keys(\App\Services\Stations::all()),
+            fn ($key) => str_starts_with($key, 'printer_') || str_starts_with($key, 'sewing_')
+        ));
+
+        $operators = ['Jully', 'Rommie', 'Maru', 'Carla', 'Ton Ton', 'Mick'];
+        $i = 0;
+
+        foreach ($orders as $order) {
+            $i++;
+
+            // 1. The print files the artist handed over, as network paths --
+            //    which is what the floor opens and what "edit and resend" edits.
+            foreach ($order->tasks->where('department', 'Export') as $export) {
+                if (! in_array($export->status, ['complete', 'in_progress'], true)) {
+                    continue;
+                }
+
+                foreach ($export->fileSlots() as $label) {
+                    $export->files()->create([
+                        'external_path' => sprintf(
+                            '\\192.168.150.%d\Designs\%s\%s.tif',
+                            230 + ($i % 20),
+                            $order->created_at?->format('Y-m') ?? date('Y-m'),
+                            $order->order_number
+                        ),
+                        'original_name' => $order->order_number.'.tif',
+                        'label' => $label,
+                        'round' => 1,
+                        'uploaded_by' => $export->assigned_to ?? $leader->id,
+                    ]);
+                }
+            }
+
+            // 2. Who was on which machine, and when they came off. The station
+            //    board's handover log is this.
+            if ($stations !== [] && $i % 3 === 0) {
+                $station = $stations[$i % count($stations)];
+                $started = ($order->created_at ?? now())->copy()->addDays(3)->setTime(8 + ($i % 6), 0);
+
+                \App\Models\StationSession::create([
+                    'station' => $station,
+                    'user_id' => $leader->id,
+                    'operator_name' => $operators[$i % count($operators)],
+                    'production_order_id' => $order->id,
+                    'started_at' => $started,
+                    'ended_at' => $started->copy()->addHours(2 + ($i % 4)),
+                    'end_reason' => ['done', 'break', 'shift_change'][$i % 3],
+                    'note' => $i % 5 === 0 ? 'Handed over mid-run.' : null,
+                ]);
+            }
+
+            // 3. The finished pieces, counted in at the inventory desk. Without
+            //    this the products page is empty however much work has shipped.
+            if ($order->status === 'complete') {
+                foreach (\App\Models\ProductReceipt::where('production_order_id', $order->id)
+                    ->where('status', 'pending')->get() as $receipt) {
+                    $product = \App\Models\ProductItem::firstOrCreate(
+                        ['name' => $receipt->name],
+                        ['unit' => $receipt->unit ?: 'pcs', 'quantity' => 0]
+                    );
+
+                    $qty = (float) $receipt->expected_quantity;
+
+                    if ($qty > 0) {
+                        $product->recordMovement(
+                            $qty,
+                            'received',
+                            'Received from order '.$order->order_number,
+                            $order->id,
+                            $operators[$i % count($operators)],
+                        );
+                    }
+
+                    $receipt->update([
+                        'status' => 'received',
+                        'received_quantity' => $qty,
+                        'received_by' => $leader->id,
+                        'received_at' => $order->completed_at ?? now(),
+                    ]);
+                }
+            }
+
+            // 4. The client's paperwork. A delivered job that never produced a
+            //    quotation is not a delivered job anybody got paid for.
+            if ($order->status === 'complete' && $i % 2 === 0) {
+                $type = $order->vat_inclusive
+                    ? \App\Models\OrderDocument::TYPE_PQ
+                    : \App\Models\OrderDocument::TYPE_DR;
+
+                $defaults = \App\Models\OrderDocument::defaultsFor($order, $type);
+
+                $order->documents()->create([
+                    'type' => $type,
+                    'number' => $defaults['number'],
+                    'items' => $defaults['items'],
+                    'fields' => $defaults['fields'],
+                    'created_by' => $order->created_by,
+                ]);
+            }
+        }
+    }
 
     private function makePayments(array $orders, User $finance): void
     {
