@@ -152,6 +152,23 @@ class DemoDataSeeder extends Seeder
         return User::where('is_active', true)->get()->first(fn ($u) => $u->role === $role);
     }
 
+    /**
+     * Every active account holding a role, not just the first one found.
+     *
+     * The demo used to put all 130 orders on one officer's name, which made
+     * the shop look like it had one salesperson and left every other login
+     * with an empty dashboard. Work is dealt round these instead.
+     *
+     * @return array<int, User>
+     */
+    private function allStaff(string $role): array
+    {
+        return User::where('is_active', true)->get()
+            ->filter(fn ($u) => $u->role === $role)
+            ->values()
+            ->all();
+    }
+
     /** Clear only the business tables, so the seeder can be re-run freely. */
     private function wipe(): void
     {
@@ -471,6 +488,10 @@ class DemoDataSeeder extends Seeder
     {
         $orders = [];
 
+        // Deal the orders round every account officer so each of them signs in
+        // to a dashboard with their own work on it.
+        $officers = $this->allStaff(User::ROLE_SALES) ?: [$sales];
+
         $plan = $this->plan();
 
         // How many orders are in each deadline group, so each group can be fanned
@@ -535,6 +556,10 @@ class DemoDataSeeder extends Seeder
             $discount = $i % 6 === 3 ? 1000.0 : 0.0;
             $vat = $client->company !== null && $i % 3 === 0;
 
+            // Whose order this is. Round-robin so the work is spread evenly
+            // rather than piled on whoever happens to be first in the table.
+            $officer = $officers[$i % count($officers)];
+
             // The options an officer ticks on the form. Each changes something
             // real -- the price, or the shape of the pipeline -- so a demo that
             // never ticks them leaves those paths unseen.
@@ -576,7 +601,7 @@ class DemoDataSeeder extends Seeder
                 'vat_inclusive' => $vat,
                 'discount_amount' => $discount,
                 'discount_note' => $discount > 0 ? 'Repeat client courtesy discount' : null,
-                'created_by' => $sales->id,
+                'created_by' => $officer->id,
                 'status' => 'active',
                 'created_at' => $placed,
                 'updated_at' => $placed,
@@ -591,7 +616,7 @@ class DemoDataSeeder extends Seeder
 
             $order->jobOrder()->create([
                 'status' => 'draft',
-                'created_by' => $sales->id,
+                'created_by' => $officer->id,
                 'print_type' => $printType,
                 'printer' => JobOrder::PRINT_TYPES[$printType]['printer'],
                 'press' => $addon ? JobOrder::pressForAddon($addon) : null,
@@ -601,9 +626,10 @@ class DemoDataSeeder extends Seeder
                 'needs_embroidery' => $embroidery,
                 'fabric' => $this->fabric($product),
                 'raw_materials' => $this->materialsFor($product),
-                'neck' => 'Ribbed collar, same colour as body',
-                'packaging' => 'Individually folded, 1 pc per plastic',
                 'special_instructions' => $rush ? 'RUSH — client is picking up on the due date itself.' : null,
+                // The whole sewing block, so every printed sheet reads like a
+                // finished one instead of a form somebody forgot to fill in.
+                ...$this->sewingBlock($i, $product),
             ]);
 
             // The add-on is priced on the job order, so the total is only final
@@ -1146,6 +1172,104 @@ class DemoDataSeeder extends Seeder
 
         return "$what for $who. Logo in front, name at the back. Client sent the artwork by Viber.";
     }
+
+    /**
+     * A filled-in sewing block, varied per order.
+     *
+     * Every seam group on the paper form names a sewer and a thread, and a demo
+     * where those are blank shows nothing of what the sheet is for. The values
+     * cycle on the order's index so no two consecutive sheets look identical
+     * and the suggestion dropdowns have a real spread of past entries to offer.
+     *
+     * @return array<string, string>
+     */
+    private function sewingBlock(int $i, string $product): array
+    {
+        $sewers = self::SEWERS;
+        $threads = self::THREAD_CODES;
+
+        // Walk both lists at different strides so sewer/thread pairings vary
+        // instead of marching in lockstep.
+        $sewer = fn (int $n) => $sewers[($i * 3 + $n) % count($sewers)];
+        $thread = fn (int $n) => $threads[($i * 5 + $n) % count($threads)];
+
+        $collars = ['Ribbed collar, same colour as body', 'Printed ribbings', 'Self-fabric collar', 'Contrast tipping'];
+        $cuffs = ['Tupi finish', 'Ribbed cuff', 'Plain hem sleeve', 'Elastic cuff'];
+        $hems = ['Straight hem', 'Curved tail hem', 'Double-needle hem'];
+        $labels = ['IC flat bed', 'IC woven label', 'Heat transfer label'];
+
+        return [
+            'fb_viber_gc' => self::GC_NAMES[$i % count(self::GC_NAMES)],
+            'free_logo_sticker' => $i % 4 === 0 ? 'IC round sticker' : 'IC standard sticker',
+
+            'neck' => $collars[$i % count($collars)],
+            'neck_size' => (2 + $i % 3).'.5 inches',
+            'cuff_arm_sleeves' => $cuffs[$i % count($cuffs)],
+            'cuff_size' => (2 + $i % 4).' inches',
+            'neck_label' => $labels[$i % count($labels)],
+            'neck_label_thread' => $thread(1),
+            'bottom_hem' => $hems[$i % count($hems)],
+            'bottom_hem_thread' => $thread(2),
+
+            'neckbond_sewer' => $sewer(0),
+            'neckbond_thread' => $thread(0),
+            'hangtag_woven_sewer' => $sewer(1),
+            'hangtag_woven_thread' => $thread(3),
+            'flatbed_sewer' => $sewer(2),
+            'flatbed_thread' => $thread(4),
+            'close_side_sewer' => $sewer(3),
+            'close_side_thread' => $thread(5),
+
+            'attached_sleeve_sewer' => $sewer(4),
+            'attached_sleeve_thread' => $thread(6),
+            'topping_side_sewer' => $sewer(5),
+            'topping_side_thread' => $thread(7),
+            'pipping_sewer' => $sewer(6),
+            'pipping_thread' => $thread(8),
+
+            // The spare column, used on some jobs and left blank on others —
+            // which is how it is used on paper.
+            'extra_seam_label' => $i % 3 === 0 ? 'Shoulder taping' : ($i % 3 === 1 ? 'Side vent' : ''),
+            'extra_seam_note' => $i % 3 === 0 ? 'Two rows, both shoulders' : ($i % 3 === 1 ? 'Both sides, 4 inches' : ''),
+            'extra_seam_sewer' => $i % 3 === 2 ? '' : $sewer(7),
+
+            'sewer_notes' => self::SEWER_NOTES[$i % count(self::SEWER_NOTES)],
+            'packaging' => $i % 5 === 0
+                ? 'Bundled per size, 10 pcs per pack'
+                : 'Individually folded, 1 pc per plastic',
+        ];
+    }
+
+    /** How the client is known on Messenger/Viber — the header asks for it. */
+    private const GC_NAMES = [
+        'Mamangun Sports GC', 'Team Angeles Viber', 'JD Prints FB', 'Balibago Riders GC',
+        'Clark Corporate Viber', 'Sto. Rosario Parish GC', 'Pampanga Cyclists FB',
+        'SM Clark Staff GC', 'Holy Angel Alumni Viber',
+    ];
+
+    /** The sewing floor. Real-looking names so the sheet reads like a sheet. */
+    private const SEWERS = [
+        'Marites Bautista', 'Jhun Delos Reyes', 'Angel Ramos', 'Boyet Santos',
+        'Nena Cruz', 'Lito Garcia', 'Rosa Mendoza', 'Kim Aguilar', 'Fely Domingo',
+    ];
+
+    /** Thread codes and colours as the floor writes them. */
+    private const THREAD_CODES = [
+        'TC-220 navy', 'TC-118 grey', 'TC-004 white', 'TC-901 black',
+        'Royal blue', 'Crimson red', 'Off white', 'Metallic gold', 'Forest green',
+        'TC-556 maroon', 'Charcoal', 'Sky blue',
+    ];
+
+    /** What a sewer actually writes in the notes box. */
+    private const SEWER_NOTES = [
+        'Double stitch the side seams on the XL pieces.',
+        'Collar ribbing runs slightly short — eased in on all pieces.',
+        '',
+        'Two pieces re-sewn, thread tension corrected.',
+        'Check sleeve length against the sample before pressing.',
+        '',
+        'Piping colour confirmed with the agent before starting.',
+    ];
 
     private function fabric(string $product): string
     {
