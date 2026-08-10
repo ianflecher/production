@@ -307,25 +307,56 @@ Route::get('/db-test', function () {
     }
     $perQuery = ((microtime(true) - $t) * 1000) / 10;
 
+    // A typical page here runs about this many queries. Used to turn a
+    // per-query figure into the number that actually matters — what the
+    // latency costs a real page.
+    $typicalPageQueries = 25;
+    $pageCost = ($perQuery * $typicalPageQueries) / 1000;
+
+    // Read the two numbers in the right order. Connection cost is paid ONCE per
+    // request and DB_PERSISTENT removes it; per-query cost is paid by every
+    // single query on the page and nothing but distance fixes it. Blaming the
+    // connection when a bare SELECT 1 takes half a second sends you tuning
+    // settings that cannot help.
     $verdict = match (true) {
         $connecting === null => 'Connection timing is only measured for MySQL.',
-        $connecting > 50 => "Most of the wait is opening the connection, not the database\n".
-            "itself. Two things fix that: put the database in the same region as\n".
-            "the app, and set DB_PERSISTENT=true so the connection is reused\n".
-            'instead of rebuilt from scratch on every single request.',
-        default => 'Connecting is cheap here — the database is close by.',
+
+        $perQuery > 50 => sprintf(
+            "THE DATABASE IS TOO FAR AWAY. A query that does no work takes\n".
+            "%.0f ms, and that is not the database thinking — it is the round\n".
+            "trip. Every query on the page pays it, so a normal page of about\n".
+            "%d queries costs roughly %.1f SECONDS before the app does anything.\n".
+            "\n".
+            "Move the database into the same region as the deployment. That is\n".
+            "the whole fix and it is on the hosting side, not in this repo.\n".
+            "DB_PERSISTENT and the cache settings are worth having, but they\n".
+            "save the connection and a few queries — they cannot touch the\n".
+            "%.0f ms that every remaining query still pays.",
+            $perQuery, $typicalPageQueries, $pageCost, $perQuery
+        ),
+
+        $connecting > 50 => "Queries are quick once the connection is open, but opening it is\n".
+            "slow and that is paid on every request. Set DB_PERSISTENT=true so\n".
+            'the connection is reused instead of rebuilt each time.',
+
+        default => 'The database is close by and connecting is cheap. If pages still\n'.
+            'feel slow, it is not the database.',
     };
 
     return response()->make(sprintf(
         "Opening a connection   : %s   <-- paid once per request\n".
         "One query once open    : %8.2f ms\n".
-        "Average of ten queries : %8.2f ms\n".
+        "Average of ten queries : %8.2f ms   <-- paid by EVERY query on the page\n".
         "Connections reused     : %s\n".
+        "\n".
+        "A page of ~%d queries therefore costs about %.1f s in waiting alone.\n".
         "\n%s\n",
         $connecting === null ? '     n/a  ' : sprintf('%8.2f ms', $connecting),
         $queryOnly,
         $perQuery,
         ($config['options'][PDO::ATTR_PERSISTENT] ?? false) ? 'yes' : 'no (DB_PERSISTENT)',
+        $typicalPageQueries,
+        $pageCost,
         $verdict
     ), 200, ['Content-Type' => 'text/plain']);
 })->middleware(['auth']);
