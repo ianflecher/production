@@ -785,11 +785,34 @@
                                 @endif
 
                                 @if (! in_array($task->status, ['complete', 'cancelled', 'for_checking']))
-                                    <form method="POST" action="{{ route('tasks.force-complete', $task) }}"
-                                          onsubmit="return confirm('Mark {{ $task->department }} COMPLETE without agent submission?');">
-                                        @csrf
-                                        <button class="btn btn-ghost btn-sm">Mark complete</button>
-                                    </form>
+                                    @php
+                                        // Every other step can be re-run if it was
+                                        // closed too early. Goods that left unpaid
+                                        // cannot be un-released.
+                                        $unpaidRelease = $task->department === 'Release to client'
+                                            && ! $order->isFullyPaid();
+                                    @endphp
+                                    @if ($unpaidRelease)
+                                        @php $bal = $order->balance(); @endphp
+                                        <form method="POST" action="{{ route('tasks.force-complete', $task) }}"
+                                              onsubmit="return confirm('Release this order with {{ $bal === null ? 'no price set' : '₱'.number_format($bal, 2) }} unpaid? This is recorded on the order.');"
+                                              style="border:1px solid var(--danger-ink); border-radius:8px; padding:0.5rem; max-width:320px;">
+                                            @csrf
+                                            <div style="font-size:0.75rem; font-weight:700; color:var(--danger-ink); margin-bottom:0.35rem;">
+                                                ⚠ {{ $bal === null ? 'No total price set' : '₱'.number_format($bal, 2).' unpaid' }}
+                                            </div>
+                                            <input type="text" name="override_reason" maxlength="500" required
+                                                   placeholder="Why release before payment?"
+                                                   style="width:100%; font-size:0.78rem; margin-bottom:0.35rem;">
+                                            <button class="btn btn-danger btn-sm">Release anyway</button>
+                                        </form>
+                                    @else
+                                        <form method="POST" action="{{ route('tasks.force-complete', $task) }}"
+                                              onsubmit="return confirm('Mark {{ $task->department }} COMPLETE without agent submission?');">
+                                            @csrf
+                                            <button class="btn btn-ghost btn-sm">Mark complete</button>
+                                        </form>
+                                    @endif
                                 @endif
 
                                 @if ($task->status === 'complete' && $task->approved_at)

@@ -542,6 +542,33 @@ class ProductionOrderController extends Controller
         return view('orders.job-order', ['order' => $order]);
     }
 
+    /**
+     * Remember where the design was dragged to on the job order sheet.
+     *
+     * It sits over the description column and can cover the very lines the
+     * floor needs to read — and the sheet prints where it was left. Storing it
+     * on the order rather than in the browser means the person who moved it and
+     * the person who prints it are looking at the same sheet.
+     */
+    public function saveMockupOffset(Request $request, ProductionOrder $order): \Illuminate\Http\JsonResponse
+    {
+        $this->assertOrderVisible($order);
+
+        // Bounded: a bad value should not be able to fling the design off the
+        // page for everybody with no way back short of editing the database.
+        $data = $request->validate([
+            'x' => ['required', 'integer', 'between:-2000,2000'],
+            'y' => ['required', 'integer', 'between:-2000,2000'],
+        ]);
+
+        $order->update([
+            'mockup_offset_x' => $data['x'],
+            'mockup_offset_y' => $data['y'],
+        ]);
+
+        return response()->json(['saved' => true]);
+    }
+
     /** Display the mockup image in a centered, focused view. */
     public function mockup(ProductionOrder $order): View
     {

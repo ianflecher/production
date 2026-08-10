@@ -172,7 +172,9 @@
                         {{-- Draggable: the design sits over the description column
                              and can cover the very text somebody needs to read.
                              Drag it clear; double-click puts it back. --}}
-                        <div class="jo-mockup" data-order="{{ $order->id }}">
+                        <div class="jo-mockup" data-order="{{ $order->id }}"
+                             data-save="{{ route('orders.mockup-offset', $order) }}"
+                             style="transform: translate({{ (int) $order->mockup_offset_x }}px, {{ (int) $order->mockup_offset_y }}px);">
                             @foreach ($mockupFiles as $f)
                                 @if ($f->isImage())
                                     <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" draggable="false">
@@ -196,7 +198,9 @@
                         {{-- Draggable: the design sits over the description column
                              and can cover the very text somebody needs to read.
                              Drag it clear; double-click puts it back. --}}
-                        <div class="jo-mockup" data-order="{{ $order->id }}">
+                        <div class="jo-mockup" data-order="{{ $order->id }}"
+                             data-save="{{ route('orders.mockup-offset', $order) }}"
+                             style="transform: translate({{ (int) $order->mockup_offset_x }}px, {{ (int) $order->mockup_offset_y }}px);">
                             @foreach ($mockupFiles as $f)
                                 @if ($f->isImage())
                                     <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" draggable="false">
@@ -379,30 +383,37 @@
     /* Drag the design where you want it.
      *
      * It is positioned over the description column, which means on a busy sheet
-     * it can cover the very lines somebody is trying to read — and it prints
+     * it can cover the very lines somebody is trying to read -- and it prints
      * that way too. Dragging it is the fix, and where it is left is where it
      * prints.
      *
-     * The position is kept per job order in this browser, because the page
-     * reloads itself whenever the data changes and it would otherwise jump back
-     * mid-print. It is a placement for reading and printing, not a property of
-     * the order, so it stays local rather than being saved for everybody.
+     * The position is saved on the ORDER, not in this browser, because the
+     * person who moves it and the person who prints it are usually not at the
+     * same machine. Double-click puts it back.
      */
     (function () {
+        var token = document.querySelector('meta[name="csrf-token"]')?.content;
+
         document.querySelectorAll('.jo-mockup').forEach(function (box) {
-            var key = 'jo-mockup-' + box.dataset.order;
-
-            var saved = null;
-            try { saved = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { /* ignore */ }
-            if (saved) {
-                box.style.transform = 'translate(' + saved.x + 'px, ' + saved.y + 'px)';
-            }
-
             var startX = 0, startY = 0, baseX = 0, baseY = 0, dragging = false;
 
             function current() {
                 var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(box.style.transform || '');
-                return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+                return m ? { x: Math.round(parseFloat(m[1])), y: Math.round(parseFloat(m[2])) } : { x: 0, y: 0 };
+            }
+
+            function save(pos) {
+                if (!box.dataset.save || !token) return;
+
+                fetch(box.dataset.save, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                    body: JSON.stringify(pos)
+                }).catch(function () {
+                    /* A failed save leaves it where it was dropped for this
+                       viewer and back where it was for everyone else. Better
+                       than an alert over a printed sheet. */
+                });
             }
 
             box.addEventListener('pointerdown', function (e) {
@@ -418,9 +429,8 @@
 
             box.addEventListener('pointermove', function (e) {
                 if (!dragging) return;
-                var x = baseX + (e.clientX - startX);
-                var y = baseY + (e.clientY - startY);
-                box.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+                box.style.transform = 'translate(' + (baseX + (e.clientX - startX)) + 'px, '
+                                                   + (baseY + (e.clientY - startY)) + 'px)';
             });
 
             function stop(e) {
@@ -428,7 +438,7 @@
                 dragging = false;
                 box.classList.remove('is-dragging');
                 try { box.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-                try { localStorage.setItem(key, JSON.stringify(current())); } catch (err) { /* ignore */ }
+                save(current());
             }
 
             box.addEventListener('pointerup', stop);
@@ -436,8 +446,8 @@
 
             // Back to where it started, for when it has been dragged somewhere daft.
             box.addEventListener('dblclick', function () {
-                box.style.transform = '';
-                try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+                box.style.transform = 'translate(0px, 0px)';
+                save({ x: 0, y: 0 });
             });
         });
     })();

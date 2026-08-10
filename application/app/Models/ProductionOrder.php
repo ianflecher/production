@@ -58,6 +58,7 @@ class ProductionOrder extends Model
         'rush', 'rush_fee',
         'unit_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
         'quantity', 'due_date', 'status', 'completed_at', 'created_by',
+        'mockup_offset_x', 'mockup_offset_y',
     ];
 
     protected function casts(): array
@@ -78,6 +79,8 @@ class ProductionOrder extends Model
             'vat_inclusive' => 'boolean',
             'discount_amount' => 'decimal:2',
             'brief_expires_at' => 'datetime',
+            'mockup_offset_x' => 'integer',
+            'mockup_offset_y' => 'integer',
         ];
     }
 

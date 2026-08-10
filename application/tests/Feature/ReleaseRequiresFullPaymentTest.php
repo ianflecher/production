@@ -113,4 +113,53 @@ class ReleaseRequiresFullPaymentTest extends TestCase
             ->assertSee('Not paid in full')
             ->assertSee('11,800.00');
     }
+
+    public function test_the_leader_override_cannot_release_unpaid_goods_silently(): void
+    {
+        [$sales, $order, $task] = $this->orderAtRelease(23800, paid: 12000);
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        // No reason given — the override is refused rather than waved through.
+        $this->actingAs($leader)
+            ->post("/tasks/{$task->id}/complete")
+            ->assertSessionHasErrors('override_reason');
+
+        $this->assertNotSame('complete', $task->fresh()->status);
+    }
+
+    public function test_a_reasoned_override_releases_and_leaves_a_trace_on_the_order(): void
+    {
+        [$sales, $order, $task] = $this->orderAtRelease(23800, paid: 12000);
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        $this->actingAs($leader)
+            ->post("/tasks/{$task->id}/complete", [
+                'override_reason' => 'Client collected in person, paying the balance on Monday.',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('complete', $task->fresh()->status, 'the override must still work');
+
+        // Whoever chases the money has to be able to find this.
+        $note = $order->messages()->latest('id')->first();
+        $this->assertNotNull($note, 'the unpaid release was not recorded anywhere');
+        $this->assertStringContainsString('RELEASED WITHOUT FULL PAYMENT', $note->body);
+        $this->assertStringContainsString('11,800.00', $note->body);
+        $this->assertStringContainsString('paying the balance on Monday', $note->body);
+        $this->assertSame($leader->id, $note->sender_id);
+    }
+
+    public function test_the_override_is_untouched_for_an_order_that_is_paid(): void
+    {
+        [$sales, $order, $task] = $this->orderAtRelease(23800, paid: 23800);
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        // Nothing owed, so no reason is demanded and nothing is written.
+        $this->actingAs($leader)
+            ->post("/tasks/{$task->id}/complete")
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('complete', $task->fresh()->status);
+        $this->assertSame(0, $order->messages()->count());
+    }
 }

@@ -53,6 +53,12 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Live updates: pages poll this and reload themselves when data changed.
     Route::get('/poll/version', fn () => ['v' => \App\Services\DataVersion::current()])->name('poll.version');
 
+    // Where the design sits on the job order sheet. Anyone who can open the
+    // sheet can drag it, artists included — it is a placement for reading and
+    // printing, and it belongs to the order so everyone sees the same one.
+    Route::post('/orders/{order}/mockup-offset', [ProductionOrderController::class, 'saveMockupOffset'])
+        ->whereNumber('order')->name('orders.mockup-offset');
+
     // Web Push: browser opts in (works even when closed). This is how alerts
     // reach someone now — the server sends them. Nothing asks on a timer.
     Route::post('/push/subscribe', [\App\Http\Controllers\NotificationController::class, 'subscribe'])->name('push.subscribe');

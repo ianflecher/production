@@ -696,9 +696,51 @@ class TaskController extends Controller
         return back()->with('success', $task->department.' unlocked early (dependency override). It is now READY.');
     }
 
-    public function forceComplete(Task $task): RedirectResponse
+    /**
+     * Leader override: close a step without the agent submitting it.
+     *
+     * Releasing goods that have not been paid for goes through here too, and
+     * that one is different from the rest. Every other step can be re-run if it
+     * was closed too early; money that left with the client cannot. So the
+     * override stays — it is there to unstick a real job — but it has to be
+     * deliberate, and it has to leave a trace on the order rather than
+     * happening silently behind a confirm dialog.
+     */
+    public function forceComplete(Request $request, Task $task): RedirectResponse
     {
+        $order = $task->order;
+        $unpaidRelease = $task->department === 'Release to client' && ! $order->isFullyPaid();
+        $reason = null;
+
+        if ($unpaidRelease) {
+            $reason = trim((string) $request->validate([
+                'override_reason' => ['required', 'string', 'min:5', 'max:500'],
+            ], [
+                'override_reason.required' => 'Say why this order is being released before it is paid — it is recorded on the order.',
+                'override_reason.min' => 'Give a real reason — it is recorded on the order.',
+            ])['override_reason']);
+        }
+
+        $balance = $order->balance();
+
         $task->forceComplete();
+
+        if ($unpaidRelease) {
+            // On the conversation, not in a log file: this is the thread the
+            // people who chase the money actually read.
+            $order->messages()->create([
+                'sender_id' => $request->user()->id,
+                'body' => sprintf(
+                    "RELEASED WITHOUT FULL PAYMENT.\n%s outstanding at release.\nAuthorised by %s.\nReason: %s",
+                    $balance === null ? 'No total price set — amount unknown' : '₱'.number_format($balance, 2),
+                    $request->user()->name,
+                    $reason
+                ),
+            ]);
+
+            return back()->with('success', $task->department.' marked COMPLETE by leader override — '
+                .'the unpaid release has been recorded on the order conversation.');
+        }
 
         return back()->with('success', $task->department.' marked COMPLETE by leader override.');
     }
