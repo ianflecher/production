@@ -42,9 +42,27 @@ stylesheet.
 ## The one thing settings cannot fix
 
 If the Aiven database and the Vercel deployment are in **different regions**, every
-round trip crosses that distance and no amount of tuning removes it. Check both are
-in the same region — it is the single biggest lever, and it is on Aiven's side, not
-in this repo.
+round trip crosses that distance and no amount of tuning removes it. It is the
+single biggest lever by a wide margin.
+
+**Run the function next to the database, not next to the user.** Aiven is in
+Bangalore. With no region set, Vercel runs the function in `iad1` (Washington
+D.C.) by default — a quarter of a second of ocean on *every query*. A page runs
+about twenty-five queries, so that alone was ten seconds of waiting. Measured:
+419 ms for a `SELECT 1` that does no work, against 94 ms of real network latency
+from the Manila office to the same database.
+
+`vercel.json` now pins `"regions": ["bom1"]` (Mumbai — the closest Vercel region
+to Bangalore). That adds one slower hop for the person using the site and removes
+the distance from all twenty-five queries.
+
+**Do not read the region out of an error page.** The `sin1` in a Vercel request ID
+is the edge PoP nearest the visitor, not where the function ran. Check
+Project → Settings → Functions.
+
+If the database is ever moved, move the function region with it. They must stay
+together, and which one they are near matters far more than which one the user
+is near.
 
 ## Checking it worked
 
@@ -76,6 +94,13 @@ Set in `application/Dockerfile.vercel`, no configuration needed:
   column". The server now binds the port immediately and the migration runs
   behind it. The migrations only add columns that are missing, so an
   interrupted run finishes itself on the next boot.
+
+## If the build fails on "push was denied"
+
+The image built, but Vercel would not accept it into the project's container
+registry. Nothing in this repo causes it and nothing here fixes it — create the
+repository under **Project → Sandboxes → Container Registry** (it takes its name
+from the service in `vercel.json`, so `laravel`), then re-run the build.
 
 ## If the deployment will not start
 
