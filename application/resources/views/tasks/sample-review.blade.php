@@ -66,13 +66,32 @@
                     @endif
                 </div>
 
-                @php $isPhysicalSample = $task->department === 'Produce sample for client'; @endphp
+                @php
+                    $isPhysicalSample = $task->department === 'Produce sample for client';
+                    // Nothing leaves the shop unpaid. Say so here rather than
+                    // letting them click and be refused.
+                    $heldForPayment = $task->department === 'Release to client' && ! $task->order->isFullyPaid();
+                @endphp
 
                 <div style="margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    @if ($heldForPayment)
+                        @php $bal = $task->order->balance(); @endphp
+                        <div class="alert-error" style="margin-bottom: 1rem;">
+                            <strong>Not paid in full — cannot release.</strong>
+                            @if ($bal === null)
+                                This order has no total price set, so there is nothing to check the payments against.
+                            @else
+                                ₱{{ number_format($bal, 2) }} is still outstanding
+                                (paid ₱{{ $task->order->totalPaid() }} of ₱{{ number_format($task->order->total_price, 2) }}).
+                            @endif
+                            <a href="{{ route('orders.show', $task->order) }}#payment-section">Record the payment</a>, then release.
+                        </div>
+                    @endif
+
                     <form method="POST" action="{{ route('tasks.approve', $task) }}"
                           onsubmit="return confirm('{{ $isPhysicalSample ? 'Client approved the sample? Mass production will start.' : 'Client approved this sample?' }}');" style="margin-bottom: 1rem;">
                         @csrf
-                        <button class="btn btn-success btn-sm">✓ Client approved</button>
+                        <button class="btn btn-success btn-sm" @disabled($heldForPayment)>✓ Client approved</button>
                     </form>
 
                     @if ($isPhysicalSample)

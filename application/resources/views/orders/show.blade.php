@@ -591,7 +591,7 @@
         <p class="sub">The job order, mockup and production template as one document — the same package the leader approves.</p>
         <div style="display:flex; gap:1.1rem; align-items:center; flex-wrap:wrap;">
             @if ($mockupPreview)
-                <a href="{{ route('orders.package', $order) }}" target="_blank" rel="noopener" style="flex-shrink:0;">
+                <a href="{{ route('orders.package', $order) }}" style="flex-shrink:0;">
                     @if ($mockupPreview->isExternal() && ! $mockupPreview->isWebLink())
                         {{-- Network-path design — no preview; show a placeholder tile. --}}
                         <div style="width:120px; height:120px; display:grid; place-items:center; border:1px solid var(--border); border-radius:8px; font-size:2rem; background:var(--surface-2);">📁</div>
@@ -611,7 +611,7 @@
                         @endif
                     @endforeach
                 </div>
-                <a href="{{ route('orders.package', $order) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">📄 Open design package</a>
+                <a href="{{ route('orders.package', $order) }}" class="btn btn-primary btn-sm">📄 Open design package</a>
                 @php
                     $exportFile = $order->tasks->flatMap->files->firstWhere('label', 'Export file')
                         ?? $order->tasks->flatMap->files->firstWhere('label', 'Print file (TIFF)');

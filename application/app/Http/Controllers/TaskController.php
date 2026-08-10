@@ -493,6 +493,17 @@ class TaskController extends Controller
     {
         $this->assertApprover($request, $task);
 
+        // Nothing goes out of the door on an unpaid balance. This is the last
+        // step before the client has the goods, so it is the last chance to
+        // catch it — after this the only leverage left is asking nicely.
+        if ($task->department === 'Release to client' && ! $task->order->isFullyPaid()) {
+            $balance = $task->order->balance();
+
+            return back()->with('error', $balance === null
+                ? 'Cannot release — this order has no total price set, so there is no way to tell if it is paid. Set the price and record the payment first.'
+                : 'Cannot release — ₱'.number_format($balance, 2).' is still unpaid. Record the full payment before handing over to the client.');
+        }
+
         $task->approve();
 
         // The client approved the first physical sample — count that one piece

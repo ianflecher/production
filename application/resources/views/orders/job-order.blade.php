@@ -28,7 +28,10 @@
     table.jo td, table.jo th { border: 1px solid #111; padding: 0.3rem 0.5rem; font-size: 0.8rem; vertical-align: top; }
     .lbl { background: #cfcfcf; font-weight: 700; text-align: center; font-size: 0.72rem; text-transform: uppercase; }
     .lbl-l { background: #cfcfcf; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
-    .yellow { background: #ffef00 !important; font-weight: 700; text-align: center; }
+    /* A filled-in value. White like the paper form — the yellow belongs on
+       the entry form, where it means "still to type in". Here it is already
+       typed in, and a printed sheet should look like the printed sheet. */
+    .yellow { background: #fff !important; font-weight: 700; text-align: center; }
     .ctr { text-align: center; }
     .red { color: #d00; font-weight: 700; }
     .sec { background: #cfcfcf; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }

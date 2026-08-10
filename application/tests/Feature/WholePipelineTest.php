@@ -296,6 +296,17 @@ class WholePipelineTest extends TestCase
 
         $this->assertNotEmpty($stages, 'no production stages were built');
 
+        // The client settles up before anything is handed over — the release
+        // step refuses to close on an outstanding balance.
+        $this->actingAs($this->staff['sales'])
+            ->post("/orders/{$this->order->id}/payment", [
+                'portion' => 'balance',
+                'method' => 'Cash',
+                'proof' => UploadedFile::fake()->image('cash-receipt.jpg'),
+            ])->assertRedirect();
+
+        $this->assertEqualsWithDelta(0, (float) $this->order->fresh()->balance(), 0.01, 'the order did not settle');
+
         foreach ($stages as $stage) {
             $this->clearStage($stage);
         }
@@ -311,16 +322,7 @@ class WholePipelineTest extends TestCase
             'the order completed with steps still open'
         );
 
-        // ---- 7. The balance and the paperwork -------------------------------
-        $this->actingAs($this->staff['sales'])
-            ->post("/orders/{$this->order->id}/payment", [
-                'portion' => 'balance',
-                'method' => 'Cash',
-                'proof' => UploadedFile::fake()->image('cash-receipt.jpg'),
-            ])->assertRedirect();
-
-        $this->assertEqualsWithDelta(0, (float) $this->order->fresh()->balance(), 0.01, 'the order did not settle');
-
+        // ---- 7. The paperwork ------------------------------------------------
         $this->actingAs($this->staff['sales'])
             ->get("/orders/{$this->order->id}/document/pq")->assertOk();
 

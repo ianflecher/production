@@ -70,6 +70,20 @@
         .jo-mockup .jo-mockup-hint { display: none !important; }
     }
 
+    /* A field that carries its own printed label — "Sewer:", "Thread Color:".
+       White like the paper form; only the group headers above it are grey. */
+    .jo .fld { background: #fff; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+    /* …and the value written into it, in normal case so a thread code or a
+       sewer's name reads as it was typed. */
+    .jo .fill { font-weight: 700; text-transform: none; color: #111; }
+
+    .jo-footnote {
+        text-align: center; padding: 0.5rem 0.25rem;
+        font-weight: 800; font-size: 0.9rem; letter-spacing: .02em;
+        color: #c0392b;
+    }
+    @media print { .jo-footnote { font-size: 0.68rem !important; padding: 0.25rem !important; } }
+
     .jo-mockup {
         position: absolute; top: 0; left: 0; right: 0;
         text-align: center; z-index: 1;
@@ -219,10 +233,9 @@
             <td class="yellow">{{ strtoupper($y($jo?->fabric)) }}</td>
             <td class="yellow">{{ $order->needs_sticker ? strtoupper($y($jo?->free_logo_sticker)) : '' }}</td>
         </tr>
-        {{-- The two presses: one merges the print onto the fabric, one decorates. --}}
-        <tr><td class="lbl-l">Fabric Press:</td><td colspan="3" class="yellow" style="text-align: left;">{{ strtoupper($y($jo?->fabricPressLabel())) }}</td></tr>
-        {{-- No add-on row. It is asked for and answered in the production
-             details, and repeating it here only gave the two places somewhere
+        {{-- No fabric press, add-on or embroidery row. All three are asked for
+             and answered in the production details, and the paper form doesn't
+             carry them — repeating them here only gave the two places somewhere
              to disagree. --}}
         {{-- Filled in from whoever ran each station, so the sheet doesn't have to
              be written up by hand after the job. --}}
@@ -234,12 +247,6 @@
              one. Who followed this job is who signed a message on it — several
              people share the one login, and each types their own name. --}}
         <tr><td class="lbl-l">Mover:</td><td colspan="3">{{ $order->moverNames() ?: '' }}</td></tr>
-        @if ($jo?->needs_embroidery)
-            <tr>
-                <td class="lbl-l">Embroidery:</td>
-                <td colspan="3" class="yellow" style="text-align: left;">YES</td>
-            </tr>
-        @endif
     </table>
 
     {{-- SEWING --}}
@@ -257,26 +264,77 @@
             <td class="yellow">{{ strtoupper($y($jo?->neck_label)) }}</td>
             <td class="yellow">{{ strtoupper($y($jo?->bottom_hem)) }}</td>
         </tr>
+        {{-- Size on the two that are cut to a measurement, thread colour on the
+             two that are stitched on. --}}
         <tr>
-            <td class="lbl-l" colspan="2">Sewer:</td>
-            <td colspan="2">{{ $who(['Sewing']) }}</td>
+            <td class="fld">Size: <span class="fill">{{ strtoupper($y($jo?->neck_size)) }}</span></td>
+            <td class="fld">Size: <span class="fill">{{ strtoupper($y($jo?->cuff_size)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->neck_label_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->bottom_hem_thread)) }}</span></td>
+        </tr>
+
+        {{-- Each seam group names the sewer who ran it and the thread they used,
+             so a fault found later can be traced back to the machine it came off. --}}
+        <tr>
+            <td class="lbl">Neckbond Shoulder</td>
+            <td class="lbl">Top / Neck / Hangtag Woven</td>
+            <td class="lbl">Flatbed</td>
+            <td class="lbl">Close Side Body &amp; Sleeve</td>
         </tr>
         <tr>
-            <td class="lbl-l">Thread Color:</td>
-            <td class="lbl-l">Thread Color:</td>
-            <td class="lbl-l">Thread Color:</td>
-            <td class="lbl-l">Thread Color:</td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->neckbond_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->hangtag_woven_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->flatbed_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->close_side_sewer)) }}</span></td>
         </tr>
         <tr>
-            <td class="lbl-l" colspan="3">IC Woven / Tag Placement:</td>
-            <td class="yellow">{{ strtoupper($y($jo?->ic_placement)) }}</td>
+            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->neckbond_thread)) }}</span></td>
+            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->hangtag_woven_thread)) }}</span></td>
+            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->flatbed_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->close_side_thread)) }}</span></td>
         </tr>
-        <tr><td class="lbl-l" colspan="4">Notes from Sewer:</td></tr>
+
+        <tr>
+            <td class="lbl">Attached Sleeve / Cuffs</td>
+            <td class="lbl">Topping Side / Sleeve</td>
+            <td class="lbl">Pipping</td>
+            {{-- The spare column, named on the form for whatever this garment
+                 needed — blank on the paper version. --}}
+            <td class="lbl">{{ strtoupper($y($jo?->extra_seam_label)) }}</td>
+        </tr>
+        <tr>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->attached_sleeve_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->topping_side_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->pipping_sewer)) }}</span></td>
+            <td class="fld"><span class="fill">{{ strtoupper($y($jo?->extra_seam_note)) }}</span></td>
+        </tr>
+        <tr>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->attached_sleeve_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->topping_side_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->pipping_thread)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->extra_seam_sewer)) }}</span></td>
+        </tr>
+
+        {{-- Whoever closed the sewing step, for the seams the form doesn't break
+             out by name. --}}
+        @if ($who(['Sewing']))
+            <tr><td class="fld" colspan="4">Sewing Station: <span class="fill">{{ $who(['Sewing']) }}</span></td></tr>
+        @endif
+
+        <tr>
+            <td class="fld red" colspan="4" style="text-align: left; white-space: pre-line;">Notes from Sewer: <span class="fill">{{ $y($jo?->sewer_notes) }}</span></td>
+        </tr>
     </table>
 
     {{-- QUALITY CHECK --}}
     <table class="jo">
         <tr><td colspan="4" class="sec">Quality Check</td></tr>
+        {{-- The checker's standing list — what "checked" is supposed to mean. --}}
+        <tr>
+            <td colspan="4" class="lbl-l red" style="text-align: left;">
+                Quality Control: full mock up approved design / thread stiches / needle mark / wrinkle / stain / standard size / special instructions
+            </td>
+        </tr>
         <tr>
             <td class="lbl" style="width: 25%;">Packaging</td>
             <td class="lbl" style="width: 25%;">Quality Checked By:</td>
@@ -308,6 +366,12 @@
             <td style="min-height: 120px; white-space: pre-line; text-align: center; padding: 1.2rem; font-weight: 600;">{{ $jo?->special_instructions ?? $order->description }}</td>
         </tr>
     </table>
+
+    {{-- Only in the package document, where the mockup really is the next page.
+         On the standalone sheet the design is on this page already. --}}
+    @unless ($showMockup)
+        <div class="jo-footnote">FULL MOCK UP DESIGN — PLEASE CHECK THE NEXT PAGE!</div>
+    @endunless
 
 </div>
 

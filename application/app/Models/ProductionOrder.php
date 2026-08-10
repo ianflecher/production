@@ -367,6 +367,24 @@ class ProductionOrder extends Model
         return $this->payments()->exists();
     }
 
+    /**
+     * Is the order settled in full?
+     *
+     * Nothing leaves the shop on an unpaid balance, so this gates the release
+     * step. An order with no price set yet has nothing to settle against and
+     * can't be judged either way — treat that as not paid rather than guess,
+     * because guessing wrong hands over goods for free.
+     */
+    public function isFullyPaid(): bool
+    {
+        if ($this->total_price === null) {
+            return false;
+        }
+
+        // A hair under, from rounding a split payment, is paid.
+        return $this->paidTotal() >= (float) $this->total_price - 0.005;
+    }
+
     public function totalPaid(): string
     {
         return number_format($this->paidTotal(), 2);

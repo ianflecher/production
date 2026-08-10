@@ -786,7 +786,9 @@
             border-radius: 8px;
             transition: color 0.15s ease, border-color 0.15s ease;
         }
-        .app-pager-link:hover { color: var(--accent); border-color: var(--accent); }
+        /* The colour and border already say it is hoverable; the global link
+           underline only smudges the arrows. */
+        .app-pager-link:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
         .app-pager-link.is-disabled {
             color: var(--ink-3); background: var(--surface-2);
             border-color: var(--border); cursor: default;
