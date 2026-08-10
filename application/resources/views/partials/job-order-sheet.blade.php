@@ -62,7 +62,34 @@
         .yellow, .lbl, .lbl-l, .sec, table.jo td, table.jo th {
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
+
+        /* Wherever it was dragged to is where it prints — that is the point of
+           dragging it. The grab cursor and outline are screen-only. */
+        .jo-mockup { cursor: default !important; }
+        .jo-mockup:hover { outline: none !important; }
+        .jo-mockup .jo-mockup-hint { display: none !important; }
     }
+
+    .jo-mockup {
+        position: absolute; top: 0; left: 0; right: 0;
+        text-align: center; z-index: 1;
+        cursor: grab; touch-action: none;
+        transition: outline-color .12s;
+        outline: 2px dashed transparent; outline-offset: 3px;
+    }
+    .jo-mockup:hover { outline-color: rgba(37, 99, 235, .45); }
+    .jo-mockup.is-dragging { cursor: grabbing; outline-color: rgba(37, 99, 235, .8); z-index: 5; }
+    .jo-mockup img {
+        max-width: 60%; max-height: 220px; display: block; margin: 0 auto;
+        user-select: none; -webkit-user-drag: none;
+    }
+    .jo-mockup-hint {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        bottom: -1.15rem; white-space: nowrap;
+        font-size: 0.62rem; font-weight: 600; letter-spacing: .04em;
+        color: #2563eb; opacity: 0; transition: opacity .12s; pointer-events: none;
+    }
+    .jo-mockup:hover .jo-mockup-hint { opacity: 1; }
 </style>
 <div class="jo-sheet">
     {{-- Title --}}
@@ -128,12 +155,16 @@
                     {{-- Per-line description, else the order's overall description on the first row. --}}
                     {{ strtoupper($item->description ?: ($loop->first ? ($order->description ?? '') : '')) }}
                     @if ($loop->first && $mockupFiles->isNotEmpty())
-                        <div style="position: absolute; top: 0; left: 0; right: 0; text-align: center; z-index: 1;">
+                        {{-- Draggable: the design sits over the description column
+                             and can cover the very text somebody needs to read.
+                             Drag it clear; double-click puts it back. --}}
+                        <div class="jo-mockup" data-order="{{ $order->id }}">
                             @foreach ($mockupFiles as $f)
                                 @if ($f->isImage())
-                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" style="max-width: 60%; max-height: 220px; display: block; margin: 0 auto;">
+                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" draggable="false">
                                 @endif
                             @endforeach
+                            <span class="jo-mockup-hint">drag to move &middot; double-click to reset</span>
                         </div>
                     @endif
                 </td>
@@ -148,12 +179,16 @@
             <tr>
                 <td class="ctr" style="{{ $i === 0 && $items->isEmpty() && $mockupFiles->isNotEmpty() ? 'position: relative;' : '' }} height: 1.6rem;">
                     @if ($i === 0 && $items->isEmpty() && $mockupFiles->isNotEmpty())
-                        <div style="position: absolute; top: 0; left: 0; right: 0; text-align: center; z-index: 1;">
+                        {{-- Draggable: the design sits over the description column
+                             and can cover the very text somebody needs to read.
+                             Drag it clear; double-click puts it back. --}}
+                        <div class="jo-mockup" data-order="{{ $order->id }}">
                             @foreach ($mockupFiles as $f)
                                 @if ($f->isImage())
-                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" style="max-width: 60%; max-height: 220px; display: block; margin: 0 auto;">
+                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" draggable="false">
                                 @endif
                             @endforeach
+                            <span class="jo-mockup-hint">drag to move &middot; double-click to reset</span>
                         </div>
                     @endif
                 </td>
@@ -275,3 +310,71 @@
     </table>
 
 </div>
+
+<script>
+    /* Drag the design where you want it.
+     *
+     * It is positioned over the description column, which means on a busy sheet
+     * it can cover the very lines somebody is trying to read — and it prints
+     * that way too. Dragging it is the fix, and where it is left is where it
+     * prints.
+     *
+     * The position is kept per job order in this browser, because the page
+     * reloads itself whenever the data changes and it would otherwise jump back
+     * mid-print. It is a placement for reading and printing, not a property of
+     * the order, so it stays local rather than being saved for everybody.
+     */
+    (function () {
+        document.querySelectorAll('.jo-mockup').forEach(function (box) {
+            var key = 'jo-mockup-' + box.dataset.order;
+
+            var saved = null;
+            try { saved = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { /* ignore */ }
+            if (saved) {
+                box.style.transform = 'translate(' + saved.x + 'px, ' + saved.y + 'px)';
+            }
+
+            var startX = 0, startY = 0, baseX = 0, baseY = 0, dragging = false;
+
+            function current() {
+                var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(box.style.transform || '');
+                return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+            }
+
+            box.addEventListener('pointerdown', function (e) {
+                dragging = true;
+                box.classList.add('is-dragging');
+                box.setPointerCapture(e.pointerId);
+
+                var pos = current();
+                baseX = pos.x; baseY = pos.y;
+                startX = e.clientX; startY = e.clientY;
+                e.preventDefault();
+            });
+
+            box.addEventListener('pointermove', function (e) {
+                if (!dragging) return;
+                var x = baseX + (e.clientX - startX);
+                var y = baseY + (e.clientY - startY);
+                box.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+            });
+
+            function stop(e) {
+                if (!dragging) return;
+                dragging = false;
+                box.classList.remove('is-dragging');
+                try { box.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                try { localStorage.setItem(key, JSON.stringify(current())); } catch (err) { /* ignore */ }
+            }
+
+            box.addEventListener('pointerup', stop);
+            box.addEventListener('pointercancel', stop);
+
+            // Back to where it started, for when it has been dragged somewhere daft.
+            box.addEventListener('dblclick', function () {
+                box.style.transform = '';
+                try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+            });
+        });
+    })();
+</script>
