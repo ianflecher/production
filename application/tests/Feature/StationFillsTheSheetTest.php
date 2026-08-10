@@ -52,11 +52,11 @@ class StationFillsTheSheetTest extends TestCase
     }
 
     /** Put an operator on a station, running this order. */
-    private function runningOn(User $who, string $station, ProductionOrder $order): StationSession
+    private function runningOn(User $who, string $station, ProductionOrder $order, string $operator = 'Marites Bautista'): StationSession
     {
         $this->actingAs($who)->post('/stations/start', [
             'station' => $station,
-            'operator_name' => 'Marites Bautista',
+            'operator_name' => $operator,
             'production_order_id' => $order->id,
         ]);
 
@@ -202,5 +202,74 @@ class StationFillsTheSheetTest extends TestCase
         // One shared pool, so the next job offers them on any seam.
         $this->assertContains('Marites Bautista', $suggest['sewer']);
         $this->assertContains('Metallic gold', $suggest['thread']);
+    }
+
+    public function test_saying_another_seam_remains_leaves_the_step_open_for_the_next_sewer(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $session = $this->runningOn($sewer, 'sewing_1', $order);
+
+        $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
+            'end_reason' => 'done',
+            'more_seams' => 1,
+            'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
+        ])->assertSessionHasNoErrors();
+
+        $task = $order->fresh()->tasks()->where('department', 'Sewing')->first();
+
+        $this->assertNotSame('complete', $task->status,
+            'several people sew one job order — one finishing their seams must not close the step');
+        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->neckbond_sewer,
+            'their seams are still recorded');
+        $this->assertNotNull(StationSession::find($session->id)->ended_at,
+            'their own run at the machine is over, even though the step is not');
+    }
+
+    public function test_the_last_sewer_closes_the_step_and_every_name_is_kept(): void
+    {
+        [$first, $order] = $this->orderAtSewing();
+        $second = User::factory()->create(['job_role' => 'Sewing', 'is_active' => true]);
+
+        // First sewer: some seams, more to come.
+        $a = $this->runningOn($first, 'sewing_1', $order);
+        $this->actingAs($first)->post("/station-sessions/{$a->id}/end", [
+            'end_reason' => 'done',
+            'more_seams' => 1,
+            'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
+        ]);
+
+        // Second sewer picks the same job up and finishes it.
+        $b = $this->runningOn($second, 'sewing_1', $order->fresh(), 'Angel Ramos');
+        $this->actingAs($second)->post("/station-sessions/{$b->id}/end", [
+            'end_reason' => 'done',
+            'more_seams' => 0,
+            'sheet' => ['flatbed_sewer' => 'Angel Ramos'],
+        ]);
+
+        $task = $order->fresh()->tasks()->where('department', 'Sewing')->first();
+        $jo = $order->fresh()->jobOrder;
+
+        $this->assertSame('complete', $task->status, 'the last sewer closes the step');
+        $this->assertSame('Marites Bautista', $jo->neckbond_sewer, "the first sewer's seam survives");
+        $this->assertSame('Angel Ramos', $jo->flatbed_sewer);
+
+        // The step was worked by two people and must credit both.
+        $this->assertStringContainsString('Marites Bautista', (string) $task->operator_name);
+        $this->assertStringContainsString('Angel Ramos', (string) $task->operator_name);
+    }
+
+    public function test_finish_opens_the_sheet_rather_than_closing_the_step(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $session = $this->runningOn($sewer, 'sewing_1', $order);
+
+        $this->actingAs($sewer)
+            ->get("/station-sessions/{$session->id}/finish")
+            ->assertOk()
+            ->assertSee('Is there another seam still to sew', false)
+            ->assertSee('name="sheet[neckbond_sewer]"', false);
+
+        // Opening the page must not have closed anything on its own.
+        $this->assertNotSame('complete', $order->fresh()->tasks()->where('department', 'Sewing')->value('status'));
     }
 }

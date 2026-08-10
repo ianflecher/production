@@ -73,7 +73,14 @@
                     @endif
                 </div>
 
-                @if ($p['orders']->isNotEmpty())
+                {{-- The waiting queue is only shown when the station is FREE.
+                     Once somebody is running a job, the only job that matters to
+                     them is the one in their hands — a list of everything else
+                     waiting is noise on a shop-floor screen, and on a busy
+                     station it pushed the Finish button off the bottom. What is
+                     queued is still on the badge above, and comes back the
+                     moment the station is free. --}}
+                @if ($p['orders']->isNotEmpty() && ! $s)
                     {{-- Garments move through the line one at a time, so a piece
                          count is meaningless on most stations. The exceptions are
                          stickers (printed as a batch) and mass production, which
@@ -136,47 +143,43 @@
 
                     {{-- Finishing means the work on this station is DONE — it closes
                          the step and moves the order on. Breaks and shift changes
-                         are recorded on "Take over" instead. --}}
-                    <form method="POST" action="{{ route('stations.end', $s) }}"
-                          onsubmit="return confirm('Finished {{ $s->order?->order_number ?? 'this job' }} on {{ addslashes($p['label']) }}?\n\nThis closes the step and moves the order to the next one.');"
-                          style="margin-top:0.8rem; display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
-                        @csrf
-                        <input type="hidden" name="end_reason" value="done">
-                        <input type="text" name="note" maxlength="255" placeholder="Note (optional)" style="flex:1; min-width:110px; padding:0.3rem 0.5rem; font-size:0.82rem;">
-                        <button class="btn btn-success btn-sm">✓ Finish</button>
+                         are recorded on "Take over" instead.
 
-                        {{-- This station's part of the job order sheet, asked of
-                             the person holding the garment. Folded away so the
-                             board stays a board; everything in it is optional,
-                             and a box left alone keeps whatever an earlier shift
-                             wrote. --}}
-                        @php $sheetFields = \App\Http\Controllers\StationController::sheetFieldsFor($p['key']); @endphp
-                        @if ($sheetFields !== [] && $s->order?->jobOrder)
-                            @php $sjo = $s->order->jobOrder; @endphp
-                            <details class="station-sheet" style="flex-basis:100%; margin-top:0.5rem;">
-                                <summary style="cursor:pointer; font-size:0.8rem; font-weight:700; color:var(--accent);">
-                                    ✎ Fill the job order sheet
-                                    ({{ str_starts_with($p['key'], 'qc_') ? 'notes from QC' : 'sewers &amp; threads' }})
-                                </summary>
-                                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0.4rem; margin-top:0.5rem;">
-                                    @foreach ($sheetFields as $f)
-                                        <label style="font-size:0.7rem; font-weight:700; text-transform:uppercase; color:var(--ink-2);">
-                                            {{ \App\Http\Controllers\StationController::sheetFieldLabel($f) }}
-                                            <input type="text" name="sheet[{{ $f }}]" maxlength="1000"
-                                                   value="{{ $sjo->$f }}"
-                                                   list="{{ str_contains($f, 'thread') ? 'dl_station_thread' : (str_contains($f, 'sewer') ? 'dl_station_sewer' : '') }}"
-                                                   style="width:100%; padding:0.25rem 0.4rem; font-size:0.8rem; font-weight:400; text-transform:none;">
-                                        </label>
-                                    @endforeach
-                                </div>
-                            </details>
-                        @endif
-                    </form>
+                         Where the station owns part of the job order sheet, Finish
+                         opens that sheet rather than closing the step behind a
+                         confirm box: the questions are the point, and a fold-out
+                         on a busy board is too easy to walk past. --}}
+                    @php $sheetFields = \App\Http\Controllers\StationController::sheetFieldsFor($p['key']); @endphp
+
+                    @if ($sheetFields !== [] && $s->order?->jobOrder)
+                        <a href="{{ route('stations.finish', $s) }}" class="btn btn-success btn-sm" style="margin-top:0.8rem;">
+                            ✓ Finish &amp; fill the sheet
+                        </a>
+                    @else
+                        <form method="POST" action="{{ route('stations.end', $s) }}"
+                              onsubmit="return confirm('Finished {{ $s->order?->order_number ?? 'this job' }} on {{ addslashes($p['label']) }}?
+
+This closes the step and moves the order to the next one.');"
+                              style="margin-top:0.8rem; display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                            @csrf
+                            <input type="hidden" name="end_reason" value="done">
+                            <input type="text" name="note" maxlength="255" placeholder="Note (optional)" style="flex:1; min-width:110px; padding:0.3rem 0.5rem; font-size:0.82rem;">
+                            <button class="btn btn-success btn-sm">✓ Finish</button>
+                        </form>
+                    @endif
                 @else
                     <p class="muted" style="margin:0.5rem 0 0; font-size:0.85rem;">Nobody on this station.</p>
                 @endif
 
-                {{-- Taking over automatically hands it off the current operator. --}}
+                {{-- Taking over automatically hands it off the current operator.
+
+                     Not offered at sewing: several people run different seams on
+                     the same job order, one after another, so there is nothing to
+                     "take over". Whoever is at the machine finishes their seams,
+                     answers whether any are left, and the station frees up for the
+                     next person to Start. --}}
+                @php $sharedSeams = str_starts_with($p['key'], 'sewing_'); @endphp
+                @unless ($s && $sharedSeams)
                 <details class="inline-form" style="margin-top:0.7rem;">
                     <summary class="btn {{ $s ? 'btn-ghost' : 'btn-primary' }} btn-sm">{{ $s ? 'Take over' : 'Start on this station' }}</summary>
                     <div class="pop">
@@ -238,8 +241,11 @@
                                 @endif
                             @endif
 
-                            <label style="margin-top:0.5rem;">Note (optional)</label>
-                            <input type="text" name="note" maxlength="255" placeholder="e.g. continuing the night run">
+                            {{-- No note here. Anything worth writing down about the
+                                 job goes on the job order sheet when the step is
+                                 finished, where the next person actually reads it —
+                                 a second box on the way IN just split the same
+                                 sentence across two places. --}}
 
                             <button class="btn btn-primary btn-sm" style="margin-top:0.6rem;"
                                     @disabled(! ($s && $s->order) && $p['orders']->isEmpty())>
@@ -248,6 +254,7 @@
                         </form>
                     </div>
                 </details>
+                @endunless
 
             </div>
         @endforeach

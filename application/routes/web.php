@@ -71,6 +71,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/orders/{order}/package', [JobOrderController::class, 'completeJobOrder'])
         ->whereNumber('order')->name('orders.package');
     Route::post('/stations/start', [\App\Http\Controllers\StationController::class, 'start'])->name('stations.start');
+    // Finishing at sewing or QC means writing that station's part of the job
+    // order sheet, so Finish opens the sheet instead of closing the step
+    // silently. Stations with nothing to record skip straight to end.
+    Route::get('/station-sessions/{stationSession}/finish', [\App\Http\Controllers\StationController::class, 'finish'])
+        ->whereNumber('stationSession')->name('stations.finish');
     Route::post('/station-sessions/{stationSession}/end', [\App\Http\Controllers\StationController::class, 'end'])
         ->whereNumber('stationSession')->name('stations.end');
 

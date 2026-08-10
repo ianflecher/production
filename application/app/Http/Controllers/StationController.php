@@ -281,10 +281,25 @@ class StationController extends Controller
 
         // Only the step actually being worked — never overwrite the name on a
         // step someone else already finished.
-        $order->tasks()
+        //
+        // Sewing is shared: several people run different seams on the same job
+        // order, one after another. Replacing the name would credit the whole
+        // step to whoever happened to close it, so each new person is added to
+        // the list instead.
+        foreach ($order->tasks()
             ->whereIn('department', Stations::departments($station))
             ->whereIn('status', Stations::RELEASED)
-            ->update(['operator_name' => $operator]);
+            ->get() as $task) {
+            $names = collect(explode(',', (string) $task->operator_name))
+                ->map(fn ($n) => trim($n))
+                ->filter()
+                ->push(trim($operator))
+                ->filter()
+                ->unique(fn ($n) => mb_strtolower($n))
+                ->implode(', ');
+
+            $task->update(['operator_name' => $names]);
+        }
 
         // Someone is now running it, so the step is IN PROGRESS (was READY / a
         // revision). Leave finished / for-checking steps alone.
@@ -340,6 +355,31 @@ class StationController extends Controller
         };
     }
 
+    /**
+     * The page a sewer or checker gets when they press Finish.
+     *
+     * Their part of the job order sheet, full width and one screen, instead of
+     * a fold-out on the board that is easy to walk past. Submitting it is what
+     * closes the step.
+     */
+    public function finish(StationSession $stationSession): View
+    {
+        $this->assertAccess();
+        abort_unless($stationSession->isRunning(), 403);
+
+        return view('stations.finish', [
+            // Everything the sheet partial reads, so the sewer can see the
+            // officer's spec on the same screen instead of opening the job
+            // order in another page.
+            'session' => $stationSession->load([
+                'order.jobOrder', 'order.items', 'order.client',
+                'order.creator', 'order.tasks.assignee', 'order.tasks.files',
+            ]),
+            'fields' => self::sheetFieldsFor($stationSession->station),
+            'suggest' => \App\Models\JobOrder::stationSuggestions(),
+        ]);
+    }
+
     public function end(Request $request, StationSession $stationSession): RedirectResponse
     {
         $this->assertAccess();
@@ -354,6 +394,10 @@ class StationController extends Controller
         $data = $request->validate([
             'end_reason' => ['required', 'in:'.implode(',', array_keys(StationSession::REASONS))],
             'note' => ['nullable', 'string', 'max:255'],
+            // Sewing is shared between several people on the same job order.
+            // "Another seam still to sew" ends this person's run without
+            // closing the step, so the next sewer can pick the job up.
+            'more_seams' => ['nullable', 'boolean'],
             ...array_fill_keys(
                 array_map(fn ($f) => 'sheet.'.$f, $sheetFields),
                 ['nullable', 'string', 'max:1000']
@@ -369,6 +413,8 @@ class StationController extends Controller
         // "Finished" means the work at this station is done, so close the matching
         // task — that's what unlocks the next stage and eventually completes the
         // order. Breaks and shift changes leave the task open.
+        $moreSeams = (bool) ($data['more_seams'] ?? false);
+
         $note = '';
         if ($data['end_reason'] === 'done' && $stationSession->order) {
             $departments = Stations::departments($stationSession->station);
@@ -395,6 +441,15 @@ class StationController extends Controller
                 if ($typed !== []) {
                     $stationSession->order->jobOrder->update($typed);
                 }
+            }
+
+            // Somebody else still has seams to run on this job, so the step
+            // stays open and the order goes back in the queue for them. The
+            // seam record and the operator's name are already saved above.
+            if ($moreSeams) {
+                return back()->with('success',
+                    $stationSession->stationLabel().' — your seams are recorded. '
+                    .$stationSession->order->order_number.' stays here for the next sewer.');
             }
 
             $closed = 0;
