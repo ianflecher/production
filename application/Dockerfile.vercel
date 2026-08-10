@@ -151,20 +151,26 @@ ENV DEMO_LOGINS=true
 # Vercel automatically provides $PORT.
 # ==========================================
 #
-# config:cache runs HERE, not at build time: the environment only exists once
-# the container starts. Without it Laravel re-reads every config file and parses
-# the environment on each request.
+# THE PORT MUST BE LISTENING WITHIN 15 SECONDS.
 #
-# migrate runs before serving so the schema matches the code. Without it every
-# column added since the database was created is missing and the pages 500.
+# That is Vercel's startup timeout, and nothing that talks to the database can
+# happen before it. Migrating first looked sensible and was the cause of a long
+# outage: connecting to Aiven and running twenty ALTERs takes far longer than
+# fifteen seconds, so the container was killed part way through — which both
+# meant the port never opened AND left the schema half-changed with no record
+# that the migration had run, so every later boot died on "duplicate column"
+# too.
 #
-# It must NOT be able to stop the server starting, though. A migration that
-# fails — half-applied by an earlier container that was killed mid-run, or two
-# containers racing each other at boot — used to abort the whole command, so
-# the function never started and EVERY page returned a Vercel crash page with
-# nothing to read. Serving with a schema that is behind is bad; serving nothing
-# at all, with the reason buried in a build log, is worse. The failure is
-# printed to stderr (LOG_CHANNEL=stderr puts it in Vercel's log viewer) and the
-# app comes up anyway, so the error is visible and fixable.
+# So: config:cache (local files only, fast), then hand the port over
+# immediately and let the migration run behind it.
 #
-CMD ["sh", "-c", "php /app/artisan config:cache && { php /app/artisan migrate --force || echo 'MIGRATION FAILED — serving anyway; schema may be behind the code' >&2; } && cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
+# config:cache has to be here rather than at build time because the
+# environment only exists once the container starts.
+#
+# The migration still runs on every boot, just not in the way of the port. For
+# the few seconds it takes, the schema can be behind the code and a page that
+# needs a new column may error — far better than the whole deployment failing
+# to start. Its output goes to stderr, which LOG_CHANNEL=stderr puts in
+# Vercel's log viewer.
+#
+CMD ["sh", "-c", "php /app/artisan config:cache; { php /app/artisan migrate --force >&2 || echo 'MIGRATION FAILED - serving anyway; schema may be behind the code' >&2; } & cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]

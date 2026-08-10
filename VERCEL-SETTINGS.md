@@ -68,8 +68,25 @@ Set in `application/Dockerfile.vercel`, no configuration needed:
   table compiled into the image.
 - **`config:cache` at start-up** — not at build, because the environment only
   exists once the container runs.
-- **`migrate --force` before serving** — so the schema matches the code. Without
-  it, every column added since the database was created is missing and pages 500.
+- **`migrate --force` behind the port, not in front of it** — Vercel gives the
+  container **15 seconds to start listening**. Migrating first blew that budget
+  (connecting to Aiven plus twenty `ALTER`s), so the container was killed part
+  way: the port never opened, *and* the schema was left half-changed with no
+  record the migration had run, which made every later boot die on "duplicate
+  column". The server now binds the port immediately and the migration runs
+  behind it. The migrations only add columns that are missing, so an
+  interrupted run finishes itself on the next boot.
+
+## If the deployment will not start
+
+**"could not connect to $PORT"** means nothing was listening within 15 seconds.
+Anything added to the start command that touches the network — a migration, a
+warm-up, a health check against the database — has to run *after* the port is
+handed over, or it will do this again.
+
+**A crash page on every URL** (not just one page) is almost always the start
+command failing rather than the app. Check the runtime log for the container's
+first few lines, not the page itself.
 
 ## Known limit
 
