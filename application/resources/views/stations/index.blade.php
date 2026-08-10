@@ -144,6 +144,33 @@
                         <input type="hidden" name="end_reason" value="done">
                         <input type="text" name="note" maxlength="255" placeholder="Note (optional)" style="flex:1; min-width:110px; padding:0.3rem 0.5rem; font-size:0.82rem;">
                         <button class="btn btn-success btn-sm">✓ Finish</button>
+
+                        {{-- This station's part of the job order sheet, asked of
+                             the person holding the garment. Folded away so the
+                             board stays a board; everything in it is optional,
+                             and a box left alone keeps whatever an earlier shift
+                             wrote. --}}
+                        @php $sheetFields = \App\Http\Controllers\StationController::sheetFieldsFor($p['key']); @endphp
+                        @if ($sheetFields !== [] && $s->order?->jobOrder)
+                            @php $sjo = $s->order->jobOrder; @endphp
+                            <details class="station-sheet" style="flex-basis:100%; margin-top:0.5rem;">
+                                <summary style="cursor:pointer; font-size:0.8rem; font-weight:700; color:var(--accent);">
+                                    ✎ Fill the job order sheet
+                                    ({{ str_starts_with($p['key'], 'qc_') ? 'notes from QC' : 'sewers &amp; threads' }})
+                                </summary>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0.4rem; margin-top:0.5rem;">
+                                    @foreach ($sheetFields as $f)
+                                        <label style="font-size:0.7rem; font-weight:700; text-transform:uppercase; color:var(--ink-2);">
+                                            {{ \App\Http\Controllers\StationController::sheetFieldLabel($f) }}
+                                            <input type="text" name="sheet[{{ $f }}]" maxlength="1000"
+                                                   value="{{ $sjo->$f }}"
+                                                   list="{{ str_contains($f, 'thread') ? 'dl_station_thread' : (str_contains($f, 'sewer') ? 'dl_station_sewer' : '') }}"
+                                                   style="width:100%; padding:0.25rem 0.4rem; font-size:0.8rem; font-weight:400; text-transform:none;">
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </details>
+                        @endif
                     </form>
                 @else
                     <p class="muted" style="margin:0.5rem 0 0; font-size:0.85rem;">Nobody on this station.</p>
@@ -269,4 +296,12 @@
         @endif
     </div>
 @endforeach
+{{-- Shared by every sewing station's sheet form: the same handful of people
+     work every seam and the same thread codes go through all of them. --}}
+<datalist id="dl_station_sewer">
+    @foreach (($sewerNames ?? []) as $n)<option value="{{ $n }}"></option>@endforeach
+</datalist>
+<datalist id="dl_station_thread">
+    @foreach (($threadCodes ?? []) as $t)<option value="{{ $t }}"></option>@endforeach
+</datalist>
 @endsection

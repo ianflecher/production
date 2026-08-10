@@ -190,10 +190,18 @@ class StationController extends Controller
             }
         }
 
+        // Sewer names and thread codes already used on other jobs, so the
+        // floor picks from a list instead of retyping (and misspelling) them.
+        // One query, not one per suggestable field — this is a board the shop
+        // leaves open all day.
+        $suggest = \App\Models\JobOrder::stationSuggestions();
+
         return view('stations.index', [
             'groups' => $groups,
             'historyByGroup' => $historyByGroup,
             'reasons' => StationSession::REASONS,
+            'sewerNames' => $suggest['sewer'],
+            'threadCodes' => $suggest['thread'],
         ]);
     }
 
@@ -287,14 +295,69 @@ class StationController extends Controller
     }
 
     /** Come off a station — break, shift change, or the job is finished. */
+    /**
+     * The parts of the job order sheet this station is responsible for.
+     *
+     * Empty for most stations — a printer has nothing to write on the sheet
+     * beyond its operator name, which is stamped automatically.
+     *
+     * @return array<int, string>
+     */
+    public static function sheetFieldsFor(string $station): array
+    {
+        return match (true) {
+            str_starts_with($station, 'sewing_') => \App\Models\JobOrder::SEWING_STATION_FIELDS,
+            str_starts_with($station, 'qc_') => \App\Models\JobOrder::QC_STATION_FIELDS,
+            default => [],
+        };
+    }
+
+    /** The label the paper form uses for a sheet field, for the station board. */
+    public static function sheetFieldLabel(string $field): string
+    {
+        return match ($field) {
+            'neck_label_thread' => 'Neck label — thread',
+            'bottom_hem_thread' => 'Bottom hem — thread',
+            'neckbond_sewer' => 'Neckbond shoulder — sewer',
+            'neckbond_thread' => 'Neckbond shoulder — thread',
+            'hangtag_woven_sewer' => 'Top/neck/hangtag woven — sewer',
+            'hangtag_woven_thread' => 'Top/neck/hangtag woven — thread',
+            'flatbed_sewer' => 'Flatbed — sewer',
+            'flatbed_thread' => 'Flatbed — thread',
+            'close_side_sewer' => 'Close side body & sleeve — sewer',
+            'close_side_thread' => 'Close side body & sleeve — thread',
+            'attached_sleeve_sewer' => 'Attached sleeve / cuffs — sewer',
+            'attached_sleeve_thread' => 'Attached sleeve / cuffs — thread',
+            'topping_side_sewer' => 'Topping side / sleeve — sewer',
+            'topping_side_thread' => 'Topping side / sleeve — thread',
+            'pipping_sewer' => 'Pipping — sewer',
+            'pipping_thread' => 'Pipping — thread',
+            'extra_seam_note' => 'Spare column — note',
+            'extra_seam_sewer' => 'Spare column — sewer',
+            'sewer_notes' => 'Notes from sewer',
+            'qc_notes' => 'Notes from QC',
+            default => ucfirst(str_replace('_', ' ', $field)),
+        };
+    }
+
     public function end(Request $request, StationSession $stationSession): RedirectResponse
     {
         $this->assertAccess();
         abort_unless($stationSession->isRunning(), 403);
 
+        // The sheet asks this station for its own part of the record — which
+        // sewer ran each seam, what the checker found. Only the person holding
+        // the garment knows, so it is asked here rather than of the account
+        // officer weeks earlier.
+        $sheetFields = self::sheetFieldsFor($stationSession->station);
+
         $data = $request->validate([
             'end_reason' => ['required', 'in:'.implode(',', array_keys(StationSession::REASONS))],
             'note' => ['nullable', 'string', 'max:255'],
+            ...array_fill_keys(
+                array_map(fn ($f) => 'sheet.'.$f, $sheetFields),
+                ['nullable', 'string', 'max:1000']
+            ),
         ]);
 
         $stationSession->update([
@@ -318,6 +381,21 @@ class StationController extends Controller
             );
 
             $operator = $stationSession->operator_name ?: ($stationSession->user?->name ?? null);
+
+            // Write this station's part of the job order sheet. Only what was
+            // actually typed — a blank box left alone must not wipe what an
+            // earlier shift already recorded.
+            if ($sheetFields !== [] && $stationSession->order->jobOrder) {
+                $typed = array_filter(
+                    $request->input('sheet', []),
+                    fn ($v, $k) => in_array($k, $sheetFields, true) && filled($v),
+                    ARRAY_FILTER_USE_BOTH
+                );
+
+                if ($typed !== []) {
+                    $stationSession->order->jobOrder->update($typed);
+                }
+            }
 
             $closed = 0;
             $forApproval = 0;

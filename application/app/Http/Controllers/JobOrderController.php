@@ -67,24 +67,16 @@ class JobOrderController extends Controller
             'printer' => ['required', 'in:'.implode(',', array_keys(JobOrder::PRINTERS))],
             'fabric' => ['required', 'string', 'max:255'],
             'free_logo_sticker' => ['nullable', 'string', 'max:255'],
-            // Sewing (yellow) — the whole block off the paper form: the four
-            // headline seams with their size/thread, then a sewer and thread
-            // for each seam group.
+            // Sewing — only the SPEC. Who sewed each seam, with what thread, and what
+            // the checker found are recorded at the station by the person doing
+            // the work — see JobOrder::SEWING_STATION_FIELDS.
             ...array_fill_keys([
                 'neck', 'neck_size',
                 'cuff_arm_sleeves', 'cuff_size',
-                'neck_label', 'neck_label_thread',
-                'bottom_hem', 'bottom_hem_thread',
-                'neckbond_sewer', 'neckbond_thread',
-                'hangtag_woven_sewer', 'hangtag_woven_thread',
-                'flatbed_sewer', 'flatbed_thread',
-                'close_side_sewer', 'close_side_thread',
-                'attached_sleeve_sewer', 'attached_sleeve_thread',
-                'topping_side_sewer', 'topping_side_thread',
-                'pipping_sewer', 'pipping_thread',
-                'extra_seam_label', 'extra_seam_note', 'extra_seam_sewer',
+                'neck_label',
+                'bottom_hem',
+                'extra_seam_label',
             ], ['nullable', 'string', 'max:255']),
-            'sewer_notes' => ['nullable', 'string', 'max:2000'],
             // Quality check (yellow)
             'packaging' => ['nullable', 'string', 'max:255'],
             // Agent notes

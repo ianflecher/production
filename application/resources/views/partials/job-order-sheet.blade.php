@@ -347,7 +347,7 @@
         <tr>
             <td class="yellow">{{ strtoupper($y($jo?->packaging)) }}</td>
             <td class="ctr">{{ $who(['Quality control']) }}</td>
-            <td colspan="2"></td>
+            <td colspan="2" class="fld" style="text-align: left; white-space: pre-line;"><span class="fill">{{ $y($jo?->qc_notes) }}</span></td>
         </tr>
         <tr>
             <td class="lbl">Agent</td>

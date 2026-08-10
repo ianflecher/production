@@ -78,6 +78,7 @@ class JobOrder extends Model
         'extra_seam_note',
         'extra_seam_sewer',
         'sewer_notes',
+        'qc_notes',
         'ic_placement',
         // Quality check (yellow)
         'packaging',
@@ -296,6 +297,77 @@ class JobOrder extends Model
     }
 
     /** Free-text sheet fields whose past entries are offered as suggestions. */
+    /**
+     * Who fills what, and where.
+     *
+     * The account officer writes the SPEC when the order is taken: what collar,
+     * what hem, what size, how it is packed. Those are decisions, and they are
+     * known up front.
+     *
+     * Everything below is a RECORD of work that has happened — which sewer ran
+     * the flatbed, what thread they used, what the checker found. Nobody can
+     * know it at order time, so asking the account officer produced a form full
+     * of guesses and a sheet that printed blank. It is asked at the station
+     * instead, of the person holding the garment.
+     *
+     * @var array<int, string>
+     */
+    public const SEWING_STATION_FIELDS = [
+        'neck_label_thread', 'bottom_hem_thread',
+        'neckbond_sewer', 'neckbond_thread',
+        'hangtag_woven_sewer', 'hangtag_woven_thread',
+        'flatbed_sewer', 'flatbed_thread',
+        'close_side_sewer', 'close_side_thread',
+        'attached_sleeve_sewer', 'attached_sleeve_thread',
+        'topping_side_sewer', 'topping_side_thread',
+        'pipping_sewer', 'pipping_thread',
+        'extra_seam_note', 'extra_seam_sewer',
+        'sewer_notes',
+    ];
+
+    /** Filled by the checker when they close Quality Control. */
+    public const QC_STATION_FIELDS = ['qc_notes'];
+
+    /**
+     * Just the sewer and thread pools, for the station board.
+     *
+     * fieldSuggestions() answers for the whole office form and costs a query
+     * per field — fourteen of them, which is most of a station board's budget
+     * spent on two dropdowns. This asks once and sorts the answers out in PHP.
+     *
+     * @return array{sewer: array<int, string>, thread: array<int, string>}
+     */
+    public static function stationSuggestions(): array
+    {
+        $query = null;
+
+        foreach (self::SHARED_SUGGEST as $kind => $columns) {
+            foreach ($columns as $column) {
+                $part = self::query()
+                    ->selectRaw('? as kind, '.$column.' as v', [$kind])
+                    ->whereNotNull($column)
+                    ->where($column, '!=', '');
+
+                $query = $query ? $query->union($part) : $part;
+            }
+        }
+
+        $rows = $query ? $query->get() : collect();
+
+        $pool = fn (string $kind) => $rows
+            ->where('kind', $kind)
+            ->pluck('v')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter()
+            ->unique(fn ($v) => mb_strtolower($v))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->take(200)
+            ->values()
+            ->all();
+
+        return ['sewer' => $pool('sewer'), 'thread' => $pool('thread')];
+    }
+
     public const SUGGEST_FIELDS = [
         'fb_viber_gc', 'print_type', 'fabric', 'free_logo_sticker',
         'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem', 'ic_placement', 'packaging',

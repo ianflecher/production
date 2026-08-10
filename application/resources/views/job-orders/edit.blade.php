@@ -48,6 +48,13 @@
     .jo-sheet textarea.inline { text-transform: none; resize: vertical; }
     .jo-sheet .inline::placeholder { color: #a09000; font-weight: 400; }
     .jo-sheet .inline:focus { box-shadow: 0 0 0 2px rgba(17, 17, 17, .35); }
+    /* A box this form does not own. The sewer and the checker fill their own
+       parts of the sheet at the station, where they are holding the garment —
+       the account officer cannot know them weeks earlier. */
+    .at-station {
+        font-weight: 400; font-size: 0.68rem; text-transform: none;
+        color: #777; font-style: italic;
+    }
     .ctr { text-align: center; }
     .red { color: #d00; font-weight: 700; }
     .sec { background: #cfcfcf; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; }
@@ -184,8 +191,8 @@
             <tr>
                 <td class="fld">Size: <input type="text" name="neck_size" list="dl_neck_size" maxlength="255" value="{{ $old('neck_size', $jobOrder->neck_size) }}" class="inline" placeholder="—"></td>
                 <td class="fld">Size: <input type="text" name="cuff_size" list="dl_cuff_size" maxlength="255" value="{{ $old('cuff_size', $jobOrder->cuff_size) }}" class="inline" placeholder="—"></td>
-                <td class="fld">Thread Color: <input type="text" name="neck_label_thread" list="dl_thread" maxlength="255" value="{{ $old('neck_label_thread', $jobOrder->neck_label_thread) }}" class="inline" placeholder="—"></td>
-                <td class="fld">Thread Color: <input type="text" name="bottom_hem_thread" list="dl_thread" maxlength="255" value="{{ $old('bottom_hem_thread', $jobOrder->bottom_hem_thread) }}" class="inline" placeholder="—"></td>
+                <td class="fld">Thread Color: <span class="at-station">filled at sewing</span></td>
+                <td class="fld">Thread Color: <span class="at-station">filled at sewing</span></td>
             </tr>
 
             {{-- Each seam group: who sewed it and with what. --}}
@@ -224,11 +231,9 @@
                     @foreach ($group as $seam)
                         <td class="{{ $seam === 'extra' ? 'fld-extra' : 'fld' }}">
                             @if ($seam === 'extra')
-                                <input type="text" name="extra_seam_note" maxlength="255"
-                                       value="{{ $old('extra_seam_note', $jobOrder->extra_seam_note) }}"
-                                       class="inline" placeholder="—">
+                                <span class="at-station">filled at sewing</span>
                             @else
-                                Sewer: <input type="text" name="{{ $seam[1] }}_sewer" list="dl_sewer" maxlength="255" value="{{ $old($seam[1].'_sewer', $jobOrder->{$seam[1].'_sewer'}) }}" class="inline" placeholder="—">
+                                Sewer: <span class="at-station">filled at sewing</span>
                             @endif
                         </td>
                     @endforeach
@@ -237,11 +242,9 @@
                     @foreach ($group as $seam)
                         <td class="{{ $seam === 'extra' ? 'fld-extra' : 'fld' }}">
                             @if ($seam === 'extra')
-                                Sewer: <input type="text" name="extra_seam_sewer" list="dl_sewer" maxlength="255"
-                                              value="{{ $old('extra_seam_sewer', $jobOrder->extra_seam_sewer) }}"
-                                              class="inline" placeholder="—">
+                                Sewer: <span class="at-station">filled at sewing</span>
                             @else
-                                {{ $seam[2] }}: <input type="text" name="{{ $seam[1] }}_thread" list="dl_thread" maxlength="255" value="{{ $old($seam[1].'_thread', $jobOrder->{$seam[1].'_thread'}) }}" class="inline" placeholder="—">
+                                {{ $seam[2] }}: <span class="at-station">filled at sewing</span>
                             @endif
                         </td>
                     @endforeach
@@ -253,8 +256,7 @@
                  column stays in the database so old orders keep what they had. --}}
             <tr>
                 <td class="fld red" colspan="4" style="text-align:left;">
-                    Notes from Sewer:
-                    <textarea name="sewer_notes" rows="2" maxlength="2000" class="inline" style="display:block; width:100%; margin-top:0.25rem;" placeholder="Anything the sewer needs to flag">{{ $old('sewer_notes', $jobOrder->sewer_notes) }}</textarea>
+                    Notes from Sewer: <span class="at-station">filled at sewing</span>
                 </td>
             </tr>
         </table>

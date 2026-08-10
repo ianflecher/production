@@ -37,33 +37,14 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         'cuff_arm_sleeves' => 'Tupi finish',
         'cuff_size' => '3 inches',
         'neck_label' => 'IC flat bed',
-        'neck_label_thread' => 'White 8801',
         'bottom_hem' => 'Straight hem',
-        'bottom_hem_thread' => 'Black 9002',
 
-        // …each seam group's sewer and thread
-        'neckbond_sewer' => 'Marites Bautista',
-        'neckbond_thread' => 'TC-220 navy',
-        'hangtag_woven_sewer' => 'Jhun Delos Reyes',
-        'hangtag_woven_thread' => 'TC-118 grey',
-        'flatbed_sewer' => 'Angel Ramos',
-        'flatbed_thread' => 'TC-004 white',
-        'close_side_sewer' => 'Boyet Santos',
-        'close_side_thread' => 'Royal blue',
-        'attached_sleeve_sewer' => 'Nena Cruz',
-        'attached_sleeve_thread' => 'Crimson red',
-        'topping_side_sewer' => 'Lito Garcia',
-        'topping_side_thread' => 'Off white',
-        'pipping_sewer' => 'Rosa Mendoza',
-        'pipping_thread' => 'Metallic gold',
+        // The sewer/thread fields are NOT here: they are recorded at the
+        // sewing station by the person who did the work, and are covered by
+        // StationFillsTheSheetTest.
 
-        // …and the spare column, named by whoever fills the sheet
+        // …and the spare column's name, which IS a decision made up front.
         'extra_seam_label' => 'Shoulder taping',
-        'extra_seam_note' => 'Two rows both sides',
-        'extra_seam_sewer' => 'Kim Aguilar',
-
-        'sewer_notes' => 'Double stitch the side seams on the XL pieces.',
-
         // Quality check + agent notes
         'packaging' => 'One piece per plastic',
         'special_instructions' => 'Fold sleeves inward before packing.',
@@ -161,20 +142,5 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         foreach (self::SHEET_FIELDS as $field => $typed) {
             $form->assertSee(e($typed), false);
         }
-    }
-
-    public function test_sewers_and_thread_codes_are_suggested_back_across_every_seam(): void
-    {
-        $order = $this->order();
-        $this->fillIn($order);
-
-        $suggest = \App\Models\JobOrder::fieldSuggestions();
-
-        // One pool each, so a sewer who did the neckbond last week is offered
-        // when someone types into the flatbed box today.
-        $this->assertContains('Marites Bautista', $suggest['sewer']);
-        $this->assertContains('Kim Aguilar', $suggest['sewer'], 'the spare column feeds the pool too');
-        $this->assertContains('Metallic gold', $suggest['thread']);
-        $this->assertContains('White 8801', $suggest['thread'], 'the headline seams feed the pool too');
     }
 }
