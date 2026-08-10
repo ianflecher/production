@@ -277,7 +277,7 @@ class JobOrderAddonTest extends TestCase
         $this->assertSame('Sleeves only, both sides', $order->fresh()->jobOrder->addon_note);
     }
 
-    public function test_the_note_reaches_the_job_order_sheet(): void
+    public function test_the_note_reaches_the_production_details(): void
     {
         $order = $this->order();
         $this->save($order, [
@@ -288,9 +288,10 @@ class JobOrderAddonTest extends TestCase
 
         $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
 
-        $this->actingAs($leader)->get("/orders/{$order->id}/job-order")
+        // The sheet no longer carries the add-on; the production details do.
+        $this->actingAs($leader)->get("/orders/{$order->id}/package")
             ->assertOk()
-            ->assertSee('Left chest logo only', false);
+            ->assertSee('LEFT CHEST LOGO ONLY', false);
     }
 
     public function test_the_note_reaches_the_work_sheet_package(): void
@@ -368,9 +369,10 @@ class JobOrderAddonTest extends TestCase
 
         $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
 
-        $this->actingAs($leader)->get("/orders/{$order->id}/job-order")
+        // Wherever it is shown, it is somebody's typed text and is escaped.
+        $this->actingAs($leader)->get("/orders/{$order->id}/package")
             ->assertOk()
-            ->assertDontSee('<script>alert(1)</script>', false)
-            ->assertSee('&lt;script&gt;', false);
+            ->assertDontSee('<SCRIPT>ALERT(1)</SCRIPT>', false)
+            ->assertSee('&lt;SCRIPT&gt;', false);
     }
 }

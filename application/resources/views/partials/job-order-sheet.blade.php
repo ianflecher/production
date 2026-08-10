@@ -3,14 +3,10 @@
      can never drift apart.
 
      Expects: $order.  Optional: $showMockup (default true) — the design overlay
-     is hidden in the package document because the mockup has its own page; and
-     $showAddon (default true), off there for the same reason: the production
-     details table below it already answers that. --}}
+     is hidden in the package document because the mockup has its own page. --}}
 @php
     $jo = $order->jobOrder;
     $showMockup = $showMockup ?? true;
-    // Off in the package document, where the production details table repeats it.
-    $showAddon = $showAddon ?? true;
 
     $mockupTask = $order->tasks->firstWhere('department', 'Final mockup');
     $layoutTask = $order->tasks->firstWhere('department', 'Layout');
@@ -190,33 +186,9 @@
         </tr>
         {{-- The two presses: one merges the print onto the fabric, one decorates. --}}
         <tr><td class="lbl-l">Fabric Press:</td><td colspan="3" class="yellow" style="text-align: left;">{{ strtoupper($y($jo?->fabricPressLabel())) }}</td></tr>
-        {{-- The add-on, and the press that does it, so the floor sees WHAT was
-             ordered — not just which machine to use.
-
-             Hidden in the package document, where the production details table
-             sits a few inches below this sheet and says the same thing. Kept on
-             the standalone sheet, which has no such table: there the row is the
-             only place the add-on and where it goes are written down. --}}
-        @if ($showAddon)
-        <tr><td class="lbl-l">Add-on:</td><td colspan="3" class="yellow" style="text-align: left;">
-            @if ($jo?->addonLabel())
-                {{ strtoupper($y($jo->addonLabel())) }}
-                @if ($jo?->press)
-                    <span style="font-weight: 400;">({{ strtoupper($y($jo->decorationPressLabel())) }})</span>
-                @endif
-            @elseif ($jo?->press)
-                {{ strtoupper($y($jo->decorationPressLabel())) }}
-            @else
-                —
-            @endif
-
-            {{-- Where it goes. The label above names the treatment; without this
-                 the floor still has to ask which part of the garment it is for. --}}
-            @if (filled($jo?->addon_note))
-                <div style="font-weight: 400; text-transform: none; white-space: pre-line;">{{ $y($jo->addon_note) }}</div>
-            @endif
-        </td></tr>
-        @endif
+        {{-- No add-on row. It is asked for and answered in the production
+             details, and repeating it here only gave the two places somewhere
+             to disagree. --}}
         {{-- Filled in from whoever ran each station, so the sheet doesn't have to
              be written up by hand after the job. --}}
         <tr><td class="lbl-l">Printer Operator:</td><td colspan="3">{{ $who(['Printer', 'Sticker', 'Mass production']) }}</td></tr>

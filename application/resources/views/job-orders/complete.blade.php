@@ -232,7 +232,7 @@
 
     {{-- JOB ORDER SHEET — shown to every station and in the full package. --}}
     <div class="page-section">
-        @include('partials.job-order-sheet', ['order' => $order, 'showAddon' => false])
+        @include('partials.job-order-sheet', ['order' => $order])
     </div>
 
     {{-- Printer station: just the print file (TIFF). --}}
