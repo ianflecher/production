@@ -738,6 +738,10 @@ class DemoDataSeeder extends Seeder
         $operators = ['Jully', 'Rommie', 'Maru', 'Carla', 'Ton Ton', 'Mick'];
         $i = 0;
 
+        // One image on disk, referenced by every design file. A demo needs the
+        // pages to render, not a hundred different pictures.
+        [$placeholder, $placeholderSize] = $this->placeholderDesign();
+
         foreach ($orders as $order) {
             $i++;
 
@@ -760,6 +764,30 @@ class DemoDataSeeder extends Seeder
                         'label' => $label,
                         'round' => 1,
                         'uploaded_by' => $export->assigned_to ?? $leader->id,
+                    ]);
+                }
+            }
+
+            // 1b. The layout, mockup and template the artist handed in.
+            //     Without a design FILE there is no design package to open, and
+            //     the button for it never appears on the order — which makes a
+            //     finished-looking job look like nothing was ever drawn.
+            foreach (['Layout', 'Final mockup', 'Production template'] as $department) {
+                $task = $order->tasks->firstWhere('department', $department);
+
+                if (! $task || $task->status !== 'complete') {
+                    continue;
+                }
+
+                foreach ($task->fileSlots() ?: ['file' => $department] as $label) {
+                    $task->files()->create([
+                        'path' => $placeholder,
+                        'original_name' => $order->order_number.' '.strtolower($department).'.jpg',
+                        'label' => $label,
+                        'mime' => 'image/jpeg',
+                        'size' => $placeholderSize,
+                        'round' => 1,
+                        'uploaded_by' => $task->assigned_to ?? $leader->id,
                     ]);
                 }
             }
@@ -831,6 +859,38 @@ class DemoDataSeeder extends Seeder
                 ]);
             }
         }
+    }
+
+    /**
+     * A single stand-in design image, stored once and pointed at by every
+     * layout, mockup and template in the demo.
+     *
+     * @return array{0: string, 1: int} storage path, size in bytes
+     */
+    private function placeholderDesign(): array
+    {
+        $path = 'task-files/demo-design.jpg';
+
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+            $img = imagecreatetruecolor(900, 900);
+            imagefill($img, 0, 0, imagecolorallocate($img, 244, 246, 250));
+
+            // Something recognisable rather than a blank square, so the mockup
+            // on the sheet reads as artwork at a glance.
+            imagefilledrectangle($img, 250, 300, 650, 520, imagecolorallocate($img, 227, 27, 35));
+            imagefilledellipse($img, 450, 250, 220, 220, imagecolorallocate($img, 37, 99, 235));
+            imagestring($img, 5, 330, 600, 'IMPRINT CUSTOMS', imagecolorallocate($img, 30, 41, 59));
+            imagestring($img, 3, 360, 630, 'sample artwork', imagecolorallocate($img, 100, 116, 139));
+
+            ob_start();
+            imagejpeg($img, null, 82);
+            $bytes = (string) ob_get_clean();
+            imagedestroy($img);
+
+            \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+        }
+
+        return [$path, (int) \Illuminate\Support\Facades\Storage::disk('local')->size($path)];
     }
 
     private function makePayments(array $orders, User $finance): void
