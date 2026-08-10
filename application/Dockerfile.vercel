@@ -126,6 +126,28 @@ RUN php artisan view:cache && php artisan route:cache
 
 
 # ==========================================
+# Bring the schema up to date once, here,
+# rather than on every container start.
+#
+# The build has no 15-second budget and runs
+# once per deploy. Doing it at start-up
+# instead meant every cold start opened its
+# own connection to Aiven and booted a
+# second copy of the framework, competing
+# with the request that caused the cold
+# start.
+#
+# Non-fatal: if the database is unreachable
+# from the builder, or its credentials are
+# not exposed to the build, the deploy still
+# goes out and the start-up fallback below
+# does the work.
+# ==========================================
+RUN php artisan migrate --force || \
+    echo 'No database at build time - the start command will migrate instead.'
+
+
+# ==========================================
 # This deployment is the demo
 #
 # Lists an account per role on the login
@@ -167,10 +189,9 @@ ENV DEMO_LOGINS=true
 # config:cache has to be here rather than at build time because the
 # environment only exists once the container starts.
 #
-# The migration still runs on every boot, just not in the way of the port. For
-# the few seconds it takes, the schema can be behind the code and a page that
-# needs a new column may error — far better than the whole deployment failing
-# to start. Its output goes to stderr, which LOG_CHANNEL=stderr puts in
-# Vercel's log viewer.
+# The migration here is only a FALLBACK for a build that could not reach the
+# database. Normally the build has already applied everything, so this finds
+# nothing pending and costs one cheap query. It stays behind the port either
+# way, so it can never delay start-up again.
 #
 CMD ["sh", "-c", "php /app/artisan config:cache; { php /app/artisan migrate --force >&2 || echo 'MIGRATION FAILED - serving anyway; schema may be behind the code' >&2; } & cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
