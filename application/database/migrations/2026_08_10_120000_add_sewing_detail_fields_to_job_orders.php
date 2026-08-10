@@ -8,6 +8,14 @@ use Illuminate\Support\Facades\Schema;
  * The sewing block on the paper job order asks for far more than we stored.
  * Every seam group names a sewer and a thread, and the neck/cuff carry a size
  * — all of it was being written on the printout by hand and lost.
+ *
+ * Adds only what is missing. Nineteen columns go on as nineteen separate ALTER
+ * statements, so a run that is cut off part way — a container killed on a slow
+ * connection, or two of them starting at once — leaves the columns added but
+ * no record that the migration ran. The next run then died on "duplicate
+ * column", and because the hosted container migrates before it serves, that
+ * took the whole site down rather than one page. Checking each column first
+ * lets a half-applied run finish itself.
  */
 return new class extends Migration
 {
@@ -39,8 +47,17 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::table('job_orders', function (Blueprint $table) {
-            foreach (array_keys(self::FIELDS) as $column) {
+        $missing = array_filter(
+            array_keys(self::FIELDS),
+            fn ($column) => ! Schema::hasColumn('job_orders', $column)
+        );
+
+        if ($missing === []) {
+            return;
+        }
+
+        Schema::table('job_orders', function (Blueprint $table) use ($missing) {
+            foreach ($missing as $column) {
                 if ($column === 'sewer_notes') {
                     $table->text($column)->nullable();
 
@@ -54,8 +71,17 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('job_orders', function (Blueprint $table) {
-            $table->dropColumn(array_keys(self::FIELDS));
+        $present = array_filter(
+            array_keys(self::FIELDS),
+            fn ($column) => Schema::hasColumn('job_orders', $column)
+        );
+
+        if ($present === []) {
+            return;
+        }
+
+        Schema::table('job_orders', function (Blueprint $table) use ($present) {
+            $table->dropColumn($present);
         });
     }
 };

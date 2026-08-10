@@ -158,4 +158,13 @@ ENV DEMO_LOGINS=true
 # migrate runs before serving so the schema matches the code. Without it every
 # column added since the database was created is missing and the pages 500.
 #
-CMD ["sh", "-c", "php /app/artisan config:cache && php /app/artisan migrate --force && cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
+# It must NOT be able to stop the server starting, though. A migration that
+# fails — half-applied by an earlier container that was killed mid-run, or two
+# containers racing each other at boot — used to abort the whole command, so
+# the function never started and EVERY page returned a Vercel crash page with
+# nothing to read. Serving with a schema that is behind is bad; serving nothing
+# at all, with the reason buried in a build log, is worse. The failure is
+# printed to stderr (LOG_CHANNEL=stderr puts it in Vercel's log viewer) and the
+# app comes up anyway, so the error is visible and fixable.
+#
+CMD ["sh", "-c", "php /app/artisan config:cache && { php /app/artisan migrate --force || echo 'MIGRATION FAILED — serving anyway; schema may be behind the code' >&2; } && cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
