@@ -257,4 +257,122 @@ class JobOrderAddonTest extends TestCase
             ->assertOk()
             ->assertSee('RUBBERIZED PRINT', false);
     }
+
+    /* ============ What the add-on is for ============
+     *
+     * The dropdown says which treatment; the note says where it goes. It is no
+     * use to the floor unless it survives the save and reaches the paperwork.
+     */
+
+    public function test_the_note_is_stored_with_the_addon(): void
+    {
+        $order = $this->order();
+
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'sublimated',
+            'addon_note' => 'Sleeves only, both sides',
+        ])->assertRedirect();
+
+        $this->assertSame('Sleeves only, both sides', $order->fresh()->jobOrder->addon_note);
+    }
+
+    public function test_the_note_reaches_the_production_details(): void
+    {
+        $order = $this->order();
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'sublimated',
+            'addon_note' => 'Left chest logo only',
+        ]);
+
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        // The sheet no longer carries the add-on; the production details do.
+        $this->actingAs($leader)->get("/orders/{$order->id}/package")
+            ->assertOk()
+            ->assertSee('LEFT CHEST LOGO ONLY', false);
+    }
+
+    public function test_the_note_reaches_the_work_sheet_package(): void
+    {
+        $order = $this->order();
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'reflectorized',
+            'addon_note' => 'Two stripes across the back',
+        ]);
+
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        // Once only, in the production details. The job order sheet above it
+        // used to carry the same thing, and two copies on one page can only
+        // ever agree or embarrass themselves.
+        $page = $this->actingAs($leader)->get("/orders/{$order->id}/package")->assertOk();
+
+        $page->assertSee('TWO STRIPES ACROSS THE BACK', false);
+        $page->assertDontSee('Two stripes across the back', false);
+    }
+
+    /** Turning add-ons off should not leave the note describing one. */
+    public function test_taking_the_addon_off_clears_the_note(): void
+    {
+        $order = $this->order();
+
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'sublimated',
+            'addon_note' => 'Sleeves only',
+        ]);
+        $this->assertSame('Sleeves only', $order->fresh()->jobOrder->addon_note);
+
+        $this->save($order, ['fabric_press' => 'heat_press']);
+
+        $jo = $order->fresh()->jobOrder;
+        $this->assertNull($jo->addon, 'the add-on itself should be cleared');
+        $this->assertNull($jo->addon_note, 'the note should go with it');
+    }
+
+    public function test_the_note_is_optional(): void
+    {
+        $order = $this->order();
+
+        $this->save($order, ['decoration_on' => 1, 'addon' => 'embroidery'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($order->fresh()->jobOrder->addon_note);
+    }
+
+    public function test_an_overlong_note_is_refused(): void
+    {
+        $order = $this->order();
+
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'sublimated',
+            'addon_note' => str_repeat('a', 501),
+        ])->assertSessionHasErrors('addon_note');
+
+        $this->assertNull($order->fresh()->jobOrder->addon_note);
+    }
+
+    /** Free text goes to the floor's screens, so it must not arrive as markup. */
+    public function test_the_note_is_escaped_where_it_is_shown(): void
+    {
+        $order = $this->order();
+        $this->save($order, [
+            'decoration_on' => 1,
+            'addon' => 'sublimated',
+            'addon_note' => 'Sleeves <script>alert(1)</script>',
+        ]);
+
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        // Wherever it is shown, it is somebody's typed text and is escaped.
+        $this->actingAs($leader)->get("/orders/{$order->id}/package")
+            ->assertOk()
+            ->assertDontSee('<SCRIPT>ALERT(1)</SCRIPT>', false)
+            ->assertSee('&lt;SCRIPT&gt;', false);
+    }
 }

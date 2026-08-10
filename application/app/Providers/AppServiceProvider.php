@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Task;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +22,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // The framework's default pager is written for Tailwind, which this app
+        // does not use. Ours is plain markup styled by app.css.
+        Paginator::defaultView('pagination::imprint');
+
         // Windows/XAMPP: PHP can't create EC keys (needed to sign Web Push
         // messages) unless it knows where openssl.cnf is.
         if (! getenv('OPENSSL_CONF')) {

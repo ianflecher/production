@@ -131,6 +131,12 @@
                 </a>
             @endforeach
         </div>
+
+        @if ($threads->hasPages())
+            <div class="list-pager">
+                {{ $threads->links() }}
+            </div>
+        @endif
     @endif
 </div>
 @endsection

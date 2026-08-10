@@ -67,12 +67,24 @@ class JobOrderController extends Controller
             'printer' => ['required', 'in:'.implode(',', array_keys(JobOrder::PRINTERS))],
             'fabric' => ['required', 'string', 'max:255'],
             'free_logo_sticker' => ['nullable', 'string', 'max:255'],
-            // Sewing (yellow)
-            'neck' => ['nullable', 'string', 'max:255'],
-            'cuff_arm_sleeves' => ['nullable', 'string', 'max:255'],
-            'neck_label' => ['nullable', 'string', 'max:255'],
-            'bottom_hem' => ['nullable', 'string', 'max:255'],
-            'ic_placement' => ['nullable', 'string', 'max:255'],
+            // Sewing (yellow) — the whole block off the paper form: the four
+            // headline seams with their size/thread, then a sewer and thread
+            // for each seam group.
+            ...array_fill_keys([
+                'neck', 'neck_size',
+                'cuff_arm_sleeves', 'cuff_size',
+                'neck_label', 'neck_label_thread',
+                'bottom_hem', 'bottom_hem_thread',
+                'neckbond_sewer', 'neckbond_thread',
+                'hangtag_woven_sewer', 'hangtag_woven_thread',
+                'flatbed_sewer', 'flatbed_thread',
+                'close_side_sewer', 'close_side_thread',
+                'attached_sleeve_sewer', 'attached_sleeve_thread',
+                'topping_side_sewer', 'topping_side_thread',
+                'pipping_sewer', 'pipping_thread',
+                'extra_seam_label', 'extra_seam_note', 'extra_seam_sewer',
+            ], ['nullable', 'string', 'max:255']),
+            'sewer_notes' => ['nullable', 'string', 'max:2000'],
             // Quality check (yellow)
             'packaging' => ['nullable', 'string', 'max:255'],
             // Agent notes
@@ -190,10 +202,10 @@ class JobOrderController extends Controller
             'fabric_press' => ['required', 'in:'.implode(',', $pressKeys)],
             'decoration_on' => ['nullable', 'boolean'],
             'press' => ['nullable', 'in:'.implode(',', $pressKeys)],
-            'embroidery_note' => ['nullable', 'string', 'max:500'],
             // Add-ons: which one, what it is when "Others", and what it costs.
             'addon' => ['nullable', 'in:'.implode(',', array_keys(JobOrder::ADDONS))],
             'addon_other' => ['nullable', 'required_if:addon,others', 'string', 'max:255'],
+            'addon_note' => ['nullable', 'string', 'max:500'],
             'addon_price' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
         ], [
             'addon_other.required_if' => 'Say what the add-on is when you choose Others.',
@@ -232,9 +244,10 @@ class JobOrderController extends Controller
             'press' => $decoPress,
             'addon' => $addon,
             'addon_other' => $addonOther,
+            // Kept only while there is an add-on to describe, same as the price.
+            'addon_note' => $decoOn ? ($data['addon_note'] ?? null) : null,
             'addon_price' => $addonPrice,
             'needs_embroidery' => $needsEmbroidery,
-            'embroidery_note' => $needsEmbroidery ? ($data['embroidery_note'] ?? null) : null,
         ]);
 
         // The add-on is charged to the client, so fold it into the order total —

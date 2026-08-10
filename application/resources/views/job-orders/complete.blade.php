@@ -55,7 +55,7 @@
 @endphp
 
 <style>
-    .complete-doc { font-family: Arial, sans-serif; counter-reset: pg; background: #e9edf3; padding: 1.2rem 0; }
+    .complete-doc { font-family: var(--font-body); counter-reset: pg; background: #e9edf3; padding: 1.2rem 0; }
     /* On screen each section is drawn as its own A4 sheet, so you can SEE the
        4 separate pages instead of one long scroll. */
     .page-section {
@@ -88,7 +88,10 @@
     table.jo td, table.jo th { border: 1px solid #111; padding: 0.3rem 0.5rem; font-size: 0.8rem; vertical-align: top; }
     .lbl { background: #cfcfcf; font-weight: 700; text-align: center; font-size: 0.72rem; text-transform: uppercase; }
     .lbl-l { background: #cfcfcf; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
-    .yellow { background: #ffef00 !important; font-weight: 700; text-align: center; }
+    /* A filled-in value. White like the paper form — the yellow belongs on
+       the entry form, where it means "still to type in". Here it is already
+       typed in, and a printed sheet should look like the printed sheet. */
+    .yellow { background: #fff !important; font-weight: 700; text-align: center; }
     .ctr { text-align: center; }
     .red { color: #d00; font-weight: 700; }
     .sec { background: #cfcfcf; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -285,12 +288,13 @@
 
                     if ($addonName) {
                         $decoVal = $addonName.($pressName ? ' ('.$pressName.')' : '');
-                        // Embroidery still needs to say what to embroider.
-                        if ($decoKey === 'embroidery' && $jo?->embroidery_note) {
-                            $decoVal .= ' — '.$jo->embroidery_note;
+                        // What the add-on covers, then what to embroider — the
+                        // treatment on its own doesn't say where it goes.
+                        if (filled($jo?->addon_note)) {
+                            $decoVal .= ' — '.$jo->addon_note;
                         }
                     } elseif ($decoKey === 'embroidery') {
-                        $decoVal = 'EMBROIDERY'.($jo?->embroidery_note ? ' — '.$jo->embroidery_note : '');
+                        $decoVal = 'EMBROIDERY';
                     } elseif ($decoKey) {
                         $decoVal = $pressName;
                     } else {

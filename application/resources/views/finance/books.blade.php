@@ -26,6 +26,24 @@
     .bk-form .full { grid-column: 1 / -1; }
     .bk-form label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
     .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+    /* The expense rows carry a Remove button, so the last two columns need room
+       of their own — without it the button sat on top of the recorder's name. */
+    .bk-expenses .bk-by { font-size: 0.8rem; color: var(--ink-3); white-space: nowrap; }
+    .bk-expenses .bk-action { width: 1%; text-align: right; white-space: nowrap; }
+    .bk-expenses .bk-action form { margin: 0; }
+
+    /* Give the description the slack, since it is the one column that varies. */
+    .bk-expenses td:nth-child(3) { min-width: 220px; }
+
+    .bk-expenses tfoot td {
+        background: #fafbfd;
+        border-top: 2px solid var(--border);
+        border-bottom: none;
+        font-weight: 800;
+    }
+    .bk-expenses .bk-total-label { text-align: right; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.07em; color: var(--ink-3); }
+    .bk-expenses .bk-total-value { font-size: 0.95rem; }
 </style>
 
 <div class="page-head">
@@ -159,8 +177,8 @@
             No expenses recorded for {{ $month->format('F Y') }} yet.
         </p>
     @else
-        <div style="overflow-x: auto;">
-            <table>
+        <div class="tbl-wrap">
+            <table class="tbl bk-expenses">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -196,8 +214,8 @@
                                     <span style="color: var(--ink-3);">—</span>
                                 @endif
                             </td>
-                            <td style="font-size: 0.8rem; color: var(--ink-3);">{{ $e->recorder?->name ?? '—' }}</td>
-                            <td>
+                            <td class="bk-by">{{ $e->recorder?->name ?? '—' }}</td>
+                            <td class="bk-action">
                                 <form method="POST" action="{{ route('books.expenses.destroy', $e) }}"
                                       onsubmit="return confirm('Remove this expense of ₱{{ number_format((float) $e->amount, 2) }}? It will no longer count towards the month.');">
                                     @csrf
@@ -209,9 +227,9 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <th colspan="3" style="text-align: right;">Total</th>
-                        <th class="num">₱{{ number_format($expenseTotal, 2) }}</th>
-                        <th colspan="4"></th>
+                        <td colspan="3" class="bk-total-label">Total</td>
+                        <td class="num bk-total-value">₱{{ number_format($expenseTotal, 2) }}</td>
+                        <td colspan="4"></td>
                     </tr>
                 </tfoot>
             </table>

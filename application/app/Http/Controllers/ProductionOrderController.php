@@ -17,22 +17,63 @@ class ProductionOrderController extends Controller
 {
     use AuthorizesOrderAccess;
 
+    /**
+     * Every order this person is allowed to see, before searching or paging.
+     * Account officers see only their own orders; leaders/admin see all.
+     */
+    private function visibleOrders(Request $request)
+    {
+        return ProductionOrder::query()
+            ->when($request->user()->isSales(), fn ($q) => $q->where('created_by', $request->user()->id));
+    }
+
     public function index(Request $request): View
     {
+        $search = trim((string) $request->query('q', ''));
+
+        // Only the four real statuses filter; anything else means "all".
+        $status = in_array($request->query('status'), ProductionOrder::STATUSES, true)
+            ? $request->query('status')
+            : '';
+
         // Sort orders by workflow priority. FIELD() is MySQL-only, so fall back
         // to a portable CASE on other drivers (e.g. SQLite in tests).
         $statusOrder = DB::getDriverName() === 'mysql'
             ? "FIELD(status, 'active', 'on_hold', 'complete', 'cancelled')"
             : "CASE status WHEN 'active' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'complete' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END";
 
-        $orders = ProductionOrder::with('tasks')
+        // One page at a time. The list only ever grows, so loading it whole
+        // would get slower every week the shop stays busy.
+        $orders = $this->visibleOrders($request)
+            ->with('tasks')
+            // Answered per row on the list, so answer it in this query rather
+            // than once per order (see hasDownpayment).
+            ->withExists('payments')
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('order_number', 'like', "%{$search}%")
+                ->orWhere('customer_name', 'like', "%{$search}%")))
+            ->when($status !== '', fn ($q) => $q->where('status', $status))
             ->orderByRaw($statusOrder)
             ->orderByDesc('id')
-            // Account officers see only their own orders; leaders/admin see all.
-            ->when($request->user()->isSales(), fn ($q) => $q->where('created_by', $request->user()->id))
-            ->get();
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
 
-        return view('orders.index', ['orders' => $orders]);
+        // The summary cards count every order the person can see, not just the
+        // page in front of them — a total that changed as you paged would be
+        // useless for telling the office how much work is open.
+        $counts = $this->visibleOrders($request)
+            ->toBase()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return view('orders.index', [
+            'orders' => $orders,
+            'search' => $search,
+            'status' => $status,
+            'counts' => $counts,
+            'totalOrders' => (int) $counts->sum(),
+        ]);
     }
 
 
@@ -460,7 +501,7 @@ class ProductionOrderController extends Controller
     public function show(ProductionOrder $order): View
     {
         $this->assertOrderVisible($order);
-        $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles', 'materialRequests.item']);
+        $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles', 'materialRequests.item', 'payments']);
 
         return view('orders.show', [
             'order' => $order,

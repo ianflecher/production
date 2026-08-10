@@ -23,6 +23,14 @@ class MessageController extends Controller
         $me = $request->user();
         $orderIds = Message::accessibleOrderIds($me);
 
+        // The id of each order's newest message. Sorting on this in SQL is what
+        // lets the inbox be paged: orders that have been talked about float to
+        // the top (no messages sorts last on both MySQL and SQLite), and the
+        // rest follow so a thread can still be started on them.
+        $lastMessageId = Message::query()
+            ->selectRaw('MAX(id)')
+            ->whereColumn('production_order_id', 'production_orders.id');
+
         $orders = ProductionOrder::whereIn('id', $orderIds)
             // files come too: the inbox preview describes a photo-only message.
             ->with([
@@ -34,25 +42,31 @@ class MessageController extends Controller
             ])
             // Which orders are this person's is decided by accessibleOrderIds
             // above — including the mover's "once it reaches the printer".
-            ->get();
+            ->orderByDesc($lastMessageId)
+            ->orderByDesc('id')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
 
-        $threads = $orders->map(function ($order) use ($me) {
-            $last = $order->messages->first();
+        // One query for the whole page's unread counts, rather than two per row.
+        $unread = Message::unreadCountsForOrders(
+            $me,
+            $orders->getCollection()->pluck('id')->all()
+        );
 
-            return [
+        $threads = $orders->setCollection(
+            $orders->getCollection()->map(fn ($order) => [
                 'order' => $order,
-                'last' => $last,
-                'unread' => Message::unreadInOrder($me, $order->id),
-            ];
-        })
-            // Orders that have been talked about float to the top; the rest
-            // follow so a thread can still be started on them.
-            ->sortByDesc(fn ($t) => $t['last']?->id ?? 0)
-            ->values();
+                'last' => $order->messages->first(),
+                'unread' => (int) ($unread[$order->id] ?? 0),
+            ])
+        );
 
         return view('messages.index', [
             'threads' => $threads,
-            'talkedAbout' => $threads->filter(fn ($t) => $t['last'] !== null)->count(),
+            // Counted across the whole inbox, not the page on screen.
+            'talkedAbout' => ProductionOrder::whereIn('id', $orderIds)
+                ->whereHas('messages')
+                ->count(),
         ]);
     }
 

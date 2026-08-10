@@ -32,6 +32,10 @@
             --radius-sm: 8px;
             --shadow: 0 1px 2px rgba(19, 30, 51, .04), 0 2px 8px rgba(19, 30, 51, .05);
             --shadow-md: 0 4px 12px rgba(19, 30, 51, .06), 0 12px 28px rgba(19, 30, 51, .08);
+            /* The typefaces themselves are loaded by partials/fonts.blade.php,
+               which every page includes. The two public pages that render
+               outside the app shell — and so never load this stylesheet —
+               repeat these two lines in their own :root. */
             --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
             --font-head: 'Space Grotesk', 'Inter', system-ui, sans-serif;
         }
@@ -766,4 +770,57 @@
         @media (max-width: 640px) {
             .delay-alert.is-big { padding: 0.85rem 1rem; }
             .delay-alert.is-big .delay-alert-head strong { font-size: 1.25rem; }
+        }
+
+        /* Pager under a paginated table (orders, finance, inventory). */
+        .app-pager {
+            display: flex; align-items: center; justify-content: center;
+            gap: 0.75rem; flex-wrap: wrap;
+        }
+        .app-pager-link {
+            display: inline-flex; align-items: center; min-height: 38px;
+            padding: 0.45rem 0.85rem;
+            color: var(--ink-2); font-size: 0.8rem; font-weight: 700;
+            text-decoration: none;
+            background: var(--surface); border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+        /* The colour and border already say it is hoverable; the global link
+           underline only smudges the arrows. */
+        .app-pager-link:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+        .app-pager-link.is-disabled {
+            color: var(--ink-3); background: var(--surface-2);
+            border-color: var(--border); cursor: default;
+        }
+        .app-pager-status { color: var(--ink-3); font-size: 0.78rem; }
+
+        /* Pager under a paginated list that isn't a table. */
+        .list-pager { padding: 1rem 0 0.25rem; }
+
+        /* Queue pager inside a station card — tighter than the page-level one. */
+        .station-pager {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 0.5rem; flex-wrap: wrap;
+            margin-top: 0.5rem; padding-top: 0.5rem;
+            border-top: 1px dashed var(--border);
+            font-size: 0.72rem; color: var(--ink-3);
+        }
+        .station-pager .app-pager { justify-content: flex-end; gap: 0.4rem; }
+        .station-pager .app-pager-link { min-height: 28px; padding: 0.2rem 0.5rem; font-size: 0.68rem; }
+
+        /* An alert has been read once it has been read. Clicking it puts it
+           away, so a stale "saved" or a validation warning you have already
+           dealt with stops sitting on the page. */
+        .alert-error, .alert-success { cursor: pointer; }
+        .alert-error.is-dismissed, .alert-success.is-dismissed {
+            animation: alertOut .18s ease forwards;
+            pointer-events: none;
+        }
+        @keyframes alertOut {
+            to { opacity: 0; transform: translateY(-4px); margin-bottom: 0;
+                 padding-top: 0; padding-bottom: 0; height: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .alert-error.is-dismissed, .alert-success.is-dismissed { animation: none; display: none; }
         }

@@ -15,21 +15,24 @@ set "APP=%ROOT%\application"
 set "LOGS=%ROOT%\logs"
 set "PORT=8000"
 
-rem ---- Find PHP and MySQL (XAMPP by default, otherwise whatever is on PATH) --
-set "PHP=C:\xampp1\php\php.exe"
-if not exist "%PHP%" set "PHP=C:\xampp\php\php.exe"
+rem ---- Find PHP and MySQL.
+rem      C:\xampp is tried first. An older C:\xampp1 can still be
+rem      sitting on disk after a reinstall, and existing is not the same
+rem      as working: preferring it pointed the app at a dead database.
+set "PHP=C:\xampp\php\php.exe"
+if not exist "%PHP%" set "PHP=C:\xampp1\php\php.exe"
 if not exist "%PHP%" (
     where php >nul 2>&1 && set "PHP=php"
 )
 
-set "MYSQLD=C:\xampp1\mysql\bin\mysqld.exe"
-if not exist "%MYSQLD%" set "MYSQLD=C:\xampp\mysql\bin\mysqld.exe"
-set "MYSQL=C:\xampp1\mysql\bin\mysql.exe"
-if not exist "%MYSQL%" set "MYSQL=C:\xampp\mysql\bin\mysql.exe"
-set "MYSQLADMIN=C:\xampp1\mysql\bin\mysqladmin.exe"
-if not exist "%MYSQLADMIN%" set "MYSQLADMIN=C:\xampp\mysql\bin\mysqladmin.exe"
-set "MYSQL_INI=C:\xampp1\mysql\bin\my.ini"
-if not exist "%MYSQL_INI%" set "MYSQL_INI=C:\xampp\mysql\bin\my.ini"
+set "MYSQLD=C:\xampp\mysql\bin\mysqld.exe"
+if not exist "%MYSQLD%" set "MYSQLD=C:\xampp1\mysql\bin\mysqld.exe"
+set "MYSQL=C:\xampp\mysql\bin\mysql.exe"
+if not exist "%MYSQL%" set "MYSQL=C:\xampp1\mysql\bin\mysql.exe"
+set "MYSQLADMIN=C:\xampp\mysql\bin\mysqladmin.exe"
+if not exist "%MYSQLADMIN%" set "MYSQLADMIN=C:\xampp1\mysql\bin\mysqladmin.exe"
+set "MYSQL_INI=C:\xampp\mysql\bin\my.ini"
+if not exist "%MYSQL_INI%" set "MYSQL_INI=C:\xampp1\mysql\bin\my.ini"
 
 if not exist "%LOGS%" mkdir "%LOGS%"
 

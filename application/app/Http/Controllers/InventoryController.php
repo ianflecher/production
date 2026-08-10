@@ -47,22 +47,69 @@ class InventoryController extends Controller
 
     /* ==================== Stock ==================== */
 
-    public function index(): View
+    public function index(Request $request): View
     {
         $this->assertAccess();
 
-        return view('inventory.index', [
+        $search = trim((string) $request->query('q', ''));
+        $category = (string) $request->query('category', '');
+        $color = (string) $request->query('color', '');
+        $size = (string) $request->query('size', '');
+
+        if (! array_key_exists($category, InventoryItem::CATEGORIES)) {
+            $category = '';
+        }
+
+        // The stock sheet reaches thousands of rows on a full inventory, so it
+        // is searched and filtered in the database and shown a page at a time.
+        $filtered = fn ($q) => $q
+            ->when($search !== '', fn ($w) => $w->where(fn ($s) => $s
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('color', 'like', "%{$search}%")
+                ->orWhere('size', 'like', "%{$search}%")
+                ->orWhere('unit', 'like', "%{$search}%")))
+            ->when($category !== '', fn ($w) => $w->where('category', $category))
+            ->when($color !== '', fn ($w) => $w->where('color', $color))
+            ->when($size !== '', fn ($w) => $w->where('size', $size));
+
+        $items = InventoryItem::query()
+            ->tap($filtered)
             // Received / Less are summed in the query rather than per row —
             // with a full stock sheet loaded that is two queries instead of
             // two thousand.
-            'items' => InventoryItem::query()
-                ->withSum(['movements as received_sum' => fn ($q) => $q
-                    ->where('direction', StockMovement::IN)
-                    ->where('reason', '!=', 'added'), ], 'quantity')
-                ->withSum(['movements as less_sum' => fn ($q) => $q
-                    ->where('direction', StockMovement::OUT), ], 'quantity')
-                ->orderBy('name')
-                ->get(),
+            ->withSum(['movements as received_sum' => fn ($q) => $q
+                ->where('direction', StockMovement::IN)
+                ->where('reason', '!=', 'added'), ], 'quantity')
+            ->withSum(['movements as less_sum' => fn ($q) => $q
+                ->where('direction', StockMovement::OUT), ], 'quantity')
+            ->orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        // Colour and size only offer what the chosen category actually has —
+        // picking BOND PAPER shouldn't leave you scrolling past shirt colours
+        // and shirt sizes that can never match.
+        $inCategory = fn () => InventoryItem::query()
+            ->when($category !== '', fn ($w) => $w->where('category', $category));
+
+        $distinct = fn (string $column) => $inCategory()
+            ->whereNotNull($column)
+            ->where($column, '!=', '')
+            ->distinct()
+            ->orderBy($column)
+            ->pluck($column);
+
+        return view('inventory.index', [
+            'items' => $items,
+            'search' => $search,
+            'category' => $category,
+            'color' => $color,
+            'size' => $size,
+            'colorOptions' => $distinct('color'),
+            'sizeOptions' => $distinct('size'),
+            // Counted across the whole sheet, so these don't shift as you page.
+            'totalCount' => InventoryItem::count(),
+            'outCount' => InventoryItem::where('quantity', '<=', 0)->count(),
             'pendingCount' => MaterialRequest::where('status', 'pending')->count(),
         ]);
     }
@@ -76,7 +123,7 @@ class InventoryController extends Controller
             ->when($request->integer('item'), fn ($q, $id) => $q->where('inventory_item_id', $id))
             ->when($request->query('direction'), fn ($q, $d) => $q->where('direction', $d))
             ->latest('id')
-            ->paginate(50)
+            ->paginate(self::PER_PAGE)
             ->withQueryString();
 
         return view('inventory.history', [
@@ -365,7 +412,14 @@ class InventoryController extends Controller
         $this->assertAccess();
 
         return view('inventory.requests', [
-            'pending' => MaterialRequest::with('order')->where('status', 'pending')->orderBy('id')->get(),
+            // A queue that grows while nobody acts on it, so it is paged. The
+            // $items list below stays whole on purpose — it fills the material
+            // dropdown and matches names, so it is not a list being read.
+            'pending' => MaterialRequest::with('order')
+                ->where('status', 'pending')
+                ->orderBy('id')
+                ->paginate(self::PER_PAGE)
+                ->withQueryString(),
             'decided' => MaterialRequest::with(['order', 'item', 'decider'])
                 ->where('status', '!=', 'pending')->orderByDesc('decided_at')->limit(25)->get(),
             'items' => InventoryItem::orderBy('name')->get(),

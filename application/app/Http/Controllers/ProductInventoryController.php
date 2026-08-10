@@ -21,13 +21,39 @@ class ProductInventoryController extends Controller
         abort_unless(auth()->user()->canManageProducts(), 403);
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
         $this->assertAccess();
 
+        $search = trim((string) $request->query('q', ''));
+
+        // Searched on the server so it reaches the whole product list, not just
+        // the page being shown.
+        $items = ProductItem::query()
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('unit', 'like', "%{$search}%")))
+            ->orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        // The receiving queue holds one row per finished order until someone
+        // confirms it, so it is paged too. It needs its own page parameter —
+        // two paginators on one screen would otherwise move together.
+        $pending = ProductReceipt::pending()
+            ->with('order')
+            ->orderBy('id')
+            ->paginate(self::PER_PAGE, ['*'], 'receive_page')
+            ->withQueryString();
+
         return view('products.index', [
-            'items' => ProductItem::orderBy('name')->get(),
-            'pending' => ProductReceipt::pending()->with('order')->orderBy('id')->get(),
+            'items' => $items,
+            'search' => $search,
+            // Counted across all products, so the badge doesn't change as you page.
+            'outCount' => ProductItem::where('quantity', '<=', 0)->count(),
+            'totalCount' => ProductItem::count(),
+            'pending' => $pending,
+            'pendingCount' => $pending->total(),
             'movements' => ProductMovement::with(['item', 'user', 'order'])
                 ->latest('id')->limit(25)->get(),
         ]);

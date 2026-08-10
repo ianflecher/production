@@ -5,8 +5,25 @@
 
 @section('content')
 <style>
-    .err-row { padding: 0.9rem 0; border-bottom: 1px solid var(--border); }
-    .err-row:last-child { border-bottom: 0; }
+    /* The row IS the button, so the whole thing is clickable and it still
+       works with the keyboard. It has to be un-styled back into a row. */
+    .err-form { margin: 0; }
+    .err-form:last-child .err-row { border-bottom: 0; }
+    .err-row {
+        display: block; width: 100%; text-align: left; position: relative;
+        padding: 0.9rem 0; border: 0; border-bottom: 1px solid var(--border);
+        background: none; font: inherit; color: inherit; cursor: pointer;
+    }
+    .err-row:hover, .err-row:focus-visible {
+        background: var(--danger-soft, rgba(239,68,68,.05));
+    }
+    .err-clear {
+        position: absolute; top: 0.9rem; right: 0;
+        font-size: 0.72rem; font-weight: 700; letter-spacing: .04em;
+        text-transform: uppercase; color: var(--ink-3); opacity: 0;
+        transition: opacity .12s;
+    }
+    .err-row:hover .err-clear, .err-row:focus-visible .err-clear { opacity: 1; }
     .err-top { display: flex; gap: 0.7rem; align-items: baseline; flex-wrap: wrap; }
     .err-level { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; padding: 0.1rem 0.45rem; border-radius: 5px; background: #fee2e2; color: #b91c1c; }
     .err-level.CRITICAL, .err-level.ALERT, .err-level.EMERGENCY { background: #7f1d1d; color: #fff; }
@@ -46,7 +63,13 @@
         <p class="sub">If the same line keeps climbing, that is the one worth fixing.</p>
 
         @foreach ($incidents as $e)
-            <div class="err-row">
+            {{-- Click one to say it has been dealt with. The log file is the
+                 record and is never edited; this only remembers that somebody
+                 looked, so the same failure happening again brings it back. --}}
+            <form method="POST" action="{{ route('system.errors.dismiss') }}" class="err-form">
+                @csrf
+                <input type="hidden" name="fingerprint" value="{{ $e['fingerprint'] }}">
+                <button type="submit" class="err-row" title="Clear this — it comes back if it happens again">
                 <div class="err-top">
                     <span class="err-level {{ $e['level'] }}">{{ $e['level'] }}</span>
                     @if ($e['count'] > 1)
@@ -66,7 +89,9 @@
                         · logged as <strong>{{ $e['environment'] }}</strong>
                     @endif
                 </div>
-            </div>
+                <span class="err-clear">Clear</span>
+                </button>
+            </form>
         @endforeach
     @endif
 </div>

@@ -116,8 +116,20 @@
 
         {{-- Everything below appears only once the tick is on. --}}
         <div id="addonFields">
+            {{-- What the add-on covers, before which one it is. The dropdown only
+                 says the treatment — sublimated, reflectorized — and the floor
+                 still has to be told WHERE it goes. --}}
+            <div class="field" style="max-width: 480px;">
+                <label for="addon_note">What is the add-on for?</label>
+                <textarea id="addon_note" name="addon_note" rows="2" maxlength="500"
+                          placeholder="e.g. sleeves only, left chest logo, collar and cuffs">{{ old('addon_note', $jobOrder->addon_note) }}</textarea>
+                <div style="font-size: 0.75rem; color: var(--ink-3); margin-top: 0.3rem;">
+                    Where it goes and what it covers, so the floor doesn't have to ask.
+                </div>
+            </div>
+
             <div class="field" style="max-width: 360px;">
-                <label>Add-on</label>
+                <label>Add-on type</label>
                 <select name="addon" id="addonSelect">
                     @foreach (\App\Models\JobOrder::ADDONS as $k => $cfg)
                         <option value="{{ $k }}"
@@ -161,13 +173,6 @@
 
         </div>
 
-        {{-- What to embroider — shown when either press is set to embroidery. --}}
-        <div class="field" id="embroideryNoteField" style="max-width: 480px; margin-top: 0.7rem;">
-            <label for="embroidery_note">What needs to be embroidered?</label>
-            <textarea id="embroidery_note" name="embroidery_note" rows="2" maxlength="500"
-                      placeholder="e.g. IC logo on left chest, player name at the back, size 3 inches">{{ old('embroidery_note', $jobOrder->embroidery_note) }}</textarea>
-        </div>
-
         <div style="font-size: 0.75rem; color: var(--ink-3); margin-top: 0.3rem;">
             The fabric press and decoration run after printing.
         </div>
@@ -200,7 +205,6 @@
         var addonFields = document.getElementById('addonFields');
         var addonSelect = document.getElementById('addonSelect');
         var otherField = document.getElementById('addonOtherField');
-        var noteField = document.getElementById('embroideryNoteField');
 
         // Follow the add-on's press until the user picks one themselves; after
         // that their choice sticks (overridable), until the add-on changes again.
@@ -224,12 +228,6 @@
 
             var isOther = on && addonSelect && addonSelect.value === 'others';
             if (otherField) otherField.style.display = isOther ? '' : 'none';
-
-            var embroidery = on && (
-                (fabric && fabric.value === 'embroidery')
-                || (deco && deco.value === 'embroidery')
-            );
-            if (noteField) noteField.style.display = embroidery ? '' : 'none';
         }
 
         if (addonSelect) addonSelect.addEventListener('change', function () {

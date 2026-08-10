@@ -26,6 +26,28 @@
         font-size: 0.8rem; text-transform: uppercase; padding: 0.4rem 0.3rem; outline: none;
     }
     .yellow textarea { text-transform: none; text-align: left; resize: vertical; min-height: 90px; }
+    /* A field that carries its own printed label — "Sewer:", "Thread Color:".
+       White like the paper form; only the group headers above it are grey. */
+    .fld { background: #fff; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+    /* The spare seam column: nothing on it is preprinted, so the whole column
+       is fill-in and the cell itself is yellow. */
+    .fld-extra { background: #ffef00; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+
+    /* The box you type into, sitting under (or inside) its label rather than
+       filling its own cell — the sewing block is twenty of these, and a
+       full-width cell each would double the height of the sheet. Yellow like
+       every other fill-in box, including the one in the grey header cell where
+       the spare seam is named. */
+    .jo-sheet .inline {
+        border: 1px solid #111; border-radius: 3px;
+        background: #ffef00; color: #111; font-weight: 700;
+        font-size: 0.75rem; text-transform: uppercase;
+        padding: 0.2rem 0.35rem; outline: none;
+        width: 100%; max-width: 100%; margin-top: 0.15rem;
+    }
+    .jo-sheet textarea.inline { text-transform: none; resize: vertical; }
+    .jo-sheet .inline::placeholder { color: #a09000; font-weight: 400; }
+    .jo-sheet .inline:focus { box-shadow: 0 0 0 2px rgba(17, 17, 17, .35); }
     .ctr { text-align: center; }
     .red { color: #d00; font-weight: 700; }
     .sec { background: #cfcfcf; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; }
@@ -157,12 +179,83 @@
                 <td class="yellow"><input type="text" name="neck_label" list="dl_neck_label" maxlength="255" value="{{ $old('neck_label', $jobOrder->neck_label) }}" placeholder="IC FLAT BED"></td>
                 <td class="yellow"><input type="text" name="bottom_hem" list="dl_bottom_hem" maxlength="255" value="{{ $old('bottom_hem', $jobOrder->bottom_hem) }}" placeholder="STRAIGHT"></td>
             </tr>
+            {{-- Size on the two cut to a measurement, thread colour on the two
+                 stitched on — same as the paper form. --}}
             <tr>
-                <td class="lbl-l">Sewer:</td><td class="lbl-l">Sewer:</td><td class="lbl-l">Sewer:</td><td class="lbl-l">Sewer:</td>
+                <td class="fld">Size: <input type="text" name="neck_size" list="dl_neck_size" maxlength="255" value="{{ $old('neck_size', $jobOrder->neck_size) }}" class="inline" placeholder="—"></td>
+                <td class="fld">Size: <input type="text" name="cuff_size" list="dl_cuff_size" maxlength="255" value="{{ $old('cuff_size', $jobOrder->cuff_size) }}" class="inline" placeholder="—"></td>
+                <td class="fld">Thread Color: <input type="text" name="neck_label_thread" list="dl_thread" maxlength="255" value="{{ $old('neck_label_thread', $jobOrder->neck_label_thread) }}" class="inline" placeholder="—"></td>
+                <td class="fld">Thread Color: <input type="text" name="bottom_hem_thread" list="dl_thread" maxlength="255" value="{{ $old('bottom_hem_thread', $jobOrder->bottom_hem_thread) }}" class="inline" placeholder="—"></td>
             </tr>
+
+            {{-- Each seam group: who sewed it and with what. --}}
+            @php
+                $seamGroups = [
+                    [
+                        ['Neckbond Shoulder', 'neckbond', 'Thread Code/Color'],
+                        ['Top / Neck / Hangtag Woven', 'hangtag_woven', 'Thread Code/Color'],
+                        ['Flatbed', 'flatbed', 'Thread Code/Color'],
+                        ['Close Side Body & Sleeve', 'close_side', 'Thread Color'],
+                    ],
+                    [
+                        ['Attached Sleeve / Cuffs', 'attached_sleeve', 'Thread Color'],
+                        ['Topping Side / Sleeve', 'topping_side', 'Thread Color'],
+                        ['Pipping', 'pipping', 'Thread Color'],
+                        'extra',   // the spare column — name it yourself
+                    ],
+                ];
+            @endphp
+            @foreach ($seamGroups as $group)
+                {{-- Header: printed for the known seams, typed for the spare one. --}}
+                <tr>
+                    @foreach ($group as $seam)
+                        @if ($seam === 'extra')
+                            <td class="fld-extra" style="padding: 0.15rem;">
+                                <input type="text" name="extra_seam_label" maxlength="255"
+                                       value="{{ $old('extra_seam_label', $jobOrder->extra_seam_label) }}"
+                                       class="inline" placeholder="OTHER SEAM…" style="text-align: center;">
+                            </td>
+                        @else
+                            <td class="lbl">{{ $seam[0] }}</td>
+                        @endif
+                    @endforeach
+                </tr>
+                <tr>
+                    @foreach ($group as $seam)
+                        <td class="{{ $seam === 'extra' ? 'fld-extra' : 'fld' }}">
+                            @if ($seam === 'extra')
+                                <input type="text" name="extra_seam_note" maxlength="255"
+                                       value="{{ $old('extra_seam_note', $jobOrder->extra_seam_note) }}"
+                                       class="inline" placeholder="—">
+                            @else
+                                Sewer: <input type="text" name="{{ $seam[1] }}_sewer" list="dl_sewer" maxlength="255" value="{{ $old($seam[1].'_sewer', $jobOrder->{$seam[1].'_sewer'}) }}" class="inline" placeholder="—">
+                            @endif
+                        </td>
+                    @endforeach
+                </tr>
+                <tr>
+                    @foreach ($group as $seam)
+                        <td class="{{ $seam === 'extra' ? 'fld-extra' : 'fld' }}">
+                            @if ($seam === 'extra')
+                                Sewer: <input type="text" name="extra_seam_sewer" list="dl_sewer" maxlength="255"
+                                              value="{{ $old('extra_seam_sewer', $jobOrder->extra_seam_sewer) }}"
+                                              class="inline" placeholder="—">
+                            @else
+                                {{ $seam[2] }}: <input type="text" name="{{ $seam[1] }}_thread" list="dl_thread" maxlength="255" value="{{ $old($seam[1].'_thread', $jobOrder->{$seam[1].'_thread'}) }}" class="inline" placeholder="—">
+                            @endif
+                        </td>
+                    @endforeach
+                </tr>
+            @endforeach
+
+            {{-- No IC Woven / Tag Placement row. The paper form doesn't have one,
+                 and the Top/Neck/Hangtag Woven column above now covers it. The
+                 column stays in the database so old orders keep what they had. --}}
             <tr>
-                <td class="lbl-l" colspan="3">IC Woven / Tag Placement:</td>
-                <td class="yellow"><input type="text" name="ic_placement" list="dl_ic_placement" maxlength="255" value="{{ $old('ic_placement', $jobOrder->ic_placement) }}" placeholder="IC WOVEN ON LEFT / TAG ON RIGHT"></td>
+                <td class="fld red" colspan="4" style="text-align:left;">
+                    Notes from Sewer:
+                    <textarea name="sewer_notes" rows="2" maxlength="2000" class="inline" style="display:block; width:100%; margin-top:0.25rem;" placeholder="Anything the sewer needs to flag">{{ $old('sewer_notes', $jobOrder->sewer_notes) }}</textarea>
+                </td>
             </tr>
         </table>
 
@@ -205,7 +298,7 @@
 </form>
 
 {{-- Autocomplete: past entries for each field, so you type once then pick next time. --}}
-@foreach (['fb_viber_gc', 'fabric', 'free_logo_sticker', 'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem', 'ic_placement', 'packaging'] as $field)
+@foreach (['fb_viber_gc', 'fabric', 'free_logo_sticker', 'neck', 'neck_size', 'cuff_arm_sleeves', 'cuff_size', 'neck_label', 'bottom_hem', 'packaging', 'sewer', 'thread'] as $field)
     <datalist id="dl_{{ $field }}">
         @foreach (($suggest[$field] ?? []) as $v)<option value="{{ $v }}"></option>@endforeach
     </datalist>

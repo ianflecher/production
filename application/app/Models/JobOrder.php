@@ -42,18 +42,42 @@ class JobOrder extends Model
         'press',            // the ADD-ON press, matched from `addon` (default Heat press)
         'addon',            // embroidery / reflectorized / sublimated / others
         'addon_other',      // free text when addon = others
+        'addon_note',       // what the add-on covers — sleeves, left chest, collar
         'addon_price',      // what the add-on is charged at
         'fabric_press',     // the press that merges the print onto the fabric
         'needs_embroidery',
-        'embroidery_note',
         'fabric',
         'raw_materials',
         'free_logo_sticker',
-        // Sewing (yellow)
+        // Sewing (yellow) — the four headline seams, each with its size/thread
         'neck',
+        'neck_size',
         'cuff_arm_sleeves',
+        'cuff_size',
         'neck_label',
+        'neck_label_thread',
         'bottom_hem',
+        'bottom_hem_thread',
+        // …then who sewed each seam group and with what thread
+        'neckbond_sewer',
+        'neckbond_thread',
+        'hangtag_woven_sewer',
+        'hangtag_woven_thread',
+        'flatbed_sewer',
+        'flatbed_thread',
+        'close_side_sewer',
+        'close_side_thread',
+        'attached_sleeve_sewer',
+        'attached_sleeve_thread',
+        'topping_side_sewer',
+        'topping_side_thread',
+        'pipping_sewer',
+        'pipping_thread',
+        // …and the spare column, for whatever this garment needed
+        'extra_seam_label',
+        'extra_seam_note',
+        'extra_seam_sewer',
+        'sewer_notes',
         'ic_placement',
         // Quality check (yellow)
         'packaging',
@@ -275,6 +299,27 @@ class JobOrder extends Model
     public const SUGGEST_FIELDS = [
         'fb_viber_gc', 'print_type', 'fabric', 'free_logo_sticker',
         'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem', 'ic_placement', 'packaging',
+        'neck_size', 'cuff_size',
+    ];
+
+    /**
+     * The sewing block asks for a sewer and a thread nine times over. Suggesting
+     * each box only its own past values would be both nine extra queries and
+     * worse: the same handful of people work every seam, and the same thread
+     * codes go through all of them. So they share one pool each.
+     *
+     * @var array<string, array<int, string>>
+     */
+    public const SHARED_SUGGEST = [
+        'sewer' => [
+            'neckbond_sewer', 'hangtag_woven_sewer', 'flatbed_sewer', 'close_side_sewer',
+            'attached_sleeve_sewer', 'topping_side_sewer', 'pipping_sewer', 'extra_seam_sewer',
+        ],
+        'thread' => [
+            'neck_label_thread', 'bottom_hem_thread',
+            'neckbond_thread', 'hangtag_woven_thread', 'flatbed_thread', 'close_side_thread',
+            'attached_sleeve_thread', 'topping_side_thread', 'pipping_thread',
+        ],
     ];
 
     /**
@@ -295,6 +340,31 @@ class JobOrder extends Model
                 ->orderBy($field)
                 ->limit(100)
                 ->pluck($field)
+                ->all();
+        }
+
+        // One pool of sewers and one of thread codes, gathered across every
+        // seam column in a single pass each.
+        foreach (self::SHARED_SUGGEST as $name => $columns) {
+            $query = null;
+
+            foreach ($columns as $column) {
+                $part = self::query()
+                    ->selectRaw("$column as v")
+                    ->whereNotNull($column)
+                    ->where($column, '!=', '');
+
+                $query = $query ? $query->union($part) : $part;
+            }
+
+            $out[$name] = $query
+                ->pluck('v')
+                ->map(fn ($v) => trim((string) $v))
+                ->filter()
+                ->unique(fn ($v) => mb_strtolower($v))
+                ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+                ->take(200)
+                ->values()
                 ->all();
         }
 

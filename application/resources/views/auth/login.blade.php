@@ -18,7 +18,7 @@
         --lg-ink-3: #7d7d7d;
         --lg-red: #E62129;
         --lg-red-dark: #A80F16;
-        font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+        font-family: var(--font-body);
         position: relative;
         width: 100%;
         min-height: 100vh;
@@ -56,11 +56,11 @@
         width: 46px; height: 46px; border-radius: 6px;
         background: var(--lg-red);
         display: grid; place-items: center;
-        font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 1.15rem; color: #fff;
+        font-family: var(--font-head); font-weight: 700; font-size: 1.15rem; color: #fff;
         box-shadow: 3px 3px 0 rgba(0,0,0,.5);
     }
     .login-brand .txt strong {
-        display: block; font-family: 'Oswald', sans-serif; font-weight: 600;
+        display: block; font-family: var(--font-head); font-weight: 600;
         text-transform: uppercase; letter-spacing: .05em; font-size: 1.25rem; line-height: 1; color: #fff;
     }
     .login-brand .txt small {
@@ -69,7 +69,7 @@
     }
 
     .login-title {
-        font-family: 'Oswald', sans-serif; font-weight: 600; text-transform: uppercase;
+        font-family: var(--font-head); font-weight: 600; text-transform: uppercase;
         font-size: 1.7rem; letter-spacing: .01em; line-height: 1; margin-bottom: .4rem; color: #fff;
     }
     .login-sub { font-size: .88rem; color: var(--lg-ink-2); margin-bottom: 1.6rem; }
@@ -122,7 +122,7 @@
         padding: .9rem 1rem;
         background: var(--lg-red); color: #fff;
         border: none; border-radius: 6px;
-        font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 1.02rem;
+        font-family: var(--font-head); font-weight: 600; font-size: 1.02rem;
         text-transform: uppercase; letter-spacing: .06em;
         cursor: pointer;
         box-shadow: 4px 4px 0 rgba(0,0,0,.5);

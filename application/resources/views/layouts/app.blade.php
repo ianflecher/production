@@ -5,11 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Imprint Production')</title>
-    {{-- Inter for all UI text. System fallback keeps things readable if the
-         font CDN is unreachable. --}}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    @include('partials.fonts')
     {{-- App styles: extracted from this layout into a browser-cacheable stylesheet.
          The ?v= filemtime busts the cache automatically whenever the CSS changes. --}}
     <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
@@ -280,6 +276,19 @@
             }, 15000);
         })();
 
+
+        /* Click an alert to put it away. One handler on the page catches
+           every one of them -- the flash strip up top and the ones a page
+           prints itself -- including any that arrive after a reload. */
+        document.addEventListener('click', function (e) {
+            var alert = e.target.closest('.alert-error, .alert-success');
+            if (!alert || alert.classList.contains('is-dismissed')) return;
+
+            alert.classList.add('is-dismissed');
+            // Gone from the layout once the animation has run, so it leaves no
+            // gap behind it.
+            setTimeout(function () { alert.remove(); }, 200);
+        });
 
         /* ---------- Staying up to date ----------
            There is no notification polling. Every open tab used to ask the

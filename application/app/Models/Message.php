@@ -172,6 +172,39 @@ class Message extends Model
             ->count();
     }
 
+    /**
+     * Unread counts for a page of threads, keyed by order id.
+     *
+     * The inbox asks this of every thread it lists. Asked one thread at a time
+     * that is two queries a row — find when they last read it, then count what
+     * has arrived since. The join answers the whole page at once, and each
+     * thread keeps its own read mark rather than sharing one cut-off.
+     *
+     * @param  array<int, int>  $orderIds
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public static function unreadCountsForOrders(User $user, array $orderIds): \Illuminate\Support\Collection
+    {
+        if ($orderIds === []) {
+            return collect();
+        }
+
+        return self::query()
+            ->from('messages as m')
+            ->leftJoin('message_reads as r', function ($join) use ($user) {
+                $join->on('r.production_order_id', '=', 'm.production_order_id')
+                    ->where('r.user_id', '=', $user->id);
+            })
+            ->whereIn('m.production_order_id', $orderIds)
+            ->where('m.sender_id', '!=', $user->id)
+            ->where(fn ($q) => $q
+                ->whereNull('r.last_read_at')
+                ->orWhereColumn('m.created_at', '>', 'r.last_read_at'))
+            ->groupBy('m.production_order_id')
+            ->selectRaw('m.production_order_id, COUNT(*) as unread')
+            ->pluck('unread', 'm.production_order_id');
+    }
+
     /** Total unread across every thread this person can see (nav badge). */
     public static function unreadFor(int $userId): int
     {

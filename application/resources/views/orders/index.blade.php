@@ -11,27 +11,15 @@
 
 
 @php
-    $orderCollection = method_exists($orders, 'items')
-        ? collect($orders->items())
-        : collect($orders);
+    // The cards count every order the person can see; the table shows one page.
+    $summaryCards = [
+        ['status' => '',          'icon' => '▣', 'label' => 'Total orders', 'count' => $totalOrders,              'class' => 'summary-total'],
+        ['status' => 'active',    'icon' => '●', 'label' => 'Active',       'count' => $counts['active'] ?? 0,    'class' => 'summary-active'],
+        ['status' => 'on_hold',   'icon' => 'Ⅱ', 'label' => 'On hold',      'count' => $counts['on_hold'] ?? 0,   'class' => 'summary-hold'],
+        ['status' => 'complete',  'icon' => '✓', 'label' => 'Completed',    'count' => $counts['complete'] ?? 0,  'class' => 'summary-complete'],
+    ];
 
-    $totalOrders = $orderCollection->count();
-
-    $activeOrders = $orderCollection
-        ->where('status', 'active')
-        ->count();
-
-    $onHoldOrders = $orderCollection
-        ->where('status', 'on_hold')
-        ->count();
-
-    $completedOrders = $orderCollection
-        ->filter(fn ($order) => in_array(
-            strtolower((string) $order->status),
-            ['complete', 'completed'],
-            true
-        ))
-        ->count();
+    $isFiltered = $search !== '' || $status !== '';
 @endphp
 
 
@@ -56,80 +44,31 @@
         @endif
     </div>
 
-    @if ($orderCollection->isNotEmpty())
+    @if ($totalOrders > 0)
         <div class="order-summary-grid">
 
-            <button
-                type="button"
-                class="order-summary-card summary-total is-active"
-                data-summary-status=""
-            >
-                <span class="order-summary-icon">▣</span>
+            @foreach ($summaryCards as $card)
+                <a
+                    href="{{ route('orders.index', array_filter([
+                        'status' => $card['status'],
+                        'q' => $search,
+                    ])) }}"
+                    class="order-summary-card {{ $card['class'] }} {{ $status === $card['status'] ? 'is-active' : '' }}"
+                    @if ($status === $card['status']) aria-current="true" @endif
+                >
+                    <span class="order-summary-icon">{{ $card['icon'] }}</span>
 
-                <span>
-                    <span class="order-summary-label">
-                        Total orders
+                    <span>
+                        <span class="order-summary-label">
+                            {{ $card['label'] }}
+                        </span>
+
+                        <span class="order-summary-value">
+                            {{ number_format($card['count']) }}
+                        </span>
                     </span>
-
-                    <span class="order-summary-value">
-                        {{ $totalOrders }}
-                    </span>
-                </span>
-            </button>
-
-            <button
-                type="button"
-                class="order-summary-card summary-active"
-                data-summary-status="active"
-            >
-                <span class="order-summary-icon">●</span>
-
-                <span>
-                    <span class="order-summary-label">
-                        Active
-                    </span>
-
-                    <span class="order-summary-value">
-                        {{ $activeOrders }}
-                    </span>
-                </span>
-            </button>
-
-            <button
-                type="button"
-                class="order-summary-card summary-hold"
-                data-summary-status="on_hold"
-            >
-                <span class="order-summary-icon">Ⅱ</span>
-
-                <span>
-                    <span class="order-summary-label">
-                        On hold
-                    </span>
-
-                    <span class="order-summary-value">
-                        {{ $onHoldOrders }}
-                    </span>
-                </span>
-            </button>
-
-            <button
-                type="button"
-                class="order-summary-card summary-complete"
-                data-summary-status="complete"
-            >
-                <span class="order-summary-icon">✓</span>
-
-                <span>
-                    <span class="order-summary-label">
-                        Completed
-                    </span>
-
-                    <span class="order-summary-value">
-                        {{ $completedOrders }}
-                    </span>
-                </span>
-            </button>
+                </a>
+            @endforeach
 
         </div>
     @endif
@@ -146,7 +85,7 @@
             </div>
         </div>
 
-        @if ($orderCollection->isEmpty())
+        @if ($totalOrders === 0)
 
             <div class="orders-empty">
                 <div class="orders-empty-icon">▣</div>
@@ -160,7 +99,14 @@
 
         @else
 
-            <div class="orders-toolbar">
+            {{-- Searching and filtering happen on the server, so they reach
+                 every order ever made — not only the page on screen. --}}
+            <form
+                method="GET"
+                action="{{ route('orders.index') }}"
+                id="ordersFilterForm"
+                class="orders-toolbar"
+            >
 
                 <div class="orders-search">
                     <svg
@@ -184,6 +130,8 @@
                     <input
                         type="search"
                         id="orderSearch"
+                        name="q"
+                        value="{{ $search }}"
                         placeholder="Search order number or customer"
                         autocomplete="off"
                         aria-label="Search orders"
@@ -196,32 +144,59 @@
 
                 <select
                     id="orderStatusFilter"
+                    name="status"
                     class="orders-filter-select"
                     aria-label="Filter orders by status"
                 >
                     <option value="">All statuses</option>
-                    <option value="active">Active</option>
-                    <option value="on_hold">On hold</option>
-                    <option value="complete">Complete</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="active" @selected($status === 'active')>Active</option>
+                    <option value="on_hold" @selected($status === 'on_hold')>On hold</option>
+                    <option value="complete" @selected($status === 'complete')>Complete</option>
+                    <option value="cancelled" @selected($status === 'cancelled')>Cancelled</option>
                 </select>
 
-                <button
-                    type="button"
-                    id="clearOrderFilters"
-                    class="orders-clear-button"
-                    hidden
-                >
-                    Clear filters
+                <button type="submit" class="btn btn-primary">
+                    Search
                 </button>
 
-                <span
-                    class="orders-count"
-                    id="orderCount"
-                    aria-live="polite"
-                ></span>
+                @if ($isFiltered)
+                    <a
+                        href="{{ route('orders.index') }}"
+                        class="orders-clear-button"
+                    >
+                        Clear filters
+                    </a>
+                @endif
 
+                <span class="orders-count" aria-live="polite">
+                    @if ($orders->total() === 0)
+                        No matching orders
+                    @elseif ($orders->hasPages())
+                        Showing {{ number_format($orders->firstItem()) }}–{{ number_format($orders->lastItem()) }}
+                        of {{ number_format($orders->total()) }}
+                    @else
+                        {{ number_format($orders->total()) }}
+                        {{ \Illuminate\Support\Str::plural('order', $orders->total()) }}
+                    @endif
+                </span>
+
+            </form>
+
+        @endif
+
+        @if ($totalOrders > 0 && $orders->isEmpty())
+
+            <div class="orders-empty">
+                <div class="orders-empty-icon">⌕</div>
+
+                <h3>No matching orders</h3>
+
+                <p>
+                    Change your search or clear the selected status filter.
+                </p>
             </div>
+
+        @elseif ($totalOrders > 0)
 
             <div class="orders-table-wrap">
 
@@ -269,8 +244,12 @@
 
                                 $dueDate = $order->due_date;
 
+                                // Whole days only: diffInDays returns a float, and
+                                // a float 0.0 never matches the "due today" test
+                                // below — which is how a job due today ended up
+                                // reading "Due in 0 days".
                                 $daysUntilDue = $dueDate
-                                    ? now()
+                                    ? (int) now()
                                         ->startOfDay()
                                         ->diffInDays(
                                             $dueDate->copy()->startOfDay(),
@@ -297,12 +276,6 @@
                                 tabindex="0"
                                 role="link"
                                 data-url="{{ route('orders.show', $order) }}"
-                                data-status="{{ strtolower((string) $order->status) }}"
-                                data-text="{{ strtolower(
-                                    $order->order_number
-                                    .' '
-                                    .$order->customer_name
-                                ) }}"
                                 aria-label="Open order {{ $order->order_number }}"
                             >
 
@@ -449,19 +422,11 @@
 
             </div>
 
-            <div
-                id="ordersNoResults"
-                class="orders-empty"
-                hidden
-            >
-                <div class="orders-empty-icon">⌕</div>
-
-                <h3>No matching orders</h3>
-
-                <p>
-                    Change your search or clear the selected status filter.
-                </p>
-            </div>
+            @if ($orders->hasPages())
+                <div class="orders-pager">
+                    {{ $orders->links() }}
+                </div>
+            @endif
 
         @endif
 
@@ -469,108 +434,19 @@
 
 </div>
 
-@if ($orderCollection->isNotEmpty())
+@if ($totalOrders > 0)
 <script>
     (function () {
         'use strict';
 
+        var form = document.getElementById('ordersFilterForm');
         var search = document.getElementById('orderSearch');
         var statusFilter =
             document.getElementById('orderStatusFilter');
 
-        var clearButton =
-            document.getElementById('clearOrderFilters');
-
-        var tableBody =
-            document.getElementById('ordersBody');
-
-        var emptyMessage =
-            document.getElementById('ordersNoResults');
-
-        var countElement =
-            document.getElementById('orderCount');
-
         var rows = Array.prototype.slice.call(
-            tableBody.querySelectorAll('.order-row')
+            document.querySelectorAll('.order-row')
         );
-
-        var summaryButtons = Array.prototype.slice.call(
-            document.querySelectorAll(
-                '[data-summary-status]'
-            )
-        );
-
-        var total = rows.length;
-
-        function setActiveSummary(status) {
-            summaryButtons.forEach(function (button) {
-                button.classList.toggle(
-                    'is-active',
-                    button.getAttribute(
-                        'data-summary-status'
-                    ) === status
-                );
-            });
-        }
-
-        function applyFilters() {
-            var query = search.value
-                .trim()
-                .toLowerCase();
-
-            var status = statusFilter.value;
-            var shown = 0;
-
-            rows.forEach(function (row) {
-                var rowText =
-                    row.getAttribute('data-text') || '';
-
-                var rowStatus =
-                    row.getAttribute('data-status') || '';
-
-                var matchesSearch =
-                    !query ||
-                    rowText.indexOf(query) !== -1;
-
-                var matchesStatus =
-                    !status ||
-                    rowStatus === status;
-
-                var visible =
-                    matchesSearch && matchesStatus;
-
-                row.hidden = !visible;
-
-                if (visible) {
-                    shown++;
-                }
-            });
-
-            emptyMessage.hidden = shown !== 0;
-
-            countElement.textContent =
-                shown === total
-                    ? total +
-                        (total === 1
-                            ? ' order'
-                            : ' orders')
-                    : 'Showing ' +
-                        shown +
-                        ' of ' +
-                        total;
-
-            clearButton.hidden =
-                !query && !status;
-
-            setActiveSummary(status);
-        }
-
-        function clearFilters() {
-            search.value = '';
-            statusFilter.value = '';
-            applyFilters();
-            search.focus();
-        }
 
         rows.forEach(function (row) {
             row.addEventListener('click', function (event) {
@@ -604,33 +480,13 @@
             );
         });
 
-        summaryButtons.forEach(function (button) {
-            button.addEventListener(
-                'click',
-                function () {
-                    statusFilter.value =
-                        button.getAttribute(
-                            'data-summary-status'
-                        );
-
-                    applyFilters();
-                }
-            );
-        });
-
-        search.addEventListener(
-            'input',
-            applyFilters
-        );
-
+        // Picking a status is a whole-list question, so ask the server at once
+        // rather than making the person also press Search.
         statusFilter.addEventListener(
             'change',
-            applyFilters
-        );
-
-        clearButton.addEventListener(
-            'click',
-            clearFilters
+            function () {
+                form.submit();
+            }
         );
 
         document.addEventListener(
@@ -656,12 +512,10 @@
                     event.key === 'Escape' &&
                     document.activeElement === search
                 ) {
-                    clearFilters();
+                    search.value = '';
                 }
             }
         );
-
-        applyFilters();
     })();
 </script>
 @endif

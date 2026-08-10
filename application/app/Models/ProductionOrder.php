@@ -42,6 +42,9 @@ class ProductionOrder extends Model
      *  listed here is captured as a typed "Others" size on the order form. */
     public const SIZES = ['CS', 'FS', '2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
+    /** The order statuses, in the order the office works through them. */
+    public const STATUSES = ['active', 'on_hold', 'complete', 'cancelled'];
+
     /** Maximum pieces that may be due on any single date. */
     public const DAILY_CAPACITY = 500;
 
@@ -242,7 +245,22 @@ class ProductionOrder extends Model
             return null;
         }
 
-        return max(0, (float) $this->total_price - (float) $this->payments()->sum('amount'));
+        return max(0, (float) $this->total_price - $this->paidTotal());
+    }
+
+    /**
+     * Everything paid on this order so far.
+     *
+     * The order page asks what has been paid, what is left and whether anything
+     * has been paid at all, several times over — each was its own SUM. Read the
+     * loaded payments when the caller has them, and ask the database only when
+     * nobody does.
+     */
+    private function paidTotal(): float
+    {
+        return $this->relationLoaded('payments')
+            ? (float) $this->payments->sum('amount')
+            : (float) $this->payments()->sum('amount');
     }
 
     public function tasks(): HasMany
@@ -312,22 +330,64 @@ class ProductionOrder extends Model
             ->exists();
     }
 
-    /** Every task in the layout stage is complete (client approved the layout). */
+    /**
+     * Every task in the layout stage is complete (client approved the layout).
+     *
+     * Read from the already-loaded tasks when the caller eager-loaded them —
+     * the order list asks this of every row, and going back to the database
+     * each time cost a query per row. Same as progress() above.
+     */
     public function layoutApproved(): bool
     {
-        $layout = $this->tasks()->where('stage', self::STAGE_LAYOUT)->get();
+        $layout = $this->relationLoaded('tasks')
+            ? $this->tasks->where('stage', self::STAGE_LAYOUT)
+            : $this->tasks()->where('stage', self::STAGE_LAYOUT)->get();
 
         return $layout->isNotEmpty() && $layout->every(fn ($t) => $t->status === 'complete');
     }
 
+    /**
+     * Has anything been paid on this order yet?
+     *
+     * A list that asks this per row should say so with withExists('payments'),
+     * which answers it in the query that fetched the orders. Without that this
+     * falls back to asking on its own, which is right for a single order.
+     */
     public function hasDownpayment(): bool
     {
+        if (array_key_exists('payments_exists', $this->attributes)) {
+            return (bool) $this->attributes['payments_exists'];
+        }
+
+        // The dashboard loads the payments themselves — no need to ask again.
+        if ($this->relationLoaded('payments')) {
+            return $this->payments->isNotEmpty();
+        }
+
         return $this->payments()->exists();
+    }
+
+    /**
+     * Is the order settled in full?
+     *
+     * Nothing leaves the shop on an unpaid balance, so this gates the release
+     * step. An order with no price set yet has nothing to settle against and
+     * can't be judged either way — treat that as not paid rather than guess,
+     * because guessing wrong hands over goods for free.
+     */
+    public function isFullyPaid(): bool
+    {
+        if ($this->total_price === null) {
+            return false;
+        }
+
+        // A hair under, from rounding a split payment, is paid.
+        return $this->paidTotal() >= (float) $this->total_price - 0.005;
     }
 
     public function totalPaid(): string
     {
-        return number_format((float) $this->payments()->sum('amount'), 2);
+        return number_format($this->paidTotal(), 2);
     }
 
     /** @return array{0: int, 1: int} completed tasks, total tasks */
@@ -1273,7 +1333,9 @@ class ProductionOrder extends Model
 
             if ($lines->isEmpty()) {
                 $lines = collect([(object) [
-                    'description' => $this->product_type ?: $this->customer_name,
+                    // The readable label, not the stored key — otherwise the
+                    // stock line reads "round_neck" instead of "Round Neck".
+                    'description' => $this->productLabel() ?: $this->customer_name,
                     'size' => null,
                     'quantity' => $this->quantity,
                 ]]);
@@ -1288,7 +1350,7 @@ class ProductionOrder extends Model
                 if ($qty <= 0) {
                     continue;
                 }
-                $product = trim((string) ($line->description ?? '')) ?: ($this->product_type ?: 'Products');
+                $product = trim((string) ($line->description ?? '')) ?: ($this->productLabel() ?: 'Products');
                 $byProduct[$product] = ($byProduct[$product] ?? 0) + $qty;
             }
 

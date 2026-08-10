@@ -62,7 +62,48 @@
         .yellow, .lbl, .lbl-l, .sec, table.jo td, table.jo th {
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
+
+        /* Wherever it was dragged to is where it prints — that is the point of
+           dragging it. The grab cursor and outline are screen-only. */
+        .jo-mockup { cursor: default !important; }
+        .jo-mockup:hover { outline: none !important; }
+        .jo-mockup .jo-mockup-hint { display: none !important; }
     }
+
+    /* A field that carries its own printed label — "Sewer:", "Thread Color:".
+       White like the paper form; only the group headers above it are grey. */
+    .jo .fld { background: #fff; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+    /* …and the value written into it, in normal case so a thread code or a
+       sewer's name reads as it was typed. */
+    .jo .fill { font-weight: 700; text-transform: none; color: #111; }
+
+    .jo-footnote {
+        text-align: center; padding: 0.5rem 0.25rem;
+        font-weight: 800; font-size: 0.9rem; letter-spacing: .02em;
+        color: #c0392b;
+    }
+    @media print { .jo-footnote { font-size: 0.68rem !important; padding: 0.25rem !important; } }
+
+    .jo-mockup {
+        position: absolute; top: 0; left: 0; right: 0;
+        text-align: center; z-index: 1;
+        cursor: grab; touch-action: none;
+        transition: outline-color .12s;
+        outline: 2px dashed transparent; outline-offset: 3px;
+    }
+    .jo-mockup:hover { outline-color: rgba(37, 99, 235, .45); }
+    .jo-mockup.is-dragging { cursor: grabbing; outline-color: rgba(37, 99, 235, .8); z-index: 5; }
+    .jo-mockup img {
+        max-width: 60%; max-height: 220px; display: block; margin: 0 auto;
+        user-select: none; -webkit-user-drag: none;
+    }
+    .jo-mockup-hint {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        bottom: -1.15rem; white-space: nowrap;
+        font-size: 0.62rem; font-weight: 600; letter-spacing: .04em;
+        color: #2563eb; opacity: 0; transition: opacity .12s; pointer-events: none;
+    }
+    .jo-mockup:hover .jo-mockup-hint { opacity: 1; }
 </style>
 <div class="jo-sheet">
     {{-- Title --}}
@@ -128,12 +169,16 @@
                     {{-- Per-line description, else the order's overall description on the first row. --}}
                     {{ strtoupper($item->description ?: ($loop->first ? ($order->description ?? '') : '')) }}
                     @if ($loop->first && $mockupFiles->isNotEmpty())
-                        <div style="position: absolute; top: 0; left: 0; right: 0; text-align: center; z-index: 1;">
+                        {{-- Draggable: the design sits over the description column
+                             and can cover the very text somebody needs to read.
+                             Drag it clear; double-click puts it back. --}}
+                        <div class="jo-mockup" data-order="{{ $order->id }}">
                             @foreach ($mockupFiles as $f)
                                 @if ($f->isImage())
-                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" style="max-width: 60%; max-height: 220px; display: block; margin: 0 auto;">
+                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" draggable="false">
                                 @endif
                             @endforeach
+                            <span class="jo-mockup-hint">drag to move &middot; double-click to reset</span>
                         </div>
                     @endif
                 </td>
@@ -148,12 +193,16 @@
             <tr>
                 <td class="ctr" style="{{ $i === 0 && $items->isEmpty() && $mockupFiles->isNotEmpty() ? 'position: relative;' : '' }} height: 1.6rem;">
                     @if ($i === 0 && $items->isEmpty() && $mockupFiles->isNotEmpty())
-                        <div style="position: absolute; top: 0; left: 0; right: 0; text-align: center; z-index: 1;">
+                        {{-- Draggable: the design sits over the description column
+                             and can cover the very text somebody needs to read.
+                             Drag it clear; double-click puts it back. --}}
+                        <div class="jo-mockup" data-order="{{ $order->id }}">
                             @foreach ($mockupFiles as $f)
                                 @if ($f->isImage())
-                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" style="max-width: 60%; max-height: 220px; display: block; margin: 0 auto;">
+                                    <img src="{{ route('tasks.file.view', $f) }}" alt="{{ $f->label }}" draggable="false">
                                 @endif
                             @endforeach
+                            <span class="jo-mockup-hint">drag to move &middot; double-click to reset</span>
                         </div>
                     @endif
                 </td>
@@ -184,22 +233,10 @@
             <td class="yellow">{{ strtoupper($y($jo?->fabric)) }}</td>
             <td class="yellow">{{ $order->needs_sticker ? strtoupper($y($jo?->free_logo_sticker)) : '' }}</td>
         </tr>
-        {{-- The two presses: one merges the print onto the fabric, one decorates. --}}
-        <tr><td class="lbl-l">Fabric Press:</td><td colspan="3" class="yellow" style="text-align: left;">{{ strtoupper($y($jo?->fabricPressLabel())) }}</td></tr>
-        {{-- The add-on, and the press that does it, so the floor sees WHAT was
-             ordered — not just which machine to use. --}}
-        <tr><td class="lbl-l">Add-on:</td><td colspan="3" class="yellow" style="text-align: left;">
-            @if ($jo?->addonLabel())
-                {{ strtoupper($y($jo->addonLabel())) }}
-                @if ($jo?->press)
-                    <span style="font-weight: 400;">({{ strtoupper($y($jo->decorationPressLabel())) }})</span>
-                @endif
-            @elseif ($jo?->press)
-                {{ strtoupper($y($jo->decorationPressLabel())) }}
-            @else
-                —
-            @endif
-        </td></tr>
+        {{-- No fabric press, add-on or embroidery row. All three are asked for
+             and answered in the production details, and the paper form doesn't
+             carry them — repeating them here only gave the two places somewhere
+             to disagree. --}}
         {{-- Filled in from whoever ran each station, so the sheet doesn't have to
              be written up by hand after the job. --}}
         <tr><td class="lbl-l">Printer Operator:</td><td colspan="3">{{ $who(['Printer', 'Sticker', 'Mass production']) }}</td></tr>
@@ -210,12 +247,6 @@
              one. Who followed this job is who signed a message on it — several
              people share the one login, and each types their own name. --}}
         <tr><td class="lbl-l">Mover:</td><td colspan="3">{{ $order->moverNames() ?: '' }}</td></tr>
-        @if ($jo?->needs_embroidery)
-            <tr>
-                <td class="lbl-l">Embroidery:</td>
-                <td colspan="3" class="yellow" style="text-align: left; white-space: pre-line;">{{ $y($jo->embroidery_note) ?: 'YES' }}</td>
-            </tr>
-        @endif
     </table>
 
     {{-- SEWING --}}
@@ -233,26 +264,77 @@
             <td class="yellow">{{ strtoupper($y($jo?->neck_label)) }}</td>
             <td class="yellow">{{ strtoupper($y($jo?->bottom_hem)) }}</td>
         </tr>
+        {{-- Size on the two that are cut to a measurement, thread colour on the
+             two that are stitched on. --}}
         <tr>
-            <td class="lbl-l" colspan="2">Sewer:</td>
-            <td colspan="2">{{ $who(['Sewing']) }}</td>
+            <td class="fld">Size: <span class="fill">{{ strtoupper($y($jo?->neck_size)) }}</span></td>
+            <td class="fld">Size: <span class="fill">{{ strtoupper($y($jo?->cuff_size)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->neck_label_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->bottom_hem_thread)) }}</span></td>
+        </tr>
+
+        {{-- Each seam group names the sewer who ran it and the thread they used,
+             so a fault found later can be traced back to the machine it came off. --}}
+        <tr>
+            <td class="lbl">Neckbond Shoulder</td>
+            <td class="lbl">Top / Neck / Hangtag Woven</td>
+            <td class="lbl">Flatbed</td>
+            <td class="lbl">Close Side Body &amp; Sleeve</td>
         </tr>
         <tr>
-            <td class="lbl-l">Thread Color:</td>
-            <td class="lbl-l">Thread Color:</td>
-            <td class="lbl-l">Thread Color:</td>
-            <td class="lbl-l">Thread Color:</td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->neckbond_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->hangtag_woven_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->flatbed_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->close_side_sewer)) }}</span></td>
         </tr>
         <tr>
-            <td class="lbl-l" colspan="3">IC Woven / Tag Placement:</td>
-            <td class="yellow">{{ strtoupper($y($jo?->ic_placement)) }}</td>
+            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->neckbond_thread)) }}</span></td>
+            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->hangtag_woven_thread)) }}</span></td>
+            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->flatbed_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->close_side_thread)) }}</span></td>
         </tr>
-        <tr><td class="lbl-l" colspan="4">Notes from Sewer:</td></tr>
+
+        <tr>
+            <td class="lbl">Attached Sleeve / Cuffs</td>
+            <td class="lbl">Topping Side / Sleeve</td>
+            <td class="lbl">Pipping</td>
+            {{-- The spare column, named on the form for whatever this garment
+                 needed — blank on the paper version. --}}
+            <td class="lbl">{{ strtoupper($y($jo?->extra_seam_label)) }}</td>
+        </tr>
+        <tr>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->attached_sleeve_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->topping_side_sewer)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->pipping_sewer)) }}</span></td>
+            <td class="fld"><span class="fill">{{ strtoupper($y($jo?->extra_seam_note)) }}</span></td>
+        </tr>
+        <tr>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->attached_sleeve_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->topping_side_thread)) }}</span></td>
+            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->pipping_thread)) }}</span></td>
+            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->extra_seam_sewer)) }}</span></td>
+        </tr>
+
+        {{-- Whoever closed the sewing step, for the seams the form doesn't break
+             out by name. --}}
+        @if ($who(['Sewing']))
+            <tr><td class="fld" colspan="4">Sewing Station: <span class="fill">{{ $who(['Sewing']) }}</span></td></tr>
+        @endif
+
+        <tr>
+            <td class="fld red" colspan="4" style="text-align: left; white-space: pre-line;">Notes from Sewer: <span class="fill">{{ $y($jo?->sewer_notes) }}</span></td>
+        </tr>
     </table>
 
     {{-- QUALITY CHECK --}}
     <table class="jo">
         <tr><td colspan="4" class="sec">Quality Check</td></tr>
+        {{-- The checker's standing list — what "checked" is supposed to mean. --}}
+        <tr>
+            <td colspan="4" class="lbl-l red" style="text-align: left;">
+                Quality Control: full mock up approved design / thread stiches / needle mark / wrinkle / stain / standard size / special instructions
+            </td>
+        </tr>
         <tr>
             <td class="lbl" style="width: 25%;">Packaging</td>
             <td class="lbl" style="width: 25%;">Quality Checked By:</td>
@@ -285,4 +367,78 @@
         </tr>
     </table>
 
+    {{-- Only in the package document, where the mockup really is the next page.
+         On the standalone sheet the design is on this page already. --}}
+    @unless ($showMockup)
+        <div class="jo-footnote">FULL MOCK UP DESIGN — PLEASE CHECK THE NEXT PAGE!</div>
+    @endunless
+
 </div>
+
+<script>
+    /* Drag the design where you want it.
+     *
+     * It is positioned over the description column, which means on a busy sheet
+     * it can cover the very lines somebody is trying to read — and it prints
+     * that way too. Dragging it is the fix, and where it is left is where it
+     * prints.
+     *
+     * The position is kept per job order in this browser, because the page
+     * reloads itself whenever the data changes and it would otherwise jump back
+     * mid-print. It is a placement for reading and printing, not a property of
+     * the order, so it stays local rather than being saved for everybody.
+     */
+    (function () {
+        document.querySelectorAll('.jo-mockup').forEach(function (box) {
+            var key = 'jo-mockup-' + box.dataset.order;
+
+            var saved = null;
+            try { saved = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { /* ignore */ }
+            if (saved) {
+                box.style.transform = 'translate(' + saved.x + 'px, ' + saved.y + 'px)';
+            }
+
+            var startX = 0, startY = 0, baseX = 0, baseY = 0, dragging = false;
+
+            function current() {
+                var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(box.style.transform || '');
+                return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+            }
+
+            box.addEventListener('pointerdown', function (e) {
+                dragging = true;
+                box.classList.add('is-dragging');
+                box.setPointerCapture(e.pointerId);
+
+                var pos = current();
+                baseX = pos.x; baseY = pos.y;
+                startX = e.clientX; startY = e.clientY;
+                e.preventDefault();
+            });
+
+            box.addEventListener('pointermove', function (e) {
+                if (!dragging) return;
+                var x = baseX + (e.clientX - startX);
+                var y = baseY + (e.clientY - startY);
+                box.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+            });
+
+            function stop(e) {
+                if (!dragging) return;
+                dragging = false;
+                box.classList.remove('is-dragging');
+                try { box.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                try { localStorage.setItem(key, JSON.stringify(current())); } catch (err) { /* ignore */ }
+            }
+
+            box.addEventListener('pointerup', stop);
+            box.addEventListener('pointercancel', stop);
+
+            // Back to where it started, for when it has been dragged somewhere daft.
+            box.addEventListener('dblclick', function () {
+                box.style.transform = '';
+                try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+            });
+        });
+    })();
+</script>

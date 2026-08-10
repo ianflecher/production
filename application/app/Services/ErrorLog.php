@@ -32,6 +32,7 @@ class ErrorLog
     {
         $since = now()->subDays($days);
         $groups = [];
+        $cleared = self::clearedFingerprints();
 
         foreach (self::entries() as $entry) {
             if ($entry['at']->lt($since)) {
@@ -44,6 +45,7 @@ class ErrorLog
 
             if (! isset($groups[$key])) {
                 $groups[$key] = [
+                    'fingerprint' => \App\Models\DismissedError::fingerprintFor($entry['level'], $entry['message']),
                     'level' => $entry['level'],
                     'environment' => $entry['environment'],
                     'message' => $entry['message'],
@@ -59,8 +61,28 @@ class ErrorLog
         }
 
         return collect(array_values($groups))
+            // Drop what somebody has already looked at — but only up to the
+            // moment they cleared it. A failure that has happened AGAIN since
+            // is a new problem wearing the same message, and comes back.
+            ->reject(fn ($g) => ($cleared[$g['fingerprint']] ?? null)?->gte($g['last']) ?? false)
             ->sortByDesc(fn ($g) => $g['last']->getTimestamp())
             ->values();
+    }
+
+    /**
+     * When each already-seen failure was cleared, keyed by fingerprint.
+     *
+     * Tolerant of the table being absent: this page has to work on a copy of
+     * the app whose migrations have not been run, because being unable to read
+     * the errors is exactly the moment you need to.
+     */
+    private static function clearedFingerprints(): array
+    {
+        try {
+            return \App\Models\DismissedError::pluck('dismissed_at', 'fingerprint')->all();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /** How many errors were logged in the last $days (for a badge). */

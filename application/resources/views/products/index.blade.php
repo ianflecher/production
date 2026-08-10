@@ -31,7 +31,7 @@
 
 @if ($pending->isNotEmpty())
     <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--accent);">
-        <h2>To receive <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">({{ $pending->count() }})</span></h2>
+        <h2>To receive <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">({{ number_format($pendingCount) }})</span></h2>
         <p class="sub">Products from completed orders. Enter how many you actually received in person, then confirm — that number is what's added to stock.</p>
         <div class="tbl-wrap">
             <table class="tbl">
@@ -68,6 +68,10 @@
                 </tbody>
             </table>
         </div>
+
+        @if ($pending->hasPages())
+            <div class="list-pager">{{ $pending->links() }}</div>
+        @endif
     </div>
 
     <script>
@@ -92,25 +96,36 @@
 <div class="card panel" style="margin-bottom: 1.4rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
         <h2 style="margin-bottom: 0;">Stock on hand
-            <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">({{ $items->count() }} product{{ $items->count() === 1 ? '' : 's' }})</span>
+            <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">({{ number_format($totalCount) }} product{{ $totalCount === 1 ? '' : 's' }})</span>
         </h2>
-        @if ($items->isNotEmpty())
-            @php $outCount = $items->filter(fn ($i) => (float) $i->quantity <= 0)->count(); @endphp
-            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        @if ($totalCount > 0)
+            <form method="GET" action="{{ route('products.index') }}" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
                 @if ($outCount > 0)
-                    <span class="badge" style="background: #fef2f2; color: #b91c1c;">{{ $outCount }} out of stock</span>
+                    <span class="badge" style="background: #fef2f2; color: #b91c1c;">{{ number_format($outCount) }} out of stock</span>
                 @endif
                 <div class="inv-search">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="search" id="invSearch" placeholder="Search product…" autocomplete="off" aria-label="Search products">
+                    <input type="search" id="invSearch" name="q" value="{{ $search }}" placeholder="Search product…" autocomplete="off" aria-label="Search products">
                 </div>
-                <span id="invCount" style="font-size: 0.8rem; color: var(--ink-3); white-space: nowrap;"></span>
-            </div>
+                <button type="submit" class="btn btn-sm">Search</button>
+                @if ($search !== '')
+                    <a href="{{ route('products.index') }}" class="btn btn-sm">Clear</a>
+                @endif
+                <span style="font-size: 0.8rem; color: var(--ink-3); white-space: nowrap;">
+                    @if ($items->total() === 0)
+                        No matches
+                    @elseif ($items->hasPages())
+                        Showing {{ number_format($items->firstItem()) }}–{{ number_format($items->lastItem()) }} of {{ number_format($items->total()) }}
+                    @endif
+                </span>
+            </form>
         @endif
     </div>
 
-    @if ($items->isEmpty())
+    @if ($totalCount === 0)
         <p class="muted">No products in stock yet. They appear automatically when an order is completed — confirm them under “To receive” above.</p>
+    @elseif ($items->isEmpty())
+        <p class="muted" style="text-align: center; padding: 1.5rem;">No products match your search.</p>
     @else
         <div class="tbl-wrap">
             <table class="tbl">
@@ -148,7 +163,9 @@
                 </tbody>
             </table>
         </div>
-        <div id="invEmpty" hidden style="text-align: center; color: var(--ink-3); padding: 1.5rem;">No products match your search.</div>
+        @if ($items->hasPages())
+            <div class="list-pager">{{ $items->links() }}</div>
+        @endif
     @endif
 </div>
 
@@ -258,30 +275,6 @@
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
     })();
 
-    (function () {
-        var search = document.getElementById('invSearch');
-        var body = document.getElementById('invBody');
-        var emptyMsg = document.getElementById('invEmpty');
-        var countEl = document.getElementById('invCount');
-        if (!search || !body) return;
-        var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
-        var total = rows.length;
-
-        function apply() {
-            var q = search.value.trim().toLowerCase();
-            var shown = 0;
-            rows.forEach(function (row) {
-                var visible = !q || row.getAttribute('data-search').indexOf(q) !== -1;
-                row.hidden = !visible;
-                if (visible) shown++;
-            });
-            emptyMsg.hidden = shown !== 0;
-            countEl.textContent = q ? 'Showing ' + shown + ' of ' + total : '';
-        }
-
-        search.addEventListener('input', apply);
-        apply();
-    })();
 </script>
 @endif
 @endsection

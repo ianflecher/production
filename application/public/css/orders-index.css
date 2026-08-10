@@ -44,6 +44,8 @@
         padding: 0.95rem 1rem;
         overflow: hidden;
         text-align: left;
+        color: inherit;
+        text-decoration: none;
         background: linear-gradient(135deg, var(--summary-soft) 0%, #ffffff 78%);
         border: 1px solid color-mix(in srgb, var(--summary-color) 28%, #ffffff);
         border-radius: 12px;
@@ -55,7 +57,10 @@
             box-shadow 0.15s ease;
     }
 
+    /* These are links so a status filter can be shared and opened in a new tab,
+       but they are cards — the global a:hover underline does not belong on them. */
     .order-summary-card:hover {
+        text-decoration: none;
         transform: translateY(-2px);
         box-shadow: 0 11px 26px color-mix(in srgb, var(--summary-color) 22%, transparent);
     }
@@ -167,8 +172,8 @@
        ========================================= */
 
     .orders-toolbar {
-        display: grid;
-        grid-template-columns: minmax(280px, 1fr) auto auto auto;
+        display: flex;
+        flex-wrap: wrap;
         gap: 0.65rem;
         align-items: center;
         padding: 0.85rem 1.1rem 1rem;
@@ -177,6 +182,7 @@
 
     .orders-search {
         position: relative;
+        flex: 1 1 280px;
         min-width: 0;
     }
 
@@ -247,11 +253,15 @@
     }
 
     .orders-clear-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         min-height: 42px;
         padding: 0.55rem 0.85rem;
         color: #526176;
         font-size: 0.76rem;
         font-weight: 700;
+        text-decoration: none;
         background: #ffffff;
         border: 1px solid #dce3ea;
         border-radius: 8px;
@@ -263,11 +273,16 @@
         border-color: #e31b23;
     }
 
-    .orders-clear-button[hidden] {
-        display: none;
+    /* Page links sit under the table, centred, out of the way of the rows. */
+    .orders-pager {
+        display: flex;
+        justify-content: center;
+        padding: 0.9rem 1.1rem;
+        border-top: 1px solid #e8edf2;
     }
 
     .orders-count {
+        margin-left: auto;
         min-width: 70px;
         color: #8794a6;
         font-size: 0.75rem;
@@ -520,18 +535,15 @@
             grid-template-columns: 1fr;
         }
 
-        .orders-toolbar {
-            grid-template-columns: 1fr;
-        }
-
+        .orders-search,
         .orders-filter-select,
-        .orders-clear-button {
+        .orders-clear-button,
+        .orders-toolbar .btn {
+            flex: 1 1 100%;
             width: 100%;
         }
 
         .orders-count {
-            grid-row: auto;
-            justify-self: start;
             text-align: left;
         }
 
