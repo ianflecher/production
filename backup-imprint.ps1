@@ -19,7 +19,10 @@ $ErrorActionPreference = 'Stop'
 $RepoDir    = 'C:\ImprintProduction'
 $AppDir     = Join-Path $RepoDir 'application'
 $EnvFile    = Join-Path $AppDir '.env'
-$MysqlDump  = 'C:\xampp1\mysql\bin\mysqldump.exe'
+# C:\xampp first: an older C:\xampp1 can still be on disk after a
+# reinstall, and a dump taken with the wrong one backs up nothing.
+$MysqlDump  = 'C:\xampp\mysql\bin\mysqldump.exe'
+if (-not (Test-Path $MysqlDump)) { $MysqlDump = 'C:\xampp1\mysql\bin\mysqldump.exe' }
 $OneDrive   = Join-Path $env:USERPROFILE 'OneDrive\ImprintBackups'
 $LogDir     = Join-Path $RepoDir 'logs'
 $LogFile    = Join-Path $LogDir 'backup.log'

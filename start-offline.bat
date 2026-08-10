@@ -6,10 +6,14 @@ rem ================= paths (edit here if software moves) =================
 set "ROOT=C:\ImprintProduction"
 set "APP=%ROOT%\application"
 set "LOGS=%ROOT%\logs"
-set "PHP=C:\xampp1\php\php.exe"
-set "MYSQLD=C:\xampp1\mysql\bin\mysqld.exe"
-set "MYSQLADMIN=C:\xampp1\mysql\bin\mysqladmin.exe"
-set "MYSQL_INI=C:\xampp1\mysql\bin\my.ini"
+set "PHP=C:\xampp\php\php.exe"
+if not exist "%PHP%" set "PHP=C:\xampp1\php\php.exe"
+set "MYSQLD=C:\xampp\mysql\bin\mysqld.exe"
+if not exist "%MYSQLD%" set "MYSQLD=C:\xampp1\mysql\bin\mysqld.exe"
+set "MYSQLADMIN=C:\xampp\mysql\bin\mysqladmin.exe"
+if not exist "%MYSQLADMIN%" set "MYSQLADMIN=C:\xampp1\mysql\bin\mysqladmin.exe"
+set "MYSQL_INI=C:\xampp\mysql\bin\my.ini"
+if not exist "%MYSQL_INI%" set "MYSQL_INI=C:\xampp1\mysql\bin\my.ini"
 set "PORT=8000"
 rem ========================================================================
 

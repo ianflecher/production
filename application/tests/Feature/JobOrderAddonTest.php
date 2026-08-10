@@ -304,11 +304,13 @@ class JobOrderAddonTest extends TestCase
 
         $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
 
-        // Once on the sheet, once in the production details — the latter upper-cased.
-        $this->actingAs($leader)->get("/orders/{$order->id}/package")
-            ->assertOk()
-            ->assertSee('Two stripes across the back', false)
-            ->assertSee('TWO STRIPES ACROSS THE BACK', false);
+        // Once only, in the production details. The job order sheet above it
+        // used to carry the same thing, and two copies on one page can only
+        // ever agree or embarrass themselves.
+        $page = $this->actingAs($leader)->get("/orders/{$order->id}/package")->assertOk();
+
+        $page->assertSee('TWO STRIPES ACROSS THE BACK', false);
+        $page->assertDontSee('Two stripes across the back', false);
     }
 
     /** Turning add-ons off should not leave the note describing one. */
