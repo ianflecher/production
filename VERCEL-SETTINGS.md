@@ -5,7 +5,33 @@ then redeploy. None of it affects the office PC, which keeps its own `.env`.
 
 The office is fast because the database is on the same machine and the code is
 compiled once. Hosted, neither is true by default, and the app pays for that on
-every single request — including the login page, which barely touches the data.
+every single request.
+
+## How it is deployed
+
+On **Vercel's PHP runtime**, not a container. Container deploys need a Container
+Registry, which the Hobby plan does not provide — the build succeeds and then the
+image push is denied. `Dockerfile.vercel` is kept for a host that does support
+containers, but Vercel does not use it.
+
+That has one consequence worth knowing: **the filesystem is read-only except
+`/tmp`**. `api/index.php` moves Laravel's storage there and creates the
+directories before the framework boots, so compiled templates and the cache have
+somewhere to go. `/tmp` lasts for the life of the container, so that is paid once
+per cold start.
+
+**Migrations do not run automatically.** There is no start-up command to hang
+them on. After any deploy that adds a migration, run them yourself against the
+hosted database — from the office PC, without touching your `.env`:
+
+```
+DB_HOST=<aiven-host> DB_PORT=<port> DB_DATABASE=<db> DB_USERNAME=<user> DB_PASSWORD=<password> php artisan migrate --force
+```
+
+Run it from `application/` in Git Bash. The variables are only set for that one
+command, so your own `.env` and the office database are untouched.
+
+The migrations only add columns that are missing, so re-running one is safe.
 
 ## Required
 
@@ -21,7 +47,7 @@ every single request — including the login page, which barely touches the data
 | Variable | Value | Why |
 |---|---|---|
 | `DB_PERSISTENT` | `true` | Opening a connection to Aiven is TCP + TLS + auth — several round trips, ~400ms, and PHP throws it away after each request. This keeps it open between requests in the same process. |
-| `SESSION_DRIVER` | `cookie` | The default keeps sessions in the database, so **every request** — the login page included — makes a round trip to Aiven before it does anything. A cookie session is encrypted and travels with the request. |
+| `SESSION_DRIVER` | `cookie` | **Required here, not just faster.** The default keeps sessions in the database, so every request — the login page included — round-trips to Aiven first. A file session is worse still on this host: `/tmp` belongs to one container, so the next request can land somewhere else and log the person out at random. A cookie session is encrypted and travels with the request. |
 | `CACHE_STORE` | `file` | Same reasoning: the default caches into the database, which is the slow thing here. |
 | `LOG_CHANNEL` | `stderr` | Otherwise errors go to a file inside a container you cannot open. This puts them in Vercel's log viewer. |
 

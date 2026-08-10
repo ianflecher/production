@@ -1,17 +1,14 @@
 {
   "regions": ["bom1"],
-  "services": {
-    "laravel": {
-      "root": "./",
-      "entrypoint": "Dockerfile.vercel"
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.7.4",
+      "maxDuration": 60
     }
   },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": {
-        "service": "laravel"
-      }
-    }
+  "routes": [
+    { "src": "/(css|js|build|storage)/(.*)", "dest": "/public/$1/$2" },
+    { "src": "/([^/]+\\.(?:ico|png|jpe?g|gif|svg|webp|txt|xml|mp4|webmanifest|js|css))", "dest": "/public/$1" },
+    { "src": "/(.*)", "dest": "/api/index.php" }
   ]
 }
