@@ -183,8 +183,11 @@ class StationFillsTheSheetTest extends TestCase
             $form->assertDontSee('name="'.$field.'"', false);
         }
 
-        // The spec it DOES own is still there.
-        $form->assertSee('name="neck"', false)->assertSee('name="neck_size"', false);
+        // The spec it DOES own is still there: what kind of collar, not what
+        // it measured out at.
+        $form->assertSee('name="neck"', false)
+            ->assertSee('name="cuff_arm_sleeves"', false)
+            ->assertSee('name="bottom_hem"', false);
     }
 
     public function test_sewers_and_threads_typed_at_the_station_are_suggested_next_time(): void
@@ -204,58 +207,55 @@ class StationFillsTheSheetTest extends TestCase
         $this->assertContains('Metallic gold', $suggest['thread']);
     }
 
-    public function test_saying_another_seam_remains_leaves_the_step_open_for_the_next_sewer(): void
+    public function test_finishing_closes_the_step_and_credits_the_names_off_the_sheet(): void
     {
         [$sewer, $order] = $this->orderAtSewing();
         $session = $this->runningOn($sewer, 'sewing_1', $order);
 
         $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
             'end_reason' => 'done',
-            'more_seams' => 1,
-            'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
+            'sheet' => [
+                'neckbond_sewer' => 'Marites Bautista',
+                'flatbed_sewer' => 'Angel Ramos',
+            ],
         ])->assertSessionHasNoErrors();
 
         $task = $order->fresh()->tasks()->where('department', 'Sewing')->first();
 
-        $this->assertNotSame('complete', $task->status,
-            'several people sew one job order — one finishing their seams must not close the step');
-        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->neckbond_sewer,
-            'their seams are still recorded');
-        $this->assertNotNull(StationSession::find($session->id)->ended_at,
-            'their own run at the machine is over, even though the step is not');
-    }
-
-    public function test_the_last_sewer_closes_the_step_and_every_name_is_kept(): void
-    {
-        [$first, $order] = $this->orderAtSewing();
-        $second = User::factory()->create(['job_role' => 'Sewing', 'is_active' => true]);
-
-        // First sewer: some seams, more to come.
-        $a = $this->runningOn($first, 'sewing_1', $order);
-        $this->actingAs($first)->post("/station-sessions/{$a->id}/end", [
-            'end_reason' => 'done',
-            'more_seams' => 1,
-            'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
-        ]);
-
-        // Second sewer picks the same job up and finishes it.
-        $b = $this->runningOn($second, 'sewing_1', $order->fresh(), 'Angel Ramos');
-        $this->actingAs($second)->post("/station-sessions/{$b->id}/end", [
-            'end_reason' => 'done',
-            'more_seams' => 0,
-            'sheet' => ['flatbed_sewer' => 'Angel Ramos'],
-        ]);
-
-        $task = $order->fresh()->tasks()->where('department', 'Sewing')->first();
-        $jo = $order->fresh()->jobOrder;
-
-        $this->assertSame('complete', $task->status, 'the last sewer closes the step');
-        $this->assertSame('Marites Bautista', $jo->neckbond_sewer, "the first sewer's seam survives");
-        $this->assertSame('Angel Ramos', $jo->flatbed_sewer);
-
-        // The step was worked by two people and must credit both.
+        $this->assertSame('complete', $task->status);
+        // Nobody typed a name on the way in — these come off the sheet.
         $this->assertStringContainsString('Marites Bautista', (string) $task->operator_name);
         $this->assertStringContainsString('Angel Ramos', (string) $task->operator_name);
+    }
+
+    public function test_clicking_a_job_order_starts_the_clock_and_opens_its_sheet(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+
+        $this->actingAs($sewer)
+            ->post("/stations/sewing_1/work/{$order->id}")
+            ->assertRedirect();
+
+        $session = StationSession::where('station', 'sewing_1')->whereNull('ended_at')->first();
+
+        $this->assertNotNull($session, 'clicking the job order should start a run');
+        $this->assertSame($order->id, $session->production_order_id);
+        $this->assertNotNull($session->started_at, 'that click is what starts the clock');
+    }
+
+    public function test_a_finished_run_explains_itself_instead_of_answering_forbidden(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $session = $this->runningOn($sewer, 'sewing_1', $order);
+
+        $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", ['end_reason' => 'done']);
+
+        // A board left open in another tab still links here. Telling somebody
+        // who did nothing wrong that they are Forbidden is untrue and unhelpful.
+        $this->actingAs($sewer)
+            ->get(route('stations.finish', $session))
+            ->assertRedirect(route('stations.index'))
+            ->assertSessionHas('success');
     }
 
     public function test_finish_opens_the_sheet_rather_than_closing_the_step(): void
@@ -266,7 +266,6 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)
             ->get("/station-sessions/{$session->id}/finish")
             ->assertOk()
-            ->assertSee('Is there another seam still to sew', false)
             // The boxes are IN the sheet, not in a second list of the same
             // questions underneath it.
             ->assertSee('class="fill-in" name="sheet[neckbond_sewer]"', false)
@@ -281,10 +280,16 @@ class StationFillsTheSheetTest extends TestCase
         [$sewer, $order] = $this->orderAtSewing();
         $sales = User::find($order->created_by);
 
-        // The same partial renders the sheet on the order page. It must not
-        // hand a text box to everyone who can open it.
+        // The same partial renders the sheet on the order page. An account
+        // officer works no station, so it stays read-only for them.
         $this->actingAs($sales)
             ->get("/orders/{$order->id}/job-order")
+            ->assertOk()
+            ->assertDontSee('name="sheet[', false);
+
+        // …and the package document is read-only for everybody.
+        $this->actingAs($sewer)
+            ->get("/orders/{$order->id}/package")
             ->assertOk()
             ->assertDontSee('name="sheet[', false);
     }
@@ -296,7 +301,7 @@ class StationFillsTheSheetTest extends TestCase
      */
     public function test_finishing_lands_on_the_board_and_not_on_a_forbidden_page(): void
     {
-        foreach ([1, 0] as $moreSeams) {
+        foreach ([1, 2] as $ignored) {
             [$sewer, $order] = $this->orderAtSewing();
             $session = $this->runningOn($sewer, 'sewing_1', $order);
 
@@ -304,16 +309,15 @@ class StationFillsTheSheetTest extends TestCase
                 ->from(route('stations.finish', $session))
                 ->post("/station-sessions/{$session->id}/end", [
                     'end_reason' => 'done',
-                    'more_seams' => $moreSeams,
                     'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
                 ])
                 ->assertRedirect(route('stations.index'));
 
-            // And the page they came from is now genuinely off limits, which is
-            // exactly why they must not be sent back to it.
+            // And the page they came from no longer holds a run, which is why
+            // they must not be sent back to it — it bounces to the board.
             $this->actingAs($sewer)
                 ->get(route('stations.finish', $session))
-                ->assertForbidden();
+                ->assertRedirect(route('stations.index'));
         }
     }
 }

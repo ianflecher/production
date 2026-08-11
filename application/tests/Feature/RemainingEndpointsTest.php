@@ -247,8 +247,10 @@ class RemainingEndpointsTest extends TestCase
             'end_reason' => 'finished',
         ]);
 
+        // A second submit is a double-click or a stale form, not an offence:
+        // it says the run is already finished and goes back to the board.
         $this->actingAs($operator)
             ->post("/station-sessions/{$session->id}/end", ['end_reason' => 'break'])
-            ->assertForbidden();
+            ->assertRedirect(route('stations.index'));
     }
 }

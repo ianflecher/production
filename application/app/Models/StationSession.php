@@ -17,6 +17,9 @@ class StationSession extends Model
         'break' => 'On break',
         'shift_change' => 'Shift change',
         'done' => 'Finished',
+        // Picked the job up, then put it back — a wrong job order, or called
+        // away. The step is untouched and the job returns to the queue.
+        'cancelled' => 'Put back',
     ];
 
     protected $fillable = [

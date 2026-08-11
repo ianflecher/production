@@ -798,6 +798,17 @@
         /* Pager under a paginated list that isn't a table. */
         .list-pager { padding: 1rem 0 0.25rem; }
 
+        /* Who has worked a job so far, on a station card. A job order can pass
+           through eight or nine pairs of hands, and as a comma-run it is a wall
+           of text; numbered, the count is the point and reads at a glance. */
+        .station-names {
+            margin: 0.45rem 0 0.3rem; padding-left: 1.35rem;
+            font-size: 0.82rem; font-weight: 600; color: var(--ink);
+            line-height: 1.45;
+        }
+        .station-names li { margin: 0.05rem 0; }
+        .station-names li::marker { color: var(--ink-3); font-weight: 700; }
+
         /* Queue pager inside a station card — tighter than the page-level one. */
         .station-pager {
             display: flex; align-items: center; justify-content: space-between;

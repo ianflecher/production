@@ -100,5 +100,32 @@
     <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back to {{ $backLabel }}</a>
 </div>
 
-@include('partials.job-order-sheet', ['order' => $order])
+@php
+    // The floor can still correct its own boxes here — a seam typed against the
+    // wrong row should not be permanent because somebody pressed Finish. Open
+    // until the job order itself is finished; after that the sheet is a record
+    // of what was made, and records do not change.
+    $floorFields = array_merge(
+        \App\Models\JobOrder::SEWING_STATION_FIELDS,
+        \App\Models\JobOrder::QC_STATION_FIELDS
+    );
+    $canCorrect = $order->jobOrder
+        && $order->sheetStillEditable()
+        && \App\Services\Stations::forUser(auth()->user()) !== [];
+@endphp
+
+@if ($canCorrect)
+    <form method="POST" action="{{ route('orders.sheet.update', $order) }}">
+        @csrf
+        @include('partials.job-order-sheet', ['order' => $order, 'editable' => $floorFields])
+        <div class="no-print" style="max-width:900px; margin:0.9rem auto 0; display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm">Save corrections</button>
+            <span style="font-size:0.78rem; color:var(--ink-3);">
+                Sewing and QC boxes stay editable until this job order is finished.
+            </span>
+        </div>
+    </form>
+@else
+    @include('partials.job-order-sheet', ['order' => $order])
+@endif
 @endsection

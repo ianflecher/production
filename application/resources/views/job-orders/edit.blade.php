@@ -189,8 +189,8 @@
             {{-- Size on the two cut to a measurement, thread colour on the two
                  stitched on — same as the paper form. --}}
             <tr>
-                <td class="fld">Size: <input type="text" name="neck_size" list="dl_neck_size" maxlength="255" value="{{ $old('neck_size', $jobOrder->neck_size) }}" class="inline" placeholder="—"></td>
-                <td class="fld">Size: <input type="text" name="cuff_size" list="dl_cuff_size" maxlength="255" value="{{ $old('cuff_size', $jobOrder->cuff_size) }}" class="inline" placeholder="—"></td>
+                <td class="fld">Size: <span class="at-station">filled at sewing</span></td>
+                <td class="fld">Size: <span class="at-station">filled at sewing</span></td>
                 <td class="fld">Thread Color: <span class="at-station">filled at sewing</span></td>
                 <td class="fld">Thread Color: <span class="at-station">filled at sewing</span></td>
             </tr>

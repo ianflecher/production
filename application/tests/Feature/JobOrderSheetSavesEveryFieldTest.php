@@ -31,11 +31,10 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         'fabric' => 'Dri-fit micro mesh',
         'free_logo_sticker' => 'IC round sticker',
 
-        // Sewing — the four headline seams and their size/thread
+        // Sewing — the four headline seams. Their sizes and threads are
+        // measured and used at the machine, so they belong to the sewer.
         'neck' => 'Printed ribbings',
-        'neck_size' => '2.5 inches',
         'cuff_arm_sleeves' => 'Tupi finish',
-        'cuff_size' => '3 inches',
         'neck_label' => 'IC flat bed',
         'bottom_hem' => 'Straight hem',
 

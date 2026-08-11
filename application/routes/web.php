@@ -71,6 +71,17 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/orders/{order}/package', [JobOrderController::class, 'completeJobOrder'])
         ->whereNumber('order')->name('orders.package');
     Route::post('/stations/start', [\App\Http\Controllers\StationController::class, 'start'])->name('stations.start');
+    // Sewing and QC have one computer between them and no sign-in ritual:
+    // the operator clicks the job order they are picking up, which starts the
+    // clock and opens its sheet in one action.
+    Route::post('/stations/{station}/work/{order}', [\App\Http\Controllers\StationController::class, 'work'])
+        ->whereNumber('order')->name('stations.work');
+
+    // Correcting the floor's part of the sheet after the station has closed.
+    // Open until the job order itself is finished — see sheetStillEditable().
+    Route::post('/orders/{order}/sheet', [\App\Http\Controllers\StationController::class, 'updateSheet'])
+        ->whereNumber('order')->name('orders.sheet.update');
+
     // Finishing at sewing or QC means writing that station's part of the job
     // order sheet, so Finish opens the sheet instead of closing the step
     // silently. Stations with nothing to record skip straight to end.

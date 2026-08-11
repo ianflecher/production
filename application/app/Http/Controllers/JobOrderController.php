@@ -71,8 +71,8 @@ class JobOrderController extends Controller
             // the checker found are recorded at the station by the person doing
             // the work — see JobOrder::SEWING_STATION_FIELDS.
             ...array_fill_keys([
-                'neck', 'neck_size',
-                'cuff_arm_sleeves', 'cuff_size',
+                'neck',
+                'cuff_arm_sleeves',
                 'neck_label',
                 'bottom_hem',
                 'extra_seam_label',

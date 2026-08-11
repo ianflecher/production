@@ -241,6 +241,20 @@ class ProductionOrder extends Model
             ?? ($this->product_type ? \Illuminate\Support\Str::title($this->product_type) : null);
     }
 
+    /**
+     * May the floor still correct its part of the job order sheet?
+     *
+     * A seam gets typed against the wrong row, or a thread code is remembered
+     * five minutes later. Locking the sheet the moment a station closes means
+     * living with the mistake, so it stays open until the whole job order is
+     * finished — after that it is a record of what was made, and records do
+     * not change.
+     */
+    public function sheetStillEditable(): bool
+    {
+        return ! in_array($this->status, ['complete', 'cancelled'], true);
+    }
+
     /** Outstanding balance = total price minus everything paid so far. */
     public function balance(): ?float
     {

@@ -419,7 +419,9 @@
         </tr>
         <tr>
             <td class="yellow">{{ strtoupper($y($jo?->packaging)) }}</td>
-            <td class="ctr">{{ $who(['Quality control']) }}</td>
+            <td class="fld ctr">{!! filled($jo?->qc_checked_by) || in_array('qc_checked_by', $editable, true)
+                ? $fill('qc_checked_by')
+                : '<span class="fill">'.e($who(['Quality control'])).'</span>' !!}</td>
             <td colspan="2" class="fld" style="text-align: left; white-space: pre-line;">{!! $fill('qc_notes', false) !!}</td>
         </tr>
         <tr>

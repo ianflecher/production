@@ -196,7 +196,16 @@ class StationController extends Controller
         // leaves open all day.
         $suggest = \App\Models\JobOrder::stationSuggestions();
 
+        // Which job orders somebody is working on right now, and where. Every
+        // sewing card lists the same queue, so without this two people can pick
+        // up the same job from two machines and only find out at the seam.
+        $running = StationSession::whereNull('ended_at')
+            ->whereNotNull('production_order_id')
+            ->get()
+            ->mapWithKeys(fn ($x) => [$x->production_order_id => Stations::label($x->station)]);
+
         return view('stations.index', [
+            'runningOrders' => $running,
             'groups' => $groups,
             'historyByGroup' => $historyByGroup,
             'reasons' => StationSession::REASONS,
@@ -209,10 +218,15 @@ class StationController extends Controller
     public function start(Request $request): RedirectResponse
     {
         $this->assertAccess();
+        // At sewing the names go on the sheet, seam by seam, when the work is
+        // finished — so the machine is taken without being asked who is on it.
+        $station = (string) $request->input('station');
+        $namesComeFromTheSheet = str_starts_with($station, 'sewing_') || str_starts_with($station, 'qc_');
+
         $data = $request->validate([
             'station' => ['required', 'in:'.implode(',', Stations::keys())],
             // Accounts get shared on the floor, so the operator types their name.
-            'operator_name' => ['required', 'string', 'max:100'],
+            'operator_name' => [$namesComeFromTheSheet ? 'nullable' : 'required', 'string', 'max:100'],
             'production_order_id' => ['required', 'integer', 'exists:production_orders,id'],
             'note' => ['nullable', 'string', 'max:255'],
             // Why the person currently on it is coming off (take-over only).
@@ -239,7 +253,9 @@ class StationController extends Controller
             ]);
         }
 
-        $operator = trim($data['operator_name']);
+        // Absent at sewing and QC, where the name is written on the sheet when
+        // the work is finished rather than claimed when the machine is taken.
+        $operator = trim((string) ($data['operator_name'] ?? ''));
 
         // Taking over is where we record WHY the last person came off — a break
         // or a shift change. Finishing the job is a separate action.
@@ -327,6 +343,32 @@ class StationController extends Controller
         };
     }
 
+    /**
+     * Whose name goes on the step.
+     *
+     * A sewer writes their name against each seam they ran, so asking for it
+     * again when they take the machine is the same question twice — and two
+     * places for it to disagree. Where the sheet carries names, they are the
+     * answer; anywhere else it is whoever took the station.
+     *
+     * @param  array<string, string>  $typed  what was just written on the sheet
+     */
+    private static function whoDidTheWork(StationSession $session, array $typed): string
+    {
+        $fromSheet = collect($typed)
+            ->filter(fn ($v, $k) => str_ends_with($k, '_sewer') || $k === 'qc_checked_by')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter()
+            ->unique(fn ($v) => mb_strtolower($v))
+            ->implode(', ');
+
+        if ($fromSheet !== '') {
+            return $fromSheet;
+        }
+
+        return $session->operator_name ?: ($session->user?->name ?? '');
+    }
+
     /** The label the paper form uses for a sheet field, for the station board. */
     public static function sheetFieldLabel(string $field): string
     {
@@ -350,9 +392,86 @@ class StationController extends Controller
             'extra_seam_note' => 'Spare column — note',
             'extra_seam_sewer' => 'Spare column — sewer',
             'sewer_notes' => 'Notes from sewer',
+            'qc_checked_by' => 'Quality checked by',
             'qc_notes' => 'Notes from QC',
             default => ucfirst(str_replace('_', ' ', $field)),
         };
+    }
+
+    /**
+     * Correct the floor's part of the sheet after the station has closed.
+     *
+     * The same fields, the same rule about blanks, but reachable from the job
+     * order itself rather than from a run. A seam typed against the wrong row
+     * should not be permanent just because somebody pressed Finish.
+     */
+    public function updateSheet(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        $this->assertAccess();
+        abort_unless($order->sheetStillEditable(), 403);
+        abort_unless($order->jobOrder, 404);
+
+        $fields = array_merge(
+            \App\Models\JobOrder::SEWING_STATION_FIELDS,
+            \App\Models\JobOrder::QC_STATION_FIELDS
+        );
+
+        $request->validate(array_fill_keys(
+            array_map(fn ($f) => 'sheet.'.$f, $fields),
+            ['nullable', 'string', 'max:1000']
+        ));
+
+        // Everything typed, including a box deliberately cleared — this is the
+        // correction screen, so blanking one has to mean blanking it.
+        $typed = collect($request->input('sheet', []))
+            ->only($fields)
+            ->map(fn ($v) => filled($v) ? trim((string) $v) : null)
+            ->all();
+
+        if ($typed !== []) {
+            $order->jobOrder->update($typed);
+        }
+
+        return back()->with('success', 'Job order sheet updated.');
+    }
+
+    /**
+     * Pick up a job order: start the clock and open its sheet.
+     *
+     * Sewing and QC share one computer and do not sign on to a machine — the
+     * job order in front of the operator IS the action. Clicking it is what
+     * starts the timer, and finishing the sheet is what stops it, so the two
+     * ends of the run are the two things the operator actually does.
+     */
+    public function work(Request $request, string $station, ProductionOrder $order): RedirectResponse
+    {
+        $this->assertAccess();
+
+        abort_unless(in_array($station, Stations::keys(), true), 404);
+        abort_unless(in_array($station, Stations::forUser($request->user()), true), 403);
+
+        if (! self::eligibleOrders($station)->whereKey($order->id)->exists()) {
+            return back()->withErrors([
+                'production_order_id' => $order->order_number.' has not reached this station yet.',
+            ]);
+        }
+
+        // Somebody else's run on this machine ends when this one begins.
+        StationSession::activeOn($station)?->update([
+            'ended_at' => now(),
+            'end_reason' => 'shift_change',
+        ]);
+
+        $session = StationSession::create([
+            'station' => $station,
+            'user_id' => $request->user()->id,
+            // No name: it goes on the sheet, with the work.
+            'operator_name' => '',
+            'production_order_id' => $order->id,
+            'started_at' => now(),
+        ]);
+
+        return redirect()->route('stations.finish', $session);
     }
 
     /**
@@ -362,10 +481,19 @@ class StationController extends Controller
      * a fold-out on the board that is easy to walk past. Submitting it is what
      * closes the step.
      */
-    public function finish(StationSession $stationSession): View
+    public function finish(StationSession $stationSession): View|RedirectResponse
     {
         $this->assertAccess();
-        abort_unless($stationSession->isRunning(), 403);
+
+        // The run is already over — usually a board left open in another tab,
+        // or the back button after finishing. Say so and send them to the
+        // board; a Forbidden page tells somebody who did nothing wrong that
+        // they are not allowed, which is both untrue and unhelpful.
+        if (! $stationSession->isRunning()) {
+            return redirect()->route('stations.index')->with('success',
+                $stationSession->stationLabel().' — that run is already finished. '
+                .'Pick the job order up again if there is more to do.');
+        }
 
         return view('stations.finish', [
             // Everything the sheet partial reads, so the sewer can see the
@@ -383,7 +511,12 @@ class StationController extends Controller
     public function end(Request $request, StationSession $stationSession): RedirectResponse
     {
         $this->assertAccess();
-        abort_unless($stationSession->isRunning(), 403);
+
+        // Double-submit, or a stale form. Nothing to do, and nothing wrong.
+        if (! $stationSession->isRunning()) {
+            return redirect()->route('stations.index')
+                ->with('success', $stationSession->stationLabel().' — that run was already finished.');
+        }
 
         // The sheet asks this station for its own part of the record — which
         // sewer ran each seam, what the checker found. Only the person holding
@@ -394,10 +527,6 @@ class StationController extends Controller
         $data = $request->validate([
             'end_reason' => ['required', 'in:'.implode(',', array_keys(StationSession::REASONS))],
             'note' => ['nullable', 'string', 'max:255'],
-            // Sewing is shared between several people on the same job order.
-            // "Another seam still to sew" ends this person's run without
-            // closing the step, so the next sewer can pick the job up.
-            'more_seams' => ['nullable', 'boolean'],
             ...array_fill_keys(
                 array_map(fn ($f) => 'sheet.'.$f, $sheetFields),
                 ['nullable', 'string', 'max:1000']
@@ -413,24 +542,15 @@ class StationController extends Controller
         // "Finished" means the work at this station is done, so close the matching
         // task — that's what unlocks the next stage and eventually completes the
         // order. Breaks and shift changes leave the task open.
-        $moreSeams = (bool) ($data['more_seams'] ?? false);
-
         $note = '';
         if ($data['end_reason'] === 'done' && $stationSession->order) {
             $departments = Stations::departments($stationSession->station);
 
-            // Credit whoever actually finished it.
-            $this->stampOperator(
-                $stationSession->production_order_id,
-                $stationSession->station,
-                $stationSession->operator_name ?: ($stationSession->user?->name ?? '')
-            );
-
-            $operator = $stationSession->operator_name ?: ($stationSession->user?->name ?? null);
-
-            // Write this station's part of the job order sheet. Only what was
-            // actually typed — a blank box left alone must not wipe what an
+            // Write this station's part of the job order sheet FIRST. Only what
+            // was actually typed — a blank box left alone must not wipe what an
             // earlier shift already recorded.
+            $typed = [];
+
             if ($sheetFields !== [] && $stationSession->order->jobOrder) {
                 $typed = array_filter(
                     $request->input('sheet', []),
@@ -443,17 +563,18 @@ class StationController extends Controller
                 }
             }
 
-            // Somebody else still has seams to run on this job, so the step
-            // stays open and the order goes back in the queue for them. The
-            // seam record and the operator's name are already saved above.
-            if ($moreSeams) {
-                // Never back(): the finish page this was submitted from needs a
-                // RUNNING session, and this run is over. Going back to it answers
-                // 403 to somebody who just did everything right.
-                return redirect()->route('stations.index')->with('success',
-                    $stationSession->stationLabel().' — your seams are recorded. '
-                    .$stationSession->order->order_number.' stays here for the next sewer.');
-            }
+            // Credit whoever actually did the work.
+            //
+            // At sewing the names are already on the sheet, seam by seam, so
+            // they are read back from there rather than asked for twice. Every
+            // other station has one operator and says who at the start.
+            $this->stampOperator(
+                $stationSession->production_order_id,
+                $stationSession->station,
+                self::whoDidTheWork($stationSession, $typed)
+            );
+
+            $operator = $stationSession->operator_name ?: ($stationSession->user?->name ?? null);
 
             $closed = 0;
             $forApproval = 0;

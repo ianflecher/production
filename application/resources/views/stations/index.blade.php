@@ -120,6 +120,30 @@
                                 {{-- Only what this station needs: the job order plus
                                      its own file (TIFF / sticker / embroidery) or the
                                      production details. --}}
+                                @php $runningAt = ($runningOrders ?? collect())->get($o->id); @endphp
+                                @if ($runningAt)
+                                    {{-- Somebody has it open. Say so instead of
+                                         offering it again: every sewing card
+                                         lists the same queue, and two people
+                                         picking up one job find out at the seam. --}}
+                                    <span class="badge" style="margin-left:0.3rem; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-size:0.68rem;">
+                                        <span class="dot"></span>RUNNING · {{ $runningAt }}
+                                    </span>
+                                @elseif (\App\Http\Controllers\StationController::sheetFieldsFor($p['key']) !== [])
+                                    {{-- One computer, no signing on to a machine: the
+                                         job order in front of you IS the button. Clicking
+                                         it starts the clock and opens its sheet. --}}
+                                    <form method="POST" action="{{ route('stations.work', [$p['key'], $o]) }}"
+                                          onsubmit="return confirm('Start work on {{ $o->order_number }}?
+
+The clock starts now, and stops when you finish the sheet.');"
+                                          style="display:inline;">
+                                        @csrf
+                                        <button class="btn btn-primary btn-sm" style="margin-left:0.3rem; font-size:0.72rem; padding:0.15rem 0.5rem;">
+                                            ▶ Start this job
+                                        </button>
+                                    </form>
+                                @endif
                                 <a href="{{ route('orders.package', [$o, 'for' => \App\Services\Stations::scope($p['key'])]) }}" style="margin-left:0.3rem; font-size:0.73rem;">📄 open work sheet</a>
                             </div>
                         @endforeach
@@ -134,7 +158,38 @@
                 @endif
 
                 @if ($s)
-                    <p style="margin:0.5rem 0 0.2rem; font-weight:600;">👤 {{ $s->operator() }}</p>
+                    @php
+                        // Sewing and QC never asked who is at the machine — the
+                        // names go on the sheet with the work. Show those, and
+                        // until one is written say so, rather than naming the
+                        // shared account somebody happened to log in with.
+                        $sheetFieldsHere = \App\Http\Controllers\StationController::sheetFieldsFor($p['key']);
+                        $namedOnSheet = $sheetFieldsHere !== []
+                            ? ($s->order?->jobOrder?->namesOnSheet($sheetFieldsHere) ?: null)
+                            : null;
+                    @endphp
+                    @if ($sheetFieldsHere !== [])
+                        @if ($namedOnSheet)
+                            {{-- A job order can pass through eight or nine pairs
+                                 of hands. Run together in a sentence that is a
+                                 wall of commas nobody reads; numbered, you can
+                                 count them at a glance. --}}
+                            <ol class="station-names">
+                                @foreach (explode(', ', $namedOnSheet) as $person)
+                                    <li>{{ $person }}</li>
+                                @endforeach
+                            </ol>
+                        @else
+                            <p style="margin:0.5rem 0 0.2rem; font-weight:600;">🧵 In progress</p>
+                        @endif
+                        @unless ($namedOnSheet)
+                            <p style="font-size:0.75rem; color:var(--ink-3); margin:0 0 0.2rem;">
+                                Names go on the job order sheet when you finish.
+                            </p>
+                        @endunless
+                    @else
+                        <p style="margin:0.5rem 0 0.2rem; font-weight:600;">👤 {{ $s->operator() }}</p>
+                    @endif
                     <p style="font-size:0.82rem; color:var(--ink-3); margin:0;">
                         Since {{ $s->started_at->format('M j, g:i A') }} · {{ $s->duration() }}
                         @if ($s->order) · <a href="{{ route('orders.show', $s->order) }}">{{ $s->order->order_number }}</a> @endif
@@ -178,8 +233,13 @@ This closes the step and moves the order to the next one.');"
                      "take over". Whoever is at the machine finishes their seams,
                      answers whether any are left, and the station frees up for the
                      next person to Start. --}}
-                @php $sharedSeams = str_starts_with($p['key'], 'sewing_'); @endphp
-                @unless ($s && $sharedSeams)
+                @php
+                    $sharedSeams = str_starts_with($p['key'], 'sewing_');
+                    // Sewing and QC both write the name on the sheet when the
+                    // work is done, so neither is asked for it on the way in.
+                    $nameOnSheet = $sharedSeams || str_starts_with($p['key'], 'qc_');
+                @endphp
+                @unless ($nameOnSheet)
                 <details class="inline-form" style="margin-top:0.7rem;">
                     <summary class="btn {{ $s ? 'btn-ghost' : 'btn-primary' }} btn-sm">{{ $s ? 'Take over' : 'Start on this station' }}</summary>
                     <div class="pop">
@@ -196,9 +256,15 @@ This closes the step and moves the order to the next one.');"
                                 </select>
                             @endif
 
-                            <label>Who is running it {{ $s ? 'now' : '' }}? <span style="color: var(--danger-ink);">*</span></label>
-                            <input type="text" name="operator_name" maxlength="100" required
-                                   placeholder="e.g. {{ auth()->user()->name }}">
+                            {{-- Not asked at sewing: the sewer writes their name
+                                 against each seam they ran when they finish, so
+                                 asking here is the same question twice and two
+                                 places for it to disagree. --}}
+                            @unless ($nameOnSheet)
+                                <label>Who is running it {{ $s ? 'now' : '' }}? <span style="color: var(--danger-ink);">*</span></label>
+                                <input type="text" name="operator_name" maxlength="100" required
+                                       placeholder="e.g. {{ auth()->user()->name }}">
+                            @endunless
 
                             {{-- Only job orders the leader has released to this station. --}}
                             <label style="margin-top:0.5rem;">Job order <span style="color: var(--danger-ink);">*</span></label>

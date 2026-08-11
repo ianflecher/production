@@ -79,6 +79,7 @@ class JobOrder extends Model
         'extra_seam_sewer',
         'sewer_notes',
         'qc_notes',
+        'qc_checked_by',
         'ic_placement',
         // Quality check (yellow)
         'packaging',
@@ -313,6 +314,7 @@ class JobOrder extends Model
      * @var array<int, string>
      */
     public const SEWING_STATION_FIELDS = [
+        'neck_size', 'cuff_size',
         'neck_label_thread', 'bottom_hem_thread',
         'neckbond_sewer', 'neckbond_thread',
         'hangtag_woven_sewer', 'hangtag_woven_thread',
@@ -325,8 +327,26 @@ class JobOrder extends Model
         'sewer_notes',
     ];
 
+    /**
+     * The names already written on the sheet for a station, if any.
+     *
+     * Sewing and QC do not ask who is at the machine — the names go on the
+     * sheet with the work. Until somebody has written one there is nobody to
+     * show, and naming the shared account instead would put the wrong person
+     * on the board.
+     */
+    public function namesOnSheet(array $fields): string
+    {
+        return collect($fields)
+            ->filter(fn ($f) => str_ends_with($f, '_sewer') || $f === 'qc_checked_by')
+            ->map(fn ($f) => trim((string) ($this->$f ?? '')))
+            ->filter()
+            ->unique(fn ($n) => mb_strtolower($n))
+            ->implode(', ');
+    }
+
     /** Filled by the checker when they close Quality Control. */
-    public const QC_STATION_FIELDS = ['qc_notes'];
+    public const QC_STATION_FIELDS = ['qc_checked_by', 'qc_notes'];
 
     /**
      * Just the sewer and thread pools, for the station board.
