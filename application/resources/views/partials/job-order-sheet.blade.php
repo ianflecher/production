@@ -31,6 +31,30 @@
 @endphp
 
 <style>
+    /* The sheet's own look — the ruled boxes, the grey labels, the red dates.
+       This lived in the two pages that happened to include this partial, so any
+       new page including it got the markup with none of the ruling and the job
+       order came out as a wall of plain text. It belongs here, with the sheet. */
+    .jo-sheet { max-width: 900px; margin: 0 auto; background: #fff; color: #111; border: 2px solid #111; }
+    .jo-sheet * { box-sizing: border-box; }
+    .jo-title { text-align: center; padding: 0.6rem; border-bottom: 2px solid #111; }
+    .jo-title .t1 { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.02em; }
+    .jo-title .t1 .pri { color: #d00; }
+    .jo-title .t2 { font-size: 1.2rem; font-weight: 800; color: #d00; margin-top: 0.15rem; }
+    table.jo { width: 100%; border-collapse: collapse; }
+    table.jo td, table.jo th { border: 1px solid #111; padding: 0.3rem 0.5rem; font-size: 0.8rem; vertical-align: top; }
+    .jo-sheet .lbl { background: #cfcfcf; font-weight: 700; text-align: center; font-size: 0.72rem; text-transform: uppercase; }
+    .jo-sheet .lbl-l { background: #cfcfcf; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+    /* A filled-in value. White like the paper form — the yellow belongs on the
+       entry form, where it means "still to type in". Here it is already typed
+       in, and a printed sheet should look like the printed sheet. */
+    .jo-sheet .yellow { background: #fff !important; font-weight: 700; text-align: center; }
+    .jo-sheet .ctr { text-align: center; }
+    .jo-sheet .red { color: #d00; font-weight: 700; }
+    .jo-sheet .sec { background: #cfcfcf; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .jo-sheet .mock-box { min-height: 150px; text-align: center; }
+    .jo-sheet .mock-box img { max-width: 100%; max-height: 260px; border: 1px solid #999; }
+
     /* Keep the whole sheet on ONE printed page: tighter rows, smaller type, and
        the app shell reset to block flow (page rules are ignored inside flex). */
     @media print {
