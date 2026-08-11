@@ -73,9 +73,11 @@
 
         <div class="fin-bar">
             <button class="btn btn-success">✓ Finish this step</button>
-            {{-- Step away without deciding anything: the clock keeps running,
-                 because the job is still on this machine. --}}
-            <a href="{{ route('stations.index') }}" class="btn btn-ghost">← Back (keep working)</a>
+            {{-- Step away without finishing. A plain link threw away whatever
+                 had been typed and not yet submitted, which on a sheet of
+                 twenty boxes is somebody's whole shift of typing — so this
+                 saves first and leaves the clock running. --}}
+            <button name="keep_working" value="1" class="btn btn-ghost">← Save &amp; keep working</button>
         </div>
     </form>
 

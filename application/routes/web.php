@@ -77,6 +77,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/stations/{station}/work/{order}', [\App\Http\Controllers\StationController::class, 'work'])
         ->whereNumber('order')->name('stations.work');
 
+    // The floor's own view of a sheet it may still correct. They are not
+    // allowed on the order page, so they need a door of their own.
+    Route::get('/orders/{order}/sheet', [\App\Http\Controllers\StationController::class, 'editSheet'])
+        ->whereNumber('order')->name('orders.sheet');
+
     // Correcting the floor's part of the sheet after the station has closed.
     // Open until the job order itself is finished — see sheetStillEditable().
     Route::post('/orders/{order}/sheet', [\App\Http\Controllers\StationController::class, 'updateSheet'])
@@ -252,6 +257,10 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // -------- Production management: Leader / Super Admin --------
     Route::middleware('role:leader,super_admin')->group(function () {
+        // Remakes: a wrong colour, a damaged panel, a seam that failed QC.
+        Route::post('/orders/{order}/replacement', [ProductionOrderController::class, 'storeReplacement'])
+            ->whereNumber('order')->name('orders.replacement');
+
         Route::post('/orders/{order}/status', [ProductionOrderController::class, 'updateStatus'])->name('orders.status');
 
         Route::get('/approvals', [TaskController::class, 'approvals'])->name('approvals');
@@ -263,6 +272,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/system/errors', [SystemHealthController::class, 'errors'])->name('system.errors');
         // Clearing one only records that somebody looked; the log is untouched.
         Route::post('/system/errors/dismiss', [SystemHealthController::class, 'dismiss'])->name('system.errors.dismiss');
+        Route::post('/system/errors/dismiss-all', [SystemHealthController::class, 'dismissAll'])->name('system.errors.dismiss-all');
 
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');

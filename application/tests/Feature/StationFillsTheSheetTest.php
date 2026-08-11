@@ -320,4 +320,64 @@ class StationFillsTheSheetTest extends TestCase
                 ->assertRedirect(route('stations.index'));
         }
     }
+
+    public function test_back_saves_what_was_typed_instead_of_throwing_it_away(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $session = $this->runningOn($sewer, 'sewing_1', $order);
+
+        $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
+            'end_reason' => 'done',
+            'keep_working' => 1,
+            'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
+        ])->assertRedirect(route('stations.index'));
+
+        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->neckbond_sewer,
+            'stepping away must not throw away a shift of typing');
+        $this->assertTrue(StationSession::find($session->id)->isRunning(),
+            'the job is still on the machine, so the clock keeps running');
+    }
+
+    public function test_a_sewer_is_never_asked_to_sign_the_quality_check(): void
+    {
+        $sewer = User::factory()->make(['job_role' => 'Sewing']);
+        $checker = User::factory()->make(['job_role' => 'Quality control']);
+
+        $sewerFields = \App\Http\Controllers\StationController::sheetFieldsForUser($sewer);
+        $checkerFields = \App\Http\Controllers\StationController::sheetFieldsForUser($checker);
+
+        $this->assertEmpty(array_intersect($sewerFields, JobOrder::QC_STATION_FIELDS),
+            "the QC line is not for the sewer to write");
+        $this->assertEmpty(array_intersect($checkerFields, JobOrder::SEWING_STATION_FIELDS),
+            "the seams are not for the checker to write");
+        $this->assertNotEmpty($sewerFields);
+        $this->assertNotEmpty($checkerFields);
+    }
+
+    public function test_the_sheet_stays_correctable_until_the_whole_order_is_finished(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $order->jobOrder->update(['neckbond_sewer' => 'Marites Bautista']);
+
+        // Still running: the floor can open it and put a wrong entry right.
+        $this->actingAs($sewer)->get(route('orders.sheet', $order))->assertOk();
+
+        $this->actingAs($sewer)->post(route('orders.sheet.update', $order), [
+            'sheet' => ['neckbond_thread' => 'TC-999 corrected'],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('TC-999 corrected', $order->fresh()->jobOrder->neckbond_thread);
+
+        // Finished: the sheet is a record of what was made, and records do not
+        // change.
+        $order->update(['status' => 'complete']);
+
+        $this->actingAs($sewer)->get(route('orders.sheet', $order))
+            ->assertRedirect(route('stations.index'));
+        $this->actingAs($sewer)->post(route('orders.sheet.update', $order), [
+            'sheet' => ['neckbond_thread' => 'too late'],
+        ])->assertForbidden();
+
+        $this->assertSame('TC-999 corrected', $order->fresh()->jobOrder->neckbond_thread);
+    }
 }

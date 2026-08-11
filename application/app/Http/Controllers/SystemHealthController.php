@@ -47,4 +47,32 @@ class SystemHealthController extends Controller
 
         return back()->with('success', 'Cleared. It comes back if it happens again.');
     }
+
+    /**
+     * Clear everything currently on the page in one go.
+     *
+     * After a bad afternoon the list is thirty rows of the same two problems,
+     * and clearing them one at a time is thirty clicks that teach nobody
+     * anything. Same rule as clearing one: the log is untouched, and anything
+     * that happens again comes straight back.
+     */
+    public function dismissAll(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $days = (int) $request->input('days', 7);
+        $days = in_array($days, [1, 7, 30], true) ? $days : 7;
+
+        $showing = ErrorLog::recent($days);
+
+        foreach ($showing as $incident) {
+            \App\Models\DismissedError::updateOrCreate(
+                ['fingerprint' => $incident['fingerprint']],
+                ['dismissed_at' => now(), 'dismissed_by' => $request->user()->id],
+            );
+        }
+
+        return back()->with('success', $showing->count() === 0
+            ? 'Nothing to clear.'
+            : 'Cleared '.$showing->count().' error'.($showing->count() === 1 ? '' : 's')
+                .'. Any of them that happen again will come back.');
+    }
 }

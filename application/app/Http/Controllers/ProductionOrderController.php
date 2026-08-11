@@ -569,6 +569,91 @@ class ProductionOrderController extends Controller
         return response()->json(['saved' => true]);
     }
 
+    /**
+     * Make the pieces again: a remake of an order that went wrong.
+     *
+     * A wrong colour, a damaged panel, a seam that failed QC. The remake is a
+     * real job — it prints, cuts, sews and gets checked like any other — so it
+     * is a new order running the same pipeline, not a note on the old one.
+     *
+     * It carries no price. The shop is doing the work twice and being paid
+     * once, and pretending otherwise would make the month look better than it
+     * was. It is pointed at the order it replaces so both are answerable.
+     */
+    public function storeReplacement(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        $this->assertOrderVisible($order);
+
+        $data = $request->validate([
+            'replacement_reason' => ['required', 'string', 'min:5', 'max:255'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:'.max(1, (int) $order->quantity)],
+            'due_date' => ['required', 'date'],
+        ], [
+            'replacement_reason.required' => 'Say what went wrong — it is the whole point of recording a remake.',
+            'quantity.max' => 'A remake cannot be for more pieces than the original order.',
+        ]);
+
+        $replacement = DB::transaction(function () use ($order, $data, $request) {
+            $new = ProductionOrder::create([
+                'order_number' => $order->order_number.'-R'.($order->replacements()->count() + 1),
+                'client_id' => $order->client_id,
+                'customer_name' => $order->customer_name,
+                'product_type' => $order->product_type,
+                'description' => $order->description,
+                'decoration_methods' => $order->decoration_methods,
+                'cutting_type' => $order->cutting_type,
+                'needs_sticker' => $order->needs_sticker,
+                'back_pocket' => $order->back_pocket,
+                'back_pocket_qty' => min((int) ($order->back_pocket_qty ?? 0), (int) $data['quantity']),
+                'quantity' => $data['quantity'],
+                // No charge: this is work being done a second time.
+                'unit_price' => 0,
+                'total_price' => 0,
+                'due_date' => $data['due_date'],
+                'status' => 'active',
+                'created_by' => $request->user()->id,
+                'replaces_order_id' => $order->id,
+                'replacement_reason' => $data['replacement_reason'],
+            ]);
+
+            // Same sizes, scaled down to what is actually being remade — the
+            // biggest sizes first, because a remake is usually the pieces that
+            // failed rather than a slice of the whole run.
+            $left = (int) $data['quantity'];
+            foreach ($order->items()->orderByDesc('quantity')->get() as $item) {
+                if ($left <= 0) {
+                    break;
+                }
+                $take = min($left, (int) $item->quantity);
+                $new->items()->create(['size' => $item->size, 'quantity' => $take, 'description' => $item->description]);
+                $left -= $take;
+            }
+
+            // The specs are the same garment, so the sheet starts from the
+            // original rather than being typed out again.
+            if ($order->jobOrder) {
+                $new->jobOrder()->create(
+                    collect($order->jobOrder->only($order->jobOrder->getFillable()))
+                        ->except(array_merge(
+                            ['production_order_id', 'status', 'created_by', 'sent_to_artist_by', 'sent_to_artist_at'],
+                            \App\Models\JobOrder::SEWING_STATION_FIELDS,
+                            \App\Models\JobOrder::QC_STATION_FIELDS,
+                        ))
+                        ->all()
+                    + ['status' => 'sent_to_artist', 'created_by' => $request->user()->id]
+                );
+            }
+
+            $new->refresh()->rebuildPipeline($new->decoration_methods ?? [], $new->cutting_type);
+
+            return $new;
+        });
+
+        return redirect()->route('orders.show', $replacement)->with('success',
+            'Remake '.$replacement->order_number.' created for '.$order->order_number
+            .'. It runs the same pipeline and carries no charge.');
+    }
+
     /** Display the mockup image in a centered, focused view. */
     public function mockup(ProductionOrder $order): View
     {

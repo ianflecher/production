@@ -18,6 +18,10 @@
 @endif
 
 @php
+    // Who the order page actually lets in — see the role group on orders.show.
+    $me = auth()->user();
+    $canOpenOrders = $me->isSales() || $me->isLeader() || $me->isSuperAdmin() || $me->isMover();
+
     // Each station group gets its own accent colour so the board reads at a glance.
     $groupColors = [
         'Supply' => '#0d9488',
@@ -90,6 +94,12 @@
                              by the controller so the order survives paging. --}}
                         @php $queue = $p['queue']; @endphp
                         @foreach ($queue as $o)
+                            {{-- Somebody already has this one open. Ten sewing
+                                 cards list the same queue, so leaving it here
+                                 invites a second person to pick up a job that is
+                                 already on a machine. It comes back the moment
+                                 that run ends. --}}
+                            @continue(($runningOrders ?? collect())->has($o->id))
                             @php $step = $o->station_step ?? null; @endphp
                             <div @class(['station-job', 'is-late' => $o->delayState()])>
                                 <strong>{{ $o->order_number }}</strong>
@@ -120,16 +130,7 @@
                                 {{-- Only what this station needs: the job order plus
                                      its own file (TIFF / sticker / embroidery) or the
                                      production details. --}}
-                                @php $runningAt = ($runningOrders ?? collect())->get($o->id); @endphp
-                                @if ($runningAt)
-                                    {{-- Somebody has it open. Say so instead of
-                                         offering it again: every sewing card
-                                         lists the same queue, and two people
-                                         picking up one job find out at the seam. --}}
-                                    <span class="badge" style="margin-left:0.3rem; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-size:0.68rem;">
-                                        <span class="dot"></span>RUNNING · {{ $runningAt }}
-                                    </span>
-                                @elseif (\App\Http\Controllers\StationController::sheetFieldsFor($p['key']) !== [])
+                                @if (\App\Http\Controllers\StationController::sheetFieldsFor($p['key']) !== [])
                                     {{-- One computer, no signing on to a machine: the
                                          job order in front of you IS the button. Clicking
                                          it starts the clock and opens its sheet. --}}
@@ -192,7 +193,7 @@ The clock starts now, and stops when you finish the sheet.');"
                     @endif
                     <p style="font-size:0.82rem; color:var(--ink-3); margin:0;">
                         Since {{ $s->started_at->format('M j, g:i A') }} · {{ $s->duration() }}
-                        @if ($s->order) · <a href="{{ route('orders.show', $s->order) }}">{{ $s->order->order_number }}</a> @endif
+                        @if ($s->order) · <strong>{{ $s->order->order_number }}</strong> @endif
                     </p>
                     @if ($s->note)<p style="font-size:0.78rem; color:var(--ink-3); margin:0.3rem 0 0;">{{ $s->note }}</p>@endif
 
@@ -233,6 +234,24 @@ This closes the step and moves the order to the next one.');"
                      "take over". Whoever is at the machine finishes their seams,
                      answers whether any are left, and the station frees up for the
                      next person to Start. --}}
+                {{-- Already done here, but the order is still running. A sewer
+                     who spots a wrong thread code an hour later needs the job to
+                     still be reachable; it drops off once the whole order is
+                     finished and the sheet becomes a record. --}}
+                @if (($p['finished'] ?? collect())->isNotEmpty())
+                    <div style="margin-top:0.6rem; padding-top:0.5rem; border-top:1px dashed var(--border);">
+                        <div style="font-size:0.7rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); margin-bottom:0.3rem;">
+                            Done here · still correctable
+                        </div>
+                        @foreach ($p['finished'] as $done)
+                            <div style="font-size:0.78rem; margin:0.15rem 0;">
+                                <strong>{{ $done->order_number }}</strong>
+                                <a href="{{ route('orders.sheet', $done) }}" style="margin-left:0.35rem; font-size:0.73rem;">✎ edit sheet</a>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 @php
                     $sharedSeams = str_starts_with($p['key'], 'sewing_');
                     // Sewing and QC both write the name on the sheet when the
@@ -345,10 +364,20 @@ This closes the step and moves the order to the next one.');"
                             <tr>
                                 <td style="font-weight:600;">{{ $h->stationLabel() }}</td>
                                 <td>
-                                    {{ $h->operator() }}
+                                    {{ $h->handoverOperator() }}
                                 </td>
                                 <td>
-                                    @if ($h->order)<a href="{{ route('orders.show', $h->order) }}">{{ $h->order->order_number }}</a>@else — @endif
+                                    @if ($h->order)
+                                        {{-- Only linked for the people the order page
+                                             lets in. The floor cannot open it, and a
+                                             link that answers Forbidden is worse than
+                                             no link. --}}
+                                        @if ($canOpenOrders)
+                                            <a href="{{ route('orders.show', $h->order) }}">{{ $h->order->order_number }}</a>
+                                        @else
+                                            {{ $h->order->order_number }}
+                                        @endif
+                                    @else — @endif
                                 </td>
                                 <td style="font-size:0.8rem; color:var(--ink-3); white-space:nowrap;">{{ $h->started_at->format('M j, g:i A') }}</td>
                                 <td style="font-size:0.8rem; color:var(--ink-3); white-space:nowrap;">{{ $h->ended_at?->format('M j, g:i A') ?? '—' }}</td>

@@ -56,6 +56,27 @@ class StationSession extends Model
         return $this->operator_name ?: ($this->user?->name ?? '—');
     }
 
+    /**
+     * Name shown in the handover log.
+     *
+     * Sewing is different from the other stations: the shared station account
+     * does not identify the people who actually sewed the garment. Those names
+     * are recorded seam-by-seam on the job order sheet, so the log should show
+     * every distinct sewer credited on that job order.
+     */
+    public function handoverOperator(): string
+    {
+        if (str_starts_with($this->station, 'sewing_')) {
+            $names = $this->order?->jobOrder?->namesOnSheet(JobOrder::SEWING_STATION_FIELDS) ?? '';
+
+            // Do not fall back to the shared Sewing account. Until somebody
+            // is actually written on the sheet, there is no real sewer to name.
+            return filled($names) ? $names : '—';
+        }
+
+        return $this->operator();
+    }
+
     /** True when the typed name differs from the account it was logged under. */
     public function loggedUnderDifferentAccount(): bool
     {

@@ -49,6 +49,21 @@
     </select>
 </form>
 
+{{-- After a bad afternoon this list is thirty rows of the same two problems.
+     Clearing them one at a time is thirty clicks that teach nobody anything. --}}
+@if ($incidents->isNotEmpty())
+    <form method="POST" action="{{ route('system.errors.dismiss-all') }}"
+          onsubmit="return confirm('Clear all {{ $incidents->count() }} shown? The log itself is untouched, and anything that happens again comes back.');"
+          style="display:flex; gap:0.6rem; align-items:center; margin:-0.5rem 0 1rem;">
+        @csrf
+        <input type="hidden" name="days" value="{{ $days }}">
+        <button class="btn btn-ghost btn-sm">✓ Clear all {{ $incidents->count() }}</button>
+        <span style="font-size:0.78rem; color:var(--ink-3);">
+            Only marks them as seen — the log is the record, and a failure that happens again comes back.
+        </span>
+    </form>
+@endif
+
 <div class="card panel">
     @if ($incidents->isEmpty())
         <div style="text-align:center; padding:2.5rem 1rem;">

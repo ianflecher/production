@@ -59,6 +59,7 @@ class ProductionOrder extends Model
         'unit_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
         'quantity', 'due_date', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
+        'replaces_order_id', 'replacement_reason',
     ];
 
     protected function casts(): array
@@ -239,6 +240,29 @@ class ProductionOrder extends Model
         // type (e.g. Rash Guard) stored as free text — show it as-is.
         return \App\Services\PricingService::label($this->product_type)
             ?? ($this->product_type ? \Illuminate\Support\Str::title($this->product_type) : null);
+    }
+
+    /** The order this one is a remake of, if it is one. */
+    public function replaces(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'replaces_order_id');
+    }
+
+    /** Remakes made because of this order. */
+    public function replacements(): HasMany
+    {
+        return $this->hasMany(self::class, 'replaces_order_id');
+    }
+
+    /**
+     * A remake, not a sale.
+     *
+     * Worth asking before counting money or capacity: the shop is doing the
+     * work twice and being paid once.
+     */
+    public function isReplacement(): bool
+    {
+        return $this->replaces_order_id !== null;
     }
 
     /**

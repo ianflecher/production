@@ -105,13 +105,8 @@
     // wrong row should not be permanent because somebody pressed Finish. Open
     // until the job order itself is finished; after that the sheet is a record
     // of what was made, and records do not change.
-    $floorFields = array_merge(
-        \App\Models\JobOrder::SEWING_STATION_FIELDS,
-        \App\Models\JobOrder::QC_STATION_FIELDS
-    );
-    $canCorrect = $order->jobOrder
-        && $order->sheetStillEditable()
-        && \App\Services\Stations::forUser(auth()->user()) !== [];
+    $floorFields = \App\Http\Controllers\StationController::sheetFieldsForUser(auth()->user());
+    $canCorrect = $order->jobOrder && $order->sheetStillEditable() && $floorFields !== [];
 @endphp
 
 @if ($canCorrect)

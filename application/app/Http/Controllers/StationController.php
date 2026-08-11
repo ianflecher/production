@@ -64,6 +64,31 @@ class StationController extends Controller
      *
      * @param  \Illuminate\Support\Collection  $waiting
      */
+    /**
+     * Jobs this station has already finished, on orders that are still running.
+     *
+     * A sewer who spots a wrong thread code an hour later needs the job to
+     * still be there. It drops off the board when the whole order is finished,
+     * at which point the sheet is a record and stops being editable.
+     *
+     * @return \Illuminate\Support\Collection<int, ProductionOrder>
+     */
+    private static function finishedHere(string $station, $orders, $finishedByDepartment): \Illuminate\Support\Collection
+    {
+        if (self::sheetFieldsFor($station) === []) {
+            return collect();
+        }
+
+        $ids = collect(Stations::departments($station))
+            ->flatMap(fn ($d) => ($finishedByDepartment[$d] ?? collect())->all())
+            ->unique();
+
+        return $ids->map(fn ($id) => $orders[$id] ?? null)
+            ->filter()
+            ->filter(fn ($o) => $o->sheetStillEditable())
+            ->values();
+    }
+
     private function queuePage(string $station, $waiting): LengthAwarePaginator
     {
         $sorted = $waiting->sortBy(fn ($o) => match ($o->delayState()) {
@@ -136,7 +161,9 @@ class StationController extends Controller
         // everything sharing a single list.
         $all = Stations::all();
 
-        $historyByGroup = StationSession::with(['user', 'order'])
+        // order.jobOrder as well: a sewing row names its people off the sheet
+        // (handoverOperator), which was a query per row on a 400-row list.
+        $historyByGroup = StationSession::with(['user', 'order.jobOrder'])
             ->whereIn('station', $allowed)
             ->latest('id')
             ->limit(400)
@@ -148,23 +175,41 @@ class StationController extends Controller
         // a query each for the session, the jobs and every job's waiting step,
         // which is barely noticeable on a local database and very slow on a
         // remote one.
-        $activeByStation = StationSession::with(['user', 'order'])
+        // order.jobOrder too: the card reads the names off the sheet, and
+        // fetching it per card put the board back over its query budget.
+        $activeByStation = StationSession::with(['user', 'order.jobOrder'])
             ->whereIn('station', $allowed)
             ->whereNull('ended_at')
             ->latest('id')
             ->get()
             ->groupBy('station');
 
-        // Every step released to the floor, and the job it belongs to.
-        $released = Task::whereIn('status', Stations::RELEASED)
+        // Every step released to the floor, plus the sewing and QC steps that
+        // are already DONE on a live order — those stay on their card so the
+        // sheet can still be corrected. One query for both: this board is left
+        // open all day and each query on it is paid over and over.
+        $steps = Task::where(fn ($q) => $q
+                ->whereIn('status', Stations::RELEASED)
+                ->orWhere(fn ($w) => $w->where('status', 'complete')
+                    ->whereIn('department', ['Sewing', 'Quality control'])))
             ->whereHas('order', fn ($q) => $q->where('status', 'active'))
-            ->get(['production_order_id', 'department']);
+            ->get(['production_order_id', 'department', 'status']);
+
+        $released = $steps->whereIn('status', Stations::RELEASED);
 
         $ordersByDepartment = $released->groupBy('department')
             ->map(fn ($rows) => $rows->pluck('production_order_id')->unique()->values());
 
+        // Done here, nothing of this department left open on that order.
+        $finishedByDepartment = $steps->groupBy('department')->map(
+            fn ($rows) => $rows->groupBy('production_order_id')
+                ->filter(fn ($forOrder) => $forOrder->every(fn ($t) => $t->status === 'complete'))
+                ->keys()
+                ->values()
+        );
+
         $orders = ProductionOrder::with('jobOrder')
-            ->whereIn('id', $released->pluck('production_order_id')->unique())
+            ->whereIn('id', $steps->pluck('production_order_id')->unique())
             ->get()
             ->keyBy('id');
 
@@ -182,6 +227,7 @@ class StationController extends Controller
                     'label' => $s['label'],
                     'session' => $activeByStation->get($key)?->first(),
                     'orders' => $waiting,
+                    'finished' => self::finishedHere($key, $orders, $finishedByDepartment),
                     // A busy station can have hundreds of jobs queued behind it.
                     // Drawing them all made this the heaviest page in the app, so
                     // the card shows a page at a time.
@@ -199,9 +245,13 @@ class StationController extends Controller
         // Which job orders somebody is working on right now, and where. Every
         // sewing card lists the same queue, so without this two people can pick
         // up the same job from two machines and only find out at the seam.
-        $running = StationSession::whereNull('ended_at')
-            ->whereNotNull('production_order_id')
-            ->get()
+        //
+        // Taken from the sessions already fetched above rather than asked for
+        // again — this board is left open all day and every query on it is paid
+        // over and over.
+        $running = $activeByStation
+            ->flatten(1)
+            ->filter(fn ($x) => $x->production_order_id !== null)
             ->mapWithKeys(fn ($x) => [$x->production_order_id => Stations::label($x->station)]);
 
         return view('stations.index', [
@@ -369,6 +419,52 @@ class StationController extends Controller
         return $session->operator_name ?: ($session->user?->name ?? '');
     }
 
+    /**
+     * Write this station's part of the sheet. Only what was actually typed — a
+     * blank box left alone must not wipe what an earlier shift recorded.
+     *
+     * @param  array<int, string>  $fields
+     * @return array<string, string> what was written
+     */
+    private function writeSheet(Request $request, StationSession $session, array $fields): array
+    {
+        if ($fields === [] || ! $session->order?->jobOrder) {
+            return [];
+        }
+
+        $typed = array_filter(
+            $request->input('sheet', []),
+            fn ($v, $k) => in_array($k, $fields, true) && filled($v),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        if ($typed !== []) {
+            $session->order->jobOrder->update($typed);
+        }
+
+        return $typed;
+    }
+
+    /**
+     * The sheet boxes this person may fill, across the stations they work.
+     *
+     * A sewer owns the seams; the checker owns the QC line. Handing everyone
+     * both meant a sewer was asked to sign off the quality check, which is not
+     * their job and not their name to write.
+     *
+     * @return array<int, string>
+     */
+    public static function sheetFieldsForUser(\App\Models\User $user): array
+    {
+        $fields = [];
+
+        foreach (Stations::forUser($user) as $station) {
+            $fields = array_merge($fields, self::sheetFieldsFor($station));
+        }
+
+        return array_values(array_unique($fields));
+    }
+
     /** The label the paper form uses for a sheet field, for the station board. */
     public static function sheetFieldLabel(string $field): string
     {
@@ -399,6 +495,30 @@ class StationController extends Controller
     }
 
     /**
+     * The sheet, open for correction, without a run attached.
+     *
+     * The floor cannot open the order page, so a sewer who spots a wrong
+     * thread code after finishing had nowhere to go. This is the same sheet
+     * with the same boxes live, reachable from the station board.
+     */
+    public function editSheet(ProductionOrder $order): View|RedirectResponse
+    {
+        $this->assertAccess();
+        abort_unless($order->jobOrder, 404);
+
+        if (! $order->sheetStillEditable()) {
+            return redirect()->route('stations.index')->with('success',
+                $order->order_number.' is finished — its sheet is now a record and cannot be changed.');
+        }
+
+        return view('stations.sheet', [
+            'order' => $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee', 'tasks.files']),
+            'fields' => self::sheetFieldsForUser(request()->user()),
+            'suggest' => \App\Models\JobOrder::stationSuggestions(),
+        ]);
+    }
+
+    /**
      * Correct the floor's part of the sheet after the station has closed.
      *
      * The same fields, the same rule about blanks, but reachable from the job
@@ -411,10 +531,8 @@ class StationController extends Controller
         abort_unless($order->sheetStillEditable(), 403);
         abort_unless($order->jobOrder, 404);
 
-        $fields = array_merge(
-            \App\Models\JobOrder::SEWING_STATION_FIELDS,
-            \App\Models\JobOrder::QC_STATION_FIELDS
-        );
+        // Only what this person's own stations own.
+        $fields = self::sheetFieldsForUser($request->user());
 
         $request->validate(array_fill_keys(
             array_map(fn ($f) => 'sheet.'.$f, $fields),
@@ -456,11 +574,14 @@ class StationController extends Controller
             ]);
         }
 
-        // Somebody else's run on this machine ends when this one begins.
-        StationSession::activeOn($station)?->update([
-            'ended_at' => now(),
-            'end_reason' => 'shift_change',
-        ]);
+        // Somebody else's run on this machine ends when this one begins — and
+        // so does any run on this JOB somewhere else. A garment is in one pair
+        // of hands at a time; without the second clause the same job order sat
+        // open on two machines and both of them wrote to the same sheet.
+        StationSession::whereNull('ended_at')
+            ->where(fn ($q) => $q->where('station', $station)
+                ->orWhere('production_order_id', $order->id))
+            ->update(['ended_at' => now(), 'end_reason' => 'shift_change']);
 
         $session = StationSession::create([
             'station' => $station,
@@ -526,12 +647,25 @@ class StationController extends Controller
 
         $data = $request->validate([
             'end_reason' => ['required', 'in:'.implode(',', array_keys(StationSession::REASONS))],
+            // "Save and keep working": write the sheet, leave the clock running.
+            'keep_working' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:255'],
             ...array_fill_keys(
                 array_map(fn ($f) => 'sheet.'.$f, $sheetFields),
                 ['nullable', 'string', 'max:1000']
             ),
         ]);
+
+        // Stepping away mid-job saves what has been typed without ending the
+        // run — leaving the page used to throw it away, which on a sheet with
+        // twenty boxes is somebody's whole shift of typing.
+        if ($request->boolean('keep_working')) {
+            $this->writeSheet($request, $stationSession, $sheetFields);
+
+            return redirect()->route('stations.index')->with('success',
+                $stationSession->stationLabel().' — saved. '
+                .($stationSession->order?->order_number ?? 'The job').' is still on this machine.');
+        }
 
         $stationSession->update([
             'ended_at' => now(),
@@ -546,22 +680,9 @@ class StationController extends Controller
         if ($data['end_reason'] === 'done' && $stationSession->order) {
             $departments = Stations::departments($stationSession->station);
 
-            // Write this station's part of the job order sheet FIRST. Only what
-            // was actually typed — a blank box left alone must not wipe what an
-            // earlier shift already recorded.
-            $typed = [];
-
-            if ($sheetFields !== [] && $stationSession->order->jobOrder) {
-                $typed = array_filter(
-                    $request->input('sheet', []),
-                    fn ($v, $k) => in_array($k, $sheetFields, true) && filled($v),
-                    ARRAY_FILTER_USE_BOTH
-                );
-
-                if ($typed !== []) {
-                    $stationSession->order->jobOrder->update($typed);
-                }
-            }
+            // Write this station's part of the job order sheet FIRST, so the
+            // typing survives even if something later goes wrong.
+            $typed = $this->writeSheet($request, $stationSession, $sheetFields);
 
             // Credit whoever actually did the work.
             //

@@ -583,6 +583,66 @@
     };
     $hasDesign = collect($designTasks)->contains(fn ($t) => $latestFiles($t)->isNotEmpty());
 @endphp
+    {{-- Remakes. Kept next to the design package because that is where the
+         leader is when they decide the pieces have to be made again. --}}
+    @php $isBoss = auth()->user()->isLeader() || auth()->user()->isSuperAdmin(); @endphp
+
+    @if ($order->isReplacement())
+        <div class="alert-error" style="margin-bottom:1.4rem;">
+            <strong>This is a remake of
+                <a href="{{ route('orders.show', $order->replaces_order_id) }}">{{ $order->replaces?->order_number }}</a>.</strong>
+            {{ $order->replacement_reason }}
+            <br><span style="font-size:0.82rem;">It runs the full pipeline and carries no charge — the work is being done twice.</span>
+        </div>
+    @endif
+
+    @if ($order->replacements()->exists())
+        <div class="card panel" style="margin-bottom:1.4rem;">
+            <h2>Remakes of this order</h2>
+            <p class="sub">Pieces that had to be made again.</p>
+            @foreach ($order->replacements as $r)
+                <div style="font-size:0.85rem; margin:0.25rem 0;">
+                    <a href="{{ route('orders.show', $r) }}"><strong>{{ $r->order_number }}</strong></a>
+                    · {{ $r->quantity }} pcs · {{ $r->replacement_reason }}
+                    @include('partials.status', ['status' => $r->status])
+                </div>
+            @endforeach
+        </div>
+    @endif
+
+    @if ($isBoss && ! $order->isReplacement())
+        <div class="card panel" style="margin-bottom:1.4rem;">
+            <h2>Make these pieces again</h2>
+            <p class="sub">
+                A wrong colour, a damaged panel, a seam that failed the check. This makes a
+                new job order that runs the same pipeline — printing, cutting, sewing,
+                checking — pointed at this one. It carries <strong>no charge</strong>, so the
+                shop can see what remaking work actually costs.
+            </p>
+            <form method="POST" action="{{ route('orders.replacement', $order) }}"
+                  onsubmit="return confirm('Create a remake of {{ $order->order_number }}?');"
+                  style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.7rem; align-items:end;">
+                @csrf
+                <label>
+                    <span style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--ink-2);">What went wrong</span>
+                    <input type="text" name="replacement_reason" maxlength="255" required
+                           placeholder="e.g. wrong collar colour on 12 pcs" style="width:100%;">
+                </label>
+                <label>
+                    <span style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--ink-2);">How many pieces</span>
+                    <input type="number" name="quantity" min="1" max="{{ $order->quantity }}"
+                           value="{{ $order->quantity }}" required style="width:100%;">
+                </label>
+                <label>
+                    <span style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--ink-2);">Due</span>
+                    <input type="date" name="due_date" required
+                           value="{{ now()->addDays(7)->toDateString() }}" style="width:100%;">
+                </label>
+                <div><button class="btn btn-danger">Create remake</button></div>
+            </form>
+        </div>
+    @endif
+
 @if (($canRecordPayment || $isLeader) && $hasDesign && $order->jobOrder)
     @php $mockupPreview = $latestFiles($designTasks['Final mockup'] ?? null)->first(fn ($f) => $f->isImage())
         ?? $latestFiles($designTasks['Layout'] ?? null)->first(fn ($f) => $f->isImage()); @endphp
