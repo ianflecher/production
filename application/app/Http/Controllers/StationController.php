@@ -447,7 +447,10 @@ class StationController extends Controller
             // stays open and the order goes back in the queue for them. The
             // seam record and the operator's name are already saved above.
             if ($moreSeams) {
-                return back()->with('success',
+                // Never back(): the finish page this was submitted from needs a
+                // RUNNING session, and this run is over. Going back to it answers
+                // 403 to somebody who just did everything right.
+                return redirect()->route('stations.index')->with('success',
                     $stationSession->stationLabel().' — your seams are recorded. '
                     .$stationSession->order->order_number.' stays here for the next sewer.');
             }
@@ -480,6 +483,9 @@ class StationController extends Controller
             }
         }
 
-        return back()->with('success', $stationSession->stationLabel().' — '.$stationSession->reasonLabel().' recorded.'.$note);
+        // Same reason as above — the session is finished, so the finish page is
+        // no longer somewhere this person is allowed to be.
+        return redirect()->route('stations.index')
+            ->with('success', $stationSession->stationLabel().' — '.$stationSession->reasonLabel().' recorded.'.$note);
     }
 }

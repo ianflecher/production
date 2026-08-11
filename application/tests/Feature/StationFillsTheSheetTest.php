@@ -288,4 +288,32 @@ class StationFillsTheSheetTest extends TestCase
             ->assertOk()
             ->assertDontSee('name="sheet[', false);
     }
+
+    /**
+     * The finish page needs a RUNNING session. Sending the sewer "back" to it
+     * after their run has ended answered 403 to somebody who had just done
+     * everything right — so both answers land on the station board instead.
+     */
+    public function test_finishing_lands_on_the_board_and_not_on_a_forbidden_page(): void
+    {
+        foreach ([1, 0] as $moreSeams) {
+            [$sewer, $order] = $this->orderAtSewing();
+            $session = $this->runningOn($sewer, 'sewing_1', $order);
+
+            $this->actingAs($sewer)
+                ->from(route('stations.finish', $session))
+                ->post("/station-sessions/{$session->id}/end", [
+                    'end_reason' => 'done',
+                    'more_seams' => $moreSeams,
+                    'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
+                ])
+                ->assertRedirect(route('stations.index'));
+
+            // And the page they came from is now genuinely off limits, which is
+            // exactly why they must not be sent back to it.
+            $this->actingAs($sewer)
+                ->get(route('stations.finish', $session))
+                ->assertForbidden();
+        }
+    }
 }
