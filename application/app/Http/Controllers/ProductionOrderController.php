@@ -604,6 +604,12 @@ class ProductionOrderController extends Controller
                 'cutting_type' => $order->cutting_type,
                 'needs_sticker' => $order->needs_sticker,
                 'back_pocket' => $order->back_pocket,
+                // No first sample. The client approved this garment already and
+                // is waiting on pieces they have paid for — showing them one
+                // again, and splitting the run into sample + mass production,
+                // would hold up the remake for no decision anybody still has to
+                // make.
+                'skip_sample' => true,
                 'back_pocket_qty' => min((int) ($order->back_pocket_qty ?? 0), (int) $data['quantity']),
                 'quantity' => $data['quantity'],
                 // No charge: this is work being done a second time.
@@ -632,19 +638,39 @@ class ProductionOrderController extends Controller
             // The specs are the same garment, so the sheet starts from the
             // original rather than being typed out again.
             if ($order->jobOrder) {
-                $new->jobOrder()->create(
-                    collect($order->jobOrder->only($order->jobOrder->getFillable()))
-                        ->except(array_merge(
-                            ['production_order_id', 'status', 'created_by', 'sent_to_artist_by', 'sent_to_artist_at'],
-                            \App\Models\JobOrder::SEWING_STATION_FIELDS,
-                            \App\Models\JobOrder::QC_STATION_FIELDS,
-                        ))
-                        ->all()
-                    + ['status' => 'sent_to_artist', 'created_by' => $request->user()->id]
-                );
+                // A copy of the sheet, minus everything that belonged to the
+                // first run: who sewed it, with what thread, what the checker
+                // found. Those are answered again by whoever makes it this time.
+                $sheet = $order->jobOrder->replicate(array_merge(
+                    ['production_order_id', 'created_by', 'sent_to_artist_by', 'sent_to_artist_at'],
+                    \App\Models\JobOrder::SEWING_STATION_FIELDS,
+                    \App\Models\JobOrder::QC_STATION_FIELDS,
+                ));
+
+                foreach (array_merge(
+                    \App\Models\JobOrder::SEWING_STATION_FIELDS,
+                    \App\Models\JobOrder::QC_STATION_FIELDS,
+                ) as $ownedByTheFloor) {
+                    $sheet->$ownedByTheFloor = null;
+                }
+
+                $sheet->production_order_id = $new->id;
+                $sheet->status = 'sent_to_artist';
+                $sheet->created_by = $request->user()->id;
+                $sheet->save();
             }
 
             $new->refresh()->rebuildPipeline($new->decoration_methods ?? [], $new->cutting_type);
+
+            // A remake is production only: printer through inventory.
+            //
+            // The design is already drawn, approved and exported — the artist
+            // has nothing to do again, and there is no client sample or second
+            // release, because the client is waiting on pieces they have
+            // already bought. Building the whole pipeline and asking somebody
+            // to click through the design steps would be make-work that also
+            // makes the remake look like a fresh sale on every board.
+            $new->trimToProductionRun();
 
             return $new;
         });

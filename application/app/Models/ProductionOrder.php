@@ -242,6 +242,42 @@ class ProductionOrder extends Model
             ?? ($this->product_type ? \Illuminate\Support\Str::title($this->product_type) : null);
     }
 
+    /**
+     * Cut the pipeline down to the production run: printer through inventory.
+     *
+     * Used for a remake. The design steps are already done on the order this
+     * one replaces, and there is no sample to show or second release to make —
+     * the client bought these pieces once already. What is left is the work of
+     * making them again.
+     *
+     * The steps are deleted rather than cancelled: a cancelled step still
+     * shows on the board and in the counts, and a remake that lists eight
+     * cancelled design steps reads as a job that went wrong twice.
+     */
+    public function trimToProductionRun(): void
+    {
+        $tasks = $this->tasks()->orderBy('sequence')->get();
+
+        $from = $tasks->firstWhere('department', self::MOVER_FIRST_STEP)?->sequence;
+        $to = $tasks->firstWhere('department', self::MOVER_LAST_STEP)?->sequence;
+
+        // No production run in this pipeline (nothing is printed, say) — leave
+        // it alone rather than deleting every step it has.
+        if ($from === null || $to === null || $to < $from) {
+            return;
+        }
+
+        $this->tasks()
+            ->where(fn ($q) => $q->where('sequence', '<', $from)->orWhere('sequence', '>', $to))
+            ->delete();
+
+        // Open the first step of what is left, which the design approval would
+        // normally have done.
+        $this->refresh();
+        $firstStage = (int) $this->tasks()->min('stage');
+        $this->unlockStage($firstStage);
+    }
+
     /** The order this one is a remake of, if it is one. */
     public function replaces(): BelongsTo
     {
