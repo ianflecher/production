@@ -18,6 +18,34 @@
     $artistName = optional($order->tasks->first(fn ($t) => $t->team === \App\Models\User::JOB_ARTIST && $t->assignee))->assignee?->name ?? '—';
     $y = fn ($v) => filled($v) ? $v : '';
 
+    // Fields this viewer may type into, named as they are on the job order.
+    // Passed in by the station's finish page so the sewer fills the sheet
+    // itself rather than a separate list of the same questions underneath it.
+    // Everywhere else this is empty and the sheet is read-only, as before.
+    $editable = $editable ?? [];
+
+    // One filled-in box: the value as printed, or a box to type it into if
+    // this viewer owns that field.
+    $fill = function (string $field, bool $shout = true) use ($jo, $editable) {
+        $value = (string) ($jo?->$field ?? '');
+
+        if (! in_array($field, $editable, true)) {
+            return '<span class="fill">'.e($shout ? strtoupper($value) : $value).'</span>';
+        }
+
+        if (str_contains($field, 'notes')) {
+            return '<textarea class="fill-in" name="sheet['.$field.']" rows="2" maxlength="1000"'
+                .' placeholder="Anything worth flagging">'.e($value).'</textarea>';
+        }
+
+        $list = str_contains($field, 'thread')
+            ? ' list="dl_sheet_thread"'
+            : (str_contains($field, 'sewer') ? ' list="dl_sheet_sewer"' : '');
+
+        return '<input type="text" class="fill-in" name="sheet['.$field.']" maxlength="1000"'
+            .' value="'.e($value).'"'.$list.' placeholder="'.chr(8212).'" autocomplete="off">';
+    };
+
     // Who actually did each step. Floor accounts are shared, so prefer the name
     // typed at the station over the account the task sits on.
     $who = function (array $departments) use ($order) {
@@ -100,6 +128,27 @@
     /* …and the value written into it, in normal case so a thread code or a
        sewer's name reads as it was typed. */
     .jo .fill { font-weight: 700; text-transform: none; color: #111; }
+
+    /* The same box, when the person looking at it is the one who fills it in.
+       Yellow, because on this sheet yellow has always meant "still to write". */
+    .jo .fill-in {
+        display: block; width: 100%; margin-top: 0.15rem;
+        background: #ffef00; color: #111;
+        border: 1px solid #111; border-radius: 3px;
+        padding: 0.25rem 0.35rem;
+        font-size: 0.8rem; font-weight: 700; font-family: inherit;
+        outline: none;
+    }
+    .jo textarea.fill-in { font-weight: 400; resize: vertical; min-height: 3rem; }
+    .jo .fill-in::placeholder { color: #a09000; font-weight: 400; }
+    .jo .fill-in:focus { box-shadow: 0 0 0 2px rgba(17, 17, 17, .35); }
+    /* On paper it is just the value — no box, no yellow. */
+    @media print {
+        .jo .fill-in {
+            background: #fff !important; border: none !important;
+            padding: 0 !important; box-shadow: none !important;
+        }
+    }
 
     .jo-footnote {
         text-align: center; padding: 0.5rem 0.25rem;
@@ -295,10 +344,10 @@
         {{-- Size on the two that are cut to a measurement, thread colour on the
              two that are stitched on. --}}
         <tr>
-            <td class="fld">Size: <span class="fill">{{ strtoupper($y($jo?->neck_size)) }}</span></td>
-            <td class="fld">Size: <span class="fill">{{ strtoupper($y($jo?->cuff_size)) }}</span></td>
-            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->neck_label_thread)) }}</span></td>
-            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->bottom_hem_thread)) }}</span></td>
+            <td class="fld">Size: {!! $fill('neck_size') !!}</td>
+            <td class="fld">Size: {!! $fill('cuff_size') !!}</td>
+            <td class="fld">Thread Color: {!! $fill('neck_label_thread') !!}</td>
+            <td class="fld">Thread Color: {!! $fill('bottom_hem_thread') !!}</td>
         </tr>
 
         {{-- Each seam group names the sewer who ran it and the thread they used,
@@ -310,16 +359,16 @@
             <td class="lbl">Close Side Body &amp; Sleeve</td>
         </tr>
         <tr>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->neckbond_sewer)) }}</span></td>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->hangtag_woven_sewer)) }}</span></td>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->flatbed_sewer)) }}</span></td>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->close_side_sewer)) }}</span></td>
+            <td class="fld">Sewer: {!! $fill('neckbond_sewer') !!}</td>
+            <td class="fld">Sewer: {!! $fill('hangtag_woven_sewer') !!}</td>
+            <td class="fld">Sewer: {!! $fill('flatbed_sewer') !!}</td>
+            <td class="fld">Sewer: {!! $fill('close_side_sewer') !!}</td>
         </tr>
         <tr>
-            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->neckbond_thread)) }}</span></td>
-            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->hangtag_woven_thread)) }}</span></td>
-            <td class="fld">Thread Code/Color: <span class="fill">{{ strtoupper($y($jo?->flatbed_thread)) }}</span></td>
-            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->close_side_thread)) }}</span></td>
+            <td class="fld">Thread Code/Color: {!! $fill('neckbond_thread') !!}</td>
+            <td class="fld">Thread Code/Color: {!! $fill('hangtag_woven_thread') !!}</td>
+            <td class="fld">Thread Code/Color: {!! $fill('flatbed_thread') !!}</td>
+            <td class="fld">Thread Color: {!! $fill('close_side_thread') !!}</td>
         </tr>
 
         <tr>
@@ -331,16 +380,16 @@
             <td class="lbl">{{ strtoupper($y($jo?->extra_seam_label)) }}</td>
         </tr>
         <tr>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->attached_sleeve_sewer)) }}</span></td>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->topping_side_sewer)) }}</span></td>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->pipping_sewer)) }}</span></td>
-            <td class="fld"><span class="fill">{{ strtoupper($y($jo?->extra_seam_note)) }}</span></td>
+            <td class="fld">Sewer: {!! $fill('attached_sleeve_sewer') !!}</td>
+            <td class="fld">Sewer: {!! $fill('topping_side_sewer') !!}</td>
+            <td class="fld">Sewer: {!! $fill('pipping_sewer') !!}</td>
+            <td class="fld">{!! $fill('extra_seam_note') !!}</td>
         </tr>
         <tr>
-            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->attached_sleeve_thread)) }}</span></td>
-            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->topping_side_thread)) }}</span></td>
-            <td class="fld">Thread Color: <span class="fill">{{ strtoupper($y($jo?->pipping_thread)) }}</span></td>
-            <td class="fld">Sewer: <span class="fill">{{ strtoupper($y($jo?->extra_seam_sewer)) }}</span></td>
+            <td class="fld">Thread Color: {!! $fill('attached_sleeve_thread') !!}</td>
+            <td class="fld">Thread Color: {!! $fill('topping_side_thread') !!}</td>
+            <td class="fld">Thread Color: {!! $fill('pipping_thread') !!}</td>
+            <td class="fld">Sewer: {!! $fill('extra_seam_sewer') !!}</td>
         </tr>
 
         {{-- Whoever closed the sewing step, for the seams the form doesn't break
@@ -350,7 +399,7 @@
         @endif
 
         <tr>
-            <td class="fld red" colspan="4" style="text-align: left; white-space: pre-line;">Notes from Sewer: <span class="fill">{{ $y($jo?->sewer_notes) }}</span></td>
+            <td class="fld red" colspan="4" style="text-align: left; white-space: pre-line;">Notes from Sewer: {!! $fill('sewer_notes', false) !!}</td>
         </tr>
     </table>
 
@@ -371,7 +420,7 @@
         <tr>
             <td class="yellow">{{ strtoupper($y($jo?->packaging)) }}</td>
             <td class="ctr">{{ $who(['Quality control']) }}</td>
-            <td colspan="2" class="fld" style="text-align: left; white-space: pre-line;"><span class="fill">{{ $y($jo?->qc_notes) }}</span></td>
+            <td colspan="2" class="fld" style="text-align: left; white-space: pre-line;">{!! $fill('qc_notes', false) !!}</td>
         </tr>
         <tr>
             <td class="lbl">Agent</td>

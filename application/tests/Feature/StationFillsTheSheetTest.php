@@ -267,9 +267,25 @@ class StationFillsTheSheetTest extends TestCase
             ->get("/station-sessions/{$session->id}/finish")
             ->assertOk()
             ->assertSee('Is there another seam still to sew', false)
-            ->assertSee('name="sheet[neckbond_sewer]"', false);
+            // The boxes are IN the sheet, not in a second list of the same
+            // questions underneath it.
+            ->assertSee('class="fill-in" name="sheet[neckbond_sewer]"', false)
+            ->assertSee('Neckbond Shoulder', false);
 
         // Opening the page must not have closed anything on its own.
         $this->assertNotSame('complete', $order->fresh()->tasks()->where('department', 'Sewing')->value('status'));
+    }
+
+    public function test_the_sheet_stays_read_only_everywhere_else(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $sales = User::find($order->created_by);
+
+        // The same partial renders the sheet on the order page. It must not
+        // hand a text box to everyone who can open it.
+        $this->actingAs($sales)
+            ->get("/orders/{$order->id}/job-order")
+            ->assertOk()
+            ->assertDontSee('name="sheet[', false);
     }
 }
