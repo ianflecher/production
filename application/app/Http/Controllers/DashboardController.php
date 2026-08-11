@@ -188,6 +188,21 @@ class DashboardController extends Controller
                 ];
                 $desk = ['url' => route('products.index'), 'action' => 'Open inventory',
                     'title' => 'Product inventory', 'text' => 'Count in what production finished, then release products when a client receives them.'];
+            } elseif (! $user->canUseStations()) {
+                // Not a machine operator at all — the mover, for one. They were
+                // dropped into the station operator's desk and handed a link to
+                // a board they are not allowed to open, which answered
+                // Forbidden. Their work is the orders and the conversation.
+                $live = ProductionOrder::where('status', 'active');
+
+                $stats = [
+                    ['label' => 'Jobs on the floor', 'value' => (clone $live)->count(), 'note' => 'Open job orders'],
+                    ['label' => 'Running late', 'value' => (clone $live)->whereDate('due_date', '<', now())->count(), 'note' => 'Past their delivery date'],
+                    ['label' => 'Due today', 'value' => (clone $live)->whereDate('due_date', now())->count(), 'note' => 'Deliver or explain'],
+                ];
+
+                $desk = ['url' => route('orders.index'), 'action' => 'Open production orders',
+                    'title' => 'Following the floor', 'text' => 'Every job order and where it has got to.'];
             } else {
                 $stationKeys = \App\Services\Stations::forUser($user);
                 $all = \App\Services\Stations::all();

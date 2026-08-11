@@ -775,7 +775,15 @@
                             @endif
                             @if ($task->status === 'for_checking' && $task->approver_role === 'sales')
                                 <div style="font-size: 0.75rem; color: var(--accent); font-weight: 600; margin-top: 0.15rem;">
-                                    → <a href="{{ route('sample.review') }}">Approve it on Sample Review</a>
+                                    {{-- Only linked for the people that page lets
+                                         in. A leader or a mover watching the
+                                         pipeline was being handed a door that
+                                         answered Forbidden. --}}
+                                    @if (auth()->user()->canCreateOrders())
+                                        → <a href="{{ route('sample.review') }}">Approve it on Sample Review</a>
+                                    @else
+                                        → waiting on the account officer to check it with the client
+                                    @endif
                                 </div>
                             @endif
                             @if ($task->id === $currentTask?->id && $task->isStuckNoStaff())

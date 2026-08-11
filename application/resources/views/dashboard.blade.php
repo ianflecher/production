@@ -975,7 +975,9 @@
                         </tbody>
                     </table>
                 </div>
-                <a href="{{ route('stations.index') }}" class="btn btn-ghost btn-sm" style="margin-top: 0.75rem;">Open station board →</a>
+                @if (auth()->user()->canUseStations())
+                    <a href="{{ route('stations.index') }}" class="btn btn-ghost btn-sm" style="margin-top: 0.75rem;">Open station board →</a>
+                @endif
             </div>
         @endif
     @else
