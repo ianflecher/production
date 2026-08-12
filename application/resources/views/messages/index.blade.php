@@ -52,6 +52,13 @@
     </div>
 </div>
 
+@include('partials.list-search', [
+    'action' => route('messages.index'),
+    'value' => $search ?? '',
+    'placeholder' => 'Search order number, client, or what was said',
+    'label' => 'Search conversations',
+])
+
 <div class="card panel">
     <h2>Job order conversations</h2>
     <p class="sub">

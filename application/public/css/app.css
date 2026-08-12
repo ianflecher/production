@@ -795,6 +795,24 @@
         }
         .app-pager-status { color: var(--ink-3); font-size: 0.78rem; }
 
+        /* The search box every list shares (partials/list-search). */
+        .list-search {
+            display: flex; align-items: center; gap: 0.5rem;
+            flex-wrap: wrap; margin-bottom: 1rem;
+        }
+        .list-search-box {
+            position: relative; display: flex; align-items: center;
+            flex: 1; min-width: 220px; max-width: 420px;
+        }
+        .list-search-box svg {
+            position: absolute; left: 0.7rem; width: 16px; height: 16px;
+            color: var(--ink-3); pointer-events: none;
+        }
+        .list-search-box input {
+            width: 100%; padding-left: 2.1rem;
+        }
+        .list-search-note { font-size: 0.78rem; color: var(--ink-3); }
+
         /* Pager under a paginated list that isn't a table. */
         .list-pager { padding: 1rem 0 0.25rem; }
 

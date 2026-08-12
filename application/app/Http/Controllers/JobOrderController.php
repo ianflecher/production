@@ -185,7 +185,18 @@ class JobOrderController extends Controller
         $pressKeys = array_keys(\App\Models\JobOrder::pressOptions());
 
         $data = $request->validate([
-            'raw_materials' => ['nullable', 'array'],
+            // A garment always needs something to make it from. Saving this
+            // page with the list empty produced a job order whose Raw
+            // materials step opened with nothing to issue — the supply desk
+            // saw a step and no request, and the job quietly waited on a
+            // request that was never going to arrive.
+            'raw_materials' => ['required', 'array', 'min:1', function ($attr, $value, $fail) {
+                // required|array|min:1 still passes on ['', ''] — the form
+                // always posts its blank rows.
+                if (collect($value)->filter(fn ($v) => filled($v))->isEmpty()) {
+                    $fail('List at least one raw material — the supply desk has nothing to issue without it.');
+                }
+            }],
             'raw_materials.*' => ['nullable', 'string', 'max:255'],
             'cutting_type' => ['nullable', 'in:'.implode(',', array_keys(ProductionOrder::CUTTING_TYPES))],
             // Fabric press (required, merges the print onto the fabric) and the

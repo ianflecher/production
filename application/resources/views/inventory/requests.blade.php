@@ -12,6 +12,13 @@
     <a href="{{ route('inventory.index') }}" class="btn btn-ghost btn-sm">← Back to inventory</a>
 </div>
 
+@include('partials.list-search', [
+    'action' => route('inventory.requests'),
+    'value' => $search ?? '',
+    'placeholder' => 'Search material, order number, or client',
+    'label' => 'Search material requests',
+])
+
 @if ($pending->isEmpty())
     <div class="card panel" style="text-align: center; padding: 2.5rem; margin-bottom: 1.4rem;">
         <p class="muted">No pending requests. When an account officer sends a job order, its raw materials appear here.</p>
@@ -76,6 +83,11 @@
                                 @csrf
                                 <label>Why is it rejected?</label>
                                 <textarea name="note" rows="2" required maxlength="500" placeholder="e.g. out of stock — restock arriving Tuesday"></textarea>
+                                {{-- Shared login, so the decision needs a person
+                                     against it — the same question issuing asks. --}}
+                                <label style="margin-top:0.5rem;">Rejected by <span style="color: var(--danger-ink);">*</span></label>
+                                <input type="text" name="operator_name" maxlength="100" required
+                                       placeholder="e.g. {{ auth()->user()->name }}">
                                 <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;">Reject request</button>
                             </form>
                         </div>
@@ -122,7 +134,7 @@
                                 @endif
                             </td>
                             <td>{{ $d->status === 'approved' ? rtrim(rtrim(number_format((float) $d->quantity, 2), '0'), '.').' '.($d->item?->unit ?? '') : '—' }}</td>
-                            <td>{{ $d->decider?->name ?? '—' }}</td>
+                            <td>{{ $d->decidedByLabel() }}</td>
                             <td style="font-size: 0.8rem; color: var(--ink-3);">{{ $d->decided_at?->format('M j, g:i A') }}</td>
                             <td style="text-align: right;">
                                 {{-- A rejected request can be issued once the material is restocked. --}}

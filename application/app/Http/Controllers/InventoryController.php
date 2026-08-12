@@ -407,21 +407,34 @@ class InventoryController extends Controller
 
     /* ==================== Material requests from orders ==================== */
 
-    public function requests(): View
+    public function requests(Request $request): View
     {
         $this->assertAccess();
 
+        // Same box as every other list: find a material, or the job it is for.
+        $search = trim((string) $request->query('q', ''));
+
+        $matching = fn ($q) => $q->when($search !== '', fn ($w) => $w->where(fn ($s) => $s
+            ->where('material', 'like', "%{$search}%")
+            ->orWhereHas('order', fn ($o) => $o
+                ->where('order_number', 'like', "%{$search}%")
+                ->orWhere('customer_name', 'like', "%{$search}%"))));
+
         return view('inventory.requests', [
+            'search' => $search,
             // A queue that grows while nobody acts on it, so it is paged. The
             // $items list below stays whole on purpose — it fills the material
             // dropdown and matches names, so it is not a list being read.
             'pending' => MaterialRequest::with('order')
                 ->where('status', 'pending')
+                ->tap($matching)
                 ->orderBy('id')
                 ->paginate(self::PER_PAGE)
                 ->withQueryString(),
             'decided' => MaterialRequest::with(['order', 'item', 'decider'])
-                ->where('status', '!=', 'pending')->orderByDesc('decided_at')->limit(25)->get(),
+                ->where('status', '!=', 'pending')
+                ->tap($matching)
+                ->orderByDesc('decided_at')->limit(25)->get(),
             'items' => InventoryItem::orderBy('name')->get(),
         ]);
     }
@@ -460,6 +473,7 @@ class InventoryController extends Controller
 
             $materialRequest->update([
                 'status' => 'approved',
+                'decided_by_name' => $data['operator_name'],
                 'inventory_item_id' => $item->id,
                 'quantity' => $data['quantity'],
                 'decided_by' => $request->user()->id,
@@ -477,10 +491,15 @@ class InventoryController extends Controller
         $this->assertAccess();
         abort_unless($materialRequest->status === 'pending', 403);
 
-        $data = $request->validate(['note' => ['required', 'string', 'max:500']]);
+        $data = $request->validate([
+            'note' => ['required', 'string', 'max:500'],
+            // Shared login: say who is turning it down, same as issuing.
+            'operator_name' => ['required', 'string', 'max:100'],
+        ], ['operator_name.required' => 'Enter the name of the person rejecting this.']);
 
         $materialRequest->update([
             'status' => 'rejected',
+            'decided_by_name' => $data['operator_name'],
             'note' => $data['note'],
             'decided_by' => $request->user()->id,
             'decided_at' => now(),

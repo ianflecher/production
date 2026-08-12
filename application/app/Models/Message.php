@@ -150,7 +150,13 @@ class Message extends Model
                 fn ($t) => $t->where('department', ProductionOrder::MOVER_FIRST_STEP)
                     ->whereNotNull('released_at')
             ))
-            ->when(! $user->isLeader() && ! $user->isMover(), function ($q) use ($user) {
+            // The raw materials desk supplies every job on the floor, so it
+            // needs the whole inbox: a question about fabric on a job order
+            // they are not assigned to is still theirs to answer, and they
+            // were only seeing threads on orders they happened to hold a step
+            // on.
+            ->when(! $user->isLeader() && ! $user->isMover() && ! $user->canManageInventory(),
+                function ($q) use ($user) {
                 $q->where(function ($w) use ($user) {
                     $w->where('created_by', $user->id)
                         ->orWhereHas('tasks', fn ($t) => $t->where('assigned_to', $user->id));

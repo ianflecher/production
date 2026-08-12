@@ -291,11 +291,35 @@ class TaskController extends Controller
             $rules["paths.$key"] = ['required', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
             $messages["paths.$key.required"] = "Enter the file path for the {$label}.";
         }
+        // One design is not always one file - a front and a back, a sleeve
+        // done separately. Anything added with "Add another file" arrives as
+        // extra_1, extra_2... optional, but a real path if it was filled in.
+        $extras = collect($request->input('paths', []))
+            ->filter(fn ($v, $k) => str_starts_with((string) $k, 'extra_') && filled($v));
+
+        foreach ($extras as $key => $ignored) {
+            $rules["paths.$key"] = ['nullable', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
+        }
+
         $request->validate($rules, $messages);
 
         $round = (int) $task->revision_count + 1;
-        foreach ($slots as $key => $label) {
+
+        // The declared slot(s) first, then the artist's extras, numbered so
+        // production can tell them apart on the sheet.
+        $toStore = collect($slots)->map(fn ($label, $key) => [$key, $label])->values();
+        $n = 0;
+        foreach ($extras->keys() as $key) {
+            $n++;
+            $toStore->push([$key, ($slots ? reset($slots) : 'Export file').' ('.($n + 1).')']);
+        }
+
+        foreach ($toStore as [$key, $label]) {
             $path = trim((string) $request->input("paths.$key"));
+
+            if ($path === '') {
+                continue;
+            }
             $task->files()->create([
                 'path' => null,
                 'external_path' => $path,

@@ -41,6 +41,8 @@ class JobOrderAddonTest extends TestCase
 
         return $this->actingAs($sales)->post("/job-orders/{$order->id}/production", array_merge([
             'fabric_press' => 'heat_press',   // Step 3, always required
+            // A garment needs something to make it from; the page requires it.
+            'raw_materials' => ['Cotton combed 24s'],
         ], $fields));
     }
 
@@ -326,7 +328,7 @@ class JobOrderAddonTest extends TestCase
         ]);
         $this->assertSame('Sleeves only', $order->fresh()->jobOrder->addon_note);
 
-        $this->save($order, ['fabric_press' => 'heat_press']);
+        $this->save($order, ['fabric_press' => 'heat_press', 'raw_materials' => ['Cotton combed 24s']]);
 
         $jo = $order->fresh()->jobOrder;
         $this->assertNull($jo->addon, 'the add-on itself should be cleared');

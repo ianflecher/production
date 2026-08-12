@@ -53,18 +53,20 @@
                  pre-filled with the signed-in artist's own PC address so they
                  only type the folder + file after it (always back-slashes). --}}
             @php
-                // The address of the PC asking for this page — read from the
-                // connection, not from a list. Nothing to keep up to date, and
-                // it is right even after the router hands that PC a new one.
+                // The address of the artist's PC, so the path starts itself.
                 //
-                // Only an office-network address is offered: reached over the
-                // tunnel from outside, what the server sees is the tunnel, not
-                // the artist's machine, and a wrong address here is worse than
-                // an empty box.
-                $ip = request()->ip();
-                $ipPrefix = \App\Services\ServerIp::isPrivate((string) $ip)
-                    ? '\\\\'.$ip.'\\'
-                    : '';
+                // Reached over the tunnel, request()->ip() is the tunnel, not the
+                // artist's machine — which is why this box came up empty for
+                // anyone working from outside. Their last sign-in from the
+                // office is the next best thing, and it is the address their
+                // shared folder actually sits on.
+                $ip = \App\Services\ServerIp::isPrivate((string) request()->ip())
+                    ? request()->ip()
+                    : (\App\Services\ServerIp::isPrivate((string) auth()->user()?->last_login_ip)
+                        ? auth()->user()->last_login_ip
+                        : null);
+
+                $ipPrefix = $ip ? '\\\\'.$ip.'\\' : '';
             @endphp
             @foreach ($slots as $key => $label)
                 <div class="field" style="max-width: 520px;">
@@ -74,6 +76,17 @@
                            placeholder="\\{{ $ipPrefix ? trim($ipPrefix, '\\') : 'server' }}\FolderName\file..." required>
                 </div>
             @endforeach
+
+            {{-- One design does not always come out as one file: a front and a
+                 back, a set of sizes, a sleeve done separately. There was room
+                 for exactly one path, so the rest were pasted into the same box
+                 or left off the sheet entirely. --}}
+            <div id="extra_paths_{{ $task->id }}"></div>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:0.8rem;"
+                    onclick="addExportPath({{ $task->id }}, @js($ipPrefix))">
+                + Add another file
+            </button>
+
             <div style="font-size: 0.9rem; color: var(--ink-1); margin-bottom: 0.8rem; line-height: 1.6; background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 6px; padding: 0.7rem 0.9rem;">
                 Add the folder and file name after the IP — e.g. <code>\\192.168.1.1\sample\sample</code>.
                 <strong>Use back-slashes <code>\\</code> — not <code>//</code>.</strong><br>
@@ -159,3 +172,44 @@
 @else
     <p class="muted">No actions available (status: {{ $task->statusLabel() }}).</p>
 @endif
+
+@once
+    <script>
+        /* Another file path on an export step.
+         *
+         * Named extra_1, extra_2… so the server can tell the declared slots
+         * (which are required) from the ones the artist added (which are not).
+         */
+        function addExportPath(taskId, prefix) {
+            var box = document.getElementById('extra_paths_' + taskId);
+            var n = box.children.length + 1;
+
+            var field = document.createElement('div');
+            field.className = 'field';
+            field.style.maxWidth = '520px';
+
+            var label = document.createElement('label');
+            label.textContent = 'Another file — path';
+
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'no-caps';
+            input.name = 'paths[extra_' + n + ']';
+            input.value = prefix || '';
+            input.placeholder = '\\server\FolderName\file...';
+
+            var drop = document.createElement('button');
+            drop.type = 'button';
+            drop.className = 'btn btn-ghost btn-sm';
+            drop.textContent = 'Remove';
+            drop.style.marginTop = '0.3rem';
+            drop.onclick = function () { field.remove(); };
+
+            field.appendChild(label);
+            field.appendChild(input);
+            field.appendChild(drop);
+            box.appendChild(field);
+            input.focus();
+        }
+    </script>
+@endonce

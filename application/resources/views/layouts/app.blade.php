@@ -256,7 +256,15 @@
                 if (dirty) return false;
                 var ae = document.activeElement;
                 if (ae && ae.matches && ae.matches('input, textarea, select')) return false;
-                if (document.querySelector('details[open]')) return false;
+                // An open <details> that holds a form is somebody mid-way
+                // through something; reloading would shut it and lose what
+                // they typed. An open one that is only showing information —
+                // the job order sheet on the finish page, a help panel — is
+                // not a reason to stop the screen ever refreshing again.
+                var open = document.querySelectorAll('details[open]');
+                for (var i = 0; i < open.length; i++) {
+                    if (open[i].querySelector('input, textarea, select')) return false;
+                }
                 return true;
             }
 

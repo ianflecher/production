@@ -184,6 +184,13 @@
     </details>
 </div>
 
+@include('partials.list-search', [
+    'action' => route('users.index'),
+    'value' => $search ?? '',
+    'placeholder' => 'Search name, email, or job role',
+    'label' => 'Search staff',
+])
+
 @if ($users->isNotEmpty())
     @php
         $attTotal   = $presentToday + $absentToday;

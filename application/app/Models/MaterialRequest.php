@@ -9,7 +9,7 @@ class MaterialRequest extends Model
 {
     protected $fillable = [
         'production_order_id', 'material', 'status',
-        'inventory_item_id', 'quantity', 'note', 'decided_by', 'decided_at',
+        'inventory_item_id', 'quantity', 'note', 'decided_by', 'decided_by_name', 'decided_at',
     ];
 
     protected function casts(): array
@@ -30,5 +30,19 @@ class MaterialRequest extends Model
     public function decider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'decided_by');
+    }
+
+    /**
+     * Who decided this, as a person.
+     *
+     * The supply desk is a shared login, so the name typed on the form is the
+     * answer; the account it came through is a fallback for older rows that
+     * were recorded before the box was kept.
+     */
+    public function decidedByLabel(): string
+    {
+        return filled($this->decided_by_name)
+            ? $this->decided_by_name
+            : ($this->decider?->name ?? '—');
     }
 }

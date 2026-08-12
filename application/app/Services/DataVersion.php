@@ -28,6 +28,10 @@ class DataVersion
         'product_items',
         'product_movements',
         'product_receipts',
+        // The inbox is a screen like any other, and the station board moves
+        // whenever somebody picks a job up or puts it down.
+        'messages',
+        'station_sessions',
     ];
 
     /**
@@ -41,15 +45,28 @@ class DataVersion
      * on its own was more work than the server could keep up with — and far
      * worse against a database that isn't on the same machine.
      *
-     * Note: updated_at has one-second resolution, so two edits to the same row
-     * inside one second look identical. Screens check on a 15-second timer, so
-     * a change always lands in a later second than the one before it.
+     * It is a count, the highest id and the SUM of every row's updated_at —
+     * not the maximum.
+     *
+     * The maximum was the bug: demo and back-dated rows carry timestamps in
+     * the future, so a genuine edit today was older than the maximum and the
+     * fingerprint never moved. Screens sat there showing stale data and the
+     * auto-reload looked broken. A sum moves whenever ANY row's updated_at
+     * changes, whatever order the dates are in, and the max(id) catches an
+     * insert that lands in the same second.
      */
     public static function current(): string
     {
+        // Seconds since the epoch, per driver. Tests run on SQLite; the shop
+        // runs on MySQL.
+        $seconds = DB::getDriverName() === 'sqlite'
+            ? "strftime('%s', updated_at)"
+            : 'UNIX_TIMESTAMP(updated_at)';
+
         $selects = array_map(
             // Table names come from the constant above, never from input.
-            fn (string $table) => "select '{$table}' as t, count(*) as c, max(updated_at) as m from `{$table}`",
+            fn (string $table) => "select '{$table}' as t, count(*) as c, coalesce(max(id), 0) as i, "
+                ."coalesce(sum({$seconds}), 0) as s from `{$table}`",
             self::WATCHED
         );
 
@@ -57,7 +74,7 @@ class DataVersion
 
         $parts = [];
         foreach ($rows as $row) {
-            $parts[$row->t] = $row->c.'@'.$row->m;
+            $parts[$row->t] = $row->c.'/'.$row->i.'/'.$row->s;
         }
 
         // Keyed and sorted, so the fingerprint doesn't depend on row order.

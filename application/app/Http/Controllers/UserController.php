@@ -23,6 +23,17 @@ class UserController extends Controller
 
         $users = User::with('attendances')->orderBy('name')->get();
 
+        // Thirty-four staff is enough to scroll for. Filtered in PHP because
+        // the list is already whole in memory for the counts below.
+        $search = trim((string) $request->query('q', ''));
+
+        if ($search !== '') {
+            $needle = mb_strtolower($search);
+            $users = $users->filter(fn ($u) => str_contains(mb_strtolower((string) $u->name), $needle)
+                || str_contains(mb_strtolower((string) $u->email), $needle)
+                || str_contains(mb_strtolower((string) $u->job_role), $needle))->values();
+        }
+
         if ($scope) {
             $users = $users
                 ->filter(fn ($u) => User::roleDomain($u->job_role) === $scope || $u->id === $request->user()->id)
@@ -70,6 +81,7 @@ class UserController extends Controller
 
         return view('users.index', [
             'users' => $users,
+            'search' => $search,
             'managementScope' => $scope,
             'todayAttendance' => $todayAttendance,
             'presentToday' => $presentToday,

@@ -23,6 +23,11 @@ class MessageController extends Controller
         $me = $request->user();
         $orderIds = Message::accessibleOrderIds($me);
 
+        // The inbox is one row per job order and grows with the shop, so it
+        // needs the same box every other list has: order number, client, or
+        // something somebody said.
+        $search = trim((string) $request->query('q', ''));
+
         // The id of each order's newest message. Sorting on this in SQL is what
         // lets the inbox be paged: orders that have been talked about float to
         // the top (no messages sorts last on both MySQL and SQLite), and the
@@ -32,6 +37,12 @@ class MessageController extends Controller
             ->whereColumn('production_order_id', 'production_orders.id');
 
         $orders = ProductionOrder::whereIn('id', $orderIds)
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('order_number', 'like', "%{$search}%")
+                ->orWhere('customer_name', 'like', "%{$search}%")
+                ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%{$search}%"))
+                // Searching what was said is the point of an inbox search.
+                ->orWhereHas('messages', fn ($m) => $m->where('body', 'like', "%{$search}%"))))
             // files come too: the inbox preview describes a photo-only message.
             ->with([
                 'client',
@@ -63,6 +74,7 @@ class MessageController extends Controller
 
         return view('messages.index', [
             'threads' => $threads,
+            'search' => $search,
             // Counted across the whole inbox, not the page on screen.
             'talkedAbout' => ProductionOrder::whereIn('id', $orderIds)
                 ->whereHas('messages')
