@@ -70,6 +70,19 @@ class SampleReviewFileNoticeTest extends TestCase
             ->assertSee('No file attached.');
     }
 
+    public function test_the_officer_is_told_the_garment_is_coming(): void
+    {
+        // Otherwise the card reads as broken: a review page with nothing on it
+        // to review, and no clue that the thing is being carried over by hand.
+        [$sales, $order] = $this->waitingOn('Produce sample for client');
+
+        $this->actingAs($sales)->get('/sample-review')
+            ->assertOk()
+            ->assertSee('on its way to you')
+            ->assertSee('Send back to production')
+            ->assertSee(route('messages.show', $order), false);
+    }
+
     public function test_the_physical_sample_still_offers_its_own_controls(): void
     {
         // Removing the warning must not take the rest of the card with it.

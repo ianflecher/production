@@ -61,11 +61,21 @@
                             <a href="{{ route('tasks.file.view', $f) }}" target="_blank" class="btn btn-primary btn-sm">👁 View {{ $f->label ?? 'file' }}</a>
                         @endif
                     @empty
-                        {{-- Still worth saying on an ARTIST's step: a layout sent
-                             for review with no artwork on it is a real fault. --}}
-                        @unless ($isPhysicalSample)
+                        @if ($isPhysicalSample)
+                            {{-- Nothing to look at on screen, so say where the thing
+                                 actually is. Without this the card reads as broken:
+                                 a review page with nothing to review on it. --}}
+                            <span style="font-size:0.85rem; color: var(--ink-2);">
+                                📦 The sample garment is on its way to you — please wait for it to arrive,
+                                then check it in person. Something wrong with it? Use
+                                <strong>Send back to production</strong> below, or
+                                <a href="{{ route('messages.show', $task->order) }}">message the team</a>.
+                            </span>
+                        @else
+                            {{-- Still worth saying on an ARTIST's step: a layout sent
+                                 for review with no artwork on it is a real fault. --}}
                             <span style="font-size:0.85rem; color: var(--danger-ink);">No file attached.</span>
-                        @endunless
+                        @endif
                     @endforelse
                     {{-- The job order isn't relevant while the client is still
                          reviewing the LAYOUT (no downpayment, job order still a
