@@ -59,6 +59,32 @@ class InventoryTest extends TestCase
             ->assertInvalid(['name', 'category', 'unit', 'quantity', 'operator_name']);
     }
 
+    /**
+     * The form has to ASK for everything the rule above insists on.
+     *
+     * It did not. Adding a material required a name, the form had no box for
+     * one, and every test posted straight to the route — so the rule and the
+     * form drifted apart with nothing watching. Whoever added stock got
+     * bounced back by a rule about a field they had never been shown.
+     */
+    public function test_the_add_material_form_asks_for_every_field_it_requires(): void
+    {
+        $html = $this->actingAs($this->supplyChain())->get('/inventory')->assertOk()->getContent();
+
+        // Only the Add-material form. The restock dialog further down the page
+        // has its own name box, and searching the whole page would find that
+        // one and call the missing box present.
+        preg_match('#<form[^>]*action="[^"]*/inventory"[^>]*>(.*?)</form>#s', $html, $m);
+        $this->assertNotEmpty($m, 'the Add material form is not on the page at all');
+
+        foreach (['name', 'category', 'unit', 'quantity', 'operator_name'] as $field) {
+            $this->assertStringContainsString(
+                'name="'.$field.'"', $m[1],
+                "the Add material form requires $field but never asks for it"
+            );
+        }
+    }
+
     // ---- Adding a photo to an existing material ---------------------------
 
     public function test_a_photo_can_be_added_to_a_material_that_has_none(): void

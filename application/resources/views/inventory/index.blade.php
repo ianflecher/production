@@ -152,6 +152,19 @@
                     <input id="material_photo" type="file" name="photo" accept="image/*" class="no-caps">
                 </div>
 
+                {{-- Every other stock movement records who made it, and the
+                     opening balance is a movement like any other — a count
+                     nobody signed is a count nobody can be asked about. The
+                     desk is shared, so the account is not the answer. --}}
+                <div class="field material-field">
+                    <label for="material_operator">
+                        Your name <span style="color: var(--danger-ink);">*</span>
+                    </label>
+                    <input id="material_operator" type="text" name="operator_name" required
+                           maxlength="100" value="{{ old('operator_name') }}"
+                           placeholder="Who is adding this stock">
+                </div>
+
                 <button class="inv-submit inv-submit-add" type="submit">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
                     Add to inventory
