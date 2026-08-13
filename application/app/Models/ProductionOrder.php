@@ -771,10 +771,16 @@ class ProductionOrder extends Model
         'Embroidery' => 'Sewing',
         // The press can't run until the print is ready (Printer) AND the fabric
         // has been issued (Raw materials) — you press the transfer onto the cloth.
-        'Cap press' => ['Printer', 'Raw materials'],
-        'Heat press' => ['Printer', 'Raw materials'],
-        'Small press' => ['Printer', 'Raw materials'],
-        'Roller press' => ['Printer', 'Raw materials'],
+        //
+        // 'Mass production' is in the list for the batch run, where it is the
+        // step that does the printing. Prerequisites are matched WITHIN a stage
+        // and a missing one is treated as met, so each run only ever waits for
+        // the steps it actually has: Printer + Raw materials on the sample,
+        // Mass production on the batch.
+        'Cap press' => ['Printer', 'Raw materials', 'Mass production'],
+        'Heat press' => ['Printer', 'Raw materials', 'Mass production'],
+        'Small press' => ['Printer', 'Raw materials', 'Mass production'],
+        'Roller press' => ['Printer', 'Raw materials', 'Mass production'],
     ];
 
     /**
@@ -984,6 +990,23 @@ class ProductionOrder extends Model
         // 10 — mass production (prints the whole batch; the entire order when the
         // sample was skipped).
         $add(10, 'Mass production', $prod);
+
+        // The batch has to be PRESSED too. Printing it is only half of it — the
+        // transfer still has to go onto the cloth before anything can be cut,
+        // and the line was written as "the same line the sample did" while
+        // quietly leaving this out of the copy. The shop pressed the batch
+        // anyway, off the books, so it was never timed and never showed up as
+        // the thing holding an order up.
+        //
+        // Same stage as Mass production, gated on it, exactly as the sample's
+        // press sits with the Printer. Embroidery is not here for the same
+        // reason it is not at stage 3: it runs on the sewn garment.
+        foreach ($this->decorationSteps($decorationMethods) as $label) {
+            if ($label === self::DECORATION_METHODS['embroidery']) {
+                continue;
+            }
+            $add(10, $label, $prod);
+        }
 
         // 11-14 — the rest of the batch goes through the same line the sample did.
         // Printing it is not the end: it still has to be cut, paired, sewn and
