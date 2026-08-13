@@ -14,8 +14,6 @@
         width: 220px; max-width: 100%;
         padding: 0.45rem 0.7rem 0.45rem 2rem; font-size: 0.86rem;
     }
-    tr.is-out td { background: #fef4f4; }
-    tr.is-out:hover td { background: #fdeaea; }
 </style>
 
 <div class="page-head">
@@ -167,9 +165,6 @@
         </h2>
         @if ($totalCount > 0)
             <form method="GET" action="{{ route('products.index') }}" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-                @if ($outCount > 0)
-                    <span class="badge" style="background: #fef2f2; color: #b91c1c;">{{ number_format($outCount) }} out of stock</span>
-                @endif
                 <div class="inv-search">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     <input type="search" id="invSearch" name="q" value="{{ $search }}" placeholder="Search product…" autocomplete="off" aria-label="Search products">
@@ -205,20 +200,15 @@
                 </thead>
                 <tbody id="invBody">
                     @foreach ($items as $item)
-                        @php $isOut = (float) $item->quantity <= 0; @endphp
-                        <tr data-search="{{ strtolower($item->name.' '.$item->unit) }}" class="{{ $isOut ? 'is-out' : '' }}">
+                        <tr data-search="{{ strtolower($item->name.' '.$item->unit) }}">
                             <td style="font-weight: 600;">{{ $item->name }}</td>
                             <td>
-                                @if ($isOut)
-                                    <span class="badge" style="background: #fef2f2; color: #b91c1c;">OUT OF STOCK</span>
-                                @else
-                                    <span style="font-weight: 700;">{{ $item->qtyForHumans() }}</span>
-                                    <span style="color: var(--ink-3); font-size: 0.82rem;">{{ $item->unit }}</span>
-                                @endif
+                                <span style="font-weight: 700;">{{ $item->qtyForHumans() }}</span>
+                                <span style="color: var(--ink-3); font-size: 0.82rem;">{{ $item->unit }}</span>
                             </td>
                             <td style="text-align: right;">
                                 {{-- Opens the centered release modal. --}}
-                                <button type="button" class="btn btn-success btn-sm js-release-open" @disabled($isOut)
+                                <button type="button" class="btn btn-success btn-sm js-release-open"
                                         data-action="{{ route('products.deduct', $item) }}"
                                         data-name="{{ $item->name }}"
                                         data-unit="{{ $item->unit }}"
@@ -235,6 +225,47 @@
         @endif
     @endif
 </div>
+
+{{-- Delivered work, kept out of the stock list. A made-to-order garment hits
+     zero the day the client collects it, so counting those as "out of stock"
+     filed every finished job as a shortage — in red, and growing. They are not
+     deleted: "did they ever get it?" is a question somebody asks eventually. --}}
+@if ($handedOver->isNotEmpty())
+    <div class="card panel" style="margin-bottom: 1.4rem;">
+        <h2>Handed over to the client
+            <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">({{ number_format($handedOver->total()) }})</span>
+        </h2>
+        <p class="sub">Finished products that have left the shop. Nothing on hand — kept as a record of what went out.</p>
+
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                    <tr><th>Product</th><th>Released</th><th>By</th><th>When</th></tr>
+                </thead>
+                <tbody>
+                    @foreach ($handedOver as $item)
+                        @php $out = $item->movements->first(); @endphp
+                        <tr>
+                            <td style="font-weight: 600;">{{ $item->name }}</td>
+                            <td style="white-space: nowrap;">
+                                {{ $out ? rtrim(rtrim(number_format((float) $out->quantity, 2), '0'), '.') : '—' }}
+                                <span style="color: var(--ink-3); font-size: 0.82rem;">{{ $item->unit }}</span>
+                            </td>
+                            <td style="color: var(--ink-2);">{{ $out?->operator() ?? '—' }}</td>
+                            <td style="color: var(--ink-3); font-size: 0.8rem; white-space: nowrap;">
+                                {{ $out?->created_at?->format('M j, Y g:i A') ?? '—' }}
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+
+        @if ($handedOver->hasPages())
+            <div class="list-pager">{{ $handedOver->links() }}</div>
+        @endif
+    </div>
+@endif
 
 <div class="card panel">
     <h2>Recent activity</h2>

@@ -29,12 +29,30 @@ class ProductInventoryController extends Controller
 
         // Searched on the server so it reaches the whole product list, not just
         // the page being shown.
+        $matching = fn ($q) => $q->when($search !== '', fn ($w) => $w->where(fn ($x) => $x
+            ->where('name', 'like', "%{$search}%")
+            ->orWhere('unit', 'like', "%{$search}%")));
+
+        // Only what is actually on the shelf. Finished goods are made to order,
+        // so every one of them reaches zero the day the client collects it —
+        // leaving those in a stock list (and counting them as "out of stock",
+        // in red) files completed work as a shortage.
         $items = ProductItem::query()
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('unit', 'like', "%{$search}%")))
+            ->where('quantity', '>', 0)
+            ->tap($matching)
             ->orderBy('name')
             ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        // Gone, but not deleted: what was handed over and when is the answer to
+        // "did they ever get it?", which somebody asks eventually.
+        $handedOver = ProductItem::query()
+            ->where('quantity', '<=', 0)
+            ->whereHas('movements', fn ($q) => $q->where('reason', 'released'))
+            ->with(['movements' => fn ($q) => $q->where('reason', 'released')->latest('id')->limit(1)])
+            ->tap($matching)
+            ->orderByDesc('id')
+            ->paginate(self::PER_PAGE, ['*'], 'gone_page')
             ->withQueryString();
 
         // The receiving queue holds one row per finished order until someone
@@ -61,9 +79,9 @@ class ProductInventoryController extends Controller
             'items' => $items,
             'search' => $search,
             'toRelease' => $toRelease,
-            // Counted across all products, so the badge doesn't change as you page.
-            'outCount' => ProductItem::where('quantity', '<=', 0)->count(),
-            'totalCount' => ProductItem::count(),
+            'handedOver' => $handedOver,
+            // Counted across all products, so it doesn't change as you page.
+            'totalCount' => ProductItem::where('quantity', '>', 0)->count(),
             'pending' => $pending,
             'pendingCount' => $pending->total(),
             'movements' => ProductMovement::with(['item', 'user', 'order'])
