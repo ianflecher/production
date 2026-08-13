@@ -21,7 +21,7 @@
 <div class="page-head">
     <div class="grow">
         <h1>Production details</h1>
-        <p class="muted">{{ $order->order_number }} · {{ $order->customer_name }} — set the raw materials &amp; cutting so production isn't left unfilled. (Not printed on the job order sheet.)</p>
+        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — set the raw materials &amp; cutting so production isn't left unfilled. (Not printed on the job order sheet.)</p>
     </div>
 </div>
 

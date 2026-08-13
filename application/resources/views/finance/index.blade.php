@@ -84,7 +84,7 @@
                     @foreach ($payments as $p)
                         <tr>
                             <td style="font-weight:600;">{{ $p->order?->order_number ?? '—' }}</td>
-                            <td>{{ $p->order?->client?->name ?? $p->order?->customer_name ?? '—' }}</td>
+                            <td>{{ $p->order?->clientName() ?: '—' }}</td>
                             <td style="text-align:right; font-weight:600; font-variant-numeric: tabular-nums;">₱{{ number_format((float) $p->amount, 2) }}</td>
                             <td><span class="badge badge-kind" style="background: var(--accent-soft); color: #1d4ed8;">{{ $p->kind ?? 'payment' }}</span></td>
                             <td>{{ $p->method ?? '—' }}</td>

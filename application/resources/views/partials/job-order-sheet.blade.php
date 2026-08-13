@@ -189,7 +189,7 @@
     <table class="jo">
         <tr>
             <td class="lbl-l" style="width: 18%;">Client Name:</td>
-            <td style="width: 32%;" class="ctr">{{ $order->client?->name ?? $order->customer_name }}</td>
+            <td style="width: 32%;" class="ctr">{{ $order->clientName() }}</td>
             <td class="lbl-l" style="width: 18%;">Date Ordered:</td>
             <td style="width: 32%;" class="ctr red">{{ $order->created_at->format('n/j/Y') }}</td>
         </tr>

@@ -29,7 +29,7 @@
 
 <div class="fin-wrap">
     <div class="fin-head">
-        <h2>{{ $order?->order_number ?? 'No job order' }} — {{ $order?->client?->name ?? $order?->customer_name }}</h2>
+        <h2>{{ $order?->order_number ?? 'No job order' }} — {{ $order?->clientName() }}</h2>
         <div class="meta">
             {{ $session->stationLabel() }} · run by <strong>{{ $session->operator() }}</strong>
             @if ($order) · {{ $order->quantity }} pcs · due {{ $order->due_date?->format('M j, Y') ?? '—' }} @endif

@@ -107,7 +107,7 @@
                             @endphp
                             <span class="stage-tag {{ $stageClass }}">{{ $stageLabel }}</span>
                         </div>
-                        <div class="msg-client">{{ $t['order']->client?->name ?? $t['order']->customer_name }}</div>
+                        <div class="msg-client">{{ $t['order']->clientName() }}</div>
                         <div class="msg-prev {{ $t['unread'] ? 'unread' : '' }}">
                             @if ($t['last'])
                                 {{-- The person who typed it, not the login they

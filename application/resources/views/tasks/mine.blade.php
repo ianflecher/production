@@ -107,7 +107,7 @@
                                 font-size: 0.85rem;
                             "
                         >
-                            {{ $order->customer_name }}
+                            {{ $order->clientName() }}
                         </span>
                     </div>
 
@@ -347,7 +347,7 @@
                                         overflow-wrap: anywhere;
                                     "
                                 >
-                                    {{ $order->customer_name }}
+                                    {{ $order->clientName() }}
 
                                     @if ($order->quantity)
                                         · {{ number_format($order->quantity) }}
@@ -746,7 +746,7 @@
                                         overflow-wrap: anywhere;
                                     "
                                 >
-                                    {{ $order->customer_name }}
+                                    {{ $order->clientName() }}
 
                                     @if ($order->quantity)
                                         · {{ number_format($order->quantity) }}

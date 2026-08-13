@@ -40,7 +40,7 @@
             @include('partials.status', ['status' => $order->status])
         </h1>
         <p class="muted">
-            {{ $order->customer_name }} · {{ number_format($order->quantity) }} pcs
+            {{ $order->clientName() }} · {{ number_format($order->quantity) }} pcs
             @if ($order->due_date) · due {{ $order->due_date->format('M j, Y') }} @endif
             · created by {{ $order->creator->name }}
         </p>
@@ -278,7 +278,7 @@
         <div class="tbl-wrap">
             <table class="tbl">
                 <tbody>
-                    <tr><td style="width: 130px;">Client</td><td style="font-weight: 600;">{{ $order->client?->name ?? $order->customer_name }}</td></tr>
+                    <tr><td style="width: 130px;">Client</td><td style="font-weight: 600;">{{ $order->clientName() }}</td></tr>
                     @if ($order->client?->contact_number)
                         <tr><td>Contact</td><td>{{ $order->client->contact_number }}</td></tr>
                     @endif
@@ -489,7 +489,7 @@
             {{-- Compose the latest status as a ready-to-send message the account
                  officer copies and pastes into the client's Messenger / Viber. --}}
             @php
-                $clientName = $order->client?->name ?? $order->customer_name;
+                $clientName = $order->clientName();
                 $firstName = trim(explode(' ', trim((string) $clientName))[0] ?? '') ?: 'there';
 
                 // Turn the internal stage name into a warm, client-facing phrase

@@ -289,7 +289,7 @@ This closes the step and moves the order to the next one.');"
                                      job order carries over instead of being picked again. --}}
                                 <input type="hidden" name="production_order_id" value="{{ $s->order->id }}">
                                 <div style="font-size:0.82rem; font-weight:600; padding:0.35rem 0.5rem; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
-                                    {{ $s->order->order_number }} — {{ $s->order->customer_name }}@if ($p['key'] === 'sticker') · {{ number_format($s->order->quantity) }} pcs @endif
+                                    {{ $s->order->order_number }} — {{ $s->order->clientName() }}@if ($p['key'] === 'sticker') · {{ number_format($s->order->quantity) }} pcs @endif
                                 </div>
                                 <div style="font-size:0.72rem; color:var(--ink-3); margin-top:0.25rem;">
                                     Continuing the run already on this station. To switch jobs, come off first.
@@ -310,7 +310,7 @@ This closes the step and moves the order to the next one.');"
                                     <option value="">— Choose job order —</option>
                                     @foreach ($p['queue'] as $o)
                                         <option value="{{ $o->id }}">
-                                            {{ $o->order_number }} — {{ $o->customer_name }}@if ($p['key'] === 'sticker') · {{ number_format($o->quantity) }} pcs @endif
+                                            {{ $o->order_number }} — {{ $o->clientName() }}@if ($p['key'] === 'sticker') · {{ number_format($o->quantity) }} pcs @endif
                                         </option>
                                     @endforeach
                                 </select>

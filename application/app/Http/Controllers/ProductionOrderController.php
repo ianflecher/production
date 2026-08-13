@@ -45,7 +45,7 @@ class ProductionOrderController extends Controller
         // One page at a time. The list only ever grows, so loading it whole
         // would get slower every week the shop stays busy.
         $orders = $this->visibleOrders($request)
-            ->with('tasks')
+            ->with(['tasks', 'client'])
             // Answered per row on the list, so answer it in this query rather
             // than once per order (see hasDownpayment).
             ->withExists('payments')

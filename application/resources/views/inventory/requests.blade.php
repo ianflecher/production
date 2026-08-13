@@ -35,7 +35,7 @@
                         <h2 style="margin-bottom: 0.15rem;">{{ $req->material }}</h2>
                         <p class="muted" style="font-size: 0.85rem;">
                             for <a href="{{ route('orders.show', $req->order) }}" style="font-weight: 600;">{{ $req->order->order_number }}</a>
-                            · {{ $req->order->customer_name }} · {{ number_format($req->order->quantity) }} pcs
+                            · {{ $req->order->clientName() }} · {{ number_format($req->order->quantity) }} pcs
                             · requested {{ $req->created_at->diffForHumans() }}
                         </p>
                     </div>

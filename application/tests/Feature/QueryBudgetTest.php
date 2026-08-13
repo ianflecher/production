@@ -58,7 +58,11 @@ class QueryBudgetTest extends TestCase
             ['New order form', '/orders/create', 18],
             ['Calendar', '/calendar', 20],
             ['Approvals', '/approvals', 22],
-            ['Stations board', '/stations', 20],
+            // 21, not 20: the running card names the client, and that name has
+            // to come off the client record rather than the copy kept on the
+            // order, which goes stale the moment the record is corrected. One
+            // more query for the whole page, flat however many stations run.
+            ['Stations board', '/stations', 21],
             ['My tasks', '/my-tasks', 18],
             ['Inventory', '/inventory', 22],
             ['Products', '/products', 22],

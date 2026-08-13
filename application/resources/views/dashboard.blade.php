@@ -143,7 +143,7 @@
 
     $totalOrders = $dashboardOrders->count();
     $totalCustomers = $dashboardOrders
-        ->pluck('customer_name')
+        ->map(fn ($o) => $o->clientName())
         ->filter()
         ->unique()
         ->count();
@@ -448,7 +448,7 @@
                             </a>
 
                             <div class="dash-subtext">
-                                {{ $order->customer_name }}
+                                {{ $order->clientName() }}
                             </div>
                         </td>
 
@@ -713,7 +713,7 @@
                             </a>
 
                             <div class="dash-subtext">
-                                {{ $order->customer_name }}
+                                {{ $order->clientName() }}
                             </div>
                         </td>
 
@@ -905,7 +905,7 @@
                     <span class="dash-activity-icon">▣</span>
                     <span class="dash-activity-text">
                         Order {{ $order->order_number }} was created for
-                        {{ $order->customer_name }}
+                        {{ $order->clientName() }}
                     </span>
                     <span class="dash-activity-time">
                         {{ $order->created_at?->diffForHumans() }}
@@ -967,7 +967,7 @@
                             @foreach ($waitingList as $r)
                                 <tr>
                                     <td style="font-weight: 600;">{{ $r['order']->order_number }}</td>
-                                    <td>{{ $r['order']->customer_name }}</td>
+                                    <td>{{ $r['order']->clientName() }}</td>
                                     <td>{{ $r['station'] }}</td>
                                     <td>{{ $r['order']->productLabel() ?? '—' }}</td>
                                 </tr>
@@ -1090,7 +1090,7 @@
                                     <td>
                                         {{ $task->order->order_number ?? '—' }}
                                         <div class="dash-subtext">
-                                            {{ $task->order->customer_name ?? '' }}
+                                            {{ $task->order->clientName() ?? '' }}
                                         </div>
                                     </td>
 

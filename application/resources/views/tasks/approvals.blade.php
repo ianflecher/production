@@ -43,7 +43,7 @@
                         <tr>
                             <td>
                                 <a href="{{ route('orders.show', $order) }}" style="font-weight: 600;">{{ $order->order_number }}</a>
-                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $order->customer_name }}</div>
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $order->clientName() }}</div>
                             </td>
                             <td>
                                 <strong>Job package</strong>
@@ -122,7 +122,7 @@
                         <tr>
                             <td>
                                 <a href="{{ route('orders.show', $task->order) }}" style="font-weight: 600;">{{ $task->order->order_number }}</a>
-                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $task->order->customer_name }}</div>
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $task->order->clientName() }}</div>
                             </td>
                             <td>
                                 {{ $task->department }}

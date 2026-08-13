@@ -117,7 +117,7 @@
             </div>
         @else
         <div class="card">
-            @php $clientName = $order->client?->name ?? $order->customer_name; @endphp
+            @php $clientName = $order->clientName(); @endphp
             <h1>Tell us about your design</h1>
             <p class="lead">{{ $clientName ? 'Hi '.$clientName.'! ' : '' }}Please answer what you can — anything you leave blank is fine. This helps our artist design exactly what you want.</p>
 

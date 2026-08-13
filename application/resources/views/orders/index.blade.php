@@ -287,7 +287,7 @@
 
                                 <td>
                                     <span class="order-customer">
-                                        {{ $order->customer_name }}
+                                        {{ $order->clientName() }}
                                     </span>
                                 </td>
 

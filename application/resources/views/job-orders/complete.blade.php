@@ -158,7 +158,7 @@
 <div class="page-head no-print">
     <div class="grow">
         <h1>Complete Job Order Document</h1>
-        <p class="muted">{{ $order->order_number }} · {{ $order->customer_name }} — All 4 pages for artist</p>
+        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — All 4 pages for artist</p>
     </div>
     <button onclick="window.print()" class="btn btn-ghost btn-sm">🖨 Print All</button>
     {{-- The single export file the artist produced, for the printer to open. --}}
@@ -268,7 +268,7 @@
     <div class="page-section last-page">
         <div class="production-section">
             <h1 style="font-size: 2rem; margin: 0 0 1rem 0;">PRODUCTION DETAILS</h1>
-            <p style="color: #666; margin-bottom: 2rem;">{{ $order->order_number }} · {{ $order->customer_name }}</p>
+            <p style="color: #666; margin-bottom: 2rem;">{{ $order->order_number }} · {{ $order->clientName() }}</p>
 
             {{-- Production details: press, embroidery, cutting and raw materials.
                  Every value cell is left-aligned so the column reads straight

@@ -543,7 +543,7 @@
             @endforeach
         </div>
         <div style="font-size:0.7rem; color:#666;">
-            {{ $order->order_number }} · {{ $order->client?->name ?? $order->customer_name }}
+            {{ $order->order_number }} · {{ $order->clientName() }}
         </div>
     </div>
 @endif
@@ -560,7 +560,7 @@
             <img src="{{ route('orders.document.flatlay', [$order, $doc->type]) }}" alt="Flatlay">
         </div>
         <div style="font-size:0.7rem; color:#666;">
-            {{ $order->order_number }} · {{ $order->client?->name ?? $order->customer_name }}
+            {{ $order->order_number }} · {{ $order->clientName() }}
         </div>
     </div>
 @endif

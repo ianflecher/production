@@ -312,7 +312,7 @@
                                                 <{{ $canOpen ? 'a' : 'span' }}
                                                     @if ($canOpen) href="{{ $jobLink($order) }}" @endif
                                                     class="cal-pill {{ $class }} {{ $canOpen ? '' : 'is-locked' }} {{ $loop->index >= 3 ? 'is-extra' : '' }}"
-                                                    data-tip="{{ $order->order_number }} · {{ $order->customer_name }} · {{ number_format($order->quantity) }} pcs · due {{ $order->due_date->format('M j') }}{{ $canOpen ? '' : ' · not your job order' }}"
+                                                    data-tip="{{ $order->order_number }} · {{ $order->clientName() }} · {{ number_format($order->quantity) }} pcs · due {{ $order->due_date->format('M j') }}{{ $canOpen ? '' : ' · not your job order' }}"
                                                 >
                                                     {{ $order->order_number }} · {{ number_format($order->quantity) }} pcs
                                                 </{{ $canOpen ? 'a' : 'span' }}>
@@ -400,7 +400,7 @@
                                         <span class="mobile-order-stripe" aria-hidden="true"></span>
                                         <span class="mobile-order-main">
                                             <strong>{{ $order->order_number }}</strong>
-                                            <span>{{ $order->customer_name }} · {{ str_replace('_', ' ', ucfirst($order->status)) }}</span>
+                                            <span>{{ $order->clientName() }} · {{ str_replace('_', ' ', ucfirst($order->status)) }}</span>
                                         </span>
                                         <span class="mobile-order-qty">{{ number_format($order->quantity) }} pcs</span>
                                     </{{ $canOpen ? 'a' : 'span' }}>
@@ -463,7 +463,7 @@
                             <span class="deadline-main">
                                 <span class="deadline-order">
                                     <span class="deadline-number">{{ $order->order_number }}</span>
-                                    <span class="deadline-customer">{{ $order->customer_name }}</span>
+                                    <span class="deadline-customer">{{ $order->clientName() }}</span>
                                 </span>
                                 <span class="deadline-meta">
                                     <span>{{ $overdue ? 'Overdue' : $order->due_date->diffForHumans() }}</span>

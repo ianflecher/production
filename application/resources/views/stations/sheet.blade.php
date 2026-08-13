@@ -18,7 +18,7 @@
 
 <div class="sh-wrap">
     <div class="sh-head">
-        <h2>{{ $order->order_number }} — {{ $order->client?->name ?? $order->customer_name }}</h2>
+        <h2>{{ $order->order_number }} — {{ $order->clientName() }}</h2>
         <div class="meta">
             Correcting the sewing and QC boxes · {{ $order->quantity }} pcs ·
             due {{ $order->due_date?->format('M j, Y') ?? '—' }}

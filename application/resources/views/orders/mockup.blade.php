@@ -135,7 +135,7 @@
         @endif
         
         <div class="mockup-order-info">
-            <span><strong>Customer:</strong> {{ $order->customer_name }}</span>
+            <span><strong>Customer:</strong> {{ $order->clientName() }}</span>
             <span><strong>Quantity:</strong> {{ number_format($order->quantity) }} pcs</span>
             @if ($order->due_date)
                 <span><strong>Due:</strong> {{ $order->due_date->format('M j, Y') }}</span>

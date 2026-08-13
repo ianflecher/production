@@ -63,7 +63,7 @@ class FinanceController extends Controller
             foreach ($payments as $p) {
                 fputcsv($out, [
                     $p->order?->order_number ?? '',
-                    $p->order?->client?->name ?? $p->order?->customer_name ?? '',
+                    $p->order?->clientName() ?? '',
                     number_format((float) $p->amount, 2, '.', ''),
                     $p->kind ?? 'payment',
                     $p->method ?? '',

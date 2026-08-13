@@ -10,7 +10,7 @@
             {{ $task->department }}
             @include('partials.status', ['status' => $task->status])
         </h1>
-        <p class="muted">Step {{ $task->sequence }} of {{ $task->order->tasks->count() }} · {{ $task->order->order_number }} · {{ $task->order->customer_name }}</p>
+        <p class="muted">Step {{ $task->sequence }} of {{ $task->order->tasks->count() }} · {{ $task->order->order_number }} · {{ $task->order->clientName() }}</p>
     </div>
 </div>
 
@@ -20,7 +20,7 @@
         <table class="tbl">
             <tbody>
                 <tr><td style="color: var(--ink-3); width: 140px;">Order</td><td style="font-weight: 600;">{{ $task->order->order_number }}</td></tr>
-                <tr><td style="color: var(--ink-3);">Customer</td><td>{{ $task->order->customer_name }}</td></tr>
+                <tr><td style="color: var(--ink-3);">Customer</td><td>{{ $task->order->clientName() }}</td></tr>
                 <tr>
                     <td style="color: var(--ink-3);">Account officer</td>
                     <td>

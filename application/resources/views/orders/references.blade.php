@@ -26,7 +26,7 @@
 <div class="page-head">
     <div class="grow">
         <h1>Design to make</h1>
-        <p class="muted">{{ $order->order_number }} · {{ $order->customer_name }} — build the layout from the design below.</p>
+        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — build the layout from the design below.</p>
     </div>
     {{-- Shown via orders.references (office) and tasks.references (artists). --}}
     @php

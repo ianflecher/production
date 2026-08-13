@@ -350,6 +350,24 @@ class ProductionOrder extends Model
         return $this->belongsTo(Client::class);
     }
 
+    /**
+     * Who the job is for.
+     *
+     * customer_name is a COPY, written when the order was taken and again on
+     * every edit of that order. The client record it was copied from is shared
+     * across all of their orders, so correcting a name on one order — or on the
+     * client itself — leaves every other order still showing the old spelling,
+     * with nothing on screen to say it is out of date.
+     *
+     * So the record wins and the copy is only the fallback, for the orders old
+     * enough to have no client attached. Whole name, not just the first: half
+     * the app was showing "Cecilia" for Cecilia Villanueva.
+     */
+    public function clientName(): string
+    {
+        return $this->client?->fullName() ?: (string) $this->customer_name;
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class)->orderBy('id');

@@ -177,7 +177,9 @@ class StationController extends Controller
         // remote one.
         // order.jobOrder too: the card reads the names off the sheet, and
         // fetching it per card put the board back over its query budget.
-        $activeByStation = StationSession::with(['user', 'order.jobOrder'])
+        // order.client as well: the running card names the client, and the copy
+        // held on the order goes stale the moment the client record is corrected.
+        $activeByStation = StationSession::with(['user', 'order.jobOrder', 'order.client'])
             ->whereIn('station', $allowed)
             ->whereNull('ended_at')
             ->latest('id')
@@ -208,7 +210,7 @@ class StationController extends Controller
                 ->values()
         );
 
-        $orders = ProductionOrder::with('jobOrder')
+        $orders = ProductionOrder::with(['jobOrder', 'client'])
             ->whereIn('id', $steps->pluck('production_order_id')->unique())
             ->get()
             ->keyBy('id');

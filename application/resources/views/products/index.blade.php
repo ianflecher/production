@@ -49,7 +49,7 @@
                             <td style="font-weight: 600;">{{ $r->name }}</td>
                             <td>
                                 <span style="color: var(--accent); font-weight: 600;">{{ $r->order?->order_number ?? '—' }}</span>
-                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $r->order?->customer_name }}</div>
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $r->order?->clientName() }}</div>
                             </td>
                             <td style="white-space: nowrap;">{{ $r->expectedForHumans() }} {{ $r->unit }}</td>
                             <td>

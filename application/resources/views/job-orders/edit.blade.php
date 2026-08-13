@@ -88,7 +88,7 @@
         <table class="jo">
             <tr>
                 <td class="lbl-l" style="width:18%;">Client Name:</td>
-                <td class="ctr" style="width:32%;">{{ $order->client?->name ?? $order->customer_name }}</td>
+                <td class="ctr" style="width:32%;">{{ $order->clientName() }}</td>
                 <td class="lbl-l" style="width:18%;">Date Ordered:</td>
                 <td class="ctr red" style="width:32%;">{{ $order->created_at->format('n/j/Y') }}</td>
             </tr>

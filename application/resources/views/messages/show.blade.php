@@ -71,7 +71,7 @@
     <div class="grow">
         <h1>{{ $order->order_number }}</h1>
         <p class="muted">
-            {{ $order->client?->name ?? $order->customer_name }}
+            {{ $order->clientName() }}
             · {{ number_format($order->quantity) }} pcs
             @if ($order->due_date) · due {{ $order->due_date->format('M j, Y') }} @endif
         </p>

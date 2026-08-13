@@ -69,7 +69,7 @@
 <div class="page-head">
     <div class="grow">
         <h1>Client design questionnaire</h1>
-        <p class="muted">{{ $order->order_number }} · {{ $order->customer_name }} — collect the client's answers, then build a ChatGPT prompt from them.</p>
+        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — collect the client's answers, then build a ChatGPT prompt from them.</p>
     </div>
     <div class="db-head-actions">
         <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← Back to order</a>

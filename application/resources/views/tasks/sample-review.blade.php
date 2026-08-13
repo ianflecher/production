@@ -25,7 +25,7 @@
                     <div>
                         <h2 style="margin-bottom:0.2rem;">
                             <a href="{{ route('orders.show', $task->order) }}">{{ $task->order->order_number }}</a>
-                            — {{ $task->order->client?->name ?? $task->order->customer_name }}
+                            — {{ $task->order->clientName() }}
                         </h2>
                         <p class="muted" style="font-size:0.85rem;">
                             {{ $task->department }} · by {{ $task->assignee?->name ?? 'unassigned' }} ·

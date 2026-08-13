@@ -46,6 +46,7 @@ class CalendarController extends Controller
          * separate question — see ProductionOrder::openableBy().
          */
         $visibleOrdersQuery = ProductionOrder::query()
+            ->with('client')
             ->whereNotNull('due_date')
             ->whereBetween('due_date', [
                 $monthStart->toDateString(),
@@ -76,6 +77,7 @@ class CalendarController extends Controller
          * production capacity.
          */
         $allCompanyOrders = ProductionOrder::query()
+            ->with('client')
             ->whereNotNull('due_date')
             ->whereBetween('due_date', [
                 $monthStart->toDateString(),
@@ -160,6 +162,7 @@ class CalendarController extends Controller
         $upcomingEnd = $today->copy()->addDays(30);
 
         $upcomingQuery = ProductionOrder::query()
+            ->with('client')
             ->whereNotNull('due_date')
             ->whereIn('status', [
                 'active',
