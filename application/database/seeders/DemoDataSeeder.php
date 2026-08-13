@@ -741,6 +741,12 @@ class DemoDataSeeder extends Seeder
                 'status' => 'complete',
                 'submitted_at' => now()->subDays(rand(1, 14)),
                 'approved_at' => now()->subDays(rand(0, 1)),
+                // Somebody did every one of these. Steps with no assignee —
+                // the approvals, the handover at the counter — had nothing
+                // recorded, so the finished pipeline read "—" on its own last
+                // line while every line above it named a person.
+                'operator_name' => $task->operator_name
+                    ?: ($task->assigned_to ? null : self::SEWERS[crc32($task->department.$task->id) % count(self::SEWERS)]),
             ])->save();
 
             $order->refresh()->handleTaskCompleted($task);
