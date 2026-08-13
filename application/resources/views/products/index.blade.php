@@ -93,6 +93,63 @@
     </script>
 @endif
 
+{{-- Handing the goods over is the last step of the pipeline, and it belongs to
+     whoever is holding the boxes. It used to sit on the account officer's
+     sample review, where they were asked to confirm a handover they were not
+     part of and could not see. --}}
+@if ($toRelease->isNotEmpty())
+    <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--success-ink, #15803d);">
+        <h2>To release <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">({{ $toRelease->count() }})</span></h2>
+        <p class="sub">Finished orders waiting to be handed to the client. Confirm once the client actually has them — that closes the order.</p>
+
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Client</th>
+                        <th>Payment</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($toRelease as $t)
+                        @php $paid = $t->order->isFullyPaid(); $bal = $t->order->balance(); @endphp
+                        <tr>
+                            <td><a href="{{ route('orders.show', $t->order) }}" style="font-weight: 600;">{{ $t->order->order_number }}</a></td>
+                            <td>{{ $t->order->clientName() }}</td>
+                            <td>
+                                @if ($paid)
+                                    <span class="badge" style="background: #f0fdf4; color: #15803d;">FULLY PAID</span>
+                                @else
+                                    {{-- Nothing leaves on an unpaid balance. Say so
+                                         here rather than letting them click and be
+                                         refused at the counter with the client
+                                         standing in front of them. --}}
+                                    <span class="badge" style="background: #fef2f2; color: #b91c1c;">
+                                        @if ($bal === null) NO PRICE SET @else ₱{{ number_format($bal, 2) }} UNPAID @endif
+                                    </span>
+                                @endif
+                            </td>
+                            <td style="text-align: right;">
+                                @if ($paid)
+                                    <form method="POST" action="{{ route('products.release', $t) }}"
+                                          onsubmit="return confirm('Client has received {{ $t->order->order_number }}?\n\nThis closes the order.');">
+                                        @csrf
+                                        <button class="btn btn-success btn-sm">✓ Released to client</button>
+                                    </form>
+                                @else
+                                    <a href="{{ route('orders.show', $t->order) }}#payment-section" class="btn btn-ghost btn-sm">Record the payment</a>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+@endif
+
 <div class="card panel" style="margin-bottom: 1.4rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
         <h2 style="margin-bottom: 0;">Stock on hand

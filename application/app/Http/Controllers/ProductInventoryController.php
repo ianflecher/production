@@ -46,9 +46,21 @@ class ProductInventoryController extends Controller
             ->paginate(self::PER_PAGE, ['*'], 'receive_page')
             ->withQueryString();
 
+        // Orders sitting finished, waiting to be handed to the client. This is
+        // the last step of the pipeline and it belongs to whoever is holding
+        // the boxes — it used to sit on the account officer's sample review,
+        // where they could confirm a handover they were not part of.
+        $toRelease = \App\Models\Task::with(['order.client', 'order.payments'])
+            ->where('department', 'Release to client')
+            ->where('status', 'for_checking')
+            ->whereHas('order', fn ($q) => $q->where('status', 'active'))
+            ->orderBy('id')
+            ->get();
+
         return view('products.index', [
             'items' => $items,
             'search' => $search,
+            'toRelease' => $toRelease,
             // Counted across all products, so the badge doesn't change as you page.
             'outCount' => ProductItem::where('quantity', '<=', 0)->count(),
             'totalCount' => ProductItem::count(),

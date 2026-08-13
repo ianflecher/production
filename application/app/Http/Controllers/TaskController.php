@@ -501,14 +501,20 @@ class TaskController extends Controller
             return;
         }
 
-        $ok = $task->approver_role === 'sales'
-            ? $user->isSales()
-            : $user->isLeader();
+        $ok = match ($task->approver_role) {
+            'sales' => $user->isSales(),
+            // Handing the goods over is the products desk's job — they are the
+            // ones holding the stock and facing the client at the counter.
+            'inventory' => $user->canManageProducts(),
+            default => $user->isLeader(),
+        };
 
         abort_unless($ok, 403);
 
-        // An account officer may only act on samples for their own orders.
-        if ($user->isSales() && $task->order->created_by !== $user->id) {
+        // An account officer may only act on samples for their own orders. This
+        // is about whose client it is, so it does not apply to the products
+        // desk, who release for the whole shop.
+        if ($task->approver_role === 'sales' && $user->isSales() && $task->order->created_by !== $user->id) {
             abort(403);
         }
     }

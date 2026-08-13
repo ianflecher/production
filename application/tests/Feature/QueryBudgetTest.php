@@ -65,7 +65,10 @@ class QueryBudgetTest extends TestCase
             ['Stations board', '/stations', 21],
             ['My tasks', '/my-tasks', 18],
             ['Inventory', '/inventory', 22],
-            ['Products', '/products', 22],
+            // 23: the page now also lists the orders waiting to be handed to
+            // the client, with their payment state eager-loaded. Flat, however
+            // many are queued.
+            ['Products', '/products', 23],
             ['Bookkeeping', '/books', 20],
             ['Finance', '/finance', 24],
             ['Users', '/users', 20],

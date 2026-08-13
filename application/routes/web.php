@@ -159,6 +159,13 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/job-order-files/{file}/download', [OrderReferenceFileController::class, 'downloadReferenceFile'])
         ->whereNumber('file')->name('job-order-files.download');
 
+    // Handing the goods over is the products desk's step, and they are not in
+    // the sales/leader group below. Same controller method — so the payment
+    // gate and everything else stays in one place — with the controller's own
+    // approver check doing the gating instead of the route's role list.
+    Route::post('/products/release/{task}', [TaskController::class, 'approve'])
+        ->whereNumber('task')->name('products.release');
+
     // -------- Approve / revise: sales decide samples, leaders decide the rest
     // (the controller enforces which role owns each task).
     Route::middleware('role:sales,leader,super_admin')->group(function () {

@@ -1025,10 +1025,12 @@ class ProductionOrder extends Model
         // 15 — counted into finished goods by the inventory desk.
         $add(15, 'Inventory', $prod);
 
-        // 16 — the account officer confirms the client actually received it.
-        // Nobody "works" this step, so it lands on their desk the moment stock
-        // is counted in (auto_submit) and the order closes when they confirm.
-        $add(16, 'Release to client', null, 'sales', true);
+        // 16 — the finished-products desk hands the goods over and confirms it.
+        // They are the ones holding the stock and facing the client at the
+        // counter; the account officer never touches the boxes. Nobody "works"
+        // this step, so it lands on their page the moment stock is counted in
+        // (auto_submit) and the order closes when they confirm.
+        $add(16, 'Release to client', null, 'inventory', true);
     }
 
     /**

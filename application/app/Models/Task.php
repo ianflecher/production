@@ -339,7 +339,7 @@ class Task extends Model
         return match ($this->department) {
             'Raw materials' => 'waiting at the raw materials desk',
             'Inventory' => 'waiting at the inventory desk',
-            'Release to client' => 'with the account officer, to hand over to the client',
+            'Release to client' => 'with the products desk, to hand over to the client',
             'Produce sample for client' => 'with the account officer, to show the client',
             'Sticker' => 'waiting at the sticker printer',
             'Printer', 'Mass production' => 'waiting at '.($this->order->jobOrder?->printerLabel() ?: 'the printer'),
@@ -398,7 +398,7 @@ class Task extends Model
         return match ($this->department) {
             'Raw materials' => route('inventory.requests'),
             'Inventory' => route('products.index'),
-            'Release to client' => route('sample.review'),
+            'Release to client' => route('products.index'),
             default => route('stations.index'),
         };
     }
