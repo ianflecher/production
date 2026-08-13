@@ -53,20 +53,23 @@
                  pre-filled with the signed-in artist's own PC address so they
                  only type the folder + file after it (always back-slashes). --}}
             @php
-                // The address of the artist's PC, so the path starts itself.
+                // Where this artist's path should start.
                 //
-                // Reached over the tunnel, request()->ip() is the tunnel, not the
-                // artist's machine — which is why this box came up empty for
-                // anyone working from outside. Their last sign-in from the
-                // office is the next best thing, and it is the address their
-                // shared folder actually sits on.
-                $ip = \App\Services\ServerIp::isPrivate((string) request()->ip())
-                    ? request()->ip()
-                    : (\App\Services\ServerIp::isPrivate((string) auth()->user()?->last_login_ip)
-                        ? auth()->user()->last_login_ip
-                        : null);
+                // ipForUser is the same address the path is PACKED against
+                // when it is saved (see TaskFile::setExternalPathAttribute),
+                // so the two must agree: prefill a different address and the
+                // marker never matches, the path is frozen to a literal
+                // machine, and it stops following the artist when they move.
+                //
+                // Reached over the tunnel the request arrives as 127.0.0.1 —
+                // the server cannot see the artist's machine at all — so this
+                // leans on their last request FROM the office, which the
+                // active-user middleware now keeps current.
+                $ip = \App\Services\ServerIp::ipForUser(auth()->user());
 
-                $ipPrefix = $ip ? '\\\\'.$ip.'\\' : '';
+                $ipPrefix = ($ip && \App\Services\ServerIp::isPrivate($ip))
+                    ? '\\\\'.$ip.'\\'
+                    : '';
             @endphp
             @foreach ($slots as $key => $label)
                 <div class="field" style="max-width: 520px;">
