@@ -142,6 +142,10 @@ class ProductInventoryController extends Controller
                 ->first();
 
             if ($task) {
+                // The desk just typed who received them. Put that on the step,
+                // so the pipeline names the person instead of showing "—" for
+                // a handover the system had the name for all along.
+                $task->update(['operator_name' => trim($data['operator_name'])]);
                 $task->forceComplete();
                 $note = ' All products counted in — '.$order->order_number.' is finished.';
             }

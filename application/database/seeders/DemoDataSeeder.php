@@ -875,7 +875,10 @@ class DemoDataSeeder extends Seeder
                     $receipt->update([
                         'status' => 'received',
                         'received_quantity' => $qty,
-                        'received_by' => $leader->id,
+                        // A NAME, not an id — the desk types who took delivery,
+                        // because the login is shared. Writing $leader->id here
+                        // put "2" on the screen where a person should be.
+                        'received_by' => $operators[$i % count($operators)],
                         'received_at' => $order->completed_at ?? now(),
                     ]);
                 }
