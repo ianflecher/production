@@ -665,6 +665,22 @@
         .path-help > summary:hover { text-decoration: underline; }
         .path-help[open] > summary { margin-bottom: 0.5rem; }
 
+        /* A correction people have to FIND is a correction that does not get
+           made — a wrong path sat there because the way to fix it read as
+           small print. This one looks like the button it is. */
+        .path-help-action > summary {
+            border: 1px solid var(--border-strong);
+            background: var(--surface-2, #f3f4f6);
+            border-radius: 8px; padding: 0.45rem 0.85rem;
+            color: var(--ink-1); text-decoration: none;
+        }
+        .path-help-action > summary::before { content: "✎ "; }
+        .path-help-action > summary:hover {
+            text-decoration: none;
+            border-color: var(--accent-ink, #1d4ed8);
+            color: var(--accent-ink, #1d4ed8);
+        }
+
         .path-help-videos {
             display: grid; gap: 0.9rem;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

@@ -5,7 +5,7 @@
      is exactly when a wrong path is most annoying to be stuck with. --}}
 @if ($task->usesFilePath() && $task->status === 'complete' && $task->files->isNotEmpty())
     @php $pathSlots = $task->fileSlots(); @endphp
-    <details class="path-help" style="margin-bottom:0.8rem;">
+    <details class="path-help path-help-action" style="margin-bottom:0.8rem;">
         <summary>File moved or path wrong? Edit and send again</summary>
 
         <form method="POST" action="{{ route('tasks.path.update', $task->id) }}" style="margin-top:0.6rem;">
