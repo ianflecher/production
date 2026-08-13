@@ -534,6 +534,19 @@ class TaskController extends Controller
                 : 'Cannot release — ₱'.number_format($balance, 2).' is still unpaid. Record the full payment before handing over to the client.');
         }
 
+        // Who physically handed the goods over. The products desk is a shared
+        // login, so the account says nothing — and this step used to record
+        // nobody at all, leaving the last line of the pipeline reading "—" on
+        // the one movement where somebody signed for the goods.
+        if ($task->department === 'Release to client') {
+            $data = $request->validate(
+                ['operator_name' => ['required', 'string', 'max:100']],
+                ['operator_name.required' => 'Enter the name of the person handing the order over.']
+            );
+
+            $task->update(['operator_name' => trim($data['operator_name'])]);
+        }
+
         $task->approve();
 
         // The client approved the first physical sample — count that one piece

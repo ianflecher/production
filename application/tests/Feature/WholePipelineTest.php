@@ -127,7 +127,7 @@ class WholePipelineTest extends TestCase
                 // The sample the client sees is signed off by their account
                 // officer; everything else by the leader.
                 $this->actingAs($this->approverFor($task))
-                    ->post("/tasks/{$task->id}/approve")->assertRedirect();
+                    ->post("/tasks/{$task->id}/approve", ['operator_name' => 'Rowena'])->assertRedirect();
             }
 
             return;
@@ -164,7 +164,7 @@ class WholePipelineTest extends TestCase
 
         if ($task->status === 'for_checking' && $approve) {
             $this->actingAs($this->approverFor($task))
-                ->post("/tasks/{$task->id}/approve")->assertRedirect();
+                ->post("/tasks/{$task->id}/approve", ['operator_name' => 'Rowena'])->assertRedirect();
         }
     }
 

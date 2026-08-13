@@ -81,7 +81,7 @@ class ReleaseBelongsToProductsDeskTest extends TestCase
     {
         [$desk, , , $task] = $this->waitingToRelease();
 
-        $this->actingAs($desk)->post("/products/release/{$task->id}")
+        $this->actingAs($desk)->post("/products/release/{$task->id}", ['operator_name' => 'Rowena'])
             ->assertSessionMissing('error');
 
         $this->assertSame('complete', $task->fresh()->status);
@@ -93,7 +93,7 @@ class ReleaseBelongsToProductsDeskTest extends TestCase
         // handed over — moving the step without it would open the door.
         [$desk, , , $task] = $this->waitingToRelease(30240, paid: 15120);
 
-        $this->actingAs($desk)->post("/products/release/{$task->id}")
+        $this->actingAs($desk)->post("/products/release/{$task->id}", ['operator_name' => 'Rowena'])
             ->assertSessionHas('error');
 
         $this->assertNotSame('complete', $task->fresh()->status);
@@ -120,7 +120,29 @@ class ReleaseBelongsToProductsDeskTest extends TestCase
         [, $sales, , $task] = $this->waitingToRelease();
 
         // Not their step any more, even on their own order.
-        $this->actingAs($sales)->post("/products/release/{$task->id}")->assertForbidden();
+        $this->actingAs($sales)->post("/products/release/{$task->id}", ['operator_name' => 'Rowena'])->assertForbidden();
+    }
+
+    public function test_the_person_who_handed_it_over_is_recorded(): void
+    {
+        // The desk is a shared login, so the account says nothing. Without a
+        // name the last line of the pipeline read "—" on the one movement
+        // where somebody actually signed for the goods.
+        [$desk, , , $task] = $this->waitingToRelease();
+
+        $this->actingAs($desk)->post("/products/release/{$task->id}", ['operator_name' => 'Rowena']);
+
+        $this->assertSame('Rowena', $task->fresh()->operator_name);
+    }
+
+    public function test_it_will_not_close_without_a_name(): void
+    {
+        [$desk, , , $task] = $this->waitingToRelease();
+
+        $this->actingAs($desk)->post("/products/release/{$task->id}", [])
+            ->assertInvalid(['operator_name']);
+
+        $this->assertNotSame('complete', $task->fresh()->status);
     }
 
     public function test_a_new_order_puts_the_step_on_the_right_desk(): void

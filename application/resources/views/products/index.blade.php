@@ -131,9 +131,16 @@
                             </td>
                             <td style="text-align: right;">
                                 @if ($paid)
+                                    {{-- Shared login, so the account cannot say
+                                         who stood at the counter. Same question
+                                         every other handover in the shop asks. --}}
                                     <form method="POST" action="{{ route('products.release', $t) }}"
-                                          onsubmit="return confirm('Client has received {{ $t->order->order_number }}?\n\nThis closes the order.');">
+                                          onsubmit="return confirm('Client has received {{ $t->order->order_number }}?\n\nThis closes the order.');"
+                                          style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
                                         @csrf
+                                        <input type="text" name="operator_name" required maxlength="100"
+                                               placeholder="Released by *"
+                                               style="width: 140px; padding: 0.35rem 0.5rem; font-size: 0.85rem;">
                                         <button class="btn btn-success btn-sm">✓ Released to client</button>
                                     </form>
                                 @else

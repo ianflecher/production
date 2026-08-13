@@ -64,7 +64,7 @@ class ReleaseRequiresFullPaymentTest extends TestCase
         [$sales, $order, $task] = $this->orderAtRelease(23800, paid: 12000);
 
         $this->actingAs($sales)
-            ->post("/tasks/{$task->id}/approve")
+            ->post("/tasks/{$task->id}/approve", ['operator_name' => 'Rowena'])
             ->assertSessionHas('error');
 
         $this->assertNotSame('complete', $task->fresh()->status,
@@ -78,7 +78,7 @@ class ReleaseRequiresFullPaymentTest extends TestCase
         [$sales, $order, $task] = $this->orderAtRelease(null);
 
         $this->actingAs($sales)
-            ->post("/tasks/{$task->id}/approve")
+            ->post("/tasks/{$task->id}/approve", ['operator_name' => 'Rowena'])
             ->assertSessionHas('error');
 
         $this->assertNotSame('complete', $task->fresh()->status);
@@ -89,7 +89,7 @@ class ReleaseRequiresFullPaymentTest extends TestCase
         [$sales, $order, $task] = $this->orderAtRelease(23800, paid: 23800);
 
         $this->actingAs($sales)
-            ->post("/tasks/{$task->id}/approve")
+            ->post("/tasks/{$task->id}/approve", ['operator_name' => 'Rowena'])
             ->assertSessionMissing('error');
 
         $this->assertSame('complete', $task->fresh()->status,
