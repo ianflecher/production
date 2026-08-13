@@ -636,6 +636,14 @@ class DemoDataSeeder extends Seeder
             // once that exists — same as when the officer saves the sheet.
             $order->refresh()->recomputeTotal();
 
+            // And the routing is only final once that exists either. The line
+            // is laid down when the order is TAKEN, before anyone has said how
+            // it prints, so the press steps cannot be known yet — the officer
+            // saving the sheet is what swaps them in. Without this the demo
+            // shop had a press on the job order and no press step on any of
+            // its 100 orders, which is not what the floor would see.
+            $order->refresh()->rebuildPipeline($order->decoration_methods ?? [], $order->cutting_type);
+
             $this->advance($order, $stop, $leader);
             $orders[] = $order->fresh();
         }
