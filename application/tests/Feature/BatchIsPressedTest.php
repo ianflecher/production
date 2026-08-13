@@ -122,6 +122,35 @@ class BatchIsPressedTest extends TestCase
         );
     }
 
+    /**
+     * The path orders actually take.
+     *
+     * A pipeline is laid down when the order is taken, before anyone has said
+     * which press the job needs. Filling in the job order later does not
+     * rebuild the line — it SWAPS the routing steps into the existing one, a
+     * separate branch that had its own copy of the press logic. Fixing only
+     * the full build left every real order untouched: IC2026-00084 was created
+     * a minute after the fix and still came out with no press on the batch.
+     */
+    public function test_a_press_chosen_after_the_order_was_taken_reaches_the_batch(): void
+    {
+        $tasks = $this->pipeline('heat_press');
+        $order = $tasks->first()->order;
+
+        // The job order is filled in later and the routing is swapped in.
+        $order->jobOrder->update(['press' => 'roller_press']);
+        $order->fresh()->rebuildPipeline([], 'manual');
+
+        $after = $order->fresh()->tasks;
+
+        $this->assertTrue(
+            $after->where('stage', 10)->contains(fn ($t) => $t->department === 'Roller press'),
+            'the press chosen on the job order must reach the batch, not just the sample'
+        );
+        $this->assertEmpty($after->where('department', 'Heat press'),
+            'the press that was replaced must not be left behind on either run');
+    }
+
     public function test_embroidery_is_not_dragged_into_the_batch_print(): void
     {
         // Embroidery goes on the sewn garment, not on flat printed cloth —

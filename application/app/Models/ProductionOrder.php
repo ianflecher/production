@@ -1077,9 +1077,10 @@ class ProductionOrder extends Model
             // from pairing onwards keep whatever progress they already have.
             $presses = ['Cap press', 'Heat press', 'Small press', 'Roller press'];
             $this->tasks()->whereIn('stage', [4, 5, 11])->delete();
-            // The presses live at stage 3 (gated on the printer); drop the old
-            // press steps (only if not started) so the new choices replace them.
-            $this->tasks()->where('stage', 3)->whereIn('department', $presses)->where('status', 'todo')->delete();
+            // A press runs against each print: stage 3 for the sample, stage 10
+            // for the batch. Drop the old ones (only if not started) so the new
+            // choices replace them.
+            $this->tasks()->whereIn('stage', [3, 10])->whereIn('department', $presses)->where('status', 'todo')->delete();
 
             $seq = (int) $this->tasks()->max('sequence');
             $add = $this->taskAdder($seq);
@@ -1089,7 +1090,8 @@ class ProductionOrder extends Model
                 if ($label === self::DECORATION_METHODS['embroidery']) {
                     continue;   // embroidery lives with sewing (stages 7/13), synced below
                 }
-                $add(3, $label, $prod);   // decoration press at stage 3, gated on the printer
+                $add(3, $label, $prod);    // sample: gated on the Printer
+                $add(10, $label, $prod);   // batch: gated on Mass production
             }
 
             if ($cuttingType) {
