@@ -509,4 +509,63 @@ class InventoryController extends Controller
 
         return back()->with('success', 'Request rejected — the account officer and leader can see the reason.');
     }
+
+    /**
+     * Put back materials that went out but were not used.
+     *
+     * Issuing is typed by hand against a request that never says how many are
+     * needed, so handing out 100 when the job wanted 55 is a normal morning.
+     * Until now the only way back was a blank "correction" on the item, which
+     * left the request still claiming 100 went to that order and the 45 with
+     * no explanation attached to anything.
+     *
+     * This adds the stock back, writes it against the same order, and brings
+     * the request's own figure down to what the job actually consumed — so
+     * costing reads 55 and the shelf count agrees with the shelf.
+     */
+    public function returnToStock(Request $request, MaterialRequest $materialRequest): RedirectResponse
+    {
+        $this->assertAccess();
+        abort_unless($materialRequest->status === 'approved', 403);
+        abort_unless($materialRequest->item, 404);
+
+        $issued = (float) $materialRequest->quantity;
+
+        $data = $request->validate([
+            // You cannot hand back more than went out on this request.
+            'quantity' => ['required', 'numeric', 'gt:0', 'max:'.$issued],
+            'operator_name' => ['required', 'string', 'max:100'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ], [
+            'quantity.max' => 'Only '.rtrim(rtrim(number_format($issued, 2), '0'), '.').' went out on this request — you cannot return more than that.',
+            'operator_name.required' => 'Enter the name of the person returning the materials.',
+        ]);
+
+        return DB::transaction(function () use ($data, $materialRequest) {
+            $item = InventoryItem::lockForUpdate()->find($materialRequest->inventory_item_id);
+            $back = (float) $data['quantity'];
+
+            $item->recordMovement(
+                $back,
+                'returned',
+                'Returned unused from '.($materialRequest->order?->order_number ?? 'an order')
+                    .' — '.$materialRequest->material
+                    .(filled($data['note'] ?? null) ? ' ('.$data['note'].')' : ''),
+                $materialRequest->production_order_id,
+                $data['operator_name'],
+            );
+
+            // What the job actually used is what it should be costed for.
+            $materialRequest->update(['quantity' => (float) $materialRequest->quantity - $back]);
+
+            return back()->with('success', sprintf(
+                'Returned %s %s of %s. This order now shows %s used, and stock is back to %s.',
+                rtrim(rtrim(number_format($back, 2), '0'), '.'),
+                $item->unit,
+                $item->name,
+                rtrim(rtrim(number_format((float) $materialRequest->fresh()->quantity, 2), '0'), '.'),
+                $item->fresh()->qtyForHumans(),
+            ));
+        });
+    }
 }

@@ -116,6 +116,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/material-requests', [\App\Http\Controllers\InventoryController::class, 'requests'])->name('inventory.requests');
     Route::post('/material-requests/{materialRequest}/approve', [\App\Http\Controllers\InventoryController::class, 'approve'])->name('inventory.requests.approve');
     Route::post('/material-requests/{materialRequest}/reject', [\App\Http\Controllers\InventoryController::class, 'reject'])->name('inventory.requests.reject');
+    // Too much went out: put the unused part back and correct what the job is charged for.
+    Route::post('/material-requests/{materialRequest}/return', [\App\Http\Controllers\InventoryController::class, 'returnToStock'])->name('inventory.requests.return');
 
     // -------- Finished-products inventory (products/inventory desk + leaders; checked in controller) --------
     Route::get('/products', [\App\Http\Controllers\ProductInventoryController::class, 'index'])->name('products.index');

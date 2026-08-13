@@ -168,6 +168,40 @@
                                         </div>
                                     </details>
                                 @endif
+
+                                {{-- Issuing is typed by hand and the request never
+                                     says how many are needed, so handing out too
+                                     much is routine. This is the way back. --}}
+                                @if ($d->status === 'approved' && $d->item && (float) $d->quantity > 0)
+                                    <details class="inline-form">
+                                        <summary class="btn btn-ghost btn-sm">↩ Return unused</summary>
+                                        <div class="pop" style="min-width: 260px;">
+                                            <form method="POST" action="{{ route('inventory.requests.return', $d) }}">
+                                                @csrf
+                                                <p style="font-size: 0.78rem; color: var(--ink-2); margin: 0 0 0.5rem;">
+                                                    {{ rtrim(rtrim(number_format((float) $d->quantity, 2), '0'), '.') }}
+                                                    {{ $d->item->unit }} went out on this request.
+                                                    Put back whatever the job did not use.
+                                                </p>
+                                                <div class="field">
+                                                    <label>Coming back</label>
+                                                    <input type="number" name="quantity" step="0.01" min="0.01"
+                                                           max="{{ (float) $d->quantity }}" required placeholder="0">
+                                                </div>
+                                                <div class="field">
+                                                    <label>Reason (optional)</label>
+                                                    <input type="text" name="note" maxlength="255"
+                                                           class="no-caps" placeholder="e.g. issued too many">
+                                                </div>
+                                                <div class="field">
+                                                    <label>Returned by <span style="color: var(--danger-ink);">*</span></label>
+                                                    <input type="text" name="operator_name" required maxlength="100" placeholder="Your name">
+                                                </div>
+                                                <button class="btn btn-primary btn-sm" style="margin-top: 0.4rem;">↩ Put back in stock</button>
+                                            </form>
+                                        </div>
+                                    </details>
+                                @endif
                             </td>
                         </tr>
                     @endforeach
