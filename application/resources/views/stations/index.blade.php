@@ -93,13 +93,10 @@
                         {{-- One page of the queue, late jobs first. Sorted and paged
                              by the controller so the order survives paging. --}}
                         @php $queue = $p['queue']; @endphp
+                        {{-- Jobs already on a machine that does this same work are
+                             dropped by the controller, so the badge above, this
+                             list and the job-order dropdown below all agree. --}}
                         @foreach ($queue as $o)
-                            {{-- Somebody already has this one open. Ten sewing
-                                 cards list the same queue, so leaving it here
-                                 invites a second person to pick up a job that is
-                                 already on a machine. It comes back the moment
-                                 that run ends. --}}
-                            @continue(($runningOrders ?? collect())->has($o->id))
                             @php $step = $o->station_step ?? null; @endphp
                             <div @class(['station-job', 'is-late' => $o->delayState()])>
                                 <strong>{{ $o->order_number }}</strong>

@@ -213,6 +213,25 @@ class StationController extends Controller
             ->get()
             ->keyBy('id');
 
+        // Which orders are on a machine right now, listed under the DEPARTMENT
+        // that machine does. Ten sewing cards show the same queue, so a job
+        // already on one of them has to drop off the other nine or two people
+        // pick it up and only find out at the seam.
+        //
+        // By department, not globally: an order can honestly be in two places
+        // at once — its stickers printing while the shirts wait for Atexco —
+        // and hiding it everywhere made it invisible to the station that was
+        // genuinely waiting for it.
+        $busyByDepartment = [];
+        foreach ($activeByStation->flatten(1) as $session) {
+            if ($session->production_order_id === null) {
+                continue;
+            }
+            foreach (Stations::departments($session->station) as $department) {
+                $busyByDepartment[$department][$session->production_order_id] = true;
+            }
+        }
+
         foreach (Stations::grouped() as $group => $stations) {
             foreach ($stations as $key => $s) {
                 if (! in_array($key, $allowed, true)) {
@@ -221,6 +240,21 @@ class StationController extends Controller
                 // The operator needs to know how many and what to make, so
                 // carry the job order details onto the board.
                 $waiting = self::ordersWaitingAt($key, $orders, $ordersByDepartment);
+
+                // Dropped here rather than in the view so the count on the
+                // badge, the list under it and the job-order dropdown all say
+                // the same thing. They did not: the badge counted a job the
+                // list hid, and starting the station offered it anyway.
+                $busyHere = array_merge(
+                    ...array_map(
+                        fn ($d) => array_keys($busyByDepartment[$d] ?? []),
+                        Stations::departments($key)
+                    ) ?: [[]]
+                );
+
+                if ($busyHere !== []) {
+                    $waiting = $waiting->reject(fn ($o) => in_array($o->id, $busyHere, true))->values();
+                }
 
                 $groups[$group][] = [
                     'key' => $key,
@@ -242,20 +276,7 @@ class StationController extends Controller
         // leaves open all day.
         $suggest = \App\Models\JobOrder::stationSuggestions();
 
-        // Which job orders somebody is working on right now, and where. Every
-        // sewing card lists the same queue, so without this two people can pick
-        // up the same job from two machines and only find out at the seam.
-        //
-        // Taken from the sessions already fetched above rather than asked for
-        // again — this board is left open all day and every query on it is paid
-        // over and over.
-        $running = $activeByStation
-            ->flatten(1)
-            ->filter(fn ($x) => $x->production_order_id !== null)
-            ->mapWithKeys(fn ($x) => [$x->production_order_id => Stations::label($x->station)]);
-
         return view('stations.index', [
-            'runningOrders' => $running,
             'groups' => $groups,
             'historyByGroup' => $historyByGroup,
             'reasons' => StationSession::REASONS,

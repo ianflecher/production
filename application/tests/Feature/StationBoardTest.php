@@ -154,6 +154,90 @@ class StationBoardTest extends TestCase
         $this->assertSame('Sewing', $atSewing->station_step, 'one station must not overwrite another\'s step');
     }
 
+    /**
+     * A job on one of the ten sewing machines has to drop off the other nine,
+     * or two people pick it up and only find out at the seam.
+     */
+    public function test_a_job_on_one_sewing_machine_leaves_the_other_sewing_cards(): void
+    {
+        $order = $this->orderAt('Sewing');
+
+        StationSession::create([
+            'station' => 'sewing_1', 'production_order_id' => $order->id,
+            'user_id' => $this->leader()->id, 'operator_name' => 'Jully', 'started_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->leader())->get('/stations');
+
+        $this->assertEmpty($this->stationEntry($response, 'sewing_2')['orders'],
+            'another sewing machine must not offer a job already being sewn');
+    }
+
+    /**
+     * But a job CAN honestly be in two places at once.
+     *
+     * The stickers for an order print while the shirts themselves wait for the
+     * printer. Hiding a running job from every station on the board — rather
+     * than only from the ones doing that same work — made the shirts invisible
+     * to Atexco: its badge counted the job, the list under it did not show it,
+     * and it reappeared only once somebody started the station and opened the
+     * dropdown.
+     */
+    public function test_stickers_printing_do_not_hide_the_shirts_from_the_printer(): void
+    {
+        $order = $this->orderAt('Printer', 'atexco', 'IC2026-09083');
+        $order->tasks()->create([
+            'sequence' => 2, 'stage' => 3, 'department' => 'Sticker',
+            'status' => 'in_progress', 'approver_role' => 'leader',
+        ]);
+
+        // Somebody is running the sticker printer for this same order.
+        StationSession::create([
+            'station' => 'sticker', 'production_order_id' => $order->id,
+            'user_id' => $this->leader()->id, 'operator_name' => 'ian', 'started_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->leader())->get('/stations');
+        $atexco = $this->stationEntry($response, 'printer_atexco');
+
+        $this->assertTrue(
+            collect($atexco['orders'])->contains(fn ($o) => $o->id === $order->id),
+            'Atexco is still waiting for this job — printing its stickers is different work'
+        );
+
+        // On the PAGE, not just in the data behind it: the job was dropped
+        // while the card was drawn, so everything above this line passed
+        // happily while the operator saw an empty list.
+        //
+        // Anchored to the work-sheet link that only a QUEUE ROW draws. Looking
+        // for the order number alone finds it in the start-the-station
+        // dropdown, which kept offering the job it had just refused to list —
+        // the very thing being fixed, so the loose check passes on the bug.
+        $response->assertSee(
+            route('orders.package', [$order, 'for' => Stations::scope('printer_atexco')]),
+            false
+        );
+    }
+
+    /** The count on the badge, the list under it and the dropdown are one set. */
+    public function test_the_badge_count_matches_the_list_the_operator_can_see(): void
+    {
+        $order = $this->orderAt('Sewing');
+        StationSession::create([
+            'station' => 'sewing_1', 'production_order_id' => $order->id,
+            'user_id' => $this->leader()->id, 'operator_name' => 'Jully', 'started_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->leader())->get('/stations');
+        $card = $this->stationEntry($response, 'sewing_2');
+
+        $this->assertSame(
+            collect($card['orders'])->count(),
+            $card['queue']->total(),
+            'the badge counted jobs the list below it refused to draw'
+        );
+    }
+
     public function test_the_board_shows_who_is_running_a_station(): void
     {
         $order = $this->orderAt('Sewing');
