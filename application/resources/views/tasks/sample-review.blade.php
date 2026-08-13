@@ -19,6 +19,11 @@
         @foreach ($tasks as $task)
             @php
                 $latest = $task->files->where('round', $task->revision_count + 1);
+                // A physical sample is a garment on a table. There is no file to
+                // attach and there never has been on any of them, so the missing
+                // one is not news — it just printed a red warning under every
+                // sample the shop has ever sewn.
+                $isPhysicalSample = $task->department === 'Produce sample for client';
             @endphp
             <div class="card panel">
                 <div style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:flex-start;">
@@ -56,7 +61,11 @@
                             <a href="{{ route('tasks.file.view', $f) }}" target="_blank" class="btn btn-primary btn-sm">👁 View {{ $f->label ?? 'file' }}</a>
                         @endif
                     @empty
-                        <span style="font-size:0.85rem; color: var(--danger-ink);">No file attached.</span>
+                        {{-- Still worth saying on an ARTIST's step: a layout sent
+                             for review with no artwork on it is a real fault. --}}
+                        @unless ($isPhysicalSample)
+                            <span style="font-size:0.85rem; color: var(--danger-ink);">No file attached.</span>
+                        @endunless
                     @endforelse
                     {{-- The job order isn't relevant while the client is still
                          reviewing the LAYOUT (no downpayment, job order still a
@@ -67,7 +76,6 @@
                 </div>
 
                 @php
-                    $isPhysicalSample = $task->department === 'Produce sample for client';
                     // Nothing leaves the shop unpaid. Say so here rather than
                     // letting them click and be refused.
                     $heldForPayment = $task->department === 'Release to client' && ! $task->order->isFullyPaid();
