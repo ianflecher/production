@@ -139,7 +139,17 @@
                                         <button class="btn btn-success btn-sm">✓ Released to client</button>
                                     </form>
                                 @else
-                                    <a href="{{ route('orders.show', $t->order) }}#payment-section" class="btn btn-ghost btn-sm">Record the payment</a>
+                                    {{-- Blocked, and that is all. Recording the
+                                         payment is the account officer's job —
+                                         offering it here invites the wrong desk
+                                         to mark money received to get a client
+                                         off their counter. --}}
+                                    <span style="font-size: 0.8rem; color: var(--danger-ink); font-weight: 600;">
+                                        ✕ Cannot release
+                                    </span>
+                                    <div style="font-size: 0.75rem; color: var(--ink-3);">
+                                        Waiting on the account officer to record the payment.
+                                    </div>
                                 @endif
                             </td>
                         </tr>

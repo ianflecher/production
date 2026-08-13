@@ -107,7 +107,12 @@ class ReleaseBelongsToProductsDeskTest extends TestCase
             ->assertOk()
             ->assertSee($order->order_number)
             ->assertSee('UNPAID')
-            ->assertDontSee('Released to client');
+            ->assertSee('Cannot release')
+            ->assertDontSee('Released to client')
+            // Recording the money is the account officer's job. Offering it
+            // here invites the wrong desk to mark a payment received to get a
+            // client off their counter.
+            ->assertDontSee('Record the payment');
     }
 
     public function test_the_account_officer_cannot_release_it_from_elsewhere(): void
