@@ -547,6 +547,20 @@ class TaskController extends Controller
             $task->update(['operator_name' => trim($data['operator_name'])]);
         }
 
+        // Every other step closed by an approval had the same hole: nobody
+        // works them at a station, so nothing ever wrote a name and the
+        // pipeline showed "—" for who did it. The account officer's login IS
+        // a person, unlike the shared desks, so it can answer for itself
+        // without asking.
+        //
+        // Only where the line would otherwise be blank. A step with a worker
+        // on it already names them, and the pipeline reads operator_name FIRST
+        // — so stamping the approver here would quietly replace the artist who
+        // drew the layout with the officer who nodded at it.
+        if (blank($task->operator_name) && $task->assigned_to === null) {
+            $task->update(['operator_name' => $request->user()->name]);
+        }
+
         $task->approve();
 
         // The client approved the first physical sample — count that one piece
