@@ -243,17 +243,58 @@
         // input, while a popup is open, or while the tab is in the background.
         (function () {
             var version = @json(\App\Services\DataVersion::current());
-            var dirty = false;
 
-            ['input', 'change'].forEach(function (ev) {
-                document.addEventListener(ev, function (e) {
-                    if (e.target && e.target.matches && e.target.matches('input, textarea, select')) dirty = true;
-                }, true);
-            });
+            /* Is there typing on this page that a reload would throw away?
+             *
+             * This used to be a flag set by the first keystroke and never
+             * cleared, so touching any box — a search field, a filter dropdown
+             * — stopped that tab ever refreshing again for as long as it was
+             * open. Asking the question each time answers it honestly: a box
+             * the person emptied again is not unsaved work, and a search box is
+             * not work at all.
+             */
+            function hasUnsavedTyping() {
+                var els = document.querySelectorAll(
+                    'input:not([type=hidden]):not([type=search]):not([type=submit]):not([type=button]), textarea, select'
+                );
+
+                for (var i = 0; i < els.length; i++) {
+                    var el = els[i];
+
+                    if (el.type === 'checkbox' || el.type === 'radio') {
+                        if (el.checked !== el.defaultChecked) return true;
+                        continue;
+                    }
+
+                    if (el.tagName === 'SELECT') {
+                        // When the server marks no option as selected, the
+                        // browser picks the first one itself — selected true,
+                        // defaultSelected false. Reading that as "somebody
+                        // changed this" meant a page with any plain dropdown on
+                        // it, such as the orders status filter, never refreshed.
+                        var hasServerDefault = false;
+                        for (var j = 0; j < el.options.length; j++) {
+                            if (el.options[j].defaultSelected) { hasServerDefault = true; break; }
+                        }
+
+                        if (hasServerDefault) {
+                            for (var k = 0; k < el.options.length; k++) {
+                                if (el.options[k].selected !== el.options[k].defaultSelected) return true;
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if ((el.value || '') !== (el.defaultValue || '')) return true;
+                }
+
+                return false;
+            }
 
             function safeToReload() {
                 if (document.visibilityState !== 'visible') return false;
-                if (dirty) return false;
+                if (hasUnsavedTyping()) return false;
                 var ae = document.activeElement;
                 if (ae && ae.matches && ae.matches('input, textarea, select')) return false;
                 // An open <details> that holds a form is somebody mid-way
@@ -268,7 +309,7 @@
                 return true;
             }
 
-            setInterval(function () {
+            function check() {
                 if (!safeToReload()) return;
                 fetch(@json(route('poll.version')), { cache: 'no-store', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(function (r) { return r.ok ? r.json() : null; })
@@ -276,6 +317,22 @@
                         if (d && d.v && d.v !== version) location.reload();
                     })
                     .catch(function () {});
+            }
+
+            /* Coming back to a window checks straight away.
+             *
+             * A background tab is deliberately not polled — thirty of them
+             * asking on a timer is the load this interval exists to avoid. But
+             * it also meant the window you just switched to sat there showing
+             * yesterday's screen until the next tick came round, which is
+             * exactly the moment somebody is looking at it. */
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'visible') check();
+            });
+            window.addEventListener('focus', check);
+
+            setInterval(function () {
+                check();
             // Every open tab in the shop runs this, so the interval is what
             // decides the background load: at five seconds, 34 people asking
             // was already more than the server could answer. Fifteen keeps the
