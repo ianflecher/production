@@ -226,16 +226,35 @@ class MessageController extends Controller
      */
     private function participants(ProductionOrder $order)
     {
-        $ids = $order->tasks()->whereNotNull('assigned_to')->pluck('assigned_to');
+        $assignments = $order->tasks()->whereNotNull('assigned_to')
+            ->get(['assigned_to', 'department'])
+            ->groupBy('assigned_to')
+            ->map(fn ($rows) => $rows->pluck('department')->unique()->values());
 
-        return User::where('is_active', true)
-            ->where(function ($q) use ($ids, $order) {
-                $q->whereIn('id', $ids)
+        $people = User::where('is_active', true)
+            ->where(function ($q) use ($assignments, $order) {
+                $q->whereIn('id', $assignments->keys())
                     ->orWhere('id', $order->created_by)
                     ->orWhereIn('job_role', [User::ROLE_LEADER, User::ROLE_SUPER_ADMIN])
                     ->orWhereRaw('LOWER(TRIM(job_role)) = ?', ['mover']);
             })
             ->orderBy('name')
             ->get();
+
+        // What each of them has to do with THIS order, so a wall of first
+        // names becomes a list you can address a question to. Two people
+        // called Jully are only telling you apart by this.
+        foreach ($people as $person) {
+            $steps = $assignments[$person->id] ?? collect();
+
+            $person->setAttribute('part_on_order', match (true) {
+                $steps->isNotEmpty() => $steps->implode(', '),
+                $person->id === $order->created_by => 'Account officer for this order',
+                // On every conversation by role, not because of this order.
+                default => $person->jobRoleShort() ?: $person->roleLabel(),
+            });
+        }
+
+        return $people;
     }
 }

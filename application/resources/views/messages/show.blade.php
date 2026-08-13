@@ -64,7 +64,15 @@
     .mention-item:hover, .mention-item.active { background: rgba(0,0,0,0.06); }
     .mention-item .role { font-size: 0.72rem; color: var(--ink-3); }
     .people { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
-    .chip { font-size: 0.74rem; padding: 0.15rem 0.55rem; border-radius: 99px; background: var(--border); color: var(--ink-2); }
+    .chip {
+        font-size: 0.74rem; padding: 0.2rem 0.6rem; border-radius: 99px;
+        background: var(--border); color: var(--ink-1); font-weight: 600;
+        display: inline-flex; align-items: baseline; gap: 0.35rem;
+    }
+    /* What they have to do with this order. A wall of first names says who is
+       listening but not who to ask, and two people called Jully are only
+       telling you apart by this. */
+    .chip-part { font-weight: 400; color: var(--ink-3); font-size: 0.7rem; }
 </style>
 
 <div class="page-head">
@@ -230,7 +238,12 @@
 
     <div class="people">
             @foreach ($participants as $p)
-                <span class="chip">{{ $p->name }}</span>
+                <span class="chip">
+                    {{ $p->name }}
+                    @if ($p->part_on_order)
+                        <span class="chip-part">{{ $p->part_on_order }}</span>
+                    @endif
+                </span>
             @endforeach
         </div>
     </div>
