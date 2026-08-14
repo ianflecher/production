@@ -5,11 +5,67 @@
 
 @section('content')
 
+{{-- The cards live in a grid, so every card in a row is stretched to the
+     tallest one. Their insides were not stretched with them, so the progress
+     bar, the due date and the export paths each stopped wherever that card's
+     text happened to end — three cards side by side with three different
+     baselines, and a gap of dead space under the short ones.
+
+     Each card is now a column: the variable middle grows, and the progress and
+     footer are pushed to the bottom, so they line up straight across a row
+     whatever is above them. --}}
+<style>
+    .mt-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        gap: 0.9rem;
+        align-items: stretch;
+    }
+    .mt-card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 1.1rem 1.2rem;
+        color: inherit;
+    }
+    /* Everything from here down sits against the bottom of the card. */
+    .mt-foot { margin-top: auto; padding-top: 0.7rem; }
+
+    .mt-section-title { font-size: 1rem; margin-bottom: 0.7rem; }
+
+    /* Order number and client, kept from pushing the badge off the row. */
+    .mt-head {
+        display: flex; justify-content: space-between;
+        align-items: flex-start; gap: 0.75rem; margin-bottom: 0.75rem;
+    }
+    .mt-head-badge { flex-shrink: 0; }
+    .mt-num { color: var(--accent); font-size: 1.05rem; font-weight: 700; line-height: 1.25; }
+    .mt-client { color: var(--ink-2); font-size: 0.85rem; margin-top: 0.2rem; overflow-wrap: anywhere; }
+
+    /* Counts line up as columns of digits rather than drifting with the text. */
+    .mt-meta {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 0.5rem; font-size: 0.75rem; margin-bottom: 0.4rem;
+    }
+    .mt-meta .num { color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    @media (max-width: 560px) {
+        .mt-grid { grid-template-columns: 1fr; }
+    }
+</style>
+
 <div class="page-head">
     <div class="grow">
         <h1>My tasks</h1>
     </div>
 </div>
+
+@include('partials.list-search', [
+    'action' => route('tasks.mine'),
+    'value' => $search ?? '',
+    'placeholder' => 'Search order number or client',
+    'label' => 'Search my tasks',
+])
 
 
 {{-- =========================================================
@@ -33,23 +89,9 @@
 ========================================================= --}}
 @if ($waiting->isNotEmpty())
     <section style="margin-bottom: 1.8rem;">
-        <h2
-            style="
-                font-size: 1rem;
-                margin-bottom: 0.7rem;
-            "
-        >
-            Waiting on the account officer
-        </h2>
+        <h2 class="mt-section-title">Waiting on the account officer</h2>
 
-        <div
-            style="
-                display: grid;
-                grid-template-columns:
-                    repeat(auto-fill, minmax(320px, 1fr));
-                gap: 0.9rem;
-            "
-        >
+        <div class="mt-grid">
             @foreach ($waiting as $order)
                 @php
                     $layoutTask = $order->tasks->first(
@@ -68,21 +110,9 @@
                         }
                     );
 
-                    $layoutImages = $layoutTask
-                        ? $layoutTask->files->filter(
-                            function ($file) {
-                                return $file->isImage();
-                            }
-                        )
-                        : collect();
                 @endphp
 
-                <div
-                    class="card panel"
-                    style="
-                        border-left: 4px solid var(--accent);
-                    "
-                >
+                <div class="card panel mt-card" style="border-left: 4px solid var(--accent);">
                     <div
                         style="
                             display: flex;
@@ -127,35 +157,11 @@
                         @endif
                     </p>
 
-                    @if ($layoutImages->isNotEmpty())
-                        <div
-                            style="
-                                display: flex;
-                                flex-wrap: wrap;
-                                gap: 0.5rem;
-                            "
-                        >
-                            @foreach ($layoutImages as $file)
-                                <a
-                                    href="{{ route('tasks.file.view', $file) }}"
-                                    title="View approved layout"
-                                >
-                                    <img
-                                        src="{{ route('tasks.file.view', $file) }}"
-                                        alt="Approved layout"
-                                        class="design-preview"
-                                        style="
-                                            max-height: 130px;
-                                            max-width: 100%;
-                                            border: 1px solid var(--border);
-                                            border-radius: 8px;
-                                            display: block;
-                                        "
-                                    >
-                                </a>
-                            @endforeach
-                        </div>
-                    @elseif ($layoutTask)
+                    {{-- The approved layouts were shown as thumbnails here, at
+                         whatever height each one came out — the main reason no
+                         two cards in this row were ever the same size. A link
+                         to the step, where they are shown properly. --}}
+                    @if ($layoutTask)
                         <a
                             href="{{ route('tasks.show', $layoutTask->id) }}"
                             class="btn btn-ghost btn-sm"
@@ -176,23 +182,9 @@
 ========================================================= --}}
 @if ($orders->isNotEmpty())
     <section style="margin-bottom: 1.8rem;">
-        <h2
-            style="
-                font-size: 1rem;
-                margin-bottom: 0.7rem;
-            "
-        >
-            Active orders
-        </h2>
+        <h2 class="mt-section-title">Active orders</h2>
 
-        <div
-            style="
-                display: grid;
-                grid-template-columns:
-                    repeat(auto-fill, minmax(330px, 1fr));
-                gap: 0.9rem;
-            "
-        >
+        <div class="mt-grid">
             @foreach ($orders as $orderNumber => $group)
                 @php
                     $sortedTasks = $group
@@ -305,48 +297,15 @@
                 @if ($currentTask)
                     <a
                         href="{{ route('tasks.show', $currentTask->id) }}"
-                        class="card"
-                        style="
-                            padding: 1.1rem 1.2rem;
-                            color: inherit;
-                            display: block;
-                            border-left:
-                                4px solid
-                                {{ $hasRevision
-                                    ? '#dc2626'
-                                    : 'var(--accent)' }};
-                        "
+                        class="card mt-card"
+                        style="border-left: 4px solid {{ $hasRevision ? '#dc2626' : 'var(--accent)' }};"
                     >
                         {{-- Order header --}}
-                        <div
-                            style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: flex-start;
-                                gap: 0.75rem;
-                                margin-bottom: 0.75rem;
-                            "
-                        >
+                        <div class="mt-head">
                             <div style="min-width: 0;">
-                                <div
-                                    style="
-                                        color: var(--accent);
-                                        font-size: 1.05rem;
-                                        font-weight: 700;
-                                        line-height: 1.25;
-                                    "
-                                >
-                                    {{ $orderNumber }}
-                                </div>
+                                <div class="mt-num">{{ $orderNumber }}</div>
 
-                                <div
-                                    style="
-                                        color: var(--ink-2);
-                                        font-size: 0.85rem;
-                                        margin-top: 0.2rem;
-                                        overflow-wrap: anywhere;
-                                    "
-                                >
+                                <div class="mt-client">
                                     {{ $order->clientName() }}
 
                                     @if ($order->quantity)
@@ -356,7 +315,7 @@
                                 </div>
                             </div>
 
-                            <div style="flex-shrink: 0;">
+                            <div class="mt-head-badge">
                                 @if ($order->status === 'on_hold')
                                     <span
                                         class="badge"
@@ -483,28 +442,15 @@
                             {{ $departments->implode(' · ') }}
                         </div>
 
-                        {{-- Progress details --}}
-                        <div
-                            style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                gap: 0.5rem;
-                                margin-bottom: 0.4rem;
-                                font-size: 0.75rem;
-                            "
-                        >
+                        {{-- Progress and everything under it hug the bottom, so
+                             a row of cards shares one baseline. --}}
+                        <div class="mt-foot">
+                        <div class="mt-meta">
                             <span style="color: var(--ink-2);">
                                 Assigned tasks
                             </span>
 
-                            <span
-                                style="
-                                    color: var(--ink-3);
-                                    font-variant-numeric: tabular-nums;
-                                    white-space: nowrap;
-                                "
-                            >
+                            <span class="num">
                                 {{ $completedTasks }}/{{ $totalTasks }}
                                 complete
                             </span>
@@ -536,37 +482,11 @@
                             </div>
                         @endif
 
-                        {{-- Export files stay visible on the active card too. --}}
-                        @if ($exportTask)
-                            <div
-                                style="
-                                    margin-top: 0.7rem;
-                                    background: var(--accent-soft);
-                                    border: 1px solid #cfe0fb;
-                                    border-radius: 8px;
-                                    padding: 0.6rem 0.7rem;
-                                "
-                            >
-                                <div
-                                    style="
-                                        color: #1d4ed8;
-                                        font-size: 0.66rem;
-                                        font-weight: 700;
-                                        letter-spacing: 0.07em;
-                                        text-transform: uppercase;
-                                        margin-bottom: 0.3rem;
-                                    "
-                                >
-                                    📤 Export files
-                                </div>
-                                @foreach ($exportTask->files as $ef)
-                                    <div style="font-size: 0.74rem; margin-bottom: 0.2rem; overflow-wrap: anywhere;">
-                                        <span style="color: var(--ink-3);">{{ $ef->label ?? 'File' }}:</span>
-                                        <code style="font-family: ui-monospace, Consolas, monospace; color: var(--ink);">{{ $ef->external_path ?? $ef->original_name }}</code>
-                                    </div>
-                                @endforeach
-                            </div>
-                        @endif
+                        {{-- The export paths used to be reproduced here. They are
+                             long, they wrap to three lines, and they made every
+                             card a different height for something the artist can
+                             read on the step itself. --}}
+                        </div>{{-- /.mt-foot --}}
                     </a>
                 @endif
             @endforeach
@@ -605,15 +525,7 @@
             Completed orders ({{ $completedOrders->count() }})
         </summary>
 
-        <div
-            style="
-                display: grid;
-                grid-template-columns:
-                    repeat(auto-fill, minmax(330px, 1fr));
-                gap: 0.9rem;
-                margin-top: 0.7rem;
-            "
-        >
+        <div class="mt-grid" style="margin-top: 0.7rem;">
             @foreach ($completedOrders as $orderNumber => $tasks)
                 @php
                     $sortedCompletedTasks = $tasks
@@ -638,41 +550,6 @@
 
                     if (! $openTask) {
                         $openTask = $sortedCompletedTasks->last();
-                    }
-
-                    /*
-                     * Preview priority:
-                     * 1. Final Mockup image
-                     * 2. Last completed task image
-                     * 3. Any available image
-                     */
-                    $previewImage = null;
-
-                    if ($openTask) {
-                        $previewImage = $openTask->files->first(
-                            function ($file) {
-                                return $file->isImage();
-                            }
-                        );
-                    }
-
-                    if (! $previewImage) {
-                        foreach (
-                            $sortedCompletedTasks->reverse()
-                            as $completedTask
-                        ) {
-                            $previewImage = $completedTask
-                                ->files
-                                ->first(
-                                    function ($file) {
-                                        return $file->isImage();
-                                    }
-                                );
-
-                            if ($previewImage) {
-                                break;
-                            }
-                        }
                     }
 
                     $completedDepartments = $sortedCompletedTasks
@@ -707,45 +584,17 @@
                 @if ($openTask)
                     <a
                         href="{{ route('tasks.show', $openTask->id) }}"
-                        class="card"
-                        style="
-                            padding: 1rem 1.1rem;
-                            color: inherit;
-                            display: block;
-                            border-left:
-                                4px solid var(--success-ink);
-                        "
+                        class="card mt-card"
+                        style="border-left: 4px solid var(--success-ink);"
                     >
                         {{-- Completed order header --}}
-                        <div
-                            style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: flex-start;
-                                gap: 0.75rem;
-                                margin-bottom: 0.65rem;
-                            "
-                        >
+                        <div class="mt-head">
                             <div style="min-width: 0;">
-                                <div
-                                    style="
-                                        color: var(--accent);
-                                        font-size: 1rem;
-                                        font-weight: 700;
-                                        line-height: 1.3;
-                                    "
-                                >
+                                <div class="mt-num" style="font-size: 1rem;">
                                     {{ $orderNumber }}
                                 </div>
 
-                                <div
-                                    style="
-                                        color: var(--ink-2);
-                                        font-size: 0.82rem;
-                                        margin-top: 0.15rem;
-                                        overflow-wrap: anywhere;
-                                    "
-                                >
+                                <div class="mt-client" style="font-size: 0.82rem;">
                                     {{ $order->clientName() }}
 
                                     @if ($order->quantity)
@@ -802,94 +651,35 @@
                             </div>
                         </div>
 
-                        {{-- Export files stay visible after completion. --}}
-                        @if ($exportTask && $exportTask->files->isNotEmpty())
-                            <div
-                                style="
-                                    background: var(--accent-soft);
-                                    border: 1px solid #cfe0fb;
-                                    border-radius: 8px;
-                                    padding: 0.65rem 0.75rem;
-                                    margin-bottom: 0.7rem;
-                                "
-                            >
-                                <div
-                                    style="
-                                        color: #1d4ed8;
-                                        font-size: 0.67rem;
-                                        font-weight: 700;
-                                        letter-spacing: 0.07em;
-                                        text-transform: uppercase;
-                                        margin-bottom: 0.35rem;
-                                    "
-                                >
-                                    📤 Export files
-                                </div>
-                                @foreach ($exportTask->files as $ef)
-                                    <div style="font-size: 0.76rem; margin-bottom: 0.25rem; overflow-wrap: anywhere;">
-                                        <span style="color: var(--ink-3);">{{ $ef->label ?? 'File' }}:</span>
-                                        <code style="font-family: ui-monospace, Consolas, monospace; color: var(--ink);">{{ $ef->external_path ?? $ef->original_name }}</code>
-                                    </div>
-                                @endforeach
+                        {{-- The preview image and the export paths were both here.
+                             A 180px picture and three wrapped file paths per card
+                             is what made this list impossible to line up — and
+                             both are on the step itself, one click away.
 
-                                {{-- A finished order has no open step, so without
-                                     this there is no way back to a path that
-                                     turned out wrong or whose file has moved. --}}
+                             The one thing that was ONLY reachable from here is
+                             the path correction: a finished order has no open
+                             step to go through. So that stays, as a link. --}}
+                        @if ($exportTask && $exportTask->files->isNotEmpty())
+                            <div style="margin-bottom: 0.6rem;">
                                 <a href="{{ route('tasks.show', $exportTask->id) }}"
-                                   style="display:inline-block; margin-top:0.35rem; font-size:0.74rem; font-weight:600;">
+                                   style="font-size: 0.76rem; font-weight: 600;">
                                     ✎ Edit path and send again
                                 </a>
                             </div>
                         @endif
 
-                        {{-- Main preview --}}
-                        @if ($previewImage)
-                            <img
-                                src="{{ route(
-                                    'tasks.file.view',
-                                    $previewImage
-                                ) }}"
-                                alt="{{ $orderNumber }}"
-                                class="design-preview"
-                                style="
-                                    width: 100%;
-                                    height: 180px;
-                                    object-fit: contain;
-                                    border: 1px solid var(--border);
-                                    border-radius: 7px;
-                                    display: block;
-                                    margin-bottom: 0.7rem;
-                                "
-                            >
-                        @endif
-
-                        {{-- Completed footer --}}
-                        <div
-                            style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                gap: 0.75rem;
-                                flex-wrap: wrap;
-                                color: var(--ink-3);
-                                font-size: 0.75rem;
-                            "
-                        >
+                        {{-- Completed footer, held against the bottom so the
+                             count and the date line up across the row however
+                             tall the preview above them turned out. --}}
+                        <div class="mt-foot mt-meta" style="margin-bottom: 0; color: var(--ink-3);">
                             <span>
                                 ✓ {{ $completedCount }}
                                 completed
-                                {{ Str::plural(
-                                    'task',
-                                    $completedCount
-                                ) }}
+                                {{ Str::plural('task', $completedCount) }}
                             </span>
 
                             @if ($latestApprovedAt)
-                                <span>
-                                    {{ $latestApprovedAt->format(
-                                        'M j, Y'
-                                    ) }}
-                                </span>
+                                <span class="num">{{ $latestApprovedAt->format('M j, Y') }}</span>
                             @endif
                         </div>
                     </a>

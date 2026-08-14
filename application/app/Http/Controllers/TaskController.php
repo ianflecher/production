@@ -15,12 +15,26 @@ class TaskController extends Controller
 
     public function mine(Request $request): View
     {
+        $search = trim((string) $request->query('q', ''));
+
+        // Searched in the database so it reaches every order the artist holds,
+        // not the ones that happen to be on screen. Order number or client —
+        // the two things anybody is told over the phone.
+        $matching = fn ($q) => $q->when($search !== '', fn ($w) => $w
+            ->whereHas('order', fn ($o) => $o
+                ->where('order_number', 'like', "%{$search}%")
+                ->orWhere('customer_name', 'like', "%{$search}%")
+                ->orWhereHas('client', fn ($c) => $c
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%"))));
+
         // Grouped by order (newest first). Only the ACTIVE step shows — finished
         // (complete) and locked (todo) steps are hidden so there's no redundancy.
-        $tasks = Task::with('order')
+        $tasks = Task::with('order.client')
             ->where('assigned_to', $request->user()->id)
             ->whereNotIn('status', ['todo', 'complete', 'cancelled'])
             ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+            ->tap($matching)
             ->orderByDesc('production_order_id')
             ->orderBy('sequence')
             ->get();
@@ -45,10 +59,11 @@ class TaskController extends Controller
 
         // Finished work stays visible (collapsed) so the artist can look back at
         // what they submitted.
-        $completed = Task::with(['order', 'files'])
+        $completed = Task::with('order.client')
             ->where('assigned_to', $request->user()->id)
             ->where('status', 'complete')
             ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+            ->tap($matching)
             ->orderByDesc('approved_at')
             ->limit(20)
             ->get();
@@ -57,6 +72,7 @@ class TaskController extends Controller
             'orders' => $orders,
             'waiting' => $waiting,
             'completed' => $completed,
+            'search' => $search,
         ]);
     }
 
