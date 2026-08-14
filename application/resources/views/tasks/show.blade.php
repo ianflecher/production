@@ -236,8 +236,10 @@
         </div>
 
         {{-- Changed in one place, on the step that owns them, so two steps of
-             the same order cannot end up claiming different paths. --}}
-        <a href="{{ route('tasks.show', $orderExport->id) }}"
+             the same order cannot end up claiming different paths. Lands with
+             the form already open: asking to edit the path and then being asked
+             again on arrival is the same click twice. --}}
+        <a href="{{ route('tasks.show', ['taskId' => $orderExport->id, 'edit' => 'path']) }}#edit-path"
            style="display: inline-block; margin-top: 0.7rem; font-size: 0.8rem; font-weight: 600;">
             ✎ Edit path and send again
         </a>

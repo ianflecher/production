@@ -5,7 +5,11 @@
      is exactly when a wrong path is most annoying to be stuck with. --}}
 @if ($task->usesFilePath() && $task->status === 'complete' && $task->files->isNotEmpty())
     @php $pathSlots = $task->fileSlots(); @endphp
-    <details class="path-help path-help-action" style="margin-bottom:0.8rem;">
+    {{-- Arriving here by clicking "edit the path" and then having to click
+         "edit the path" again is one click to say the same thing twice. When
+         that is where you came from, the form is already open and scrolled to. --}}
+    <details class="path-help path-help-action" id="edit-path" style="margin-bottom:0.8rem;"
+             @if (request()->query('edit') === 'path' || $errors->any()) open @endif>
         <summary>File moved or path wrong? Edit and send again</summary>
 
         <form method="POST" action="{{ route('tasks.path.update', $task->id) }}" style="margin-top:0.6rem;">

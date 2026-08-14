@@ -171,6 +171,34 @@ class ResendFilePathTest extends TestCase
             ->assertSee(self::GOOD, false);
     }
 
+    public function test_asking_to_edit_the_path_does_not_ask_twice(): void
+    {
+        [$artist, $task] = $this->sentExport();
+
+        // Clicking "edit the path" and then being asked to click "edit the
+        // path" again on arrival is the same click twice, so the link carries
+        // the intent and the form is already open.
+        $html = $this->actingAs($artist)->get("/my-tasks/{$task->id}?edit=path")
+            ->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/id="edit-path"[^>]*\bopen\b[^>]*>/s', $html,
+            'arriving from the link should find the form already open'
+        );
+    }
+
+    public function test_the_form_stays_shut_when_nobody_asked_for_it(): void
+    {
+        [$artist, $task] = $this->sentExport();
+
+        $html = $this->actingAs($artist)->get("/my-tasks/{$task->id}")->getContent();
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/id="edit-path"[^>]*\bopen\b[^>]*>/s', $html,
+            'without the query the disclosure should render closed'
+        );
+    }
+
     public function test_every_step_of_the_order_is_listed_on_the_step_page(): void
     {
         [$artist, $task] = $this->sentExport();
