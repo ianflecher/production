@@ -159,6 +159,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/job-order-files/{file}/download', [OrderReferenceFileController::class, 'downloadReferenceFile'])
         ->whereNumber('file')->name('job-order-files.download');
 
+    // Where jobs are piling up — leaders, supervisors and admin only.
+    Route::get('/reports/bottlenecks', [\App\Http\Controllers\BottleneckReportController::class, 'index'])
+        ->name('reports.bottlenecks');
+
     // Handing the goods over is the products desk's step, and they are not in
     // the sales/leader group below. Same controller method — so the payment
     // gate and everything else stays in one place — with the controller's own

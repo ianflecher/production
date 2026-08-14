@@ -645,6 +645,18 @@ class DemoDataSeeder extends Seeder
             $order->refresh()->rebuildPipeline($order->decoration_methods ?? [], $order->cutting_type);
 
             $this->advance($order, $stop, $leader);
+
+            // Whatever it stopped on has been sitting there since it got there,
+            // not since this seeder ran. Some jobs have been waiting an hour and
+            // some for a fortnight — which is the whole point of a report about
+            // where work gets stuck.
+            $waiting = [2, 6, 20, 44, 3, 96, 11, 180, 30, 5, 260, 8][$i % 12];
+
+            $order->tasks()
+                ->whereIn('status', \App\Services\Stations::RELEASED)
+                ->whereNotNull('released_at')
+                ->update(['released_at' => now()->subHours($waiting)]);
+
             $orders[] = $order->fresh();
         }
 
@@ -726,6 +738,24 @@ class DemoDataSeeder extends Seeder
     }
 
     /** Mark every task in a stage complete, letting the model open the next one. */
+    /**
+     * Roughly how long each step takes, in hours.
+     *
+     * Without these every seeded step is released and approved in the same
+     * instant, so any report about where work piles up reads "1 min" for the
+     * whole shop — true of the data, useless as a demo. Sewing and the presses
+     * are the real queues in a print shop; the desk steps are quick.
+     */
+    private const STEP_HOURS = [
+        'Layout' => 20, 'Final mockup' => 16, 'Production template' => 8, 'Export' => 3,
+        'Raw materials' => 26, 'Printer' => 10, 'Sticker' => 5,
+        'Roller press' => 14, 'Heat press' => 16, 'Small press' => 9, 'Cap press' => 7,
+        'Laser cutting' => 6, 'Manual cutting' => 12,
+        'Pairing' => 7, 'Sewing' => 44, 'Embroidery' => 30, 'Quality control' => 5,
+        'Produce sample for client' => 34, 'Mass production' => 22,
+        'Inventory' => 4, 'Release to client' => 18,
+    ];
+
     private function completeStage(ProductionOrder $order, int $stage): void
     {
         $tasks = $order->tasks()->where('stage', $stage)->get();
@@ -737,10 +767,18 @@ class DemoDataSeeder extends Seeder
                 $task->status = 'ready';
             }
 
+            // A step is released, worked, handed in, then signed off — in that
+            // order, and taking time. Random unrelated dates put approvals
+            // before the work they approve and made every duration nonsense.
+            $typical = self::STEP_HOURS[$task->department] ?? 8;
+            $took = max(1, (int) round($typical * (0.4 + (($task->id % 13) / 10))));
+            $approved = now()->subHours(rand(2, 24 * 20));
+
             $task->fill([
                 'status' => 'complete',
-                'submitted_at' => now()->subDays(rand(1, 14)),
-                'approved_at' => now()->subDays(rand(0, 1)),
+                'released_at' => $approved->copy()->subHours($took),
+                'submitted_at' => $approved->copy()->subMinutes(rand(10, 90)),
+                'approved_at' => $approved,
                 // Somebody did every one of these. Steps with no assignee —
                 // the approvals, the handover at the counter — had nothing
                 // recorded, so the finished pipeline read "—" on its own last
