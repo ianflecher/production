@@ -14,7 +14,14 @@
     $totalItems = $totalCount;
     $inStockCount = $totalItems - $outCount;
 
-    $isFiltered = $search !== '' || $category !== '' || $color !== '' || $size !== '';
+    $isFiltered = $search !== '' || $category !== '' || $color !== '' || $size !== '' || ($stock ?? '') !== '';
+
+    // Jump straight to the rows the number is talking about, keeping whatever
+    // category/colour/size is already chosen.
+    $stockLink = fn (string $which) => route('inventory.index', array_filter([
+        'q' => $search, 'category' => $category, 'color' => $color, 'size' => $size,
+        'stock' => $which,
+    ]));
 @endphp
 
 
@@ -74,14 +81,19 @@
             <div class="inv-kpi-note">Materials currently available</div>
         </article>
 
-        <article class="inv-kpi inv-kpi-red">
+        {{-- A count you can click. Knowing twelve materials are out does not
+             tell you which twelve, and they were scattered red rows across a
+             paged sheet of hundreds. --}}
+        <a href="{{ $stockLink('out') }}" class="inv-kpi inv-kpi-red" style="text-decoration: none; color: inherit;">
             <div class="inv-kpi-label">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 Out of stock
             </div>
             <div class="inv-kpi-value">{{ number_format($outCount) }}</div>
-            <div class="inv-kpi-note">Materials needing replenishment</div>
-        </article>
+            <div class="inv-kpi-note">
+                {{ $outCount > 0 ? 'Show what needs reordering →' : 'Nothing needs reordering' }}
+            </div>
+        </a>
 
         <article class="inv-kpi inv-kpi-orange">
             <div class="inv-kpi-label">
@@ -211,11 +223,21 @@
                      stock sheet rather than the page being shown. --}}
                 <form method="GET" action="{{ route('inventory.index') }}" id="invFilterForm" class="inv-stock-controls">
                     @if ($outCount > 0)
-                        <span class="inv-out-badge">
+                        <a href="{{ $stockLink($stock === 'out' ? '' : 'out') }}" class="inv-out-badge"
+                           style="text-decoration: none;"
+                           title="{{ $stock === 'out' ? 'Show everything again' : 'Show only these' }}">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                             {{ number_format($outCount) }} out of stock
-                        </span>
+                        </a>
                     @endif
+
+                    {{-- A real filter as well as the shortcuts, so it survives a
+                         search instead of being dropped by the next submit. --}}
+                    <select name="stock" id="invStock" class="inv-cat-filter" aria-label="Filter by stock level">
+                        <option value="">Any stock level</option>
+                        <option value="out" @selected($stock === 'out')>Out of stock only</option>
+                        <option value="in" @selected($stock === 'in')>In stock only</option>
+                    </select>
 
                     <select name="category" id="invCategory" class="inv-cat-filter" aria-label="Filter by category">
                         <option value="">All categories</option>
@@ -507,7 +529,7 @@
         var form = document.getElementById('invFilterForm');
         if (!form) return;
 
-        ['invCategory', 'invColor', 'invSize'].forEach(function (id) {
+        ['invCategory', 'invColor', 'invSize', 'invStock'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('change', function () { form.submit(); });
         });

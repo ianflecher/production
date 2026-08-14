@@ -56,6 +56,15 @@ class InventoryController extends Controller
         $color = (string) $request->query('color', '');
         $size = (string) $request->query('size', '');
 
+        // Knowing that twelve materials are out is no use without knowing WHICH
+        // twelve — and on a sheet of hundreds, spread over pages, the red rows
+        // had to be hunted for. The count is now something you can click.
+        $stock = (string) $request->query('stock', '');
+
+        if (! in_array($stock, ['out', 'in'], true)) {
+            $stock = '';
+        }
+
         if (! array_key_exists($category, InventoryItem::CATEGORIES)) {
             $category = '';
         }
@@ -70,7 +79,9 @@ class InventoryController extends Controller
                 ->orWhere('unit', 'like', "%{$search}%")))
             ->when($category !== '', fn ($w) => $w->where('category', $category))
             ->when($color !== '', fn ($w) => $w->where('color', $color))
-            ->when($size !== '', fn ($w) => $w->where('size', $size));
+            ->when($size !== '', fn ($w) => $w->where('size', $size))
+            ->when($stock === 'out', fn ($w) => $w->where('quantity', '<=', 0))
+            ->when($stock === 'in', fn ($w) => $w->where('quantity', '>', 0));
 
         $items = InventoryItem::query()
             ->tap($filtered)
@@ -105,6 +116,7 @@ class InventoryController extends Controller
             'category' => $category,
             'color' => $color,
             'size' => $size,
+            'stock' => $stock,
             'colorOptions' => $distinct('color'),
             'sizeOptions' => $distinct('size'),
             // Counted across the whole sheet, so these don't shift as you page.
