@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Payment;
+use App\Services\SpreadsheetExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -48,33 +49,60 @@ class FinanceController extends Controller
         ));
     }
 
-    /** Download the (filtered) payment ledger as a CSV that opens in Excel. */
+    /**
+     * The (filtered) payment ledger as a real Excel file.
+     *
+     * VAT is broken out per line. The order carries the VAT flag and the shop
+     * is billed 12% on top, so a payment against a VAT order is itself part
+     * net and part tax — a ledger that only shows the gross cannot be checked
+     * against anything, which is most of the point of exporting it.
+     */
     public function export(Request $request)
     {
         $payments = $this->filtered($request)->get();
-        $filename = 'payments-'.now()->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($payments) {
-            $out = fopen('php://output', 'w');
-            // UTF-8 BOM so Excel reads accents / the peso sign correctly.
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Order', 'Client', 'Amount', 'Type', 'Method', 'Reference', 'Proof', 'Recorded by', 'Paid at']);
+        $rows = $payments->map(function (Payment $p) {
+            $gross = (float) $p->amount;
+            $vatable = $p->order?->vat_inclusive === true;
+            $net = $vatable ? round($gross / (1 + \App\Models\ProductionOrder::VAT_RATE), 2) : $gross;
 
-            foreach ($payments as $p) {
-                fputcsv($out, [
-                    $p->order?->order_number ?? '',
-                    $p->order?->clientName() ?? '',
-                    number_format((float) $p->amount, 2, '.', ''),
-                    $p->kind ?? 'payment',
-                    $p->method ?? '',
-                    $p->reference ?? '',
-                    $p->hasProof() ? ($p->proof_name ?: 'yes') : 'none',
-                    $p->recorder?->name ?? '',
-                    $p->paid_at?->format('Y-m-d H:i') ?? '',
-                ]);
-            }
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+            return [
+                $p->order?->order_number ?? '',
+                $p->order?->clientName() ?? '',
+                $p->order?->client?->tin ?? '',
+                $net,
+                $vatable ? round($gross - $net, 2) : 0.0,
+                $gross,
+                $p->kind ?? 'payment',
+                $p->method ?? '',
+                $p->reference ?? '',
+                $p->hasProof() ? ($p->proof_name ?: 'yes') : 'none',
+                $p->recorder?->name ?? '',
+                $p->paid_at,
+            ];
+        });
+
+        return SpreadsheetExport::download(
+            'payments-'.now()->format('Y-m-d').'.xlsx',
+            'Payment ledger',
+            [
+                ['Order', SpreadsheetExport::TEXT],
+                ['Client', SpreadsheetExport::TEXT],
+                ['TIN', SpreadsheetExport::TEXT],
+                ['Net of VAT', SpreadsheetExport::MONEY],
+                ['VAT', SpreadsheetExport::MONEY],
+                ['Amount paid', SpreadsheetExport::MONEY],
+                ['Type', SpreadsheetExport::TEXT],
+                ['Method', SpreadsheetExport::TEXT],
+                ['Reference', SpreadsheetExport::TEXT],
+                ['Proof', SpreadsheetExport::TEXT],
+                ['Recorded by', SpreadsheetExport::TEXT],
+                ['Paid at', SpreadsheetExport::DATE],
+            ],
+            $rows,
+            totalOf: ['Net of VAT', 'VAT', 'Amount paid'],
+            subtitle: $payments->count().' payment(s)',
+        );
     }
 
     /** Serve a payment's proof file (finance sees every order's proof). */

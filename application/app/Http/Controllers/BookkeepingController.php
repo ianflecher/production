@@ -143,27 +143,33 @@ class BookkeepingController extends Controller
             ->orderBy('spent_at')
             ->get();
 
-        $filename = 'expenses-'.$month->format('Y-m').'.csv';
+        $rows = $expenses->map(fn (Expense $e) => [
+            $e->spent_at,
+            $e->categoryLabel(),
+            $e->description,
+            (float) $e->amount,
+            $e->method ?? '',
+            $e->reference ?? '',
+            $e->hasReceipt() ? ($e->receipt_name ?: 'yes') : 'none',
+            $e->recorder?->name ?? '',
+        ]);
 
-        return response()->streamDownload(function () use ($expenses) {
-            $out = fopen('php://output', 'w');
-            // UTF-8 BOM so Excel reads the peso sign correctly.
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Date', 'Category', 'Description', 'Amount', 'Method', 'Reference', 'Receipt', 'Recorded by']);
-
-            foreach ($expenses as $e) {
-                fputcsv($out, [
-                    $e->spent_at?->format('Y-m-d') ?? '',
-                    $e->categoryLabel(),
-                    $e->description,
-                    number_format((float) $e->amount, 2, '.', ''),
-                    $e->method ?? '',
-                    $e->reference ?? '',
-                    $e->hasReceipt() ? ($e->receipt_name ?: 'yes') : 'none',
-                    $e->recorder?->name ?? '',
-                ]);
-            }
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return \App\Services\SpreadsheetExport::download(
+            'expenses-'.$month->format('Y-m').'.xlsx',
+            'Expenses '.$month->format('F Y'),
+            [
+                ['Date', \App\Services\SpreadsheetExport::DATE],
+                ['Category', \App\Services\SpreadsheetExport::TEXT],
+                ['Description', \App\Services\SpreadsheetExport::TEXT],
+                ['Amount', \App\Services\SpreadsheetExport::MONEY],
+                ['Method', \App\Services\SpreadsheetExport::TEXT],
+                ['Reference', \App\Services\SpreadsheetExport::TEXT],
+                ['Receipt', \App\Services\SpreadsheetExport::TEXT],
+                ['Recorded by', \App\Services\SpreadsheetExport::TEXT],
+            ],
+            $rows,
+            totalOf: ['Amount'],
+            subtitle: $expenses->count().' expense(s)',
+        );
     }
 }

@@ -159,14 +159,17 @@ class BookkeepingTest extends TestCase
             ->assertOk()->assertViewHas('expenseTotal', 999.0);
     }
 
-    public function test_export_returns_a_csv(): void
+    public function test_export_returns_a_real_excel_file(): void
     {
         $user = $this->finance();
         $this->actingAs($user)->post('/books/expenses', $this->expensePayload());
 
         $this->actingAs($user)->get('/books/export')
             ->assertOk()
-            ->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+            ->assertHeader(
+                'Content-Type',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            );
     }
 
     // ---- Access ------------------------------------------------------------

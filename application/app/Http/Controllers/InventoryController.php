@@ -247,15 +247,34 @@ class InventoryController extends Controller
 
         $items = InventoryItem::orderBy('name')->get();
 
-        return response()->streamDownload(function () use ($items) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel reads it cleanly
-            fputcsv($out, ['name', 'unit', 'quantity']);
-            foreach ($items as $i) {
-                fputcsv($out, [$i->name, $i->unit, (float) $i->quantity]);
-            }
-            fclose($out);
-        }, 'inventory-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
+        $rows = $items->map(fn (InventoryItem $i) => [
+            $i->name,
+            $i->code ?? '',
+            $i->categoryLabel(),
+            $i->size ?? '',
+            $i->color ?? '',
+            $i->unit,
+            (float) $i->quantity,
+            (float) $i->quantity <= 0 ? 'OUT OF STOCK' : '',
+        ]);
+
+        return \App\Services\SpreadsheetExport::download(
+            'inventory-'.now()->format('Y-m-d').'.xlsx',
+            'Raw materials stock',
+            [
+                ['Name', \App\Services\SpreadsheetExport::TEXT],
+                ['Code', \App\Services\SpreadsheetExport::TEXT],
+                ['Category', \App\Services\SpreadsheetExport::TEXT],
+                ['Size', \App\Services\SpreadsheetExport::TEXT],
+                ['Color', \App\Services\SpreadsheetExport::TEXT],
+                ['Unit', \App\Services\SpreadsheetExport::TEXT],
+                ['Quantity', \App\Services\SpreadsheetExport::NUMBER],
+                ['Status', \App\Services\SpreadsheetExport::TEXT],
+            ],
+            $rows,
+            subtitle: $items->count().' material(s), '
+                .$items->where('quantity', '<=', 0)->count().' out of stock',
+        );
     }
 
     public function import(Request $request): RedirectResponse
