@@ -140,11 +140,54 @@ class ResendFilePathTest extends TestCase
     {
         [$artist, $task] = $this->sentExport();
 
-        // With the order finished there is no open step, so the completed list
-        // has to carry the link or the path is unreachable.
-        $this->actingAs($artist)->get('/my-tasks')
+        // The card in the list used to carry this link. It now carries nothing
+        // but the order and its current step — so the guarantee moved to the
+        // step page, which is one click away and is where the paths are shown.
+        // What must stay true is that a wrong path is always reachable.
+        $this->actingAs($artist)->get("/my-tasks/{$task->id}")
             ->assertOk()
-            ->assertSee('Edit path and send again', false);
+            ->assertSee('Edit and send again', false);
+    }
+
+    public function test_the_path_is_visible_from_any_step_of_the_order(): void
+    {
+        [$artist, $task] = $this->sentExport();
+
+        // Opening a different step of the same order used to show nothing about
+        // the export, so the paths could only be found by knowing which step
+        // held them. Production works from these; they belong on the job.
+        $other = \App\Models\Task::create([
+            'production_order_id' => $task->production_order_id,
+            'department' => 'Layout',
+            'sequence' => $task->sequence + 1,
+            'stage' => 1,
+            'status' => 'ready',
+            'assigned_to' => $artist->id,
+        ]);
+
+        $this->actingAs($artist)->get("/my-tasks/{$other->id}")
+            ->assertOk()
+            ->assertSee('Export files for this order')
+            ->assertSee(self::GOOD, false);
+    }
+
+    public function test_every_step_of_the_order_is_listed_on_the_step_page(): void
+    {
+        [$artist, $task] = $this->sentExport();
+
+        \App\Models\Task::create([
+            'production_order_id' => $task->production_order_id,
+            'department' => 'Production template',
+            'sequence' => $task->sequence + 1,
+            'stage' => 2,
+            'status' => 'todo',
+        ]);
+
+        $this->actingAs($artist)->get("/my-tasks/{$task->id}")
+            ->assertOk()
+            ->assertSee('Steps on ')
+            ->assertSee('Production template')
+            ->assertSee('you are here');
     }
 
     public function test_the_form_is_on_the_task_page(): void

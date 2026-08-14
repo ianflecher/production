@@ -283,15 +283,6 @@
                         ->unique()
                         ->values();
 
-                    // The export step's files, shown on the active order card too
-                    // (not just once the whole order is finished).
-                    $exportTask = $sortedTasks->first(
-                        function ($task) {
-                            return $task->isExportStep()
-                                && $task->status === 'complete'
-                                && $task->files->isNotEmpty();
-                        }
-                    );
                 @endphp
 
                 @if ($currentTask)
@@ -557,14 +548,6 @@
                         ->unique()
                         ->values();
 
-                    // The export step's files stay visible after completion so the
-                    // artist can look back at (or re-copy) the paths they handed over.
-                    $exportTask = $sortedCompletedTasks->first(
-                        function ($task) {
-                            return $task->isExportStep();
-                        }
-                    );
-
                     $latestApprovedTask = $sortedCompletedTasks
                         ->filter(
                             function ($task) {
@@ -651,22 +634,11 @@
                             </div>
                         </div>
 
-                        {{-- The preview image and the export paths were both here.
-                             A 180px picture and three wrapped file paths per card
-                             is what made this list impossible to line up — and
-                             both are on the step itself, one click away.
-
-                             The one thing that was ONLY reachable from here is
-                             the path correction: a finished order has no open
-                             step to go through. So that stays, as a link. --}}
-                        @if ($exportTask && $exportTask->files->isNotEmpty())
-                            <div style="margin-bottom: 0.6rem;">
-                                <a href="{{ route('tasks.show', $exportTask->id) }}"
-                                   style="font-size: 0.76rem; font-weight: 600;">
-                                    ✎ Edit path and send again
-                                </a>
-                            </div>
-                        @endif
+                        {{-- The preview image, the export paths and the link to
+                             correct them were all here. The card is a summary;
+                             every one of those now lives on the step behind it,
+                             which opens with one click and has room to show them
+                             properly. --}}
 
                         {{-- Completed footer, held against the bottom so the
                              count and the date line up across the row however
