@@ -974,6 +974,44 @@ class DemoDataSeeder extends Seeder
         return [$path, (int) \Illuminate\Support\Facades\Storage::disk('local')->size($path)];
     }
 
+    /**
+     * A stand-in deposit slip, so seeded payments have the proof the app
+     * insists on. Recording a payment REQUIRES a picture — a ledger of
+     * payments with an empty Proof column is showing something the shop can
+     * never actually produce.
+     */
+    private function placeholderProof(): string
+    {
+        $path = 'payment-proofs/demo-proof.jpg';
+
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+            $img = imagecreatetruecolor(700, 900);
+            imagefill($img, 0, 0, imagecolorallocate($img, 250, 250, 248));
+
+            $ink = imagecolorallocate($img, 30, 41, 59);
+            $grey = imagecolorallocate($img, 148, 163, 184);
+
+            imagefilledrectangle($img, 0, 0, 700, 90, imagecolorallocate($img, 227, 27, 35));
+            imagestring($img, 5, 40, 35, 'DEPOSIT SLIP', imagecolorallocate($img, 255, 255, 255));
+
+            foreach ([180, 260, 340, 420, 500] as $y) {
+                imageline($img, 40, $y, 660, $y, $grey);
+            }
+            imagestring($img, 4, 40, 150, 'AMOUNT ................', $ink);
+            imagestring($img, 4, 40, 230, 'REFERENCE ..............', $ink);
+            imagestring($img, 3, 40, 700, 'sample proof - demo data', $grey);
+
+            ob_start();
+            imagejpeg($img, null, 80);
+            $bytes = (string) ob_get_clean();
+            imagedestroy($img);
+
+            \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+        }
+
+        return $path;
+    }
+
     private function makePayments(array $orders, User $finance): void
     {
         foreach ($orders as $index => $order) {
@@ -1001,7 +1039,13 @@ class DemoDataSeeder extends Seeder
                 // Some pay on the spot, some a few days later once the layout is
                 // approved and they are sure the job is going ahead.
                 'paid_at' => $order->created_at?->copy()->addDays($index % 6) ?? now()->subMonth(),
-                'recorded_by' => $finance->id,
+                // The officer who took the order takes the money for it: the
+                // app stamps whoever is signed in, and that is them at the
+                // counter. Filing every payment under finance made one name
+                // fill the whole ledger and hid who actually collected.
+                'recorded_by' => $order->created_by ?? $finance->id,
+                'proof_path' => $this->placeholderProof(),
+                'proof_name' => 'deposit-slip.jpg',
             ]);
 
             // The balance lands when the job is finished and released.
@@ -1012,7 +1056,9 @@ class DemoDataSeeder extends Seeder
                     'kind' => 'full',
                     'reference' => $method === 'Cash' ? null : strtoupper(bin2hex(random_bytes(4))),
                     'paid_at' => $order->completed_at ?? now()->subDays(rand(1, 30)),
-                    'recorded_by' => $finance->id,
+                    'recorded_by' => $order->created_by ?? $finance->id,
+                    'proof_path' => $this->placeholderProof(),
+                    'proof_name' => 'deposit-slip.jpg',
                 ]);
             }
         }
