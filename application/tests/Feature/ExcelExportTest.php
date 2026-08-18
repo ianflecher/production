@@ -54,7 +54,7 @@ class ExcelExportTest extends TestCase
     }
 
     /** Download an export and open it the way Excel would. */
-    private function sheetFrom(User $who, string $url)
+    private function sheetFrom(User $who, string $url, ?string $tab = null)
     {
         $response = $this->actingAs($who)->get($url)->assertOk()->assertHeader('Content-Type', self::XLSX);
 
@@ -64,13 +64,25 @@ class ExcelExportTest extends TestCase
         // A real xlsx is a zip. A CSV renamed would fail right here.
         $this->assertSame('PK', substr(file_get_contents($path), 0, 2), 'not a real xlsx');
 
-        return IOFactory::load($path)->getActiveSheet();
+        $book = IOFactory::load($path);
+
+        return $tab === null ? $book->getActiveSheet() : $book->getSheetByName($tab);
+    }
+
+    /** Every tab in the workbook, in order. */
+    private function tabsOf(User $who, string $url): array
+    {
+        $response = $this->actingAs($who)->get($url)->assertOk();
+        $path = tempnam(sys_get_temp_dir(), 'xl').'.xlsx';
+        file_put_contents($path, $response->streamedContent());
+
+        return IOFactory::load($path)->getSheetNames();
     }
 
     public function test_money_is_a_number_excel_can_add_up(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
 
         // Row 4 is the heading row, so the first payment is row 5.
         $amount = $sheet->getCell('F5');
@@ -83,7 +95,7 @@ class ExcelExportTest extends TestCase
     public function test_a_reference_is_not_mangled_into_scientific_notation(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
 
         $this->assertSame('5909978E', $sheet->getCell('I5')->getValue(),
             'a reference must survive as typed, not become 5.9E+08');
@@ -92,7 +104,7 @@ class ExcelExportTest extends TestCase
     public function test_vat_is_broken_out_so_the_line_can_be_checked(): void
     {
         $finance = $this->ledgerWithOnePayment(vat: true);
-        $sheet = $this->sheetFrom($finance, '/finance/export');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
 
         $net = (float) $sheet->getCell('D5')->getValue();
         $vat = (float) $sheet->getCell('E5')->getValue();
@@ -102,19 +114,63 @@ class ExcelExportTest extends TestCase
         $this->assertGreaterThan(0, $vat);
     }
 
-    public function test_a_non_vat_order_shows_no_vat(): void
+    public function test_a_non_vat_payment_lands_on_its_own_tab(): void
     {
         $finance = $this->ledgerWithOnePayment(vat: false);
-        $sheet = $this->sheetFrom($finance, '/finance/export');
 
-        $this->assertEqualsWithDelta(0.0, (float) $sheet->getCell('E5')->getValue(), 0.01);
+        $vat = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $plain = $this->sheetFrom($finance, '/finance/export', 'Non-VAT sales');
+
+        $this->assertSame('', (string) $vat->getCell('A5')->getValue(), 'the VAT tab should be empty');
+        $this->assertSame('IC2026-00074', $plain->getCell('A5')->getValue());
+    }
+
+    public function test_the_non_vat_tab_has_no_vat_columns_at_all(): void
+    {
+        // A column of "VAT 0.00" reads as tax that was charged and came to
+        // nothing, rather than tax that never applied.
+        $finance = $this->ledgerWithOnePayment(vat: false);
+        $plain = $this->sheetFrom($finance, '/finance/export', 'Non-VAT sales');
+
+        $headings = [];
+        foreach (range('A', $plain->getHighestColumn()) as $c) {
+            $headings[] = (string) $plain->getCell($c.'4')->getValue();
+        }
+
+        $this->assertNotContains('VAT 12%', $headings);
+        $this->assertNotContains('Net of VAT', $headings);
+        $this->assertContains('Amount paid', $headings);
+    }
+
+    public function test_the_workbook_separates_vat_from_non_vat(): void
+    {
+        $finance = $this->ledgerWithOnePayment();
+
+        $this->assertSame(
+            ['VAT sales (12%)', 'Non-VAT sales', 'Summary'],
+            $this->tabsOf($finance, '/finance/export')
+        );
+    }
+
+    public function test_the_summary_adds_the_two_tabs_up(): void
+    {
+        $finance = $this->ledgerWithOnePayment(vat: true);
+        $summary = $this->sheetFrom($finance, '/finance/export', 'Summary');
+
+        $this->assertSame('VAT sales (12%)', $summary->getCell('A5')->getValue());
+        $this->assertSame('Non-VAT sales', $summary->getCell('A6')->getValue());
+
+        // 25,500 gross at 12% is 22,767.86 net + 2,732.14 tax.
+        $this->assertEqualsWithDelta(22767.86, (float) $summary->getCell('C5')->getValue(), 0.02);
+        $this->assertEqualsWithDelta(2732.14, (float) $summary->getCell('D5')->getValue(), 0.02);
+        $this->assertEqualsWithDelta(25500.0, (float) $summary->getCell('E5')->getValue(), 0.02);
     }
 
     public function test_the_total_is_a_formula_not_a_typed_number(): void
     {
         // Typed totals stop agreeing the moment anybody filters or deletes a row.
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
 
         $last = $sheet->getHighestRow();
 
@@ -125,7 +181,7 @@ class ExcelExportTest extends TestCase
     public function test_a_date_is_a_date(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
 
         $cell = $sheet->getCell('L5');
 
@@ -136,9 +192,9 @@ class ExcelExportTest extends TestCase
     public function test_the_sheet_says_what_it_is_and_when_it_was_taken(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
 
-        $this->assertSame('Payment ledger', $sheet->getCell('A1')->getValue());
+        $this->assertSame('VAT sales (12%)', $sheet->getCell('A1')->getValue());
         $this->assertStringContainsString('Exported', (string) $sheet->getCell('A2')->getValue());
         // Headings stay put on a long ledger.
         $this->assertSame('A5', $sheet->getFreezePane());

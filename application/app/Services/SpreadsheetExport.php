@@ -50,8 +50,65 @@ class SpreadsheetExport
         array $totalOf = [],
         ?string $subtitle = null,
     ): StreamedResponse {
+        return self::downloadSheets($filename, [[
+            'title' => $sheetTitle,
+            'columns' => $columns,
+            'rows' => $rows,
+            'totalOf' => $totalOf,
+            'subtitle' => $subtitle,
+        ]]);
+    }
+
+    /**
+     * One workbook, several tabs.
+     *
+     * VATable and non-VAT sales are two different books as far as filing is
+     * concerned, and a single list with a VAT column means whoever needs one of
+     * them has to filter and re-total it by hand every time.
+     *
+     * @param  array<int, array{title: string, columns: array, rows: iterable, totalOf?: array, subtitle?: ?string}>  $sheets
+     */
+    public static function downloadSheets(string $filename, array $sheets): StreamedResponse
+    {
         $book = new Spreadsheet();
-        $sheet = $book->getActiveSheet();
+
+        foreach (array_values($sheets) as $i => $spec) {
+            $sheet = $i === 0 ? $book->getActiveSheet() : $book->createSheet();
+
+            self::writeSheet(
+                $sheet,
+                $spec['title'],
+                $spec['columns'],
+                $spec['rows'],
+                $spec['totalOf'] ?? [],
+                $spec['subtitle'] ?? null,
+            );
+        }
+
+        $book->setActiveSheetIndex(0);
+
+        $book->getProperties()
+            ->setCreator('Imprint Production')
+            ->setTitle($sheets[0]['title'] ?? 'Export')
+            ->setDescription('Exported from the Imprint Customs production system.');
+
+        return response()->streamDownload(function () use ($book) {
+            (new Xlsx($book))->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'no-store, no-cache',
+        ]);
+    }
+
+    /** Lay one tab out: title, headings, typed rows, totals, frozen headings. */
+    private static function writeSheet(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        string $sheetTitle,
+        array $columns,
+        iterable $rows,
+        array $totalOf = [],
+        ?string $subtitle = null,
+    ): void {
         // Excel refuses these characters in a tab name, and silently mangling
         // the title is worse than trimming it.
         $sheet->setTitle(mb_substr(preg_replace('/[\\\\\/\*\?\:\[\]]/', '-', $sheetTitle), 0, 31));
@@ -169,16 +226,5 @@ class SpreadsheetExport
             );
         }
 
-        $book->getProperties()
-            ->setCreator('Imprint Production')
-            ->setTitle($sheetTitle)
-            ->setDescription('Exported from the Imprint Customs production system.');
-
-        return response()->streamDownload(function () use ($book) {
-            (new Xlsx($book))->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Cache-Control' => 'no-store, no-cache',
-        ]);
     }
 }

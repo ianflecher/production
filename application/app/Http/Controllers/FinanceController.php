@@ -61,17 +61,51 @@ class FinanceController extends Controller
     {
         $payments = $this->filtered($request)->get();
 
-        $rows = $payments->map(function (Payment $p) {
-            $gross = (float) $p->amount;
-            $vatable = $p->order?->vat_inclusive === true;
-            $net = $vatable ? round($gross / (1 + \App\Models\ProductionOrder::VAT_RATE), 2) : $gross;
+        // VATable and non-VAT sales are two different books at filing time, so
+        // they get a tab each with their own totals. One list with a VAT column
+        // means whoever needs one of them filters and re-adds it by hand every
+        // single time — and a hand-made total is a number nobody can check.
+        [$vatable, $plain] = $payments->partition(
+            fn (Payment $p) => $p->order?->vat_inclusive === true
+        );
 
-            return [
+        return SpreadsheetExport::downloadSheets(
+            'payments-'.now()->format('Y-m-d').'.xlsx',
+            [
+                self::ledgerSheet('VAT sales (12%)', $vatable, true),
+                self::ledgerSheet('Non-VAT sales', $plain, false),
+                self::summarySheet($vatable, $plain),
+            ],
+        );
+    }
+
+    /**
+     * One tab of the ledger.
+     *
+     * The VAT columns only appear on the VAT tab. Printing "VAT: 0.00" down a
+     * whole non-VAT sheet invites somebody to read it as tax that was charged
+     * and came to nothing, rather than tax that never applied.
+     */
+    private static function ledgerSheet(string $title, $payments, bool $withVat): array
+    {
+        $rows = $payments->map(function (Payment $p) use ($withVat) {
+            $gross = (float) $p->amount;
+            $net = $withVat
+                ? round($gross / (1 + \App\Models\ProductionOrder::VAT_RATE), 2)
+                : $gross;
+
+            $line = [
                 $p->order?->order_number ?? '',
                 $p->order?->clientName() ?? '',
                 $p->order?->client?->tin ?? '',
-                $net,
-                $vatable ? round($gross - $net, 2) : 0.0,
+            ];
+
+            if ($withVat) {
+                $line[] = $net;
+                $line[] = round($gross - $net, 2);
+            }
+
+            return array_merge($line, [
                 $gross,
                 $p->kind ?? 'payment',
                 $p->method ?? '',
@@ -79,30 +113,64 @@ class FinanceController extends Controller
                 $p->hasProof() ? ($p->proof_name ?: 'yes') : 'none',
                 $p->recorder?->name ?? '',
                 $p->paid_at,
-            ];
-        });
+            ]);
+        })->values();
 
-        return SpreadsheetExport::download(
-            'payments-'.now()->format('Y-m-d').'.xlsx',
-            'Payment ledger',
-            [
-                ['Order', SpreadsheetExport::TEXT],
-                ['Client', SpreadsheetExport::TEXT],
-                ['TIN', SpreadsheetExport::TEXT],
+        $columns = [
+            ['Order', SpreadsheetExport::TEXT],
+            ['Client', SpreadsheetExport::TEXT],
+            ['TIN', SpreadsheetExport::TEXT],
+        ];
+
+        if ($withVat) {
+            $columns[] = ['Net of VAT', SpreadsheetExport::MONEY];
+            $columns[] = ['VAT 12%', SpreadsheetExport::MONEY];
+        }
+
+        $columns = array_merge($columns, [
+            ['Amount paid', SpreadsheetExport::MONEY],
+            ['Type', SpreadsheetExport::TEXT],
+            ['Method', SpreadsheetExport::TEXT],
+            ['Reference', SpreadsheetExport::TEXT],
+            ['Proof', SpreadsheetExport::TEXT],
+            ['Recorded by', SpreadsheetExport::TEXT],
+            ['Paid at', SpreadsheetExport::DATE],
+        ]);
+
+        return [
+            'title' => $title,
+            'columns' => $columns,
+            'rows' => $rows,
+            'totalOf' => $withVat
+                ? ['Net of VAT', 'VAT 12%', 'Amount paid']
+                : ['Amount paid'],
+            'subtitle' => $payments->count().' payment(s)',
+        ];
+    }
+
+    /** The two tabs added up, so the workbook answers "how much VAT" on its own. */
+    private static function summarySheet($vatable, $plain): array
+    {
+        $vatGross = (float) $vatable->sum('amount');
+        $vatNet = round($vatGross / (1 + \App\Models\ProductionOrder::VAT_RATE), 2);
+        $plainGross = (float) $plain->sum('amount');
+
+        return [
+            'title' => 'Summary',
+            'columns' => [
+                ['', SpreadsheetExport::TEXT],
+                ['Payments', SpreadsheetExport::NUMBER],
                 ['Net of VAT', SpreadsheetExport::MONEY],
-                ['VAT', SpreadsheetExport::MONEY],
-                ['Amount paid', SpreadsheetExport::MONEY],
-                ['Type', SpreadsheetExport::TEXT],
-                ['Method', SpreadsheetExport::TEXT],
-                ['Reference', SpreadsheetExport::TEXT],
-                ['Proof', SpreadsheetExport::TEXT],
-                ['Recorded by', SpreadsheetExport::TEXT],
-                ['Paid at', SpreadsheetExport::DATE],
+                ['VAT 12%', SpreadsheetExport::MONEY],
+                ['Total collected', SpreadsheetExport::MONEY],
             ],
-            $rows,
-            totalOf: ['Net of VAT', 'VAT', 'Amount paid'],
-            subtitle: $payments->count().' payment(s)',
-        );
+            'rows' => [
+                ['VAT sales (12%)', $vatable->count(), $vatNet, round($vatGross - $vatNet, 2), $vatGross],
+                ['Non-VAT sales', $plain->count(), $plainGross, 0.0, $plainGross],
+            ],
+            'totalOf' => ['Payments', 'Net of VAT', 'VAT 12%', 'Total collected'],
+            'subtitle' => 'Both tabs added up',
+        ];
     }
 
     /** Serve a payment's proof file (finance sees every order's proof). */
