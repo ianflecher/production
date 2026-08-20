@@ -51,6 +51,16 @@ class ProductionOrder extends Model
     /** VAT added to the total when the order is marked VAT inclusive. */
     public const VAT_RATE = 0.12;
 
+    /**
+     * A due date this close is a rush job.
+     *
+     * Ten days is roughly what the line needs to go from layout to a garment
+     * in a box without anybody skipping a step or working a Sunday. Shorter
+     * than that is sometimes the right call — but it should be a decision
+     * somebody makes on purpose, not something noticed later on the calendar.
+     */
+    public const RUSH_NOTICE_DAYS = 10;
+
     protected $fillable = [
         'order_number', 'brief_token', 'brief_expires_at', 'client_id', 'customer_name', 'product_type', 'description',
         'decoration_methods', 'cutting_type', 'needs_sticker',

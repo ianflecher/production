@@ -68,7 +68,7 @@
     </div>
 </div>
 
-<form method="POST" action="{{ route('orders.store') }}" class="form-steps">
+<form method="POST" action="{{ route('orders.store') }}" class="form-steps" onsubmit="return confirmRush();">
     @csrf
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
@@ -86,7 +86,7 @@
 
         <div class="field" style="max-width: 420px;">
             <label for="client_id">Existing client</label>
-            <select id="client_id" name="client_id" onchange="document.getElementById('newClient').style.display = this.value ? 'none' : 'block';">
+            <select id="client_id" name="client_id" onchange="toggleClientMode()">
                 <option value="">— New client (fill in below) —</option>
                 @foreach ($clients as $client)
                     <option value="{{ $client->id }}" @selected(old('client_id') == $client->id)>{{ $client->listName() }}@if ($client->company) — {{ $client->company }}@endif</option>
@@ -99,16 +99,19 @@
                 <div class="field">
                     <label for="client_name">First name <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_name" type="text" name="client_name" value="{{ old('client_name') }}" maxlength="255" placeholder="e.g. Juan" style="text-transform: capitalize;">
+                    @error('client_name')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 {{-- Held apart from the first name so the client list sorts by
                      family name rather than by whatever was typed first. --}}
                 <div class="field">
                     <label for="client_last_name">Last name <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_last_name" type="text" name="client_last_name" value="{{ old('client_last_name') }}" maxlength="255" placeholder="e.g. Dela Cruz" style="text-transform: capitalize;">
+                    @error('client_last_name')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <div class="field">
                     <label for="client_contact">Contact number <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_contact" type="text" name="client_contact" value="{{ old('client_contact') }}" maxlength="255" placeholder="e.g. 0917-555-1234">
+                    @error('client_contact')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <div class="field">
                     <label for="client_company">Company (optional)</label>
@@ -117,10 +120,12 @@
                 <div class="field">
                     <label for="client_office_address">Office address <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_office_address" type="text" name="client_office_address" value="{{ old('client_office_address') }}" maxlength="255" placeholder="e.g. 12 Rizal St., Angeles City" style="text-transform: capitalize;">
+                    @error('client_office_address')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <div class="field">
                     <label for="client_delivery_address">Delivery address <span style="color: var(--danger-ink);">*</span></label>
                     <input id="client_delivery_address" type="text" name="client_delivery_address" value="{{ old('client_delivery_address') }}" maxlength="255" placeholder="Where the order is delivered" style="text-transform: capitalize;">
+                    @error('client_delivery_address')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <div class="field">
                     <label for="client_tin">TIN (optional — for invoice)</label>
@@ -258,8 +263,9 @@
         <h2>Job details</h2>
         <div class="field" style="max-width: 340px;">
             <label for="due_date">Due date <span style="color: var(--danger-ink);">*</span></label>
-            <input id="due_date" type="date" name="due_date" required value="{{ old('due_date') }}" onchange="checkCapacity()">
+            <input id="due_date" type="date" name="due_date" required value="{{ old('due_date') }}" onchange="checkCapacity(); showRushNote();">
             <div id="capacityNote" style="font-size: 0.78rem; color: var(--ink-3); margin-top: 0.35rem;"></div>
+            <div id="rushNote"></div>
             @error('due_date')<span class="error">{{ $message }}</span>@enderror
         </div>
 
@@ -281,6 +287,17 @@
     const PRICING = @json($products);
     const BACK_POCKET_FEE = {{ $backPocketFee }};
     const peso = n => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // A new client needs a complete contact record. Existing clients already
+    // have their saved details, so selecting one hides and disables this block.
+    function toggleClientMode() {
+        const isNew = !document.getElementById('client_id').value;
+        const fields = document.querySelectorAll('#newClient input');
+        document.getElementById('newClient').style.display = isNew ? 'block' : 'none';
+        fields.forEach(field => { field.disabled = !isNew; });
+        ['client_name', 'client_last_name', 'client_contact', 'client_office_address', 'client_delivery_address']
+            .forEach(id => { document.getElementById(id).required = isNew; });
+    }
 
     function showOverride() {
         document.getElementById('overrideWrap').style.display = 'block';
@@ -463,7 +480,64 @@
         updatePrice();
     }
     document.querySelectorAll('.size-input').forEach(i => i.addEventListener('input', updateQty));
+    toggleClientMode();
     updateQty();
     checkCapacity();
+
+    // A due date inside the shop's lead time is a rush job. The calendar shows
+    // it afterwards, in red, which is the wrong moment — by then the promise is
+    // made. Say it while the date is still being picked, and again on the way
+    // out, so it is a decision rather than something noticed later.
+    const RUSH_DAYS = {{ \App\Models\ProductionOrder::RUSH_NOTICE_DAYS }};
+
+    function daysUntilDue() {
+        const el = document.getElementById('due_date');
+        if (!el || !el.value) { return null; }
+
+        // Compare dates, not moments: a date input has no time, so a plain
+        // subtraction makes "tomorrow" look like today for most of the day.
+        const due = new Date(el.value + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        return Math.round((due - today) / 86400000);
+    }
+
+    function showRushNote() {
+        const out = document.getElementById('rushNote');
+        if (!out) { return; }
+
+        const days = daysUntilDue();
+
+        if (days === null || days > RUSH_DAYS) { out.textContent = ''; return; }
+
+        out.textContent = days < 0
+            ? '⚠ That date has already passed.'
+            : (days === 0 ? '⚠ Due today' : '⚠ Only ' + days + ' day' + (days === 1 ? '' : 's') + ' away')
+                + ' — under the ' + RUSH_DAYS + '-day lead time. Tick Rush order if the client is paying for it.';
+        out.style.color = 'var(--danger-ink)';
+        out.style.fontWeight = '600';
+        out.style.fontSize = '0.78rem';
+        out.style.marginTop = '0.35rem';
+    }
+
+    function confirmRush() {
+        const days = daysUntilDue();
+
+        if (days === null || days > RUSH_DAYS) { return true; }
+
+        const when = days < 0 ? 'a date that has already passed'
+            : (days === 0 ? 'today' : days + ' day' + (days === 1 ? '' : 's') + ' from now');
+
+        return window.confirm(
+            'This order is due ' + when + '.
+
+'
+            + 'The shop needs about ' + RUSH_DAYS + ' days to take a job from layout to finished goods. '
+            + 'Are you sure about this due date?'
+        );
+    }
+
+    showRushNote();
 </script>
 @endsection

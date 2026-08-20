@@ -42,6 +42,9 @@ class User extends Authenticatable
     public const JOB_SUPPLY_CHAIN = 'supply_chain';
     public const JOB_PRODUCTION = 'production';
 
+    /** A leader in everything but name — see isSupervisor(). */
+    public const JOB_SUPERVISOR = 'supervisor';
+
     public const JOB_ROLES = [
         self::JOB_ARTIST => 'Artist (design, mockup)',
         self::JOB_SUPPLY_CHAIN => 'Supply chain (raw materials, printer, sticker)',
@@ -175,7 +178,7 @@ class User extends Authenticatable
      */
     public function isSupervisor(): bool
     {
-        return strtolower(trim((string) $this->job_role)) === 'supervisor';
+        return strtolower(trim((string) $this->job_role)) === self::JOB_SUPERVISOR;
     }
 
     /**
@@ -417,6 +420,13 @@ class User extends Authenticatable
      */
     public function positionLabel(): string
     {
+        // A supervisor counts as a leader for access, but the user list should
+        // say what they actually are — otherwise the position column calls
+        // them Leader and nobody can tell the two apart.
+        if ($this->isSupervisor()) {
+            return 'Supervisor';
+        }
+
         if ($this->isAgent()) {
             return $this->jobRoleShort() ?? 'Agent';
         }

@@ -100,6 +100,10 @@
                                 Finance
                             </option>
 
+                            <option value="supervisor">
+                                Supervisor
+                            </option>
+
                             <option value="leader">
                                 Leader
                             </option>

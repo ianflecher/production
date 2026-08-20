@@ -104,6 +104,7 @@ class UserController extends Controller
                 [
                     User::ROLE_SALES,
                     User::ROLE_FINANCE,
+                    User::JOB_SUPERVISOR,
                     User::ROLE_LEADER,
                     User::ROLE_SUPER_ADMIN,
                 ]

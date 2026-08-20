@@ -16,7 +16,7 @@
     </div>
 </div>
 
-<form method="POST" action="{{ route('orders.update', $order) }}">
+<form method="POST" action="{{ route('orders.update', $order) }}" onsubmit="return confirmRush();">
     @csrf
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
@@ -176,8 +176,9 @@
         <h2>Job details</h2>
         <div class="field" style="max-width: 340px;">
             <label for="due_date">Due date <span style="color: var(--danger-ink);">*</span></label>
-            <input id="due_date" type="date" name="due_date" required value="{{ old('due_date', $order->due_date?->toDateString()) }}" onchange="checkCapacity()">
+            <input id="due_date" type="date" name="due_date" required value="{{ old('due_date', $order->due_date?->toDateString()) }}" onchange="checkCapacity(); showRushNote();">
             <div id="capacityNote" style="font-size: 0.78rem; color: var(--ink-3); margin-top: 0.35rem;"></div>
+            <div id="rushNote"></div>
             @error('due_date')<span class="error">{{ $message }}</span>@enderror
         </div>
     </div>
@@ -347,5 +348,61 @@
     document.querySelectorAll('.size-input').forEach(i => i.addEventListener('input', updateQty));
     updateQty();
     checkCapacity();
+
+    // A due date inside the shop's lead time is a rush job. The calendar shows
+    // it afterwards, in red, which is the wrong moment — by then the promise is
+    // made. Say it while the date is still being picked, and again on the way
+    // out, so it is a decision rather than something noticed later.
+    const RUSH_DAYS = {{ \App\Models\ProductionOrder::RUSH_NOTICE_DAYS }};
+
+    function daysUntilDue() {
+        const el = document.getElementById('due_date');
+        if (!el || !el.value) { return null; }
+
+        // Compare dates, not moments: a date input has no time, so a plain
+        // subtraction makes "tomorrow" look like today for most of the day.
+        const due = new Date(el.value + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        return Math.round((due - today) / 86400000);
+    }
+
+    function showRushNote() {
+        const out = document.getElementById('rushNote');
+        if (!out) { return; }
+
+        const days = daysUntilDue();
+
+        if (days === null || days > RUSH_DAYS) { out.textContent = ''; return; }
+
+        out.textContent = days < 0
+            ? '⚠ That date has already passed.'
+            : (days === 0 ? '⚠ Due today' : '⚠ Only ' + days + ' day' + (days === 1 ? '' : 's') + ' away')
+                + ' — under the ' + RUSH_DAYS + '-day lead time. Tick Rush order if the client is paying for it.';
+        out.style.color = 'var(--danger-ink)';
+        out.style.fontWeight = '600';
+        out.style.fontSize = '0.78rem';
+        out.style.marginTop = '0.35rem';
+    }
+
+    function confirmRush() {
+        const days = daysUntilDue();
+
+        if (days === null || days > RUSH_DAYS) { return true; }
+
+        const when = days < 0 ? 'a date that has already passed'
+            : (days === 0 ? 'today' : days + ' day' + (days === 1 ? '' : 's') + ' from now');
+
+        return window.confirm(
+            'This order is due ' + when + '.
+
+'
+            + 'The shop needs about ' + RUSH_DAYS + ' days to take a job from layout to finished goods. '
+            + 'Are you sure about this due date?'
+        );
+    }
+
+    showRushNote();
 </script>
 @endsection
