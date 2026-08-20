@@ -27,8 +27,10 @@ class RushDueDateWarningTest extends TestCase
     {
         $this->actingAs($this->sales())->get('/orders/create')
             ->assertOk()
-            ->assertSee('onsubmit="return confirmRush();"', false)
-            ->assertSee('Are you sure about this due date?', false);
+            ->assertSee('onsubmit="return confirmRush(this);"', false)
+            // Asked through the app's own dialog, not the browser's grey box.
+            ->assertSee('window.icConfirm(rushQuestion())', false)
+            ->assertSee('Yes, keep this date', false);
     }
 
     public function test_the_edit_form_asks_too(): void
@@ -43,7 +45,7 @@ class RushDueDateWarningTest extends TestCase
         // Changing a date is the same promise as making one.
         $this->actingAs($sales)->get("/orders/{$order->id}/edit")
             ->assertOk()
-            ->assertSee('onsubmit="return confirmRush();"', false);
+            ->assertSee('onsubmit="return confirmRush(this);"', false);
     }
 
     public function test_the_threshold_comes_from_the_model_not_a_number_in_a_script(): void
@@ -77,5 +79,28 @@ class RushDueDateWarningTest extends TestCase
         ])->assertRedirect();
 
         $this->assertDatabaseHas('production_orders', ['order_number' => 'IC2026-09101']);
+    }
+
+    public function test_the_dialog_is_the_apps_own_not_the_browsers(): void
+    {
+        // window.confirm() prints "127.0.0.1:8000 says" above the question,
+        // cannot mark which button is the dangerous one, and on a shop screen
+        // reads as something having gone wrong rather than a question.
+        $html = $this->actingAs($this->sales())->get('/orders/create')->assertOk()->getContent();
+
+        $this->assertStringContainsString('id="icConfirm"', $html, 'the dialog markup should be on the page');
+        $this->assertStringNotContainsString('window.confirm(', $html,
+            'the rush question must not fall back to the browser box');
+    }
+
+    public function test_the_dialog_is_available_on_every_page(): void
+    {
+        // It lives in the layout so anything can ask, rather than each page
+        // rolling its own.
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        foreach (['/dashboard', '/orders', '/calendar'] as $url) {
+            $this->actingAs($leader)->get($url)->assertOk()->assertSee('id="icConfirm"', false);
+        }
     }
 }

@@ -16,7 +16,7 @@
     </div>
 </div>
 
-<form method="POST" action="{{ route('orders.update', $order) }}" onsubmit="return confirmRush();">
+<form method="POST" action="{{ route('orders.update', $order) }}" onsubmit="return confirmRush(this);">
     @csrf
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
@@ -393,32 +393,67 @@
     function onDueDatePicked() {
         showRushNote();
 
-        const el = document.getElementById('due_date');
         const days = daysUntilDue();
 
-        if (days === null || days > RUSH_DAYS) { return; }
+        if (days === null || days > RUSH_DAYS) { rushAgreed = false; return; }
 
-        if (! confirmRush()) {
-            el.value = '';
-            showRushNote();
-            checkCapacity();
-            el.focus();
-        }
+        window.icConfirm(rushQuestion()).then(ok => {
+            const el = document.getElementById('due_date');
+
+            // Saying no clears the box rather than leaving a date nobody
+            // agreed to sitting in it.
+            if (! ok) {
+                el.value = '';
+                rushAgreed = false;
+                showRushNote();
+                checkCapacity();
+                el.focus();
+                return;
+            }
+
+            // Already answered, so the submit does not ask a second time.
+            rushAgreed = true;
+        });
     }
 
-    function confirmRush() {
+    // Wording shared by the two moments it can be asked.
+    function rushQuestion() {
         const days = daysUntilDue();
-
-        if (days === null || days > RUSH_DAYS) { return true; }
-
         const when = days < 0 ? 'a date that has already passed'
             : (days === 0 ? 'today' : days + ' day' + (days === 1 ? '' : 's') + ' from now');
 
-        return window.confirm(
-            'This order is due ' + when + '.\n\n'
-            + 'The shop needs about ' + RUSH_DAYS + ' days to take a job from layout to finished goods. '
-            + 'Are you sure about this due date?'
-        );
+        return {
+            title: 'Are you sure?',
+            message: 'This order is due ' + when + '.'
+                + String.fromCharCode(10) + String.fromCharCode(10)
+                + 'The shop needs about ' + RUSH_DAYS + ' days to take a job from layout '
+                + 'to finished goods.',
+            confirmText: 'Yes, keep this date',
+            cancelText: 'Pick another date',
+            tone: 'danger',
+        };
+    }
+
+    // The submit is held, not blocked: the dialog answers later, so the form is
+    // released once somebody has actually said yes.
+    let rushAgreed = false;
+
+    function confirmRush(form) {
+        const days = daysUntilDue();
+
+        if (rushAgreed || days === null || days > RUSH_DAYS) { return true; }
+
+        window.icConfirm(rushQuestion()).then(ok => {
+            if (! ok) {
+                document.getElementById('due_date').focus();
+                return;
+            }
+
+            rushAgreed = true;
+            form.submit();
+        });
+
+        return false;
     }
 
     showRushNote();

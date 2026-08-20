@@ -379,5 +379,79 @@
         @yield('content')
     </main>
     @endauth
+
+{{-- ============================================================
+     A confirmation dialog that belongs to this app.
+
+     The browser's own confirm() box says "127.0.0.1:8000 says" above the
+     question, cannot be styled, cannot say which button is the dangerous
+     one, and on a shop-floor screen looks like something has gone wrong
+     rather than like a question being asked.
+
+     window.icConfirm({...}) returns a Promise<bool>. Nothing on the page
+     blocks while it is open, so callers await it.
+============================================================ --}}
+<div id="icConfirm" class="icc-back" hidden>
+    <div class="icc-card" role="dialog" aria-modal="true" aria-labelledby="iccTitle" aria-describedby="iccBody">
+        <div class="icc-mark" id="iccMark" aria-hidden="true">!</div>
+        <h2 class="icc-title" id="iccTitle">Are you sure?</h2>
+        <p class="icc-body" id="iccBody"></p>
+        <div class="icc-acts">
+            <button type="button" class="icc-btn icc-go" id="iccGo">Yes</button>
+            <button type="button" class="icc-btn icc-no" id="iccNo">Cancel</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    (function () {
+        const back = document.getElementById('icConfirm');
+        const card = back.querySelector('.icc-card');
+        const titleEl = document.getElementById('iccTitle');
+        const bodyEl = document.getElementById('iccBody');
+        const goEl = document.getElementById('iccGo');
+        const noEl = document.getElementById('iccNo');
+
+        let settle = null;
+
+        function close(answer) {
+            back.hidden = true;
+            document.body.style.overflow = '';
+            const done = settle;
+            settle = null;
+            if (done) { done(answer); }
+        }
+
+        goEl.addEventListener('click', () => close(true));
+        noEl.addEventListener('click', () => close(false));
+
+        // Clicking the backdrop or pressing Escape means no. A dialog you
+        // cannot dismiss is one people click through to make it go away.
+        back.addEventListener('click', e => { if (e.target === back) { close(false); } });
+        document.addEventListener('keydown', e => {
+            if (back.hidden) { return; }
+            if (e.key === 'Escape') { close(false); }
+            if (e.key === 'Enter') { close(true); }
+        });
+
+        window.icConfirm = function (opts) {
+            const o = opts || {};
+
+            titleEl.textContent = o.title || 'Are you sure?';
+            bodyEl.textContent = o.message || '';
+            goEl.textContent = o.confirmText || 'Yes';
+            noEl.textContent = o.cancelText || 'Cancel';
+            card.classList.toggle('is-danger', o.tone === 'danger');
+
+            back.hidden = false;
+            document.body.style.overflow = 'hidden';
+            goEl.focus();
+
+            return new Promise(resolve => { settle = resolve; });
+        };
+    })();
+</script>
+
 </body>
 </html>

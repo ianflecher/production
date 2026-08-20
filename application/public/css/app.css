@@ -869,3 +869,50 @@
         @media (prefers-reduced-motion: reduce) {
             .alert-error.is-dismissed, .alert-success.is-dismissed { animation: none; display: none; }
         }
+
+        /* ---- Confirmation dialog ------------------------------------------
+           The browser's own confirm() box prints "127.0.0.1:8000 says" above
+           the question, cannot show which button is the dangerous one, and on
+           a shop-floor screen reads as something having gone wrong rather than
+           a question being asked. window.icConfirm() uses this instead. */
+    .icc-back {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(15, 23, 42, 0.55);
+        display: flex; align-items: center; justify-content: center;
+        padding: 1.2rem;
+    }
+    .icc-back[hidden] { display: none; }
+
+    .icc-card {
+        background: var(--surface); border-radius: 16px;
+        padding: 1.9rem 1.7rem 1.5rem;
+        width: 100%; max-width: 400px; text-align: center;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+        animation: icc-pop 0.16s ease-out;
+    }
+    @keyframes icc-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    /* The ring carries the tone, so the question is readable before it is read. */
+    .icc-mark {
+        width: 68px; height: 68px; margin: 0 auto 1rem;
+        border-radius: 50%; border: 4px solid #f59e0b; color: #f59e0b;
+        font-size: 2.4rem; font-weight: 700; line-height: 60px;
+        font-family: Georgia, serif;
+    }
+    .icc-card.is-danger .icc-mark { border-color: #ef4444; color: #ef4444; }
+
+    .icc-title { font-size: 1.45rem; margin: 0 0 0.5rem; color: var(--ink-1); }
+    .icc-body {
+        font-size: 0.9rem; color: var(--ink-2); line-height: 1.55;
+        margin: 0 0 1.4rem; white-space: pre-line;
+    }
+
+    .icc-acts { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+    .icc-btn {
+        border: 0; border-radius: 8px; cursor: pointer;
+        padding: 0.6rem 1.3rem; font-size: 0.9rem; font-weight: 600; color: #fff;
+    }
+    .icc-go { background: var(--accent); }
+    .icc-card.is-danger .icc-go { background: #dc2626; }
+    .icc-no { background: #64748b; }
+    .icc-btn:hover { filter: brightness(1.08); }
