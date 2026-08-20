@@ -107,7 +107,22 @@ class Stations
             return self::keys();
         }
 
-        $all = self::all();
+        return self::stationsByRole()[strtolower(trim((string) $user->job_role))] ?? [];
+    }
+
+    /**
+     * Which stations each job role can run.
+     *
+     * Public because it is the shop's actual list of floor positions, and the
+     * add-account form has to offer the same names this matches on. When the
+     * form offered only the broad buckets, hiring a sewer meant choosing
+     * "Production" and quietly handing them cutting, pairing and QC as well —
+     * or typing the exact word "Sewing" into the database by hand.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public static function stationsByRole(): array
+    {
         $printers = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'printer_')));
         $lasers = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'laser_cutting_')));
         $manuals = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'manual_cutting_')));
@@ -120,7 +135,7 @@ class Stations
         $smallPresses = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'small_press_')));
         $rollerPresses = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'roller_press_')));
 
-        $map = [
+        return [
             // Stickers are printed, so the printer operators run that station too.
             'printer' => array_merge($printers, ['sticker']),
             'supply_chain' => array_merge(['raw_materials', 'sticker'], $printers),
@@ -141,8 +156,6 @@ class Stations
             // The old broad "production" role covers the whole line.
             'production' => array_merge($cuttings, $pairings, $sewings, $qcs),
         ];
-
-        return $map[strtolower(trim((string) $user->job_role))] ?? [];
     }
 
     public static function keys(): array

@@ -98,18 +98,9 @@ class UserController extends Controller
          * One position choice covers both the permission role
          * and the production team.
          */
-        $allowedPositions = $request->user()->isSuperAdmin()
-            ? array_merge(
-                array_keys(User::JOB_ROLES),
-                [
-                    User::ROLE_SALES,
-                    User::ROLE_FINANCE,
-                    User::JOB_SUPERVISOR,
-                    User::ROLE_LEADER,
-                    User::ROLE_SUPER_ADMIN,
-                ]
-            )
-            : array_keys(User::JOB_ROLES);
+        $allowedPositions = User::positionValues(
+            withOffice: $request->user()->isSuperAdmin()
+        );
 
         $data = $request->validate([
             'name' => [

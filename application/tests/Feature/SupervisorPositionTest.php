@@ -36,7 +36,10 @@ class SupervisorPositionTest extends TestCase
     {
         $this->actingAs($this->admin())->get('/users')
             ->assertOk()
-            ->assertSee('<option value="supervisor">', false);
+            // Matched on the value, not the exact markup: the options are
+            // grouped now, so the tag carries more than it used to.
+            ->assertSee('value="supervisor"', false)
+            ->assertSee('Supervisor');
     }
 
     public function test_a_supervisor_account_can_be_created(): void

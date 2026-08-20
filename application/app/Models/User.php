@@ -45,6 +45,83 @@ class User extends Authenticatable
     /** A leader in everything but name — see isSupervisor(). */
     public const JOB_SUPERVISOR = 'supervisor';
 
+    /**
+     * The positions the shop actually hires for, as the add-account form
+     * should offer them.
+     *
+     * The form used to list three buckets — Artist, Supply chain, Production —
+     * so hiring a sewer meant picking "Production", which hands them cutting,
+     * pairing and QC as well (see Stations::stationsByRole). The specific names
+     * were already the ones the app matches on; they just could not be chosen.
+     *
+     * Grouped so the dropdown reads like the shop: the floor, then the desks.
+     *
+     * @return array<string, array<string, string>>  group => [value => label]
+     */
+    public static function positionGroups(): array
+    {
+        return [
+            'Design' => [
+                self::JOB_ARTIST => 'Artist (layout, mockup, template)',
+            ],
+            'Supply' => [
+                'raw materials' => 'Raw Materials',
+                'printer' => 'Printer',
+                'sticker' => 'Sticker',
+            ],
+            'Production line' => [
+                'laser cutting' => 'Laser Cutting',
+                'manual cutting' => 'Manual Cutting',
+                'pairing' => 'Pairing',
+                'sewing' => 'Sewing',
+                'quality control' => 'Quality Control',
+            ],
+            'Add-ons' => [
+                'embroidery' => 'Embroidery',
+                'heat press' => 'Heat Press',
+                'roller press' => 'Roller Press',
+                'small press' => 'Small Press',
+                'cap press' => 'Cap Press',
+            ],
+            'Desks' => [
+                'inventory' => 'Inventory (finished products)',
+                'mover' => 'Mover',
+            ],
+            // Kept because existing accounts hold them, and somebody who really
+            // does work the whole line should still be able to say so.
+            'Whole team' => [
+                self::JOB_SUPPLY_CHAIN => 'Supply chain (all of the above)',
+                self::JOB_PRODUCTION => 'Production (whole line)',
+            ],
+        ];
+    }
+
+    /** Positions a super admin may also appoint — leader-level and office. */
+    public static function officePositions(): array
+    {
+        return [
+            self::ROLE_SALES => 'Account Officer',
+            self::ROLE_FINANCE => 'Finance',
+            self::JOB_SUPERVISOR => 'Supervisor',
+            self::ROLE_LEADER => 'Leader',
+            self::ROLE_SUPER_ADMIN => 'Super Admin',
+        ];
+    }
+
+    /** Every value the position field may hold, flattened. */
+    public static function positionValues(bool $withOffice): array
+    {
+        $values = [];
+
+        foreach (self::positionGroups() as $group) {
+            $values = array_merge($values, array_keys($group));
+        }
+
+        return $withOffice
+            ? array_merge($values, array_keys(self::officePositions()))
+            : $values;
+    }
+
     public const JOB_ROLES = [
         self::JOB_ARTIST => 'Artist (design, mockup)',
         self::JOB_SUPPLY_CHAIN => 'Supply chain (raw materials, printer, sticker)',

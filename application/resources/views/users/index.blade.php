@@ -74,43 +74,30 @@
                         Position
                     </label>
 
+                    {{-- The specific position, not a bucket. Picking
+                         "Production" hands somebody cutting, pairing, sewing
+                         AND quality control; a sewer should get the sewing
+                         machines and nothing else. Grouped so the list reads
+                         like the shop floor. --}}
                     <select
                         id="new_user_position"
                         name="position"
                         required
                     >
-                        <option value="artist">
-                            Artist (design, mockup)
-                        </option>
-
-                        <option value="supply_chain">
-                            Supply chain
-                        </option>
-
-                        <option value="production">
-                            Production
-                        </option>
+                        @foreach (\App\Models\User::positionGroups() as $group => $positions)
+                            <optgroup label="{{ $group }}">
+                                @foreach ($positions as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('position') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
 
                         @if (auth()->user()->isSuperAdmin())
-                            <option value="sales">
-                                Account Officer
-                            </option>
-
-                            <option value="finance">
-                                Finance
-                            </option>
-
-                            <option value="supervisor">
-                                Supervisor
-                            </option>
-
-                            <option value="leader">
-                                Leader
-                            </option>
-
-                            <option value="super_admin">
-                                Super Admin
-                            </option>
+                            <optgroup label="Office &amp; management">
+                                @foreach (\App\Models\User::officePositions() as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('position') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </optgroup>
                         @endif
                     </select>
 
