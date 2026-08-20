@@ -251,11 +251,11 @@
          On the layout step they work from the design/reference alone. --}}
     @php $joSent = $task->order->jobOrder?->status === 'sent_to_artist'; @endphp
     <div class="alert-success" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
-        <span>{{ $joSent ? '📋 Job order & the design to make for this order.' : '🖼 The design to make for this order.' }}</span>
+        <span>{{ $joSent ? '📋 The tech pack for this order — fill in your part of it.' : '🖼 The design to make for this order.' }}</span>
         <span style="display:flex; gap:0.5rem; flex-wrap:wrap;">
             <a href="{{ route('tasks.references', $task->id) }}" class="btn btn-primary btn-sm">🖼 Design to make</a>
             @if ($joSent)
-                <a href="{{ route('tasks.job-order', $task->id) }}" class="btn btn-ghost btn-sm">Open job order</a>
+                <a href="{{ route('tasks.job-order', $task->id) }}" class="btn btn-ghost btn-sm">📋 Open tech pack</a>
             @endif
         </span>
     </div>

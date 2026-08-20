@@ -347,8 +347,10 @@ class WholePipelineTest extends TestCase
         $pages = [
             'leader' => [
                 'order' => "/orders/$id",
-                'job order' => "/orders/$id/job-order",
-                'mockup' => "/orders/$id/mockup",
+                // The job order sheet and the mockup page are one tech pack
+                // now; the mockup URL redirects to it, so every old link still
+                // lands somewhere useful rather than 404ing.
+                'tech pack' => "/orders/$id/job-order",
                 'package' => "/orders/$id/package",
                 'messages' => "/messages/$id",
                 'orders list' => '/orders',

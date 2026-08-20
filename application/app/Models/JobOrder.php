@@ -36,6 +36,9 @@ class JobOrder extends Model
         'production_order_id',
         'status',
         'fb_viber_gc',
+        // Tech pack header
+        'design_name',
+        'fitting',
         // Production (yellow)
         'print_type',
         'printer',
@@ -58,6 +61,13 @@ class JobOrder extends Model
         'neck_label_thread',
         'bottom_hem',
         'bottom_hem_thread',
+        'thread_color',
+        'zipper_type',
+        'bp_pocket_color',
+        'colorways',
+        'print_placements',
+        'folder_shot_path',
+        'folder_shot_name',
         // …then who sewed each seam group and with what thread
         'neckbond_sewer',
         'neckbond_thread',
@@ -98,6 +108,7 @@ class JobOrder extends Model
     protected function casts(): array
     {
         return [
+            'print_placements' => 'array',
             'raw_materials' => 'array',
             'design_brief' => 'array',
             'sent_to_artist_at' => 'datetime',
@@ -135,6 +146,12 @@ class JobOrder extends Model
     public function printerLabel(): ?string
     {
         return self::PRINTERS[$this->printer] ?? $this->printer;
+    }
+
+    /** key => label, for a picker. PRINT_TYPES carries the routing with it. */
+    public static function printTypeOptions(): array
+    {
+        return collect(self::PRINT_TYPES)->map(fn ($c) => $c['label'])->all();
     }
 
     public function printTypeLabel(): ?string

@@ -148,6 +148,27 @@ class JobOrderController extends Controller
 
     /** The whole job package as ONE document: mockup, template, job order,
      *  production details — one printed page each. */
+    /**
+     * The optional picture of the export folder shown on the tech pack.
+     *
+     * Served rather than linked: uploads live on the private disk, so a direct
+     * URL to it would not resolve and a public one would hand the shop's folder
+     * layout to anyone who guessed the path.
+     */
+    public function folderShot(ProductionOrder $order)
+    {
+        $this->assertOrderVisible($order);
+
+        $path = $order->jobOrder?->folder_shot_path;
+
+        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->response(
+            $path,
+            $order->jobOrder->folder_shot_name ?: basename($path)
+        );
+    }
+
     public function completeJobOrder(ProductionOrder $order): View
     {
         $this->assertOrderVisible($order);

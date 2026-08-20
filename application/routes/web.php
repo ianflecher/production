@@ -139,6 +139,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/my-tasks', [TaskController::class, 'mine'])->name('tasks.mine');
     Route::get('/my-tasks/{taskId}', [TaskController::class, 'showMine'])->whereNumber('taskId')->name('tasks.show');
     Route::get('/my-tasks/{taskId}/job-order', [TaskController::class, 'jobOrder'])->whereNumber('taskId')->name('tasks.job-order');
+    // The artist's own part of the tech pack: design name, colourways and the
+    // actual printed size of each placement.
+    Route::post('/my-tasks/{taskId}/tech-pack', [TaskController::class, 'saveTechPack'])
+        ->whereNumber('taskId')->name('tasks.tech-pack');
     Route::get('/my-tasks/{taskId}/reference', [TaskController::class, 'references'])->whereNumber('taskId')->name('tasks.references');
     Route::post('/my-tasks/{taskId}/start', [TaskController::class, 'start'])->whereNumber('taskId')->name('tasks.start');
     // Correct a file path already handed to production (typo, moved file).
@@ -154,6 +158,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->whereNumber('file')->name('tasks.file.view');
 
     // Job order client-reference files — access checked per-file in the controller.
+    // The optional picture of the export folder shown on the tech pack. Served
+    // rather than linked: it lives on the private disk like every other upload.
+    Route::get('/orders/{order}/folder-shot', [JobOrderController::class, 'folderShot'])
+        ->whereNumber('order')->name('job-orders.folder-shot');
+
     Route::get('/job-order-files/{file}/view', [OrderReferenceFileController::class, 'viewReferenceFile'])
         ->whereNumber('file')->name('job-order-files.view');
     Route::get('/job-order-files/{file}/download', [OrderReferenceFileController::class, 'downloadReferenceFile'])

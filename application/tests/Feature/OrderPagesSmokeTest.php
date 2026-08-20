@@ -60,7 +60,9 @@ class OrderPagesSmokeTest extends TestCase
             'show'            => ['/orders/{id}', 200],
             'edit'            => ['/orders/{id}/edit', 200],
             'job-order view'  => ['/orders/{id}/job-order', 200],
-            'mockup'          => ['/orders/{id}/mockup', 200],
+            // The mockup page is now the tech pack; the old URL redirects so
+            // every existing link and bookmark still lands somewhere useful.
+            'mockup'          => ['/orders/{id}/mockup', 302],
             'reference'       => ['/orders/{id}/reference', 200],
             'design-brief'    => ['/orders/{id}/design-brief', 200],
             'document dr'     => ['/orders/{id}/document/dr', 200],

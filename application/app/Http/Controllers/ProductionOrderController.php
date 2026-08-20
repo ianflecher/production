@@ -700,12 +700,19 @@ class ProductionOrderController extends Controller
     }
 
     /** Display the mockup image in a centered, focused view. */
-    public function mockup(ProductionOrder $order): View
+    /**
+     * The mockup page is now the tech pack.
+     *
+     * It used to be a picture on its own, which meant making a shirt took two
+     * open tabs: the artwork here and the spec on the job order sheet. The tech
+     * pack carries both, so this redirects rather than 404s — every existing
+     * link, button and bookmark keeps working.
+     */
+    public function mockup(ProductionOrder $order): RedirectResponse
     {
         $this->assertOrderVisible($order);
-        $order->load(['tasks.files', 'creator']);
 
-        return view('orders.mockup', ['order' => $order]);
+        return redirect()->route('orders.job-order', $order);
     }
 
     /** Production staff, with their team so each step lists only its own people. */

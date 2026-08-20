@@ -6,6 +6,7 @@ use App\Models\Task;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -108,7 +109,9 @@ class TaskController extends Controller
         // the artist once the account officer has filled and sent it.
         abort_unless($order->jobOrder?->status === 'sent_to_artist', 403);
 
-        return view('orders.job-order', ['order' => $order]);
+        // The artist fills the pack in place, the way the floor fills the seam
+        // record — so the task comes with it, to post the answers back to.
+        return view('orders.job-order', ['order' => $order, 'techPackTask' => $task]);
     }
 
     /** The artist opens the client reference for a task assigned to them. */
@@ -119,6 +122,111 @@ class TaskController extends Controller
         $order = $task->order->load('jobOrder.referenceFiles');
 
         return view('orders.references', ['order' => $order]);
+    }
+
+    /**
+     * The artist's own part of the tech pack.
+     *
+     * Design name, colourways and the actual printed size of each placement:
+     * things that only exist once the artwork does, so the account officer
+     * cannot answer them at intake.
+     *
+     * Scoped to the artist's own task, like every other action on this page —
+     * the task id in the URL is not a permission.
+     */
+    public function saveTechPack(Request $request, int $taskId): RedirectResponse
+    {
+        $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
+
+        $jobOrder = $task->order->jobOrder;
+        abort_unless($jobOrder, 404);
+
+        $data = $request->validate([
+            'design_name' => ['nullable', 'string', 'max:120'],
+            'fitting' => ['nullable', 'string', 'max:60'],
+            'thread_color' => ['nullable', 'string', 'max:60'],
+            'zipper_type' => ['nullable', 'string', 'max:60'],
+            'bp_pocket_color' => ['nullable', 'string', 'max:60'],
+            'colorways' => ['nullable', 'string', 'max:200'],
+
+            // The garment spec. It arrives on the job order from the account
+            // officer, and the artist may correct it here — the tech pack is
+            // the sheet the floor works from, so it has to be right on the pack
+            // rather than right on a form nobody prints.
+            'fabric' => ['nullable', 'string', 'max:255'],
+            'neck' => ['nullable', 'string', 'max:100'],
+            'neck_size' => ['nullable', 'string', 'max:60'],
+            'cuff_arm_sleeves' => ['nullable', 'string', 'max:100'],
+            'cuff_size' => ['nullable', 'string', 'max:60'],
+            'neck_label' => ['nullable', 'string', 'max:120'],
+            'bottom_hem' => ['nullable', 'string', 'max:120'],
+            'packaging' => ['nullable', 'string', 'max:120'],
+            'free_logo_sticker' => ['nullable', 'string', 'max:120'],
+
+            // Routing values, so they stay something the board can place.
+            'print_type' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINT_TYPES))],
+            'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINTERS))],
+
+            // These two live on the ORDER, not the job order.
+            'product_type' => ['nullable', 'string', 'max:100'],
+            'due_date' => ['nullable', 'date'],
+            'placements' => ['nullable', 'array', 'max:20'],
+            'placements.*.label' => ['nullable', 'string', 'max:60'],
+            'placements.*.width' => ['nullable', 'numeric', 'min:0', 'max:999'],
+            'placements.*.height' => ['nullable', 'numeric', 'min:0', 'max:999'],
+            'folder_shot' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        // A row with no placement name is an empty row, not a placement. The
+        // form always offers a spare one, so most saves arrive with at least
+        // one of these.
+        $placements = collect($data['placements'] ?? [])
+            ->filter(fn ($p) => filled($p['label'] ?? null))
+            ->map(fn ($p) => [
+                'label' => trim($p['label']),
+                'width' => $p['width'] ?? null,
+                'height' => $p['height'] ?? null,
+            ])
+            ->values()
+            ->all();
+
+        $fields = collect($data)
+            ->only([
+                'design_name', 'fitting', 'thread_color', 'zipper_type',
+                'bp_pocket_color', 'colorways', 'fabric', 'neck', 'neck_size',
+                'cuff_arm_sleeves', 'cuff_size', 'neck_label', 'bottom_hem',
+                'packaging', 'free_logo_sticker', 'print_type', 'printer',
+            ])
+            ->all();
+
+        $fields['print_placements'] = $placements;
+
+        if ($request->hasFile('folder_shot')) {
+            // Replace rather than accumulate: the old picture is of a folder
+            // that has since changed, which is the reason for uploading a new one.
+            if ($jobOrder->folder_shot_path) {
+                Storage::disk('local')->delete($jobOrder->folder_shot_path);
+            }
+
+            $file = $request->file('folder_shot');
+            $fields['folder_shot_path'] = $file->store('folder-shots', 'local');
+            $fields['folder_shot_name'] = $file->getClientOriginalName();
+        }
+
+        $jobOrder->update($fields);
+
+        // The product and the delivery date are the order's, not the job
+        // order's — the due date drives the calendar and the shop's daily
+        // capacity, so it has to land where those read it.
+        $orderFields = collect($data)->only(['product_type', 'due_date'])
+            ->filter(fn ($v) => filled($v))
+            ->all();
+
+        if ($orderFields !== []) {
+            $task->order->update($orderFields);
+        }
+
+        return back()->with('success', 'Tech pack saved.');
     }
 
     /**

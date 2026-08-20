@@ -1,55 +1,23 @@
 @extends('layouts.app')
 
-@section('title', 'Job Order '.$order->order_number)
-@section('page-title', 'Job Order')
+@section('title', 'Tech Pack '.$order->order_number)
+@section('page-title', 'Tech Pack')
+
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('css/tech-pack.css') }}?v={{ filemtime(public_path('css/tech-pack.css')) }}">
+@endpush
 
 @section('content')
 @php
     $jo = $order->jobOrder;
-    // Show the FINAL MOCKUP once the artist has made it (that happens after the
-    // job order is sent). Before that exists, fall back to the approved LAYOUT so
-    // the sheet always shows the current design instead of a blank box.
-    $mockupTask = $order->tasks->firstWhere('department', 'Final mockup');
-    $layoutTask = $order->tasks->firstWhere('department', 'Layout');
-    $imgTask = ($mockupTask && $mockupTask->files->isNotEmpty()) ? $mockupTask : $layoutTask;
-    $artistName = optional($order->tasks->first(fn ($t) => $t->team === \App\Models\User::JOB_ARTIST && $t->assignee))->assignee?->name ?? '—';
-    $mockupFiles = $imgTask?->files->where('round', ($imgTask->revision_count ?? 0) + 1) ?? collect();
-    $y = fn ($v) => filled($v) ? $v : '';
 @endphp
 
-<style>
-    .jo-sheet { max-width: 900px; margin: 0 auto; background: #fff; color: #111; border: 2px solid #111; }
-    .jo-sheet * { box-sizing: border-box; }
-    .jo-title { text-align: center; padding: 0.6rem; border-bottom: 2px solid #111; }
-    .jo-title .t1 { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.02em; }
-    .jo-title .t1 .pri { color: #d00; }
-    .jo-title .t2 { font-size: 1.2rem; font-weight: 800; color: #d00; margin-top: 0.15rem; }
-    table.jo { width: 100%; border-collapse: collapse; }
-    table.jo td, table.jo th { border: 1px solid #111; padding: 0.3rem 0.5rem; font-size: 0.8rem; vertical-align: top; }
-    .lbl { background: #cfcfcf; font-weight: 700; text-align: center; font-size: 0.72rem; text-transform: uppercase; }
-    .lbl-l { background: #cfcfcf; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
-    /* A filled-in value. White like the paper form — the yellow belongs on
-       the entry form, where it means "still to type in". Here it is already
-       typed in, and a printed sheet should look like the printed sheet. */
-    .yellow { background: #fff !important; font-weight: 700; text-align: center; }
-    .ctr { text-align: center; }
-    .red { color: #d00; font-weight: 700; }
-    .sec { background: #cfcfcf; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
-    .mock-box { min-height: 150px; text-align: center; }
-    .mock-box img { max-width: 100%; max-height: 260px; border: 1px solid #999; }
-    .jo-actions { max-width: 900px; margin: 0 auto 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
-    @media print {
-        .sidebar, .topbar, .no-print, .jo-actions { display: none !important; }
-        .content { padding: 0 !important; max-width: none !important; }
-        .jo-sheet { border-color: #000; }
-    }
-</style>
 
 <div class="no-print">
     @include('partials.delay-alert', ['order' => $order, 'size' => 'big'])
 </div>
 
-<div class="jo-actions no-print">
+<div class="tp-actions no-print">
     @if (auth()->user()->canCreateOrders() && $jo)
         @if ($jo->status === 'draft')
             @php
@@ -100,27 +68,54 @@
     <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back to {{ $backLabel }}</a>
 </div>
 
-@php
-    // The floor can still correct its own boxes here — a seam typed against the
-    // wrong row should not be permanent because somebody pressed Finish. Open
-    // until the job order itself is finished; after that the sheet is a record
-    // of what was made, and records do not change.
-    $floorFields = \App\Http\Controllers\StationController::sheetFieldsForUser(auth()->user());
-    $canCorrect = $order->jobOrder && $order->sheetStillEditable() && $floorFields !== [];
-@endphp
-
-@if ($canCorrect)
-    <form method="POST" action="{{ route('orders.sheet.update', $order) }}">
+{{-- The artist types into the pack itself; everybody else reads it. --}}
+@isset($techPackTask)
+    <form method="POST" action="{{ route('tasks.tech-pack', $techPackTask->id) }}" enctype="multipart/form-data">
         @csrf
-        @include('partials.job-order-sheet', ['order' => $order, 'editable' => $floorFields])
-        <div class="no-print" style="max-width:900px; margin:0.9rem auto 0; display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
-            <button class="btn btn-primary btn-sm">Save corrections</button>
-            <span style="font-size:0.78rem; color:var(--ink-3);">
-                Sewing and QC boxes stay editable until this job order is finished.
+        @include('partials.tech-pack', ['order' => $order, 'editable' => true])
+
+        <div class="tp-save no-print">
+            <button class="btn btn-primary">Save tech pack</button>
+            <span class="hint">
+                Design name, fitting, thread, zipper, back pocket, colourways and the
+                print sizes are yours to fill — the rest comes from the order.
             </span>
         </div>
     </form>
 @else
-    @include('partials.job-order-sheet', ['order' => $order])
-@endif
+    @include('partials.tech-pack', ['order' => $order])
+@endisset
+
+@php
+    // The seam record lives under the tech pack rather than in it. The pack is
+    // what the shop pins up: what to make and where the print goes. Who sewed
+    // which seam is what the shop wrote down afterwards — production history,
+    // needed, but not part of the spec.
+    //
+    // The floor can still correct its own boxes here: a seam typed against the
+    // wrong row should not be permanent because somebody pressed Finish. Open
+    // until the job order is finished; after that the sheet is a record, and
+    // records do not change.
+    $floorFields = \App\Http\Controllers\StationController::sheetFieldsForUser(auth()->user());
+    $canCorrect = $order->jobOrder && $order->sheetStillEditable() && $floorFields !== [];
+@endphp
+
+<details class="tp-record" @if ($canCorrect) open @endif>
+    <summary>Production record — seams, thread and quality check</summary>
+
+    @if ($canCorrect)
+        <form method="POST" action="{{ route('orders.sheet.update', $order) }}">
+            @csrf
+            @include('partials.job-order-sheet', ['order' => $order, 'editable' => $floorFields])
+            <div class="no-print" style="max-width:900px; margin:0.9rem auto 0; display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
+                <button class="btn btn-primary btn-sm">Save corrections</button>
+                <span style="font-size:0.78rem; color:var(--ink-3);">
+                    Sewing and QC boxes stay editable until this job order is finished.
+                </span>
+            </div>
+        </form>
+    @else
+        @include('partials.job-order-sheet', ['order' => $order])
+    @endif
+</details>
 @endsection

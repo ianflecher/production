@@ -1,0 +1,312 @@
+/* ============================================================================
+   Tech pack
+
+   Printed and pinned up, so it is laid out for paper first: two columns that
+   hold their shape at A4 landscape, black rules, and no colour that only works
+   on a screen. The shop reads this next to a garment, not on a phone.
+   ========================================================================= */
+
+.tp-sheet {
+    display: grid;
+    grid-template-columns: 34% 1fr;
+    gap: 0;
+    background: #fff;
+    color: #111;
+    border: 2px solid #111;
+    max-width: 1180px;
+    margin: 0 auto 1.5rem;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.tp-sheet * { box-sizing: border-box; }
+
+/* ---- Section strips ---------------------------------------------------- */
+.tp-strip {
+    background: #fff;
+    border-bottom: 2px solid #111;
+    padding: 0.4rem 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.74rem;
+}
+.tp-strip-dark { background: #111; color: #fff; border-bottom: 0; }
+
+/* ---- Left: mockup + colourways ----------------------------------------- */
+.tp-mockup { border-right: 2px solid #111; display: flex; flex-direction: column; }
+
+.tp-colorways {
+    display: flex; flex-wrap: wrap; gap: 0.9rem;
+    padding: 0.6rem;
+    border-bottom: 1px solid #111;
+}
+.tp-cw { text-align: center; width: 46px; }
+.tp-dot {
+    display: block; width: 30px; height: 30px; margin: 0 auto 0.2rem;
+    border-radius: 50%; border: 1px solid #111;
+}
+.tp-cw-name {
+    font-size: 0.56rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.03em; word-break: break-word;
+}
+
+.tp-art {
+    flex: 1; padding: 0.6rem;
+    display: flex; flex-direction: column; gap: 0.7rem; align-items: center;
+    background: #d9d9d9;
+}
+.tp-art figure { margin: 0; text-align: center; width: 100%; }
+.tp-art img {
+    max-width: 100%; max-height: 300px; display: block; margin: 0 auto;
+    background: #fff;
+}
+.tp-art figcaption {
+    font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+    margin-top: 0.2rem; color: #333;
+}
+
+.tp-empty {
+    margin: auto; text-align: center; color: #555;
+    font-weight: 700; font-size: 0.75rem; padding: 2rem 0.6rem;
+}
+.tp-empty span { display: block; font-weight: 400; font-size: 0.68rem; margin-top: 0.3rem; }
+
+/* ---- Right ------------------------------------------------------------- */
+.tp-body { display: flex; flex-direction: column; }
+
+.tp-head { display: grid; grid-template-columns: 190px 1fr; border-bottom: 2px solid #111; }
+
+.tp-brand {
+    border-right: 2px solid #111;
+    padding: 0.6rem; text-align: center;
+    display: flex; flex-direction: column; justify-content: center; gap: 0.4rem;
+}
+.tp-logo {
+    display: block;
+    width: 100%;
+    max-width: 108px;
+    margin: 0 auto;
+    /* The mark is black on white, so it sits on the sheet without a box. */
+    mix-blend-mode: multiply;
+}
+.tp-sample { color: #d21f26; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.04em; }
+
+/* The production template — the flats the floor works to. Sits under the
+   SAMPLE label, the way the shop's own pack has it. */
+.tp-template { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: center; }
+.tp-template img {
+    max-width: 100%; max-height: 130px; display: block;
+    border: 1px solid #ccc; background: #fff;
+}
+.tp-template-empty {
+    font-size: 0.62rem; color: #888; font-weight: 700; text-transform: uppercase;
+    border: 1px dashed #bbb; border-radius: 6px; padding: 0.7rem 0.4rem; width: 100%;
+}
+.tp-template-empty span {
+    display: block; font-weight: 400; text-transform: none;
+    font-size: 0.6rem; margin-top: 0.25rem; color: #999;
+}
+
+/* ---- Tables ------------------------------------------------------------ */
+table.tp-tbl { width: 100%; border-collapse: collapse; }
+table.tp-tbl th, table.tp-tbl td {
+    border: 1px solid #111; padding: 0.28rem 0.45rem; vertical-align: top;
+    font-size: 0.72rem;
+}
+table.tp-tbl th {
+    background: #ededed; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.02em; text-align: left; white-space: nowrap; width: 1%;
+}
+table.tp-tbl td { font-weight: 600; }
+.tp-headtbl { border-left: 0; }
+.tp-red { color: #d21f26; font-weight: 800; }
+
+/* ---- Middle: placements + materials ------------------------------------ */
+.tp-mid { display: grid; grid-template-columns: 1fr 300px; border-bottom: 2px solid #111; }
+
+.tp-print { border-right: 2px solid #111; display: flex; flex-direction: column; }
+.tp-print-inner {
+    flex: 1; background: #111; color: #fff;
+    padding: 0.9rem; display: flex; flex-wrap: wrap; gap: 0.9rem;
+    align-content: flex-start;
+}
+.tp-place {
+    border: 1px solid #444; border-radius: 6px;
+    padding: 0.5rem 0.7rem; min-width: 150px;
+}
+.tp-place-label {
+    font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+    font-size: 0.7rem; margin-bottom: 0.15rem;
+}
+.tp-place-size { font-size: 0.68rem; color: #d4d4d8; }
+.tp-place-size strong { color: #fff; display: block; font-size: 0.8rem; }
+.tp-place-empty { color: #9ca3af; font-size: 0.72rem; margin: auto; }
+
+.tp-banner {
+    background: #fff; color: #d21f26;
+    font-weight: 800; text-align: center; letter-spacing: 0.02em;
+    padding: 0.45rem; font-size: 0.85rem;
+    border-top: 2px solid #111;
+}
+
+.tp-materials { display: flex; flex-direction: column; }
+
+/* ---- Notes, files, foot ------------------------------------------------ */
+.tp-note {
+    padding: 0.45rem 0.6rem; border-bottom: 2px solid #111;
+    font-size: 0.72rem; background: #fffbea;
+}
+
+.tp-files { border-bottom: 2px solid #111; }
+.tp-filetbl code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.68rem; word-break: break-all;
+}
+.tp-empty-line { padding: 0.5rem 0.6rem; margin: 0; font-size: 0.72rem; color: #555; }
+
+.tp-shot { margin: 0; padding: 0.6rem; text-align: center; }
+.tp-shot img { max-width: 100%; border: 1px solid #111; }
+.tp-shot figcaption { font-size: 0.62rem; color: #555; margin-top: 0.2rem; }
+
+.tp-foot {
+    margin-top: auto;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 0.6rem; flex-wrap: wrap;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+}
+.tp-foot-brand { border: 2px solid #111; padding: 0.2rem 0.6rem; }
+
+/* ---- Screen chrome around the sheet ------------------------------------ */
+.tp-actions {
+    max-width: 1180px; margin: 0 auto 1rem;
+    display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;
+}
+
+/* ---- Narrow screens ----------------------------------------------------
+   One column, because two 34%/66% columns on a phone makes the mockup a
+   thumbnail and the tables unreadable. */
+@media (max-width: 900px) {
+    .tp-sheet { grid-template-columns: 1fr; }
+    .tp-mockup { border-right: 0; border-bottom: 2px solid #111; }
+    .tp-mid { grid-template-columns: 1fr; }
+    .tp-print { border-right: 0; border-bottom: 2px solid #111; }
+    .tp-head { grid-template-columns: 1fr; }
+    .tp-brand { border-right: 0; border-bottom: 1px solid #111; flex-direction: row; justify-content: center; }
+}
+
+/* ---- Print -------------------------------------------------------------
+   The reason this page exists. Everything the app wraps around the sheet is
+   screen furniture and must not appear on the paper. */
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+
+    .sidebar, .topbar, .tp-actions, .alert-success, .alert-error { display: none !important; }
+    .shell, .main, .content, body { display: block !important; background: #fff !important; }
+
+    .tp-sheet {
+        max-width: none; margin: 0; border-width: 2px;
+        font-size: 0.7rem;
+        page-break-inside: avoid;
+    }
+    .tp-art { background: #fff; }
+    .tp-art img { max-height: 240px; }
+
+    /* Backgrounds are the layout here, not decoration. */
+    .tp-print-inner, .tp-strip-dark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* ---- Production record --------------------------------------------------
+   The seam record lives under the pack rather than in it. The pack is what the
+   shop pins up — what to make and where the print goes. Who sewed which seam is
+   what the shop wrote down afterwards: needed, but not part of the spec, and it
+   made the old sheet twice as long as the thing anybody was reading. */
+.tp-record {
+    max-width: 1180px;
+    margin: 0 auto 2rem;
+}
+.tp-record > summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 0.6rem 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    user-select: none;
+}
+.tp-record > summary:hover { border-color: var(--accent); color: var(--accent); }
+.tp-record[open] > summary { margin-bottom: 0.9rem; }
+
+@media print {
+    /* On paper the record follows the pack on its own page — the floor does
+       want it, just not on top of the spec. */
+    .tp-record { page-break-before: always; }
+    .tp-record > summary { display: none; }
+    .tp-record[open] > summary { display: none; }
+}
+
+/* ---- The artist filling the pack ---------------------------------------
+   Same idea as the sewing sheet: you read the spec and answer it in the same
+   place, rather than holding a form open beside the thing it describes. The
+   boxes are tinted so what is still blank is obvious at a glance. */
+.tp-in {
+    width: 100%;
+    border: 1px solid #b9bfc9;
+    background: #fffbe6;
+    border-radius: 4px;
+    padding: 0.2rem 0.35rem;
+    font: inherit;
+    font-weight: 600;
+    color: #111;
+}
+.tp-in:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: #fff; }
+
+.tp-place-edit { display: flex; flex-direction: column; gap: 0.4rem; width: 100%; }
+.tp-place-row { display: grid; grid-template-columns: 1fr 82px 12px 82px; gap: 0.4rem; align-items: center; }
+.tp-place-row input {
+    border: 1px solid #444; background: #1c1c1c; color: #fff;
+    border-radius: 4px; padding: 0.28rem 0.4rem; font: inherit; font-size: 0.72rem;
+}
+.tp-place-row input::placeholder { color: #6b7280; }
+.tp-place-row input:focus { outline: 2px solid #fff; outline-offset: -1px; }
+.tp-x { color: #9ca3af; text-align: center; font-size: 0.8rem; }
+
+.tp-add {
+    margin-top: 0.6rem; align-self: flex-start;
+    background: transparent; border: 1px dashed #6b7280; color: #d4d4d8;
+    border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.72rem; cursor: pointer;
+}
+.tp-add:hover { border-color: #fff; color: #fff; }
+
+.tp-cw-edit { display: block; width: 100%; margin-top: 0.4rem; }
+.tp-cw-edit span { display: block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; color: #555; }
+.tp-cw-edit input {
+    width: 100%; border: 1px solid #b9bfc9; background: #fffbe6;
+    border-radius: 4px; padding: 0.25rem 0.4rem; font: inherit; font-size: 0.72rem; font-weight: 600;
+}
+
+.tp-shot-edit { padding: 0.6rem; border-top: 1px solid #ddd; }
+.tp-shot-edit label { display: block; font-size: 0.7rem; font-weight: 700; margin-bottom: 0.25rem; }
+.tp-shot-edit span { display: block; font-size: 0.65rem; color: #666; margin-top: 0.3rem; line-height: 1.4; }
+
+/* The save bar for the artist's own pack. */
+.tp-save {
+    max-width: 1180px; margin: 0 auto 2rem;
+    display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;
+}
+.tp-save .hint { font-size: 0.8rem; color: var(--ink-3); }
+
+@media print {
+    .tp-in, .tp-place-row input, .tp-cw-edit input {
+        border: 0; background: transparent; padding: 0;
+    }
+    .tp-add, .tp-shot-edit, .tp-save { display: none !important; }
+}
+
+/* Two boxes in one cell — the thing and its size, e.g. "Round neck / 3 inches". */
+.tp-pair { display: flex; gap: 0.3rem; }
+.tp-pair .tp-in:first-child { flex: 2; }
+.tp-pair .tp-in:last-child { flex: 1; }
+select.tp-in { padding: 0.18rem 0.3rem; }
