@@ -15,6 +15,7 @@ use Illuminate\View\View;
 
 class ProductionOrderController extends Controller
 {
+
     use AuthorizesOrderAccess;
 
     /**
@@ -53,7 +54,25 @@ class ProductionOrderController extends Controller
                 ->where('order_number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%")))
             ->when($status !== '', fn ($q) => $q->where('status', $status))
+            // Finished work is history, and on a busy year it is most of the
+            // list. The default view is what is still open; completed orders
+            // have their own tab rather than burying the live ones.
+            ->when($status === '', fn ($q) => $q->where('status', '!=', 'complete'))
+            // Late work first, then what is due today, then everything else.
+            // The list is read from the top and the badges are already drawn in
+            // red — but a delayed job used to sit wherever its order number put
+            // it, which on a full page is below the fold.
+            //
+            // Bound dates rather than CURDATE(): the tests run on SQLite, which
+            // does not have it.
+            ->orderByRaw(
+                "CASE WHEN status = 'active' AND due_date IS NOT NULL AND due_date < ? THEN 0"
+                ." WHEN status = 'active' AND due_date IS NOT NULL AND due_date = ? THEN 1"
+                .' ELSE 2 END',
+                [now()->startOfDay()->toDateString(), now()->startOfDay()->toDateString()]
+            )
             ->orderByRaw($statusOrder)
+            ->orderBy('due_date')
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();

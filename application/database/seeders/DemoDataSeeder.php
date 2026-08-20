@@ -394,6 +394,18 @@ class DemoDataSeeder extends Seeder
         $plan = self::PLAN;
         $backlog = ['complete', 'complete', 'complete', 'complete', 'cancelled', 'hold', 'production', 'massprod'];
 
+        // Asking for fewer orders than the hand-written plan has entries used to
+        // be ignored: DEMO_ORDERS=10 still produced 24, because the plan was a
+        // floor rather than a starting point. Trim it instead — but never below
+        // what the late / due-today / full-day carve-outs need, or a small demo
+        // comes out with none of the states worth looking at.
+        $floor = self::DELAYED_ORDERS + self::AT_RISK_ORDERS + self::FULL_DAY_ORDERS + 2;
+        $asked = max($floor, $this->totalOrders());
+
+        if ($asked - self::FULL_DAY_ORDERS < count($plan)) {
+            $plan = array_slice($plan, 0, max(1, $asked - self::FULL_DAY_ORDERS));
+        }
+
         // The full-capacity day is part of the requested total, not an extra on
         // top of it — asking for 1000 orders should give exactly 1000.
         $upTo = max(count($plan), $this->totalOrders() - self::FULL_DAY_ORDERS);

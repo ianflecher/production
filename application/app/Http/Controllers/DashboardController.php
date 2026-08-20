@@ -10,6 +10,81 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    /**
+     * Orders grouped by the step they are actually sitting on.
+     *
+     * The donut used to have one wedge called "In production" holding every
+     * order past the design stage — which on a shop where everything is past
+     * the design stage is one colour filling the chart and saying nothing. The
+     * useful question is WHERE the work is: eleven at Sewing and two at the
+     * printer is a different morning from the reverse.
+     *
+     * Finished and parked orders keep their own wedges, because "how much is
+     * done" is the other thing the chart is asked.
+     *
+     * @param  \Illuminate\Support\Collection<int, ProductionOrder>  $orders
+     * @return array{slices: array<int, array{label: string, value: int, color: string}>, total: int}
+     */
+    private function stepBreakdown($orders): array
+    {
+        $label = function (ProductionOrder $o): string {
+            if ($o->status === 'complete') {
+                return 'Completed';
+            }
+            if ($o->status === 'cancelled') {
+                return 'Cancelled';
+            }
+            if ($o->status === 'on_hold') {
+                return 'On hold';
+            }
+
+            $step = $o->tasks
+                ->sortBy('sequence')
+                ->first(fn ($t) => ! in_array($t->status, ['complete', 'cancelled'], true));
+
+            return $step->department ?? 'Not started';
+        };
+
+        $counts = $orders->groupBy($label)->map->count();
+
+        // Finished, parked and not-yet-started are not steps on the floor, so
+        // they sit at the end in fixed colours rather than competing with the
+        // departments for the top of the list.
+        $fixed = [
+            'Completed' => '#18A957',
+            'On hold' => '#E59A18',
+            'Cancelled' => '#94A0AE',
+            'Not started' => '#CBD5E1',
+        ];
+
+        $stepColours = ['#2D7FF0', '#E31B23', '#7C3AED', '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#4F46E5'];
+
+        $steps = $counts->reject(fn ($n, $name) => isset($fixed[$name]))
+            ->sortDesc();
+
+        $slices = [];
+
+        foreach ($steps->take(count($stepColours)) as $name => $n) {
+            $slices[] = ['label' => $name, 'value' => $n, 'color' => $stepColours[count($slices)]];
+        }
+
+        // Whatever did not fit, added up rather than dropped — a chart that
+        // quietly leaves orders out is worse than one with a grey wedge.
+        $rest = (int) $steps->slice(count($stepColours))->sum();
+
+        if ($rest > 0) {
+            $slices[] = ['label' => 'Other steps', 'value' => $rest, 'color' => '#94A3B8'];
+        }
+
+        foreach ($fixed as $name => $colour) {
+            if (($n = (int) $counts->get($name, 0)) > 0) {
+                $slices[] = ['label' => $name, 'value' => $n, 'color' => $colour];
+            }
+        }
+
+        return ['slices' => $slices, 'total' => $orders->count()];
+    }
+
     public function index(Request $request): View
     {
         $user = $request->user();
@@ -59,7 +134,15 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
 
-            return view('dashboard', compact('user', 'greeting', 'stats', 'pipelineCounts', 'forChecking', 'recentOrders'));
+            // Drawn from every order, not the five most recent that happen to
+            // be listed below it — a distribution of five is not a distribution.
+            $byStep = $this->stepBreakdown(
+                ProductionOrder::with('tasks')->whereIn('status', ['active', 'on_hold', 'complete'])->get()
+            );
+
+            return view('dashboard', compact(
+                'user', 'greeting', 'stats', 'pipelineCounts', 'forChecking', 'recentOrders'
+            ) + ['stepSlices' => $byStep['slices'], 'stepTotal' => $byStep['total']]);
         }
 
         if ($user->isSales()) {
@@ -82,25 +165,12 @@ class DashboardController extends Controller
                 ['label' => 'Completed', 'value' => $myOrders->where('status', 'complete')->count(), 'note' => 'Finished orders'],
             ];
 
-            // ---- Orders-by-status donut (each order lands in exactly one bucket) ----
-            $bucketOf = function ($o) use ($currentStage) {
-                if ($o->status === 'complete') return 'Completed';
-                if ($o->status !== 'active') return 'On hold / other';
-                if (! $o->layoutReleased()) return 'Awaiting design';
-                $st = $currentStage($o);
-                return ($st !== null && $st >= ProductionOrder::STAGE_MOCKUP + 1) ? 'In production' : 'In design';
-            };
-            $counts = $myOrders->groupBy($bucketOf)->map->count();
-            $palette = [
-                'In design' => '#2D7FF0', 'In production' => '#E59A18',
-                'Completed' => '#18A957', 'Awaiting design' => '#E31B23', 'On hold / other' => '#94A0AE',
-            ];
-            $statusBreakdown = collect($palette)
-                ->map(fn ($color, $label) => ['label' => $label, 'value' => $counts->get($label, 0), 'color' => $color])
-                ->filter(fn ($s) => $s['value'] > 0)
-                ->values()
-                ->all();
-            $statusTotal = $myOrders->count();
+            // ---- Orders by the step they are on ----
+            $byStep = $this->stepBreakdown($myOrders);
+            $statusBreakdown = $byStep['slices'];
+            $statusTotal = $byStep['total'];
+            $stepSlices = $byStep['slices'];
+            $stepTotal = $byStep['total'];
 
             // ---- Alerts (only real, actionable ones) ----
             $needsDp = $myOrders->filter(fn ($o) => in_array($o->status, ['active', 'on_hold']) && $o->layoutApproved() && ! $o->hasDownpayment());
@@ -151,7 +221,8 @@ class DashboardController extends Controller
             $recentActivity = $activity->sortByDesc('at')->take(6)->values();
 
             return view('dashboard', compact('user', 'greeting', 'stats', 'recentOrders',
-                'statusBreakdown', 'statusTotal', 'alerts', 'quickSummary', 'monthSeries', 'recentActivity'));
+                'statusBreakdown', 'statusTotal', 'stepSlices', 'stepTotal',
+                'alerts', 'quickSummary', 'monthSeries', 'recentActivity'));
         }
 
         // ---- Finance desk: all payments across every order ----------------

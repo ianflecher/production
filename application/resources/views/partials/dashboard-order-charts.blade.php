@@ -12,54 +12,55 @@
 <div class="dash-card">
     <div class="dash-card-head">
         <div>
-            <h2>Orders by status</h2>
-            <p>Distribution of the orders loaded on this dashboard.</p>
+            <h2>Orders by current step</h2>
+            <p>Where the work is sitting right now.</p>
         </div>
     </div>
 
+    @php
+        // One wedge per step, built from the counts rather than three fixed
+        // stops. "In production" used to be a single wedge holding everything
+        // past design, which on a shop where everything is past design was one
+        // colour filling the chart and answering nothing.
+        $slices = collect($stepSlices ?? []);
+        $sliceTotal = max(1, (int) ($stepTotal ?? $slices->sum('value')));
+
+        $at = 0.0;
+        $stops = [];
+
+        foreach ($slices as $slice) {
+            $from = $at;
+            $at += ($slice['value'] / $sliceTotal) * 100;
+            $stops[] = $slice['color'].' '.round($from, 2).'% '.round($at, 2).'%';
+        }
+
+        // Anything unaccounted for stays visibly grey rather than stretching
+        // the last wedge over it.
+        if ($at < 99.99) {
+            $stops[] = '#DCE3EA '.round($at, 2).'% 100%';
+        }
+    @endphp
+
     <div class="dash-donut-layout">
-        <div
-            class="dash-donut"
-            style="
-                background:
-                conic-gradient(
-                    #2d7ff0 0% {{ $stopOne }}%,
-                    #e59a18 {{ $stopOne }}% {{ $stopTwo }}%,
-                    #18a957 {{ $stopTwo }}% {{ $stopThree }}%,
-                    #dce3ea {{ $stopThree }}% 100%
-                );
-            "
-        >
+        <div class="dash-donut" style="background: conic-gradient({{ implode(', ', $stops) }});">
             <div class="dash-donut-center">
-                <strong>{{ $totalOrders }}</strong>
+                <strong>{{ $stepTotal ?? $totalOrders }}</strong>
                 <span>Total orders</span>
             </div>
         </div>
 
         <div class="dash-legend">
-            <div class="dash-legend-row">
-                <span class="dash-legend-dot" style="background: #2d7ff0;"></span>
-                <span>In design</span>
-                <strong>{{ $designCount }}</strong>
-            </div>
-
-            <div class="dash-legend-row">
-                <span class="dash-legend-dot" style="background: #e59a18;"></span>
-                <span>In production</span>
-                <strong>{{ $productionCount }}</strong>
-            </div>
-
-            <div class="dash-legend-row">
-                <span class="dash-legend-dot" style="background: #18a957;"></span>
-                <span>Completed</span>
-                <strong>{{ $completedCount }}</strong>
-            </div>
-
-            <div class="dash-legend-row">
-                <span class="dash-legend-dot" style="background: #dce3ea;"></span>
-                <span>Other</span>
-                <strong>{{ $otherCount }}</strong>
-            </div>
+            @forelse ($slices as $slice)
+                <div class="dash-legend-row">
+                    <span class="dash-legend-dot" style="background: {{ $slice['color'] }};"></span>
+                    <span>{{ $slice['label'] }}</span>
+                    <strong>{{ $slice['value'] }}</strong>
+                </div>
+            @empty
+                <div class="dash-legend-row">
+                    <span>No orders on the floor yet.</span>
+                </div>
+            @endforelse
         </div>
     </div>
 </div>

@@ -13,7 +13,10 @@
 @php
     // The cards count every order the person can see; the table shows one page.
     $summaryCards = [
-        ['status' => '',          'icon' => '▣', 'label' => 'Total orders', 'count' => $totalOrders,              'class' => 'summary-total'],
+        // The default view leaves finished work out, so this card has to say
+        // what it actually shows. Calling it "Total orders" while hiding the
+        // completed ones is a number that does not match its own list.
+        ['status' => '',          'icon' => '▣', 'label' => 'Open orders',  'count' => $totalOrders - ($counts['complete'] ?? 0), 'class' => 'summary-total'],
         ['status' => 'active',    'icon' => '●', 'label' => 'Active',       'count' => $counts['active'] ?? 0,    'class' => 'summary-active'],
         ['status' => 'on_hold',   'icon' => 'Ⅱ', 'label' => 'On hold',      'count' => $counts['on_hold'] ?? 0,   'class' => 'summary-hold'],
         ['status' => 'complete',  'icon' => '✓', 'label' => 'Completed',    'count' => $counts['complete'] ?? 0,  'class' => 'summary-complete'],
