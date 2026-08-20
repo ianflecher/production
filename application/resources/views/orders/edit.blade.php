@@ -176,7 +176,7 @@
         <h2>Job details</h2>
         <div class="field" style="max-width: 340px;">
             <label for="due_date">Due date <span style="color: var(--danger-ink);">*</span></label>
-            <input id="due_date" type="date" name="due_date" required value="{{ old('due_date', $order->due_date?->toDateString()) }}" onchange="checkCapacity(); showRushNote();">
+            <input id="due_date" type="date" name="due_date" required value="{{ old('due_date', $order->due_date?->toDateString()) }}" onchange="checkCapacity(); onDueDatePicked();">
             <div id="capacityNote" style="font-size: 0.78rem; color: var(--ink-3); margin-top: 0.35rem;"></div>
             <div id="rushNote"></div>
             @error('due_date')<span class="error">{{ $message }}</span>@enderror
@@ -386,6 +386,26 @@
         out.style.marginTop = '0.35rem';
     }
 
+    // Asked the moment the date is picked, because that is when it can still be
+    // changed painlessly — waiting for the submit means re-deciding at the end
+    // of a long form. Saying no clears the box rather than leaving a date
+    // nobody agreed to sitting in it.
+    function onDueDatePicked() {
+        showRushNote();
+
+        const el = document.getElementById('due_date');
+        const days = daysUntilDue();
+
+        if (days === null || days > RUSH_DAYS) { return; }
+
+        if (! confirmRush()) {
+            el.value = '';
+            showRushNote();
+            checkCapacity();
+            el.focus();
+        }
+    }
+
     function confirmRush() {
         const days = daysUntilDue();
 
@@ -395,9 +415,7 @@
             : (days === 0 ? 'today' : days + ' day' + (days === 1 ? '' : 's') + ' from now');
 
         return window.confirm(
-            'This order is due ' + when + '.
-
-'
+            'This order is due ' + when + '.\n\n'
             + 'The shop needs about ' + RUSH_DAYS + ' days to take a job from layout to finished goods. '
             + 'Are you sure about this due date?'
         );
