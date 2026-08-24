@@ -205,7 +205,7 @@ class ResendFilePathTest extends TestCase
 
         \App\Models\Task::create([
             'production_order_id' => $task->production_order_id,
-            'department' => 'Production template',
+            'department' => 'Tech pack',
             'sequence' => $task->sequence + 1,
             'stage' => 2,
             'status' => 'todo',
@@ -214,7 +214,7 @@ class ResendFilePathTest extends TestCase
         $this->actingAs($artist)->get("/my-tasks/{$task->id}")
             ->assertOk()
             ->assertSee('Steps on ')
-            ->assertSee('Production template')
+            ->assertSee('Tech pack')
             ->assertSee('you are here');
     }
 

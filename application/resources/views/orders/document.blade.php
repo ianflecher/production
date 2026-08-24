@@ -167,7 +167,7 @@
         <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← Back to order</a>
         <span style="margin-left:auto; font-size:0.8rem; color:var(--ink-3);">
             @if ($isPq) 12% VAT @else No VAT @endif ·
-            {{ $hasJobOrder ? 'Job order details included.' : 'Job order not filled yet.' }}
+            {{ $hasJobOrder ? 'Tech Pack details included.' : 'Tech Pack not filled yet.' }}
         </span>
     </div>
 

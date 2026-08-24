@@ -56,7 +56,7 @@
                                 <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-start;">
                                     @if ($order->jobOrder)
                                         {{-- One document: mockup, template, job order, production details. --}}
-                                        <a href="{{ route('orders.package', $order) }}" class="btn btn-primary btn-sm" style="font-size: 0.72rem;">📄 Open document (4 pages)</a>
+                                        <a href="{{ route('orders.package', $order) }}" class="btn btn-primary btn-sm" style="font-size: 0.72rem;">📄 Open full document</a>
                                     @endif
                                     {{-- No thumbnails here — the design is reviewed by opening
                                          the document above. Non-image files still need a link. --}}
@@ -99,7 +99,7 @@
                                                     </label>
                                                     <label style="display:flex; gap:0.4rem; align-items:flex-start;">
                                                         <input type="checkbox" name="items[]" value="template" style="width:auto; margin-top:0.2rem;">
-                                                        <span><strong>Production template</strong> — artist redoes the template.</span>
+                                                        <span><strong>Tech pack</strong> — artist redoes the tech pack.</span>
                                                     </label>
                                                     <label style="display:flex; gap:0.4rem; align-items:flex-start;">
                                                         <input type="checkbox" name="items[]" value="job_order" style="width:auto; margin-top:0.2rem;">
@@ -135,7 +135,7 @@
                             <td>
                                 @php $latest = $task->files->where('round', $task->revision_count + 1); @endphp
                                 @if ($task->auto_submit)
-                                    <a href="{{ route('orders.job-order', $task->order) }}" class="btn btn-primary btn-sm">📋 Open job order</a>
+                                    <a href="{{ route('orders.job-order', $task->order) }}" class="btn btn-primary btn-sm">📋 Open tech pack</a>
                                 @else
                                     @forelse ($latest as $f)
                                         <div style="margin-bottom: 0.5rem;">

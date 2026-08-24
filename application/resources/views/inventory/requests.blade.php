@@ -65,7 +65,20 @@
                         </div>
                         <div>
                             <label style="font-size: 0.75rem;">Quantity</label>
-                            <input type="number" name="quantity" step="0.01" min="0.01" required placeholder="0" style="width: 110px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
+                            @if ($req->requested_quantity !== null)
+                                {{-- The job said how much it needs, so the desk
+                                     issues that. Nothing to retype and nothing
+                                     to get wrong: a hundred used to go out
+                                     against an order for fifty-five because the
+                                     amount was a free box with only the shelf
+                                     to argue with it. --}}
+                                <div class="mr-fixed-qty" title="The amount this job asked for">
+                                    {{ rtrim(rtrim(number_format((float) $req->requested_quantity, 2), '0'), '.') }}
+                                    <span>{{ $match?->unit }}</span>
+                                </div>
+                            @else
+                                <input type="number" name="quantity" step="0.01" min="0.01" required placeholder="0" style="width: 110px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
+                            @endif
                         </div>
                         {{-- Who physically hands the materials out. --}}
                         <div>
@@ -215,7 +228,12 @@
     /* Issuing materials takes them out of stock for good — confirm the amount,
        the material and who handed it over before deducting. */
     function confirmIssue(form) {
-        var qty = (form.quantity.value || '').trim();
+        if (form.dataset.confirmed === '1') { return true; }
+
+        var fixed = form.querySelector('.mr-fixed-qty');
+        var qty = fixed
+            ? fixed.firstChild.textContent.trim()
+            : (form.quantity.value || '').trim();
         var name = (form.operator_name.value || '').trim();
         var select = form.inventory_item_id;
         var material = select && select.selectedIndex > 0
@@ -230,7 +248,7 @@
         }
         if (qty === '' || isNaN(Number(qty)) || Number(qty) <= 0) {
             alert('Enter how much you are issuing.');
-            form.quantity.focus();
+            if (form.quantity) { form.quantity.focus(); }
             return false;
         }
         if (name === '') {
@@ -239,12 +257,26 @@
             return false;
         }
 
-        return window.confirm(
-            'Is the number correct?\n\n' +
-            qty + ' of ' + material + ' for ' + order + '\n' +
-            'Issued by: ' + name + '\n\n' +
-            'This takes it out of stock and cannot be undone from here.'
-        );
+        // The app's own dialog, not the browser's grey box: that one puts
+        // "127.0.0.1:8000 says" above the question and cannot mark which
+        // button is the one that takes stock away. Nothing blocks while it is
+        // open, so the form is submitted once the answer comes back.
+        window.icConfirm({
+            title: 'Is the number correct?',
+            message: qty + ' of ' + material + ' for ' + order + '\n'
+                + 'Issued by: ' + name + '\n\n'
+                + 'This takes it out of stock and cannot be undone from here.',
+            confirmText: 'Yes, issue it',
+            cancelText: 'Go back',
+            tone: 'danger',
+        }).then(function (ok) {
+            if (!ok) { return; }
+            form.dataset.confirmed = '1';
+            form.submit();
+        });
+
+        // Held here until the answer arrives; the branch above sends it on.
+        return false;
     }
 </script>
 @endsection

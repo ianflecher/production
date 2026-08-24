@@ -4,13 +4,15 @@
 @section('page-title', 'Finish at '.$session->stationLabel())
 
 @section('content')
+<link rel="stylesheet" href="{{ asset('css/tech-pack.css') }}?v={{ filemtime(public_path('css/tech-pack.css')) }}">
+
 @php
     $order = $session->order;
     $isQc = str_starts_with($session->station, 'qc_');
 @endphp
 
 <style>
-    .fin-wrap { max-width: 900px; margin: 0 auto; }
+    .fin-wrap { max-width: 1200px; margin: 0 auto; }  /* the tech pack is a wide sheet */
     .fin-head {
         background: var(--surface); border: 1px solid var(--border-strong);
         border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1.1rem;
@@ -52,7 +54,17 @@
         </div>
     @endif
 
-    {{-- The job order sheet itself, with this station's own boxes live. The
+    @if ($order)
+        @include('partials.file-location-bar', ['order' => $order, 'station' => $session->station])
+    @endif
+
+    {{-- What is being made, read off the tech pack — the one sheet the shop
+         works a garment from. --}}
+    @if ($order)
+        @include('partials.tech-pack', ['order' => $order])
+    @endif
+
+    {{-- The production record, with this station's own boxes live. The
          questions used to be repeated in a list underneath it, which meant
          reading the spec in one place and answering it in another, twice as
          long and easy to fill in against the wrong seam. The sheet IS the
@@ -62,10 +74,10 @@
         <input type="hidden" name="end_reason" value="done">
 
         @if ($order)
-            @include('partials.job-order-sheet', [
+            @include('partials.station-record', [
                 'order' => $order,
-                'showMockup' => true,
-                'editable' => $fields,
+                'station' => $session->station,
+                'task' => $task ?? null,
             ])
         @else
             <p class="muted">This run has no job order attached.</p>

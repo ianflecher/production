@@ -183,7 +183,9 @@
         </div>
     </div>
 
-    <p class="sub" style="margin-bottom: 1.4rem;">Add-ons, cutting &amp; production specs are set on the <a href="{{ route('job-orders.edit', $order) }}">job order</a>.</p>
+    @if($order->mockupApproved())
+        <p class="sub" style="margin-bottom: 1.4rem;">Add-ons, cutting &amp; production specs are set on the <a href="{{ route('job-orders.edit', $order) }}">Tech Pack</a>.</p>
+    @endif
 
     <div style="display: flex; gap: 0.75rem;">
         <button type="submit" class="btn btn-primary">Save changes</button>

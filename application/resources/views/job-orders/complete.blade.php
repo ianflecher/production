@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Job Order Complete — '.$order->order_number)
-@section('page-title', 'Complete Job Order Document')
+@section('title', 'Tech Pack Complete — '.$order->order_number)
+@section('page-title', 'Complete Tech Pack Document')
 
 @section('content')
 @php
@@ -17,8 +17,8 @@
     // fall back to every file on the task so the page is never blank.
     if ($mockupFiles->isEmpty()) { $mockupFiles = $imgTask?->files ?? collect(); }
 
-    // Page 3: the production template the artist made.
-    $templateTask = $order->tasks->firstWhere('department', 'Production template');
+    // Page 3: the garment flats, which live in the tech pack step.
+    $templateTask = $order->tasks->first(fn ($t) => $t->isTechPackStep());
     $templateFiles = $templateTask?->files->where('round', ($templateTask->revision_count ?? 0) + 1) ?? collect();
     if ($templateFiles->isEmpty()) { $templateFiles = $templateTask?->files ?? collect(); }
     // On submit the mockup is copied onto the template task as well, so drop it
@@ -28,16 +28,17 @@
     // Per-station scope: what this operator needs to see. Null = full package
     // (leader / account officer). Otherwise only the relevant pages are shown.
     $scope = in_array(request('for'), ['printer', 'sticker', 'embroidery', 'production'], true) ? request('for') : null;
-    $allFiles = $order->tasks->flatMap->files;
-    // One single Export step now provides the print, sticker AND embroidery
-    // files, so every station reads the same Export file. (Older orders may still
-    // have the separate labels — fall back to those.)
-    $exportFile = $allFiles->firstWhere('label', 'Export file')
-        ?? $allFiles->firstWhere('label', 'Print file (TIFF)');
-    $tiffFile = $exportFile;
-    $stickerFile = $allFiles->firstWhere('label', 'Sticker file') ?? $exportFile;
-    $embroideryFile = $allFiles->firstWhere('label', 'Embroidery file') ?? $exportFile;
-    $pageCount = $scope ? 2 : 4;   // scoped = JO + one page; full = 4 pages
+    // No export step and no per-station file page: the print, sticker and
+    // embroidery files all sit in one folder, and where that folder is lives on
+    // the tech pack. A page per file was a page saying "no file yet" forever.
+    // The full document is the tech pack. A station's copy is its own file
+    // page instead — the production record and the routing details are their
+    // own documents and no longer ride along in here.
+    // The pack, the print-files folder when the artist has recorded one, then
+    // the production details.
+    $pageCount = (filled($order->techPack?->file_location_notes)
+        && (in_array($scope, ['printer', 'sticker', 'embroidery'], true)
+            || ($scope === null && (auth()->user()?->isLeader() || auth()->user()?->isArtist())))) ? 3 : 2;
 
     // Cutting defaults
     $selectedCut = old('cutting_type', $order->cutting_type);
@@ -54,8 +55,16 @@
     $y = fn ($v) => filled($v) ? $v : '';
 @endphp
 
+<link rel="stylesheet" href="{{ asset('css/tech-pack.css') }}?v={{ filemtime(public_path('css/tech-pack.css')) }}">
+
 <style>
     .complete-doc { font-family: var(--font-body); counter-reset: pg; background: #e9edf3; padding: 1.2rem 0; }
+
+    /* The tech pack is a LANDSCAPE sheet; every other page here is portrait.
+       A named page gives it its own paper instead of the two @page rules
+       fighting and the pack losing. */
+    @page tech-pack-page { size: A4 landscape; margin: 6mm; }
+    .page-section.page-section-pack { width: 297mm; min-height: 210mm; }
     /* On screen each section is drawn as its own A4 sheet, so you can SEE the
        4 separate pages instead of one long scroll. */
     .page-section {
@@ -76,6 +85,36 @@
         font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #94a3b8;
     }
     .last-page { page-break-after: auto; }
+
+    /* The print-files folder. Big enough to read across a workbench, and
+       selectable in one click so it can be pasted into Explorer. */
+    .pf-folder { max-width: 170mm; margin: 0 auto; text-align: center; }
+    .pf-label {
+        font-size: 0.78rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.06em; color: #6b7280; margin-bottom: 0.6rem;
+    }
+    .pf-path {
+        display: block; padding: 1rem 1.1rem; margin-bottom: 1.1rem;
+        background: #111318; color: #f8fafc; border-radius: 10px;
+        font-family: ui-monospace, Consolas, monospace; font-size: 1.05rem;
+        line-height: 1.6; word-break: break-all; user-select: all;
+    }
+    .pf-how {
+        max-width: 320px; margin: 1.4rem auto 0; padding-left: 1.2rem;
+        text-align: left; color: #374151; font-size: 0.92rem; line-height: 2;
+    }
+    .pf-how kbd {
+        display: inline-block; padding: 0.08rem 0.42rem;
+        border: 1px solid #9ca3af; border-bottom-width: 2px; border-radius: 5px;
+        background: #f9fafb; font-family: inherit; font-size: 0.82rem; font-weight: 700;
+    }
+
+    @media print {
+        .pf-path {
+            background: #fff !important; color: #111 !important;
+            border: 1px solid #111; border-radius: 0; font-size: 1rem;
+        }
+    }
     
     /* Job Order Sheet Styles */
     .jo-sheet { max-width: 900px; margin: 0 auto; background: #fff; color: #111; border: 2px solid #111; }
@@ -119,7 +158,7 @@
         @page { size: A4 portrait; margin: 10mm; }
 
         /* The app shell is a FLEX layout, and page-break-after is ignored inside
-           a flex formatting context — that's why all 4 pages ran together as one.
+           a flex formatting context — that's why the pages ran together as one.
            Reset the shell to normal block flow so the page breaks apply. */
         html, body { height: auto !important; background: #fff !important; }
         .shell { display: block !important; min-height: 0 !important; }
@@ -137,6 +176,12 @@
             page-break-after: always !important; break-after: page !important;
         }
         .page-section::before { display: none !important; }
+
+        /* The pack keeps its landscape paper and fills it. */
+        .page-section-pack { page: tech-pack-page; }
+        .page-section-pack .tp-reference-sheet {
+            width: 100% !important; max-width: none !important; margin: 0 !important;
+        }
         .page-section:last-child, .last-page { page-break-after: auto !important; break-after: auto !important; }
 
         .jo-sheet { max-width: none !important; margin: 0 !important; }
@@ -155,16 +200,44 @@
     }
 </style>
 
+<script>
+    (function () {
+        var button = document.querySelector('.pf-copy');
+        if (!button) { return; }
+
+        button.addEventListener('click', function () {
+            var said = function (word) {
+                button.textContent = word;
+                setTimeout(function () { button.textContent = 'Copy path'; }, 1600);
+            };
+
+            // The clipboard API needs a secure context; over plain http on the
+            // office network it is simply absent. Then the next best thing is
+            // selecting it for them so Ctrl+C works.
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(button.dataset.path).then(
+                    function () { said('Copied'); },
+                    function () { said('Press Ctrl+C'); }
+                );
+                return;
+            }
+
+            var range = document.createRange();
+            range.selectNodeContents(document.getElementById('pfPath'));
+            var selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            said('Press Ctrl+C');
+        });
+    })();
+</script>
+
 <div class="page-head no-print">
     <div class="grow">
-        <h1>Complete Job Order Document</h1>
-        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — All 4 pages for artist</p>
+        <h1>Complete tech pack document</h1>
+        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — the tech pack, then the production details</p>
     </div>
-    <button onclick="window.print()" class="btn btn-ghost btn-sm">🖨 Print All</button>
-    {{-- The single export file the artist produced, for the printer to open. --}}
-    @if ($exportFile && ! $exportFile->isExternal())
-        <a href="{{ route('tasks.file.download', $exportFile) }}" class="btn btn-primary btn-sm">🖨 Download export file</a>
-    @endif
+    <button type="button" onclick="window.printTechPack ? window.printTechPack() : window.print()" class="btn btn-ghost btn-sm">🖨 Print All</button>
     {{-- Definite destination (url()->previous() pointed back at this same page).
          Leaders open this from Approvals; sales from the job order sheet. --}}
     @php
@@ -180,7 +253,7 @@
             $u->canUseStations() => [route('stations.index'), 'stations'],
             $u->canManageInventory() => [route('inventory.requests'), 'material requests'],
             $u->canManageProducts() => [route('products.index'), 'inventory'],
-            default => [route('orders.job-order', $order), 'job order'],
+            default => [route('orders.job-order', $order), 'tech pack'],
         };
     @endphp
     <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back to {{ $backLabel }}</a>
@@ -194,71 +267,55 @@
 </div>
 
 <div class="complete-doc">
-    @unless ($scope)
-    {{-- PAGE 1: MOCKUP (or LAYOUT until the mockup exists) --}}
-    <div class="page-section">
-        <div style="text-align: center; padding: 1rem;">
-            <h1 style="font-size: 2rem; margin: 0 0 1rem 0;">{{ $designLabel }}</h1>
-        </div>
-        @if ($mockupFiles->isNotEmpty())
-            <div class="mockup-section" style="display: flex; align-items: center; justify-content: center; min-height: 85vh;">
-                @foreach ($mockupFiles as $f)
-                    @include('partials.task-file-view', ['file' => $f, 'maxH' => '80vh'])
-                @endforeach
-            </div>
-        @else
-            <div style="text-align: center; padding: 3rem; color: #999;">
-                <p>No mockup available yet</p>
-            </div>
-        @endif
+    {{-- PAGE 1: THE TECH PACK. Every copy leads with it, a station's included:
+         the pack is what the floor works from, and its file location panel is
+         where the print-ready path now lives. --}}
+    {{-- PAGE 1: THE TECH PACK. The mockup, the flats and the spec used to be
+         three separate pages here; they are one sheet now, and this document
+         shows that sheet rather than rebuilding the same thing beside it. --}}
+    <div class="page-section page-section-pack">
+        @include('partials.tech-pack', ['order' => $order])
     </div>
 
-    {{-- PAGE 2: TEMPLATE --}}
-    <div class="page-section">
-        <div style="text-align: center; padding: 1rem;">
-            <h1 style="font-size: 2rem; margin: 0 0 1rem 0;">TEMPLATE</h1>
-        </div>
-        @if ($templateFiles->isNotEmpty())
-            <div class="mockup-section">
-                @foreach ($templateFiles as $tf)
-                    @include('partials.task-file-view', ['file' => $tf, 'maxH' => '80vh'])
-                @endforeach
+    {{-- PRINT FILES — the folder, on its own page.
+
+         The station opens this to PASTE a network path into Explorer, so it
+         gets a page to itself rather than a line of small print inside the
+         pack. There used to be a page per file here — print, sticker,
+         embroidery — but the artist saves them all into one folder, so one
+         page pointing at the folder is what the floor actually needs. --}}
+    @php
+        $printFolder = $order->techPack?->file_location_notes;
+
+        // Only the people who open those files. A station copy carries it when
+        // the station is a print-side one; the full document carries it for the
+        // artist who recorded it and the leader who signs it off. A sewer, a
+        // cutter, the mover and anybody the document is shown to have no use
+        // for a network path, and a page of one is a page in their way.
+        $needsFolder = in_array($scope, ['printer', 'sticker', 'embroidery'], true)
+            || ($scope === null && (auth()->user()?->isLeader() || auth()->user()?->isArtist()));
+    @endphp
+    @if (filled($printFolder) && $needsFolder)
+        <div class="page-section">
+            <div style="text-align:center; padding:1rem;">
+                <h1 style="font-size:2rem; margin:0 0 0.4rem;">PRINT FILES</h1>
+                <p style="color:#666; margin:0 0 2rem;">{{ $order->order_number }} · {{ $order->clientName() }}</p>
             </div>
-        @else
-            <div style="text-align: center; padding: 3rem; color: #999;">
-                <p>No production template available yet</p>
+            <div class="pf-folder">
+                <div class="pf-label">Open this folder</div>
+                <code class="pf-path" id="pfPath">{{ $printFolder }}</code>
+                <button type="button" class="btn btn-primary no-print pf-copy"
+                        data-path="{{ $printFolder }}">Copy path</button>
+
+                {{-- Said out loud, because the folder is no use to anybody who
+                     does not know how to open it. Run is faster than clicking
+                     through Explorer and does not care which drive is mapped. --}}
+                <ol class="pf-how">
+                    <li>Press <kbd>Windows</kbd> + <kbd>R</kbd></li>
+                    <li>Paste the path (<kbd>Ctrl</kbd> + <kbd>V</kbd>)</li>
+                    <li>Press <kbd>Enter</kbd> — the folder opens</li>
+                </ol>
             </div>
-        @endif
-
-    </div>
-    @endunless
-
-    {{-- JOB ORDER SHEET — shown to every station and in the full package. --}}
-    <div class="page-section">
-        @include('partials.job-order-sheet', ['order' => $order])
-    </div>
-
-    {{-- Printer station: just the print file (TIFF). --}}
-    @if ($scope === 'printer')
-        <div class="page-section">
-            <div style="text-align:center; padding:1rem;"><h1 style="font-size:2rem; margin:0 0 1rem;">PRINT FILE (TIFF)</h1></div>
-            @include('partials.station-file', ['file' => $tiffFile, 'label' => 'print file (TIFF)'])
-        </div>
-    @endif
-
-    {{-- Sticker station: just the sticker file. --}}
-    @if ($scope === 'sticker')
-        <div class="page-section">
-            <div style="text-align:center; padding:1rem;"><h1 style="font-size:2rem; margin:0 0 1rem;">STICKER FILE</h1></div>
-            @include('partials.station-file', ['file' => $stickerFile, 'label' => 'sticker file'])
-        </div>
-    @endif
-
-    {{-- Embroidery station: just the embroidery file. --}}
-    @if ($scope === 'embroidery')
-        <div class="page-section">
-            <div style="text-align:center; padding:1rem;"><h1 style="font-size:2rem; margin:0 0 1rem;">EMBROIDERY FILE</h1></div>
-            @include('partials.station-file', ['file' => $embroideryFile, 'label' => 'embroidery file'])
         </div>
     @endif
 

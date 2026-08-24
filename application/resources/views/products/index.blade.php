@@ -74,6 +74,9 @@
 
     <script>
         function confirmReceive(form) {
+            // Second pass, after the dialog said yes.
+            if (form.dataset.confirmed === '1') { return true; }
+
             var nameInput = form.operator_name;
             var name = (nameInput.value || '').trim();
             var product = form.getAttribute('data-product') || 'this product';
@@ -84,9 +87,23 @@
                 return false;
             }
 
-            return window.confirm(
-                'Mark ' + product + ' as received?\n\nReceived by: ' + name
-            );
+            // The app's own dialog rather than the browser's grey box, which
+            // puts "127.0.0.1:8000 says" above the question and cannot mark
+            // which button is the one that moves stock.
+            window.icConfirm({
+                title: 'Mark it as received?',
+                message: product + '\nReceived by: ' + name
+                    + '\n\nThis counts it into finished goods.',
+                confirmText: 'Yes, received',
+                cancelText: 'Not yet',
+            }).then(function (ok) {
+                if (!ok) { return; }
+                form.dataset.confirmed = '1';
+                form.submit();
+            });
+
+            // Held here until the answer arrives; the branch above sends it on.
+            return false;
         }
     </script>
 @endif
@@ -135,7 +152,8 @@
                                          who stood at the counter. Same question
                                          every other handover in the shop asks. --}}
                                     <form method="POST" action="{{ route('products.release', $t) }}"
-                                          onsubmit="return confirm('Client has received {{ $t->order->order_number }}?\n\nThis closes the order.');"
+                                          data-order="{{ $t->order->order_number }}"
+                                          onsubmit="return confirmHandover(this);"
                                           style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
                                         @csrf
                                         <input type="text" name="operator_name" required maxlength="100"
@@ -382,4 +400,29 @@
 
 </script>
 @endif
+
+{{-- The handover at the end of the line. Same dialog as everything else that
+     moves stock, and marked as the dangerous one — it closes the order. --}}
+<script>
+    function confirmHandover(form) {
+        if (form.dataset.confirmed === '1') { return true; }
+
+        var order = form.getAttribute('data-order') || 'this order';
+
+        window.icConfirm({
+            title: 'Client has received it?',
+            message: order + '\n\nThis hands the goods over and closes the order.',
+            confirmText: 'Yes, handed over',
+            cancelText: 'Not yet',
+            tone: 'danger',
+        }).then(function (ok) {
+            if (!ok) { return; }
+            form.dataset.confirmed = '1';
+            form.submit();
+        });
+
+        return false;
+    }
+</script>
+
 @endsection

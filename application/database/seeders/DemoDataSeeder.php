@@ -759,7 +759,7 @@ class DemoDataSeeder extends Seeder
      * are the real queues in a print shop; the desk steps are quick.
      */
     private const STEP_HOURS = [
-        'Layout' => 20, 'Final mockup' => 16, 'Production template' => 8, 'Export' => 3,
+        'Layout' => 20, 'Final mockup' => 16, 'Tech pack' => 8, 'Export' => 3,
         'Raw materials' => 26, 'Printer' => 10, 'Sticker' => 5,
         'Roller press' => 14, 'Heat press' => 16, 'Small press' => 9, 'Cap press' => 7,
         'Laser cutting' => 6, 'Manual cutting' => 12,
@@ -862,7 +862,7 @@ class DemoDataSeeder extends Seeder
             //     Without a design FILE there is no design package to open, and
             //     the button for it never appears on the order — which makes a
             //     finished-looking job look like nothing was ever drawn.
-            foreach (['Layout', 'Final mockup', 'Production template'] as $department) {
+            foreach (['Layout', 'Final mockup', 'Tech pack'] as $department) {
                 $task = $order->tasks->firstWhere('department', $department);
 
                 if (! $task || $task->status !== 'complete') {

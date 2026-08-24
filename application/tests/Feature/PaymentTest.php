@@ -74,8 +74,9 @@ class PaymentTest extends TestCase
             'proof' => UploadedFile::fake()->image('proof.jpg'),
         ]);
 
-        // First payment sends the officer to fill in the job order.
-        $response->assertRedirect(route('job-orders.edit', $order));
+        // First payment releases the final mockup to the artist.
+        $response->assertRedirect(route('orders.show', $order));
+        $this->assertTrue($order->fresh()->tasks()->where('department', 'Final mockup')->where('status', 'ready')->exists());
 
         $this->assertDatabaseHas('payments', [
             'production_order_id' => $order->id,

@@ -8,33 +8,39 @@
 
 .tp-sheet {
     display: grid;
-    grid-template-columns: 34% 1fr;
-    gap: 0;
+    grid-template-columns: 34% 1fr 34%;
+    align-items: start;
+    column-gap: 1.1rem;
+    row-gap: 1.1rem;
     background: #fff;
     color: #111;
-    border: 2px solid #111;
+    padding: 0.9rem;
     max-width: 1180px;
     margin: 0 auto 1.5rem;
     font-size: 0.78rem;
     line-height: 1.35;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
 .tp-sheet * { box-sizing: border-box; }
 
 /* ---- Section strips ---------------------------------------------------- */
 .tp-strip {
-    background: #fff;
-    border-bottom: 2px solid #111;
+    background: #e9e9e9;
+    border-bottom: 1px solid #111;
     padding: 0.4rem 0.6rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     font-size: 0.74rem;
 }
-.tp-strip-dark { background: #111; color: #fff; border-bottom: 0; }
+.tp-strip-dark {
+    background: #111; color: #fff; border-bottom: 0;
+    text-align: center; letter-spacing: 0.06em; font-size: 0.8rem;
+}
 
 /* ---- Left: mockup + colourways ----------------------------------------- */
-.tp-mockup { border-right: 2px solid #111; display: flex; flex-direction: column; }
+.tp-mockup { border: 1px solid #111; display: flex; flex-direction: column; min-width: 0; }
 
 .tp-colorways {
     display: flex; flex-wrap: wrap; gap: 0.9rem;
@@ -52,9 +58,9 @@
 }
 
 .tp-art {
-    flex: 1; padding: 0.6rem;
+    flex: 1; padding: 0.7rem;
     display: flex; flex-direction: column; gap: 0.7rem; align-items: center;
-    background: #d9d9d9;
+    background: #efefef;
 }
 .tp-art figure { margin: 0; text-align: center; width: 100%; }
 .tp-art img {
@@ -66,47 +72,72 @@
     margin-top: 0.2rem; color: #333;
 }
 
-.tp-empty {
-    margin: auto; text-align: center; color: #555;
-    font-weight: 700; font-size: 0.75rem; padding: 2rem 0.6rem;
+/* The picture panels from the shop's reference sheet. In edit mode the whole
+   dashed area is an upload button and shows the chosen image immediately. */
+.tp-image-stack { display: grid; grid-template-rows: 1fr 1fr; }
+.tp-image-slot {
+    position: relative; min-height: 112px; overflow: hidden;
+    border: 1px dashed #8c929b; background: #f6f7f8;
+    display: grid; place-items: center;
 }
-.tp-empty span { display: block; font-weight: 400; font-size: 0.68rem; margin-top: 0.3rem; }
+.tp-image-slot-tall { min-height: 205px; width: 100%; }
+.tp-image-upload { position: absolute; inset: 0; cursor: pointer; display: grid; place-items: center; }
+.tp-image-upload:hover { background: #eef5ff; outline: 2px solid var(--accent); outline-offset: -2px; }
+.tp-image-preview { width: 100%; height: 100%; object-fit: contain; display: block; background: #fff; }
+.tp-image-preview.is-empty { display: none; }
+.tp-image-placeholder {
+    z-index: 1; pointer-events: none; text-align: center; color: #62666d;
+    text-transform: uppercase; padding: 0.4rem;
+}
+.tp-image-placeholder strong { display: block; font-size: 0.72rem; }
+.tp-image-placeholder small {
+    display: inline-block; margin-top: 0.35rem; padding: 0.22rem 0.5rem;
+    border: 1px solid #888; border-radius: 4px; font-size: 0.58rem; font-weight: 700;
+}
+.tp-image-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-/* ---- Right ------------------------------------------------------------- */
-.tp-body { display: flex; flex-direction: column; }
-
-.tp-head { display: grid; grid-template-columns: 190px 1fr; border-bottom: 2px solid #111; }
+/* ---- Middle: the wordmark, then every picture the artist supplies ------ */
+.tp-center { display: flex; flex-direction: column; min-width: 0; }
 
 .tp-brand {
-    border-right: 2px solid #111;
-    padding: 0.6rem; text-align: center;
-    display: flex; flex-direction: column; justify-content: center; gap: 0.4rem;
+    padding: 0.9rem 0.6rem; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
 }
-.tp-logo {
-    display: block;
-    width: 100%;
-    max-width: 108px;
-    margin: 0 auto;
-    /* The mark is black on white, so it sits on the sheet without a box. */
-    mix-blend-mode: multiply;
+
+/* The printed group headings from the shop's fillable template. */
+.tp-group-title {
+    background: #111; color: #fff;
+    padding: 0.4rem 0.6rem; margin: 0 0.6rem 0.5rem;
+    font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.05em; font-size: 0.74rem; text-align: center;
 }
-.tp-sample { color: #d21f26; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.04em; }
+
+/* Every box takes a dropped file or a click. Two across, so a flat and its
+   artwork sit side by side the way the shop compares them. */
+.tp-drops {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;
+    padding: 0 0.6rem 0.9rem; align-content: start;
+}
+.tp-drop { display: flex; flex-direction: column; min-width: 0; }
+.tp-drop .tp-image-slot { min-height: 150px; }
+.tp-drop-tag .tp-image-slot { min-height: 90px; }
+
+/* ---- Right: the order, then what it is made of -------------------------
+   Two framed blocks with a gap between them, the way the shop's sheet has it —
+   the order details, then what the garment is made of. */
+.tp-body { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+.tp-body > table.tp-headtbl { border: 0; }
+.tp-body > .tp-strip-dark { border: 1px solid #111; border-bottom: 0; }
+.tp-wordmark {
+    margin: 0 auto; color: #050505; font-family: Arial Black, Arial, sans-serif;
+    font-size: 1.42rem; font-weight: 950; line-height: 0.72; letter-spacing: -0.09em;
+    text-align: left; transform: scaleX(1.08); transform-origin: center;
+}
+.tp-wordmark span { display: block; }
 
 /* The production template — the flats the floor works to. Sits under the
    SAMPLE label, the way the shop's own pack has it. */
-.tp-template { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: center; }
-.tp-template img {
-    max-width: 100%; max-height: 130px; display: block;
-    border: 1px solid #ccc; background: #fff;
-}
-.tp-template-empty {
-    font-size: 0.62rem; color: #888; font-weight: 700; text-transform: uppercase;
-    border: 1px dashed #bbb; border-radius: 6px; padding: 0.7rem 0.4rem; width: 100%;
-}
-.tp-template-empty span {
-    display: block; font-weight: 400; text-transform: none;
-    font-size: 0.6rem; margin-top: 0.25rem; color: #999;
-}
+.tp-template { justify-content: center; }
 
 /* ---- Tables ------------------------------------------------------------ */
 table.tp-tbl { width: 100%; border-collapse: collapse; }
@@ -115,33 +146,22 @@ table.tp-tbl th, table.tp-tbl td {
     font-size: 0.72rem;
 }
 table.tp-tbl th {
-    background: #ededed; font-weight: 700; text-transform: uppercase;
+    background: #fff; font-weight: 800; text-transform: uppercase;
     letter-spacing: 0.02em; text-align: left; white-space: nowrap; width: 1%;
 }
 table.tp-tbl td { font-weight: 600; }
-.tp-headtbl { border-left: 0; }
-.tp-red { color: #d21f26; font-weight: 800; }
+.tp-headtbl { border-left: 0; border-top: 0; }
 
 /* ---- Middle: placements + materials ------------------------------------ */
-.tp-mid { display: grid; grid-template-columns: 1fr 300px; border-bottom: 2px solid #111; }
-
-.tp-print { border-right: 2px solid #111; display: flex; flex-direction: column; }
-.tp-print-inner {
-    flex: 1; background: #111; color: #fff;
-    padding: 0.9rem; display: flex; flex-wrap: wrap; gap: 0.9rem;
-    align-content: flex-start;
-}
-.tp-place {
-    border: 1px solid #444; border-radius: 6px;
-    padding: 0.5rem 0.7rem; min-width: 150px;
-}
+/* The artwork row runs the full width of the body now: materials moved up to
+   sit with the order details, which is the order the shop reads them in. */
+/* ---- The artwork boxes and what they print at -------------------------- */
 .tp-place-label {
     font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
-    font-size: 0.7rem; margin-bottom: 0.15rem;
+    font-size: 0.7rem; margin-top: 0.35rem; text-align: center;
 }
-.tp-place-size { font-size: 0.68rem; color: #d4d4d8; }
-.tp-place-size strong { color: #fff; display: block; font-size: 0.8rem; }
-.tp-place-empty { color: #9ca3af; font-size: 0.72rem; margin: auto; }
+.tp-place-size { font-size: 0.66rem; color: #444; text-align: center; }
+.tp-place-size strong { color: #111; display: block; font-size: 0.78rem; }
 
 .tp-banner {
     background: #fff; color: #d21f26;
@@ -149,10 +169,18 @@ table.tp-tbl td { font-weight: 600; }
     padding: 0.45rem; font-size: 0.85rem;
     border-top: 2px solid #111;
 }
+.tp-banner-input {
+    width: 100%; border: 1px solid #ef9a9a; border-radius: 4px;
+    background: #fff; color: #d21f26; padding: 0.28rem 0.4rem;
+    font: inherit; font-weight: 800; text-align: center; text-transform: uppercase;
+}
+.tp-banner-input:focus { outline: 2px solid #d21f26; outline-offset: 1px; }
 
-.tp-materials { display: flex; flex-direction: column; }
+/* ---- Notes, files, foot -------------------------------------------------
+   Across the full width under the three columns: where the files went is the
+   last thing read and belongs to the whole sheet, not to one column. */
+.tp-foot-band { grid-column: 1 / -1; border: 1px solid #111; display: flex; flex-direction: column; }
 
-/* ---- Notes, files, foot ------------------------------------------------ */
 .tp-note {
     padding: 0.45rem 0.6rem; border-bottom: 2px solid #111;
     font-size: 0.72rem; background: #fffbea;
@@ -190,10 +218,7 @@ table.tp-tbl td { font-weight: 600; }
 @media (max-width: 900px) {
     .tp-sheet { grid-template-columns: 1fr; }
     .tp-mockup { border-right: 0; border-bottom: 2px solid #111; }
-    .tp-mid { grid-template-columns: 1fr; }
-    .tp-print { border-right: 0; border-bottom: 2px solid #111; }
-    .tp-head { grid-template-columns: 1fr; }
-    .tp-brand { border-right: 0; border-bottom: 1px solid #111; flex-direction: row; justify-content: center; }
+    .tp-center { border-right: 0; border-bottom: 2px solid #111; }
 }
 
 /* ---- Print -------------------------------------------------------------
@@ -214,7 +239,9 @@ table.tp-tbl td { font-weight: 600; }
     .tp-art img { max-height: 240px; }
 
     /* Backgrounds are the layout here, not decoration. */
-    .tp-print-inner, .tp-strip-dark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tp-strip-dark, .tp-files-path, .tp-foot-artist, .tp-foot-brand {
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
 }
 
 /* ---- Production record --------------------------------------------------
@@ -263,33 +290,12 @@ table.tp-tbl td { font-weight: 600; }
 }
 .tp-in:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: #fff; }
 
-.tp-place-edit { display: flex; flex-direction: column; gap: 0.4rem; width: 100%; }
-.tp-place-row { display: grid; grid-template-columns: 1fr 82px 12px 82px; gap: 0.4rem; align-items: center; }
-.tp-place-row input {
-    border: 1px solid #444; background: #1c1c1c; color: #fff;
-    border-radius: 4px; padding: 0.28rem 0.4rem; font: inherit; font-size: 0.72rem;
-}
-.tp-place-row input::placeholder { color: #6b7280; }
-.tp-place-row input:focus { outline: 2px solid #fff; outline-offset: -1px; }
-.tp-x { color: #9ca3af; text-align: center; font-size: 0.8rem; }
-
-.tp-add {
-    margin-top: 0.6rem; align-self: flex-start;
-    background: transparent; border: 1px dashed #6b7280; color: #d4d4d8;
-    border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.72rem; cursor: pointer;
-}
-.tp-add:hover { border-color: #fff; color: #fff; }
-
-.tp-cw-edit { display: block; width: 100%; margin-top: 0.4rem; }
-.tp-cw-edit span { display: block; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; color: #555; }
-.tp-cw-edit input {
-    width: 100%; border: 1px solid #b9bfc9; background: #fffbe6;
-    border-radius: 4px; padding: 0.25rem 0.4rem; font: inherit; font-size: 0.72rem; font-weight: 600;
-}
-
 .tp-shot-edit { padding: 0.6rem; border-top: 1px solid #ddd; }
 .tp-shot-edit label { display: block; font-size: 0.7rem; font-weight: 700; margin-bottom: 0.25rem; }
 .tp-shot-edit span { display: block; font-size: 0.65rem; color: #666; margin-top: 0.3rem; line-height: 1.4; }
+.tp-shot-edit .tp-folder-upload { min-height: 150px; margin-bottom: 0.45rem; }
+.tp-shot-edit .tp-image-upload { display: grid; margin: 0; }
+.tp-shot-edit .error { color: var(--danger-ink); font-weight: 700; }
 
 /* The save bar for the artist's own pack. */
 .tp-save {
@@ -302,7 +308,9 @@ table.tp-tbl td { font-weight: 600; }
     .tp-in, .tp-place-row input, .tp-cw-edit input {
         border: 0; background: transparent; padding: 0;
     }
-    .tp-add, .tp-shot-edit, .tp-save { display: none !important; }
+    .tp-banner-input { border: 0; padding: 0; }
+    .tp-add, .tp-shot-edit, .tp-save, .tp-image-placeholder small { display: none !important; }
+    .tp-image-upload { cursor: default; }
 }
 
 /* Two boxes in one cell — the thing and its size, e.g. "Round neck / 3 inches". */
@@ -310,3 +318,1038 @@ table.tp-tbl td { font-weight: 600; }
 .tp-pair .tp-in:first-child { flex: 2; }
 .tp-pair .tp-in:last-child { flex: 1; }
 select.tp-in { padding: 0.18rem 0.3rem; }
+
+/* ---- Screen rendering of the sheet --------------------------------------
+   The shop's own reference sheet is the design: hard black rules, a black
+   artwork panel, red for the design name and the placing banner, and two black
+   bars at the foot. On screen we keep that language exactly and add only what
+   paper cannot do — hover, focus, and a little lift off the page background.
+   Nothing here changes the document structure or any production field. */
+@media screen {
+    .tp-sheet {
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 36px rgba(15, 23, 42, .10);
+    }
+
+    /* Section strips read as headings, not as table rows. */
+    .tp-strip { letter-spacing: 0.06em; }
+    .tp-strip-dark, .tp-panel-title { background: #111; color: #fff; }
+
+    /* Colourways: chips in a black-ruled tray, as on the reference. The cells
+       are a fixed width on purpose — a text input left to size itself claims
+       twenty characters and shoves the tray clean out of the column. */
+    .tp-colorways {
+        gap: 0; padding: 0; margin: 0.6rem;
+        width: fit-content; max-width: calc(100% - 1.2rem);
+        margin: 0 0.6rem 0.6rem;
+        border: 1px solid #111; background: #fff;
+    }
+    .tp-cw {
+        flex: 0 0 auto; width: 72px; min-width: 0;
+        padding: 0.4rem 0.35rem 0.3rem; border-right: 1px solid #111;
+    }
+    .tp-cw:last-child { border-right: 0; }
+    .tp-dot { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #111; }
+    .tp-cw-in { width: 100%; min-width: 0; box-sizing: border-box; }
+
+    /* Header and materials tables: black grid, generous cells. */
+    table.tp-tbl th, table.tp-tbl td { padding: 0.42rem 0.55rem; }
+    table.tp-tbl th { background: #fff; color: #111; letter-spacing: 0.02em; }
+    table.tp-tbl td { background: #fff; text-transform: uppercase; }
+
+    /* Empty image slots are the only soft thing on the sheet — they are the
+       part a person still has to act on. */
+    .tp-image-slot { transition: border-color .16s ease, box-shadow .16s ease; }
+    .tp-image-slot:has(.tp-image-upload:hover) {
+        border-color: var(--accent);
+        border-style: solid;
+        box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .tp-image-upload:hover { background: rgba(37, 99, 235, .06); outline: 0; }
+    /* A file dragged over the box. Same look as hover, held while it hovers. */
+    .tp-image-slot.is-dragover {
+        border-style: solid; border-color: var(--accent);
+        box-shadow: inset 0 0 0 2px var(--accent);
+        background: rgba(37, 99, 235, .08);
+    }
+    .tp-image-slot:has(.tp-image-preview:not(.is-empty)) {
+        border-style: solid; border-color: #111; background: #fff;
+    }
+
+    /* The artwork boxes sit on the sheet rather than in a black panel: the
+       middle column is one wall of pictures now, and a black band through the
+       middle of it read as a second document. */
+    .tp-drop .tp-image-slot { background: #fff; }
+    .tp-drop-art .tp-in, .tp-drop-tag .tp-in { text-align: center; }
+
+    /* The placing banner is the loudest line on the sheet. Keep it that way. */
+    .tp-banner {
+        font-size: 1.05rem; letter-spacing: 0.03em; padding: 0.6rem;
+        text-transform: uppercase;
+    }
+
+    /* Woven tags: black mark, red caption, as printed. */
+
+    /* File location: dark path bar, black title box beside it. */
+    .tp-files-path { background: #111; }
+    .tp-files-title { background: #fff; color: #111; }
+    .tp-shot-edit { background: #fafafa; }
+
+    .tp-note { background: #fffbea; }
+
+    /* Two black bars with white between them, not one dark band. */
+    .tp-foot { background: #fff; color: #111; padding: 0.55rem 0.7rem; gap: 1rem; }
+    .tp-foot-artist, .tp-foot-brand {
+        background: #111; color: #fff; border: 0;
+        padding: 0.4rem 1.1rem; letter-spacing: 0.04em;
+    }
+    .tp-foot-artist { flex: 1; justify-content: center; }
+    .tp-foot-brand { flex: 1; text-align: center; }
+    .tp-foot-artist .tp-in {
+        background: #1c1c1c; border-color: #4b4f57; color: #fff;
+    }
+
+    /* Typed fields: obvious while blank, quiet once answered. */
+    .tp-in, .tp-cw-in, .tp-banner-input {
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .tp-in:focus, .tp-cw-in:focus, .tp-banner-input:focus,
+    .tp-place-row input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+        outline: 0;
+    }
+
+    /* Screen furniture around the sheet — this part is app, not paper. */
+    .tp-actions, .tp-save {
+        padding: 0.7rem 0.9rem;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, .07);
+    }
+    .tp-actions { align-items: center; }
+}
+
+@media screen and (max-width: 900px) {
+    .tp-image-slot-tall { min-height: 280px; }
+    .tp-actions { position: static; }
+}
+
+@media screen and (max-width: 560px) {
+    .tp-drops { grid-template-columns: 1fr; }
+    .tp-headtbl th, .tp-headtbl td { display: block; width: 100% !important; }
+    .tp-headtbl th { border-bottom: 0; }
+    .tp-wordmark { font-size: 1.25rem; }
+    .tp-actions .btn { flex: 1 1 auto; text-align: center; }
+}
+
+@media print {
+    .tp-wordmark { font-family: Arial Black, Arial, sans-serif; }
+    .tp-sheet { box-shadow: none; }
+    .tp-foot-artist, .tp-foot-brand { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* ---- Materials, tags and the file panel --------------------------------- */
+.tp-mattbl th { width: 42%; }
+
+/* The two woven tags and where they sit on the garment. Drawn rather than
+   supplied as artwork: the shop has no image files for these in the app, and a
+   missing picture says less than a labelled mark does. */
+.tp-tag-text { font-size: 0.58rem; font-weight: 700; color: #d21f26; text-transform: uppercase; line-height: 1.3; }
+
+.tp-files-head { display: flex; align-items: stretch; }
+.tp-files-path {
+    flex: 1; background: #111; color: #fff;
+    padding: 0.4rem 0.6rem; font-size: 0.68rem;
+    font-family: ui-monospace, Consolas, monospace;
+    display: flex; align-items: center; word-break: break-all;
+}
+.tp-files-title {
+    border-left: 2px solid #111; border-bottom: 2px solid #111;
+    padding: 0.4rem 0.9rem; font-weight: 800; text-transform: uppercase;
+    font-size: 0.74rem; display: flex; align-items: center; white-space: nowrap;
+}
+
+/* ---- Freeform lower-right workspace ------------------------------------
+   This is intentionally open like the supplied reference. The resize handle
+   is native to the browser, so image and text can be made larger or smaller
+   without a separate modal or design tool. */
+.tp-custom-workspace {
+    flex: 1;
+    min-height: 360px;
+    border: 1px solid #111;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+.tp-custom-workspace-head {
+    padding: 0.42rem 0.6rem;
+    border-bottom: 1px solid #111;
+    background: #f1f1f1;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+}
+.tp-custom-canvas {
+    flex: 1;
+    min-height: 320px;
+    padding: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    align-content: flex-start;
+    align-items: flex-start;
+    overflow: hidden;
+    background: #fff;
+}
+.tp-custom-item {
+    position: relative;
+    min-width: 120px;
+    max-width: 100%;
+    min-height: 80px;
+    resize: both;
+    overflow: auto;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, .96);
+}
+.tp-custom-image {
+    display: grid;
+    place-items: center;
+    min-height: 100px;
+}
+.tp-custom-image .tp-image-preview { position: absolute; inset: 0; }
+.tp-custom-upload {
+    position: absolute;
+    left: 50%;
+    bottom: 0.55rem;
+    z-index: 3;
+    transform: translateX(-50%);
+    padding: 0.3rem 0.65rem;
+    border: 1px solid #111;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, .92);
+    color: #111;
+    cursor: pointer;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.tp-custom-upload:hover { background: #111; color: #fff; }
+.tp-custom-text textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    resize: none;
+    border: 0;
+    padding: 0.75rem;
+    background: transparent;
+    color: #111;
+    font: 600 0.78rem/1.45 Arial, Helvetica, sans-serif;
+}
+.tp-custom-text textarea:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tp-custom-text-readonly { padding: 0.75rem; white-space: normal; }
+.tp-resize-hint {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.2rem;
+    z-index: 4;
+    color: #6b7280;
+    font-size: 0.52rem;
+    pointer-events: none;
+}
+.tp-custom-tools {
+    max-width: 1180px;
+    margin: -0.5rem auto 1.2rem;
+    padding: 0.7rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.tp-custom-tools label { margin: 0; cursor: pointer; }
+.tp-custom-tools span { color: var(--ink-3); font-size: 0.75rem; }
+
+@media screen {
+    .tp-custom-workspace { border-color: #c9cdd3; }
+    .tp-custom-workspace-head { border-color: #d8dbe0; }
+    .tp-custom-item:focus-within,
+    .tp-custom-item:hover { border-color: var(--accent); border-style: dashed; }
+}
+
+@media (max-width: 900px) {
+    .tp-custom-workspace { min-height: 300px; }
+    .tp-custom-canvas { min-height: 260px; }
+}
+
+@media print {
+    .tp-custom-canvas { overflow: hidden; }
+    .tp-custom-item { resize: none; border-color: transparent; overflow: hidden; }
+    .tp-custom-upload, .tp-resize-hint, .tp-custom-workspace-head, .tp-custom-tools { display: none !important; }
+}
+
+/* ---- Reference-image layout --------------------------------------------
+   One tall mockup panel on the left. On the right: wordmark + order details,
+   materials, then a large open composition area. The older centre gallery is
+   kept in the data model but removed from this sheet so the printed pack
+   matches the supplied reference rather than looking like a dashboard. */
+.tp-sheet {
+    grid-template-columns: 34% 16% 50%;
+    grid-template-rows: auto minmax(440px, 1fr) auto;
+    gap: 0;
+    align-items: stretch;
+    padding: 0;
+    border: 1px solid #111;
+}
+.tp-mockup {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    border: 0;
+    border-right: 1px solid #111;
+}
+.tp-center {
+    grid-column: 2;
+    grid-row: 1;
+    border-right: 0;
+    border-bottom: 1px solid #111;
+}
+.tp-center .tp-brand {
+    height: 100%; justify-content: flex-start; padding-top: 1.1rem;
+    border-right: 1px solid #111;
+}
+.tp-center .tp-drops,
+.tp-center .tp-banner { display: none !important; }
+.tp-body {
+    grid-column: 3;
+    grid-row: 1;
+    gap: 0.7rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid #111;
+}
+.tp-body > .tp-strip-dark,
+.tp-body > .tp-mattbl { width: 72%; margin-left: auto; }
+.tp-custom-workspace {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    min-height: 440px;
+    border: 0;
+    border-bottom: 1px solid #111;
+}
+.tp-custom-canvas { min-height: 400px; }
+.tp-foot-band {
+    grid-column: 1 / 4;
+    grid-row: 3;
+    border: 0;
+}
+
+@media screen {
+    .tp-sheet { border-radius: 0; box-shadow: 0 12px 36px rgba(15, 23, 42, .10); }
+    .tp-custom-workspace { border-color: #111; }
+}
+
+@media (max-width: 900px) {
+    .tp-sheet { display: block; }
+    .tp-mockup, .tp-center, .tp-body, .tp-custom-workspace {
+        border-right: 0;
+        border-bottom: 1px solid #111;
+    }
+    .tp-center .tp-brand { min-height: 110px; justify-content: center; padding-top: 0.9rem; }
+    .tp-body > .tp-strip-dark,
+    .tp-body > .tp-mattbl { width: 100%; }
+}
+
+@media print {
+    .tp-sheet {
+        grid-template-columns: 34% 16% 50%;
+        grid-template-rows: auto minmax(115mm, 1fr) auto;
+        gap: 0;
+        padding: 0;
+        border: 1px solid #111;
+    }
+    .tp-custom-workspace { min-height: 115mm; }
+    .tp-custom-canvas { min-height: 108mm; }
+}
+
+.tp-foot-artist { display: flex; align-items: center; gap: 0.4rem; }
+
+/* Colour swatch names, typed. */
+.tp-cw-in {
+    width: 100%; border: 1px solid #b9bfc9; background: #fffbe6;
+    border-radius: 3px; padding: 0.1rem 0.2rem;
+    font: inherit; font-size: 0.55rem; font-weight: 700; text-align: center;
+}
+
+/* ==========================================================================
+   PDF reference layout - the attached fillable template is the source of
+   truth for this sheet. These selectors are intentionally isolated from the
+   older screen layout above.
+   ========================================================================== */
+.tp-reference-sheet {
+    display: grid;
+    grid-template-columns: 32% 40% 28%;
+    /* Landscape on screen, the same shape it prints in — the sheet IS a
+       landscape page, and reading it as a tall scroll is reading a different
+       document. The row shares match the printed ones, which is a layout the
+       whole pack has already been proved to fit inside. */
+    /* Each band gets at least its printed share and grows if the content
+       genuinely needs more — a fixed band hides the end of a materials list,
+       and a sheet that hides a value is worse than a sheet that is a little
+       taller than a page. */
+    grid-template-rows: auto auto auto auto auto auto;
+    gap: 0;
+    width: 100%;
+    max-width: 1180px;
+    /* The proportions it prints at, so the screen shows the page rather than a
+       tall scroll of the same parts. Everything inside is sized against the
+       sheet itself (cqw/cqh) instead of in fixed pixels — a fixed 155px picture
+       box does not fit a page that is 660px tall, and the whole pack spilled
+       out of its bands the moment the sheet stopped growing to fit it. */
+    /* A landscape page's proportions, without pinning the height: the sheet is
+       as tall as the job needs and no taller. Sized against its own width, so
+       the whole pack scales together instead of a 155px picture box sitting in
+       a band that is 120px tall. */
+    min-height: 0;
+    container-type: inline-size;
+    /* The leader lines and their pins are placed against THIS box. Without it
+       they were laid out against some ancestor further up, which put the
+       overlay half a page wide and dropped pins over picture boxes — where
+       they sat on top of the upload and swallowed the click. */
+    position: relative;
+    margin: 0 auto 1.5rem;
+    padding: 0;
+    border: 1px solid #111;
+    background: #fff;
+    color: #111;
+    font-family: Arial, Helvetica, sans-serif;
+    /* Small enough to keep the sheet page-shaped, big enough to read across a
+       desk. It scales with the sheet, so a wider screen gets bigger type
+       rather than more white space. */
+    font-size: clamp(7px, 0.8cqw, 9.5px);
+    line-height: 1.25;
+    box-shadow: none;
+}
+.tp-reference-sheet * { box-sizing: border-box; }
+.tp-reference-sheet > section,
+.tp-reference-sheet > header { min-width: 0; }
+.tp-ref-table th, .tp-ref-table td { overflow: hidden; }
+.tp-ref-mockups { grid-column:1; grid-row:1/7; display:flex; flex-direction:column; border-right:1px solid #111; min-width:0; }
+/* The wordmark takes less of the row so the order details get the width. It is
+   a mark, not a headline — the table beside it is what anybody is reading. */
+.tp-ref-header { grid-column:2/4; grid-row:1; display:grid; grid-template-columns:18% 82%; border-bottom:1px solid #111; min-width:0; }
+.tp-ref-flats { grid-column:2; grid-row:2; }
+.tp-ref-materials { grid-column:3; grid-row:2; display:flex; flex-direction:column; }
+/* The table keeps its own frame. The doubled rule down its side was the Sample
+   block's border sitting beside it, not this one. */
+.tp-ref-materials .tp-ref-table { border:1px solid #777; }
+.tp-ref-artwork { grid-column:2; grid-row:3; }
+.tp-ref-tags { grid-column:3; grid-row:3; }
+/* Empty and read-only: nothing to say, so it takes no room. */
+.tp-ref-banner:empty { padding:0; }
+.tp-ref-banner { grid-column:2/4; grid-row:4; padding:0.33cqw 0.4cqw; display:flex; align-items:center; justify-content:center; color:#d71920; font-size:1.55em; font-weight:900; text-transform:uppercase; white-space:nowrap; }
+.tp-ref-file-notes { grid-column:2/4; grid-row:5; display:flex; flex-direction:column; }
+.tp-ref-artist { grid-column:2; grid-row:6; justify-self:start; align-self:end; width:max-content; min-width:0; max-width:80%; margin:0 0 0.39cqw 1cqw; background:#111; color:#fff; padding:0.39cqw 1.2cqw; font-weight:500; text-transform:uppercase; display:flex; gap:7px; align-items:center; }
+.tp-ref-artist strong { font-weight:500; }
+.tp-ref-footer-brand { grid-column:3; grid-row:6; justify-self:end; align-self:end; width:max-content; max-width:calc(100% - 2cqw); margin:0 1cqw 0.39cqw 0; background:#111; color:#fff; padding:0.39cqw 1.2cqw; font-weight:500; text-transform:uppercase; text-align:center; }
+
+.tp-ref-title { padding:0.91cqw 1.2cqw; background:#ececec; border-bottom:1px solid #111; font-size:1.55em; font-weight:900; text-transform:uppercase; }
+.tp-ref-black-title { padding:0.65cqw 1cqw; background:#111; color:#fff; font-size:1.25em; font-weight:800; text-align:center; text-transform:uppercase; }
+.tp-ref-light-title { padding:0.59cqw 1cqw; background:#e9e9e9; border-bottom:1px solid #111; font-size:1.05em; font-weight:800; text-align:center; text-transform:uppercase; }
+.tp-ref-wordmark {
+    padding:0.5cqw 0.5cqw; border-right:1px solid #111;
+    font-family:Arial Black,Arial,sans-serif;
+    /* Sized to the cell rather than a fixed 34px, which clipped both words. */
+    font-size:1.75em;
+    font-weight:950; line-height:.9; letter-spacing:-0.5px;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    text-align:center; overflow:hidden;
+}
+.tp-ref-wordmark span { display:block; }
+
+.tp-ref-colorways { display:flex; align-items:flex-start; gap:1cqw; padding:0.65cqw 1.2cqw 0.39cqw; text-transform:uppercase; }
+.tp-ref-colorways>strong { margin:1.04cqw 0.3cqw 0 0; }
+.tp-ref-color { width:6cqw; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative; text-align:center; }
+.tp-ref-color-chip { display:block; width:4.2cqw; height:4.2cqw; padding:0; border:2px solid #111; border-radius:50%; background:var(--swatch); box-shadow:inset 0 0 0 1px rgba(255,255,255,.45); }
+.tp-ref-color input { width:100%; box-sizing:border-box; min-width:0; border:0; border-bottom:1px solid #aaa; padding:0.1cqw 0; background:#fff; color:#111; font:inherit; font-weight:800; text-align:center; text-transform:uppercase; }
+.tp-ref-color strong { display:block; width:100%; overflow:hidden; color:#111; font-size:10px; text-overflow:ellipsis; }
+
+.tp-ref-mockup-block { flex:1; min-height:0; padding:0.52cqw 1.2cqw 0.65cqw; display:flex; flex-direction:column; }
+.tp-ref-image { position:relative; border:1px solid #222; background:#fafafa; overflow:hidden; }
+.tp-ref-image>label { position:absolute; inset:0; display:block; pointer-events:none; }
+.tp-ref-image.is-uploadable { cursor:pointer; }
+/* Every picture fills its box edge to edge. Fitting one inside left the panel
+   half empty, and cropping one to fill cut the edges off — the shop wants the
+   whole picture, taking up the whole box it was given. */
+.tp-ref-image img { width:100%; height:100%; display:block; object-fit:fill; background:#fff; }
+.tp-ref-image img.is-empty { display:none; }
+/* A height of its own, not a share of whatever is left over. The sheet's rows
+   size to their content now, so there IS nothing left over: flex:1 collapsed
+   the box to nothing and the mockup panel simply was not there. */
+.tp-ref-image-mockup { flex:0 0 auto; height:78cqw; min-height:0; }
+.tp-ref-image-small { width:100%; height:9.5cqw; min-height:0; }
+/* Its own size, not the cell's. Stretched to the track, dragging one box wider
+   widened the column and squeezed the box beside it — one resize, two boxes
+   changed. */
+/* How big a box may be dragged. The ceiling used to be about a fifth of the
+   sheet, which is fine for a thumbnail and useless for a parts template with
+   twenty pieces on it — the artist hit the stop long before the picture was
+   readable. A box may now take most of the sheet in either direction; it is
+   the artist's sheet, and they can see when a box is too big. */
+.tp-ref-image.is-resizable { justify-self:start; align-self:start; resize:both; overflow:hidden; min-width:5cqw; min-height:2.61cqw; max-width:75cqw; max-height:70cqw; }
+.tp-ref-image-small.is-resizable { min-width:6cqw; min-height:3.92cqw; max-height:70cqw; }
+.tp-ref-image-artwork.is-resizable { min-width:8cqw; min-height:3.92cqw; }
+.tp-ref-image-tag.is-resizable { max-width:50cqw; max-height:50cqw; }
+.tp-ref-image-artwork { width:100%; height:10cqw; }
+.tp-ref-image-tag { width:7cqw; height:4.6cqw; flex:0 0 auto; }
+.tp-ref-placeholder {
+    position:absolute; inset:0; display:grid; place-content:center; align-content:center;
+    padding:0.3cqw; overflow:hidden;
+    text-align:center; color:#6d6d6d; text-transform:uppercase; pointer-events:none;
+}
+.tp-ref-placeholder[hidden] { display:none !important; }
+.tp-ref-placeholder strong { font-size:0.95em; line-height:1.1; word-break:break-word; }
+.tp-ref-placeholder small {
+    margin-top:0.26cqw; font-size:0.72em; font-weight:400; text-transform:none;
+    line-height:1.15;
+}
+/* On a small box there is only room to say what it is. */
+.tp-ref-image-tag .tp-ref-placeholder small,
+.tp-ref-image-artwork .tp-ref-placeholder small,
+.tp-ref-image-small .tp-ref-placeholder small { display:none; }
+.tp-ref-image.is-dragover { outline:3px solid #2563eb; outline-offset:-3px; background:#eff6ff; }
+.tp-image-input { position:absolute; width:1px; height:1px; opacity:0; }
+
+/* Empty one box without touching the rest of the pack. Sits above the upload
+   overlay, or the click would open the file picker instead. */
+/* Above the upload overlay and big enough to hit on the small boxes — the tag
+   marks are about a centimetre across. */
+.tp-ref-clear {
+    position:absolute; top:3px; right:3px; z-index:6; pointer-events:auto;
+    width:18px; height:18px; min-width:18px; min-height:18px; padding:0; line-height:1;
+    border:1px solid #111; border-radius:50%;
+    background:#fff; color:#111; font-size:14px; font-weight:700;
+    cursor:pointer; display:grid; place-items:center;
+}
+.tp-ref-clear:hover { background:#d21f26; border-color:#d21f26; color:#fff; }
+
+/* Adding a box. Both buttons sit at the foot of the sheet — the sample panel
+   is where a picture box LANDS, not where the button to make one belongs. */
+/* Bottom right of the materials column: out of the way of the list itself,
+   and where a hand reaching for "one more box" already is. */
+.tp-ref-add-bar {
+    display:flex; gap:0.3cqw; align-items:center; flex-wrap:wrap;
+    justify-content:flex-end;
+    margin-top:auto;
+    padding:0.25cqw 0.4cqw;
+}
+.tp-ref-add-bar button {
+    border:1px dashed #999; background:#fafafa; color:#555; border-radius:4px;
+    padding:0.1cqw 0.35cqw; font:inherit; font-size:0.8em; font-weight:700;
+    line-height:1.3; text-transform:uppercase; letter-spacing:0.02em;
+    white-space:nowrap; cursor:pointer;
+}
+.tp-ref-add-bar button:hover { border-color:#2563eb; color:#2563eb; background:#eff6ff; }
+
+/* A note the sheet has no row for. It starts under the banner and is dragged
+   to whatever it is about. */
+.tp-ref-extra-note {
+    grid-column:2/4; position:relative;
+    /* As wide as what is written in it, and never wider than the sheet. */
+    width:max-content; max-width:calc(100% - 1.6cqw);
+    display:flex; align-items:center; gap:0.3cqw;
+    margin:0 0.8cqw 0.3cqw; padding:0.2cqw 0.3cqw;
+    border:1px solid #777; background:#fffdf0;
+}
+.tp-ref-extra-note .tp-in {
+    width:auto; min-width:0; border:0; background:transparent;
+    resize:none; overflow:hidden; line-height:1.25;
+    /* Breaks where somebody pressed Enter and nowhere else, so the box shows
+       the same number of lines the sheet will print. */
+    white-space:pre;
+}
+/* A note keeps the line breaks somebody typed, and nothing else: pre-line was
+   also printing the newlines in the MARKUP, which put a blank line above every
+   note on the read-only sheet. */
+.tp-ref-extra-note { white-space:pre-line; align-items:center; }
+.tp-reference-sheet:not(.is-editing) .tp-ref-extra-note { padding:0.15cqw 0.35cqw; }
+.tp-ref-extra-note .tp-ref-grip, .tp-ref-extra-note .tp-ref-clear { align-self:flex-start; }
+.tp-ref-extra-note .tp-ref-clear { position:static; margin-left:auto; }
+
+/* Add another picture box. Sits in the grid where the next box will appear. */
+.tp-ref-add-box {
+    border:1.5px dashed #888; background:#fafafa; color:#444;
+    border-radius:6px; padding:10px; min-height:60px; cursor:pointer;
+    font:inherit; font-weight:700; text-transform:uppercase; font-size:10px;
+}
+.tp-ref-add-box:hover { border-color:#2563eb; color:#2563eb; background:#eff6ff; }
+@media print { /* Above the upload overlay and big enough to hit on the small boxes — the tag
+   marks are about a centimetre across. */
+.tp-ref-clear { display:none !important; } }
+
+.tp-ref-placement-row,.tp-ref-size-row { display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:center; padding:6px 0; text-transform:uppercase; }
+.tp-ref-placement-row strong,.tp-ref-size-row strong { white-space:nowrap; font-size:10px; }
+.tp-ref-two-images { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.2cqw; padding:0.65cqw 1.2cqw; }
+.tp-ref-flat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.65cqw 1cqw; padding:0.65cqw 1.2cqw; align-items:start; }
+.tp-ref-art-column { min-width:0; }
+.tp-ref-tag-row { display:grid; grid-template-columns:auto max-content; justify-content:start; gap:0.8cqw; align-items:center; margin:0.65cqw 1cqw; }
+/* As wide as the tag's description, not as wide as the column. */
+.tp-ref-tag-text {
+    min-height:0; width:max-content; max-width:100%; display:flex; align-items:stretch;
+    padding-left:10px; cursor:grab;
+}
+.tp-ref-tag-text .tp-ref-grip { flex:0 0 auto; align-self:stretch; }
+.tp-ref-tag-text .tp-in { min-height:0; width:auto; min-width:0; white-space:pre; border:1px solid #777; padding:0.2cqw 0.35cqw; }
+.tp-ref-tag-text:not(:has(.tp-in)) { align-items:center; width:max-content; border:1px solid #aaa; padding:0.2cqw 0.4cqw; background:#fff; }
+.tp-ref-file-content { flex:1; min-height:0; display:flex; flex-direction:column; gap:0.46cqw; padding:0.65cqw 1cqw; }
+/* A real height of its own. It used to be flex:1 filling a fixed band; once
+   the band grew with its content there was nothing left to fill and the box
+   collapsed to two pixels — the picture was there, with no room to be seen. */
+.tp-ref-file-image { width:100%; flex:0 0 auto; height:10cqw; min-height:0; }
+.tp-ref-file-path,.tp-ref-file-content .tp-ref-note-value { width:100%; min-height:0; border:1px solid #9ca3af; padding:0.26cqw 0.6cqw; background:#fff; font:inherit; }
+
+/* The artist's help under the file path: how to share a folder and copy a
+   path. Screen only — it is not part of the printed sheet. */
+/* The path in two boxes: the machine, then the folder and file on it. The
+   address cannot be emptied, but it can be corrected — the detection is a guess
+   whenever the request arrives over the tunnel. */
+.tp-ref-path-line { display:flex; align-items:stretch; min-width:0; }
+.tp-ref-path-slashes {
+    display:flex; align-items:center; padding:0 3px; background:#f1f1f1;
+    border:1px solid #9ca3af; font-family:ui-monospace,Consolas,monospace; font-weight:700;
+}
+select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-right:1.6cqw; }
+.tp-ref-path-line .tp-ref-path-host {
+    width:auto; max-width:22ch; flex:0 0 auto; min-width:0; border:1px solid #9ca3af;
+    border-left:0; border-right:0; padding:7px 4px; background:#fff;
+    font-family:ui-monospace,Consolas,monospace; font-weight:700; text-align:center;
+}
+.tp-ref-path-line .tp-ref-file-path { flex:1; min-width:0; }
+/* The same folder by address, for a PC that cannot resolve the name. */
+.tp-ref-path-alt { margin-top:0.4cqw; font-size:0.85em; color:#555; }
+.tp-ref-path-alt code { font-family:ui-monospace,Consolas,monospace; word-break:break-all; }
+@media print {
+    .tp-ref-path-slashes { border:0; background:transparent; padding:0; }
+    .tp-ref-path-line .tp-ref-path-host { border:0; padding:0; width:auto; }
+}
+
+.tp-ref-path-help { font-size:10px; color:#444; line-height:1.5; padding:0 2px; }
+.tp-ref-path-help .path-help summary { cursor:pointer; font-weight:700; color:#2563eb; margin-top:3px; }
+.tp-ref-path-help .path-help-videos { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+.tp-ref-path-help figure { margin:0; }
+.tp-ref-path-help figcaption { font-weight:700; margin-bottom:3px; }
+.tp-ref-path-help video { width:100%; border:1px solid #bbb; background:#000; }
+@media (max-width:700px) { .tp-ref-path-help .path-help-videos { grid-template-columns:1fr; } }
+
+.tp-ref-table { width:100%; border-collapse:collapse; }
+.tp-ref-table th,.tp-ref-table td { border:1px solid #777; padding:0.16cqw 0.5cqw; height:auto; line-height:1.15; vertical-align:middle; }
+.tp-ref-table { table-layout:fixed; }
+.tp-ref-table th { width:42%; background:#eee; font-weight:800; text-align:left; text-transform:uppercase; white-space:normal; word-break:break-word; }
+.tp-ref-table td { word-break:break-word; }
+.tp-ref-label-select {
+    width:100%; min-width:0; box-sizing:border-box;
+    border:1px solid #777; background:#fff;
+    padding:0.13cqw 1.4cqw 0.13cqw 0.3cqw;
+    font:inherit; font-weight:800; text-transform:uppercase; text-overflow:ellipsis;
+}
+.tp-ref-table td { background:#fff; font-weight:500; }
+/* Four columns, label/value twice. Fixed shares, or the labels — which cannot
+   wrap — take the width they like and squeeze the answers into a column two
+   characters wide, with the last one pushed off the edge of the sheet. */
+.tp-ref-head-table { table-layout:fixed; }
+.tp-ref-head-table th { width:15%; white-space:normal; }
+.tp-ref-head-table td { width:35%; }
+.tp-ref-head-table th,.tp-ref-head-table td { height:25px; padding:3px 6px; word-break:break-word; }
+.tp-ref-head-table tr:first-child th,.tp-ref-head-table tr:first-child td { border-top:0; }
+.tp-ref-head-table tr:last-child th,.tp-ref-head-table tr:last-child td { border-bottom:0; }
+.tp-ref-head-table tr th:first-child { border-left:0; }
+.tp-ref-head-table tr td:last-child { border-right:0; }
+
+/* The size run: sizes along the top, the count for each directly under it —
+   read like the size chart it came from rather than a sentence of pairs.
+   Sized to match the header rows above it (same label column, same cell
+   height), so Size list lines up with Fabric and the block reads as one table
+   rather than something pasted in. */
+.tp-ref-sizecell { padding:0 !important; }
+
+/* The size run: sizes along the top, the count for each directly under it. One
+   grid holding both rows, so the two line up by construction rather than by two
+   tables agreeing about widths. Each column hugs its own size, and the spacer
+   after the label soaks up the slack so the run packs against the right. */
+.tp-ref-sizegrid {
+    display:grid;
+    grid-template-columns:max-content 1fr repeat(calc(var(--sizes) + 1), max-content);
+    align-items:stretch;
+}
+.tp-ref-sizelbl, .tp-ref-sizegap, .tp-ref-sizecol {
+    border:1px solid #777; border-left:0; border-top:0;
+    padding:3px 6px; line-height:1.15;
+    white-space:nowrap; text-transform:uppercase; text-align:center;
+    display:flex; align-items:center; justify-content:center;
+}
+.tp-ref-sizelbl {
+    border-left:0; background:#eee; font-weight:800;
+    justify-content:flex-start; text-align:left;
+}
+.tp-ref-sizegap { border-right:0; }
+.tp-ref-sizecol { min-width:2.2em; font-weight:600; background:#fff; }
+.tp-ref-size-tot { background:#111; color:#fff; font-weight:800; }
+.tp-ref-sticker th,.tp-ref-sticker td { height:auto; }
+
+.tp-reference-sheet .tp-in,.tp-ref-banner input {
+    box-sizing:border-box; width:100%; max-width:100%; min-width:0;
+    border:1px solid #9ca3af; border-radius:0; padding:0.16cqw 0.45cqw;
+    background:#fff; color:#111; font:inherit; font-weight:600; line-height:1.2;
+}
+/* A box nobody has answered yet, so what is still missing is obvious at a
+   glance rather than found by reading every row. */
+.tp-reference-sheet .tp-in:placeholder-shown { background:#fffdf0; }
+.tp-reference-sheet .tp-in:focus,.tp-ref-banner input:focus {
+    outline:2px solid #2563eb; outline-offset:-2px; background:#fff;
+}
+.tp-ref-banner input { color:#d71920; font-size:15px; font-weight:900; text-transform:uppercase; }
+.tp-ref-file-notes textarea,.tp-ref-additional-notes textarea { flex:1; width:calc(100% - 20px); min-height:120px; margin:10px; padding:8px; border:1px solid #777; resize:none; font:inherit; }
+.tp-ref-note-value { flex:1; margin:10px; padding:8px; border:1px solid #777; white-space:pre-wrap; }
+.tp-ref-artist .tp-in { max-width:180px; background:#fff; color:#111; }
+
+@media screen and (max-width:900px) {
+    .tp-reference-sheet { display:block; min-height:0; }
+    .tp-ref-mockups,.tp-ref-header,.tp-ref-flats,.tp-ref-materials,.tp-ref-artwork,.tp-ref-tags,.tp-ref-banner,.tp-ref-file-notes,.tp-ref-additional-notes,.tp-ref-artist,.tp-ref-footer-brand { border:0; border-bottom:1px solid #111; }
+    .tp-ref-header { grid-template-columns:1fr; }
+    .tp-ref-wordmark { border-right:0; border-bottom:1px solid #111; }
+    .tp-ref-banner { white-space:normal; }
+}
+
+@media print {
+    /* The sheet is drawn landscape, so it prints landscape. It used to be
+       squeezed onto a portrait page and then scaled up with a transform —
+       which does not reflow, so every cell clipped and the blocks landed on
+       top of each other. */
+    /* A NAMED page, not the document's page: this sheet also prints inside the
+       leader's full document, where every other page is portrait. Naming it
+       means the pack gets landscape paper without dragging the rest with it. */
+    /* Landscape paper. Named as well as default: on its own the pack IS the
+       document, and inside the leader's package it is one landscape page among
+       portrait ones — that document sets its own default @page after this. */
+    @page { size:A4 landscape; margin:6mm; }
+    @page tech-pack-page { size:A4 landscape; margin:6mm; }
+    .tp-reference-sheet { page:tech-pack-page; }
+
+    /* Printing this page means printing the Tech Pack only. The production
+       record below it is a separate document and previously created page 2. */
+    .tp-record { display:none !important; }
+
+    /* Sized the same way it is on screen — against its own width — rather than
+       a fixed height and fixed millimetre bands. The two fought each other, and
+       the sheet came out half a portrait page wide. */
+    .tp-reference-sheet {
+        width:100%; max-width:none; height:auto; min-height:0; margin:0;
+        grid-template-rows:auto auto auto auto auto auto;
+        transform:none;
+        page-break-inside:avoid; break-inside:avoid-page;
+        box-shadow:none;
+    }
+    .tp-reference-sheet,.tp-reference-sheet * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    .tp-reference-sheet { border:0.35mm solid #000 !important; }
+    .tp-ref-mockups { border-right:0.3mm solid #000 !important; }
+    .tp-ref-header { border-bottom:0.3mm solid #000 !important; }
+    .tp-ref-wordmark { border-right:0.3mm solid #000 !important; }
+    .tp-ref-flats { border:0 !important; }
+    .tp-ref-artwork { border:0 !important; }
+    .tp-ref-materials { border-bottom:0 !important; }
+    .tp-ref-banner { border-bottom:0.3mm solid #000 !important; }
+    .tp-ref-file-notes { border-top:0 !important; }
+    .tp-ref-table th,.tp-ref-table td { border:0.22mm solid #000 !important; }
+    .tp-ref-sizelbl,.tp-ref-sizegap,.tp-ref-sizecol {
+        white-space:nowrap !important; word-break:normal !important;
+        border:0.22mm solid #000 !important; border-left:0 !important; border-top:0 !important;
+    }
+    .tp-ref-sizegap { border-right:0 !important; }
+    .tp-ref-image { border:0.25mm solid #000 !important; }
+    .tp-ref-color-chip { border:0.3mm solid #000 !important; }
+    .tp-ref-artist,.tp-ref-footer-brand { outline:0.25mm solid #000; outline-offset:-0.25mm; }
+    .tp-ref-title { font-size:12px; padding:2mm 3mm; }
+    .tp-ref-colorways { gap:3mm; padding:2mm 3mm 1mm; }
+    .tp-ref-color { width:14mm; }
+    .tp-ref-color-chip { width:9mm; height:9mm; }
+    .tp-ref-colorways>strong { margin-top:3mm; font-size:8px; }
+    .tp-ref-mockup-block {
+        display:block !important;
+        min-height:0 !important;
+        padding:1.5mm 3mm 2mm;
+    }
+    .tp-ref-wordmark { font-size:15px; padding:1.5mm 1mm; letter-spacing:-0.5px; line-height:.85; overflow:hidden; }
+    .tp-ref-black-title { font-size:11px; padding:5px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .tp-ref-banner { font-size:12px; }
+    /* Do not use cqw for the main mockup on paper. Chromium recalculates
+       container-query units while paginating and could resolve the old 78cqw
+       box outside the printable fragment, so its border printed but its image
+       did not. This height fits below the title and colourways on A4 landscape. */
+    .tp-ref-image-mockup {
+        display:block !important;
+        width:100% !important;
+        height:154mm !important;
+        min-height:154mm !important;
+        max-height:154mm !important;
+        overflow:hidden !important;
+    }
+    .tp-ref-image-mockup>label {
+        display:block !important;
+        width:100% !important;
+        height:100% !important;
+    }
+    /* The picture boxes keep the share of the sheet they have on screen; a
+       fixed millimetre height here would be a different sheet on paper. */
+    .tp-ref-image.is-resizable { resize:none; min-width:0; min-height:0; max-width:100%; max-height:none; }
+    .tp-ref-flat-grid,.tp-ref-two-images { gap:2mm; padding:2mm; }
+    .tp-ref-tag-row { margin:1.2mm 2mm; padding-bottom:0.8mm; gap:2mm; }
+    .tp-ref-tag-text,.tp-ref-tag-text .tp-in { min-height:0; }
+    .tp-ref-note-value { margin:1.5mm; padding:1mm; }
+    .tp-ref-file-content { gap:1.5mm; padding:2mm; }
+    .tp-ref-file-image { flex:1; height:auto; min-height:0; }
+    .tp-ref-file-path,.tp-ref-file-content .tp-ref-note-value { min-height:6mm; height:6mm; padding:1mm 2mm; }
+    .tp-ref-table { table-layout:fixed; }
+    .tp-ref-table th,.tp-ref-table td { height:auto; padding:0.8mm 1.2mm; overflow:hidden; }
+    /* Long answers wrap instead of running off the edge of their box. */
+    .tp-ref-table th,.tp-ref-table td,.tp-ref-head-table th,.tp-ref-head-table td {
+        white-space:normal; word-break:break-word;
+    }
+    /* Scoped past the generic .tp-ref-table rule below, which otherwise hands
+       these labels 40% of the row and squeezes the answers. */
+    .tp-ref-table.tp-ref-head-table th { width:15%; font-size:7px; }
+    .tp-ref-table.tp-ref-head-table td { width:35%; font-size:7.5px; }
+    .tp-ref-head-table th,.tp-ref-head-table td { height:auto; padding:0.5mm 1mm; }
+    /* Twelve rows of materials in one band — the type has to suit the band. */
+    .tp-ref-table th { width:40%; font-size:7px; }
+    .tp-ref-table td { font-size:7.5px; }
+    .tp-ref-sticker th,.tp-ref-sticker td { height:auto; }
+    .tp-ref-label-select { border:0; padding:0; font-size:7px; -webkit-appearance:none; appearance:none; }
+    .tp-reference-sheet section,.tp-ref-header { overflow:hidden; }
+    .tp-ref-image { break-inside:avoid; overflow:hidden !important; background:#fff !important; }
+    .tp-ref-image>label { position:absolute !important; inset:0 !important; display:block !important; }
+    .tp-ref-image img:not(.is-empty) { display:block !important; visibility:visible !important; opacity:1 !important; width:100% !important; height:100% !important; object-fit:fill !important; }
+    .tp-ref-color-chip { display:block !important; background-color:var(--swatch) !important; box-shadow:inset 0 0 0 1px rgba(255,255,255,.45) !important; }
+    .tp-ref-color input,.tp-ref-color strong { color:#111 !important; opacity:1 !important; }
+    .tp-ref-placeholder small { display:none; }
+    .tp-ref-artist,.tp-ref-footer-brand { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .tp-reference-sheet .tp-in,.tp-ref-banner input,
+    .tp-ref-file-path,.tp-ref-color input {
+        border:0; padding:0; background:transparent !important; color:#111 !important;
+    }
+    .tp-ref-banner input { color:#d71920 !important; }
+    /* An empty box prints as blank paper, not as its own hint text. The
+       banner is the exception: its standard wording IS the placeholder. */
+    .tp-reference-sheet input::placeholder { color:transparent !important; }
+    .tp-reference-sheet textarea::placeholder { color:transparent !important; }
+    .tp-ref-banner { padding:2mm 3mm; white-space:normal; }
+    .tp-ref-artist,.tp-ref-footer-brand { padding:1.5mm 4mm; font-size:8px; }
+}
+
+
+/* ---- Click a picture to see it big --------------------------------------
+   A garment flat is a couple of centimetres across on the sheet, and the print
+   size written on it is unreadable at a station. This is the whole of the
+   answer: the picture, big, on black, and any click closes it again. */
+.tp-zoom {
+    position: fixed; inset: 0; z-index: 9999;
+    display: grid; place-items: center;
+    padding: 3vmin;
+    background: rgba(8, 10, 14, .92);
+    cursor: zoom-out;
+}
+.tp-zoom[hidden] { display: none; }
+.tp-zoom img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain; background: #fff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+}
+.tp-zoom-close {
+    position: absolute; top: 2vmin; right: 2vmin;
+    width: 40px; height: 40px; padding: 0;
+    display: grid; place-items: center;
+    border: 0; border-radius: 50%;
+    background: #fff; color: #111;
+    font-size: 24px; line-height: 1; cursor: pointer;
+}
+.tp-zoom-close:hover { background: #d21f26; color: #fff; }
+
+/* Only where a click means "show me", not "pick a file". */
+.tp-reference-sheet:not(.is-editing) .tp-ref-image img:not(.is-empty) { cursor: zoom-in; }
+
+
+/* Boxes this pack does without, with a click to have one back. Screen only —
+   on paper the sheet is what it is. */
+.tp-ref-restore {
+    display: flex; align-items: center; gap: 0.4cqw; flex-wrap: wrap;
+    justify-content: flex-end;
+    padding: 0 0.6cqw 0.5cqw;
+    font-size: 0.85em; color: #555;
+}
+.tp-ref-restore span { font-size: 0.78em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.tp-ref-restore button {
+    border: 1px dashed #999; border-radius: 4px; background: #fafafa; color: #444;
+    padding: 0.08cqw 0.3cqw; font: inherit; font-size: 0.8em; font-weight: 700;
+    line-height: 1.3; white-space: nowrap; cursor: pointer;
+}
+.tp-ref-restore button:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+
+
+/* ---- Moving a box ------------------------------------------------------
+   Only where the sheet is being filled in. On everybody else's copy the pack
+   is a document, and a document does not slide about under the cursor. */
+/* The handle on a text block. A picture box is picked up anywhere, but a text
+   block is nearly all input — so it gets somewhere to hold it by. */
+.tp-ref-grip {
+    display: inline-flex; align-items: center; align-self: stretch; justify-content: center;
+    min-width: 14px; padding: 0 4px; margin-right: 3px;
+    background: rgba(0,0,0,.04);
+    color: #9ca3af; font-size: 11px; line-height: 1; letter-spacing: -2px;
+    cursor: grab; user-select: none; touch-action: none;
+}
+.tp-ref-grip:hover { background: rgba(37,99,235,.12); }
+.tp-ref-grip:hover { color: var(--accent, #2563eb); }
+.tp-ref-tag-text, .tp-ref-banner { position: relative; }
+
+.tp-reference-sheet .is-movable { cursor: grab; touch-action: none; }
+/* A text block is only draggable by its grip, so the block itself keeps the
+   ordinary text cursor. */
+.tp-ref-tag-text.is-movable, .tp-ref-banner.is-movable { cursor: auto; }
+/* The corner is the resize handle, so it says so rather than offering the
+   grab hand it cannot honour. */
+.tp-reference-sheet .is-movable.is-resizable { cursor: grab; }
+.tp-reference-sheet .is-resizable::after {
+    content: ''; position: absolute; right: 0; bottom: 0;
+    width: 18px; height: 18px; cursor: nwse-resize; pointer-events: none;
+}
+.tp-reference-sheet .is-movable.is-moving {
+    cursor: grabbing; z-index: 5; position: relative;
+    outline: 2px solid var(--accent, #2563eb); outline-offset: 2px;
+    opacity: .92;
+}
+@media print { .tp-reference-sheet .is-movable { cursor: default; } }
+
+
+/* The workbench under the sheet: what builds the pack, kept off the pack. Its
+   type is the app's, not the sheet's — outside the container there are no cqw
+   units to scale with, and it is app furniture either way. */
+.tp-build {
+    max-width: 1180px; margin: -0.6rem auto 1.5rem;
+    display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-end;
+    font-family: Inter, Arial, sans-serif; font-size: 0.78rem;
+}
+.tp-build .tp-ref-add-bar,
+.tp-build .tp-ref-restore { padding: 0; gap: 0.4rem; }
+.tp-build button {
+    border: 1px dashed #999; border-radius: 4px; background: #fff; color: #444;
+    padding: 0.22rem 0.6rem; font: inherit; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.02em;
+    white-space: nowrap; cursor: pointer;
+}
+.tp-build button:hover { border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); background: #eff6ff; }
+.tp-build .tp-ref-restore span { font-size: 0.72rem; color: var(--ink-3, #6b7280); }
+
+
+/* ---- Leader lines -------------------------------------------------------
+   A line from a detail box to the place on the garment it describes, the way
+   every printed pack in the trade does it. Red, because it is an annotation on
+   the sheet rather than part of it. */
+.tp-ref-lines {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 4; overflow: visible;
+}
+.tp-ref-line { stroke: #d21f26; stroke-width: 1.2; }
+
+/* Saved endpoints are both measured in cqw, so this positioned line remains
+   attached to the endpoint dots on screen and on paper. SVG is kept only for
+   the Artist's live drag preview and legacy one-ended lines. */
+/* Drawn by script from where the box actually is, so it is right on every copy
+   and on paper. The rotated span this replaced was placed from coordinates
+   saved on the artist's sheet, which is a different layout from everybody
+   else's — the line pointed at where the box had been. */
+.tp-ref-static-line { display:none !important; }
+
+.tp-ref-pin {
+    position: absolute; z-index: 5;
+    width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px;
+    border: 1.5px solid #d21f26; border-radius: 50%;
+    background: #fff;
+}
+/* On a sheet nobody is editing a pin is a mark, not a control: it must not
+   take the click meant for the picture underneath it. */
+.tp-ref-pin { pointer-events: none; }
+.tp-ref-pin.is-pin-movable { pointer-events: auto; cursor: grab; touch-action: none; }
+.tp-ref-pin.is-moving { cursor: grabbing; background: #d21f26; }
+
+/* Starts one. Sits beside the × on a picture box. */
+.tp-ref-line-btn {
+    position: absolute; top: 3px; right: 24px; z-index: 6; pointer-events: auto;
+    width: 18px; height: 18px; padding: 0; line-height: 1;
+    border: 1px solid #111; border-radius: 50%;
+    background: #fff; color: #111; font-size: 12px; font-weight: 700;
+    cursor: pointer; display: grid; place-items: center;
+}
+.tp-ref-line-btn:hover { background: #d21f26; border-color: #d21f26; color: #fff; }
+@media print { .tp-ref-line-btn { display: none !important; } }
+
+
+/* ---- The sheet as a document -------------------------------------------
+   Once nobody is filling it in, a picture box is not a box: it is a picture.
+   The dashed frame, the grey ground and the "no image yet" label are scaffolding
+   for the artist — on the copy the floor reads, and the copy that prints, they
+   are marks on the page that mean nothing to somebody holding a garment. An
+   empty box is worse: a hole where something looks like it should have been. */
+.tp-reference-sheet:not(.is-editing) .tp-ref-image {
+    /* The frame stays: a picture with a rule round it is a plate on a spec
+       sheet, which is what this is. What goes is the grey ground and the empty
+       boxes — scaffolding for the artist, marks on the page for everyone
+       else. */
+    background: transparent;
+}
+.tp-reference-sheet:not(.is-editing) .tp-ref-image:not(:has(img:not(.is-empty))) {
+    /* Hidden, but it keeps its place. Taking an empty box OUT of the layout
+       made the display sheet a different shape from the artist's — so every
+       position saved on their sheet (a text block dragged beside a picture, the
+       end of a leader line) landed somewhere else here. The text sat on top of
+       the images and the lines pointed at nothing. */
+    visibility: hidden;
+}
+
+
+
+/* A box with a picture in it is finished, so it gets a full square. An empty
+   one keeps the broken line, which is what a dashed box has always meant:
+   something goes here and has not arrived. */
+.tp-ref-image { border: 1px solid #222; }
+.tp-reference-sheet.is-editing .tp-ref-image:not(:has(img:not(.is-empty))) {
+    border-style: dashed;
+}
+
+/* Where the line meets the picture: a ring on the box, the same mark the
+   printed packs in the trade use, so the eye follows it to the garment. */
+.tp-ref-pin-from {
+    width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px;
+    background: #fff; border-width: 2px;
+}
+
+
+/* ---- One case, everywhere on the sheet ---------------------------------
+   The app writes everything typed on the floor in capitals (see app.css) —
+   but that is a display transform on the INPUT, and the value is stored as it
+   was typed. So the artist typed "logo with black design", saw LOGO WITH BLACK
+   DESIGN in the box, and the sheet the floor reads printed it back in lower
+   case. Same value, two appearances, and the artist has no way to tell which
+   one comes out of the printer.
+
+   The printed side is transformed to match the box it was typed in. Nothing is
+   stored differently; both ends of the pack simply agree now. */
+.tp-reference-sheet .tp-ref-table td,
+.tp-reference-sheet .tp-ref-tag-text,
+.tp-reference-sheet .tp-ref-extra-note,
+.tp-reference-sheet .tp-ref-note-value,
+.tp-reference-sheet .tp-ref-file-path {
+    text-transform: uppercase;
+}

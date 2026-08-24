@@ -145,7 +145,9 @@
         <div class="mockup-actions">
             @if (auth()->user()->canCreateOrders())
                 <a href="{{ route('orders.show', $order) }}" class="btn btn-primary btn-sm">← Back to order</a>
-                <a href="{{ route('orders.job-order', $order) }}" class="btn btn-ghost btn-sm">📋 Job order</a>
+                @if($order->mockupApproved())
+                    <a href="{{ route('orders.job-order', $order) }}" class="btn btn-ghost btn-sm">📋 Tech pack</a>
+                @endif
             @else
                 <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← Back</a>
             @endif

@@ -9,6 +9,7 @@
     $isLeader = auth()->user()->isLeader();
     $layoutReleased = $order->layoutReleased();
     $layoutApproved = $order->layoutApproved();
+    $mockupApproved = $order->mockupApproved();
 @endphp
 
 <style>
@@ -51,10 +52,10 @@
         @endif
     </div>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        @if ($order->jobOrder)
-            <a href="{{ route('orders.job-order', $order) }}" class="btn btn-ghost btn-sm">📋 Job order</a>
+        @if ($order->jobOrder && $mockupApproved)
+            <a href="{{ route('orders.job-order', $order) }}" class="btn btn-ghost btn-sm">📋 Tech pack</a>
             @if (auth()->user()->canCreateOrders() && $order->jobOrder->status === 'draft' && $order->hasDownpayment())
-                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm">✎ Fill job order</a>
+                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm">✎ Fill tech pack</a>
             @endif
         @endif
         {{-- Client documents. Only once the layout is approved — that's when the
@@ -98,10 +99,10 @@
     {{-- The leader wants the account officer to fix the job order. --}}
     @if (auth()->user()->canCreateOrders() && filled($order->jobOrder?->leader_note))
         <div class="alert-error" style="width:100%; margin-top:0.8rem;">
-            <strong>↩ The leader wants the job order fixed:</strong>
+            <strong>↩ The leader wants the Tech Pack fixed:</strong>
             <div style="white-space:pre-line; margin:0.3rem 0;">{{ $order->jobOrder->leader_note }}</div>
-            <div style="font-size:0.85rem;">Correct the job order — it goes straight back to the leader once you save.
-                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm" style="margin-left:0.4rem;">✎ Fix the job order</a>
+            <div style="font-size:0.85rem;">Correct the Tech Pack — it goes straight back to the leader once you save.
+                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm" style="margin-left:0.4rem;">✎ Fix the Tech Pack</a>
             </div>
         </div>
     @endif
@@ -127,15 +128,17 @@
     } elseif ($order->status === 'on_hold') {
         $nextStep = ['tone' => 'warn', 'label' => 'On hold', 'title' => 'Order is on hold', 'desc' => 'Resume the order from the actions above to continue production.'];
     } elseif ($canRecordPayment && filled($order->jobOrder?->leader_note)) {
-        $nextStep = ['tone' => 'alert', 'label' => 'Action needed', 'title' => 'Fix the job order', 'desc' => 'The leader sent the job order back with changes. Correct it and it returns to the leader automatically.', 'cta' => ['label' => 'Fix job order', 'href' => route('job-orders.edit', $order)]];
+        $nextStep = ['tone' => 'alert', 'label' => 'Action needed', 'title' => 'Fix the Tech Pack', 'desc' => 'The leader sent the Tech Pack back with changes. Correct it and it returns to the leader automatically.', 'cta' => ['label' => 'Fix Tech Pack', 'href' => route('job-orders.edit', $order)]];
     } elseif ($canRecordPayment && ! $layoutApproved && ! $layoutReleased) {
         $nextStep = ['tone' => 'action', 'label' => 'Step 1 — Design', 'title' => 'Send this order to an artist for the layout', 'desc' => 'Add the ChatGPT design and/or notes below, then send it. No downpayment is needed yet.', 'cta' => ['label' => 'Go to layout section', 'href' => '#layout-action']];
     } elseif (! $layoutApproved && $layoutReleased) {
-        $nextStep = ['tone' => 'wait', 'label' => 'In progress', 'title' => 'With the artist', 'desc' => 'Waiting on the layout and the client’s approval before the downpayment and job order.'];
+        $nextStep = ['tone' => 'wait', 'label' => 'In progress', 'title' => 'With the artist', 'desc' => 'Waiting on the layout and the client’s approval before the downpayment.'];
     } elseif ($canRecordPayment && $layoutApproved && ! $order->hasDownpayment()) {
-        $nextStep = ['tone' => 'action', 'label' => 'Step 2 — Payment', 'title' => 'Collect the downpayment', 'desc' => 'The layout is approved — record the downpayment to move the order into the job order.', 'cta' => ['label' => 'Go to payment', 'href' => '#payment-section']];
-    } elseif ($canRecordPayment && $order->hasDownpayment() && $jobStatus === 'draft') {
-        $nextStep = ['tone' => 'action', 'label' => 'Step 3 — Job order', 'title' => 'Fill in the job order', 'desc' => 'Downpayment recorded — complete the job order to release it into production.', 'cta' => ['label' => 'Fill job order', 'href' => route('job-orders.edit', $order)]];
+        $nextStep = ['tone' => 'action', 'label' => 'Step 2 — Payment', 'title' => 'Collect the downpayment', 'desc' => 'The layout is approved — record the downpayment so the artist can prepare the final mockup.', 'cta' => ['label' => 'Go to payment', 'href' => '#payment-section']];
+    } elseif ($order->hasDownpayment() && ! $mockupApproved) {
+        $nextStep = ['tone' => 'wait', 'label' => 'Step 3 — Mockup', 'title' => 'Waiting for mockup approval', 'desc' => 'The Tech Pack will appear after the final mockup is approved.'];
+    } elseif ($canRecordPayment && $mockupApproved && $jobStatus === 'draft') {
+        $nextStep = ['tone' => 'action', 'label' => 'Step 3 — Tech pack', 'title' => 'Fill in the tech pack', 'desc' => "Downpayment recorded — put the client's spec on the tech pack to release it into production.", 'cta' => ['label' => 'Fill tech pack', 'href' => route('job-orders.edit', $order)]];
     } elseif ($currentTask) {
         $nextStep = ['tone' => 'info', 'label' => 'In production', 'title' => 'Now at: '.$currentTask->department, 'desc' => $done.' of '.$total.' steps complete — track live status in the pipeline below.'];
     }
@@ -205,7 +208,7 @@
                 📝 Design questionnaire &amp; ChatGPT prompt
             </a>
         @else
-            <p style="color: var(--accent); font-weight: 600; margin-bottom: 0.8rem;">🎨 With the artist — waiting on the layout and the client's approval before the downpayment and job order.</p>
+            <p style="color: var(--accent); font-weight: 600; margin-bottom: 0.8rem;">🎨 With the artist — waiting on the layout and the client's approval before the downpayment.</p>
         @endif
 
         {{-- The ChatGPT result, saved and uploaded here. Stays available after the
@@ -429,7 +432,7 @@
                 </table>
             </div>
         @elseif ($layoutApproved)
-            <p class="muted" style="margin-bottom: 0.6rem;">Layout approved — collect the downpayment, then fill in the job order.</p>
+            <p class="muted" style="margin-bottom: 0.6rem;">Layout approved — collect the downpayment so the artist can prepare the final mockup.</p>
         @else
             <p class="muted" style="margin-bottom: 0.6rem;">The downpayment is collected after the client approves the layout.</p>
         @endif
@@ -497,7 +500,8 @@
                 $stagePhrases = [
                     'Layout'                    => 'creating the layout design for your order',
                     'Final mockup'              => 'finalizing the mockup of your design',
-                    'Production template'       => 'preparing the production template',
+                    'Tech pack'                 => 'preparing the tech pack for the floor',
+                    'Production template'       => 'preparing the tech pack for the floor',
                     'Raw materials'             => 'preparing the materials for your order',
                     'Printer'                   => 'printing your design',
                     'Sticker'                   => 'preparing the transfers for your design',
@@ -568,13 +572,13 @@
     </div>
 </div>
 
-{{-- The artist's work: layout, final mockup and production template — so the
+{{-- The artist's work: layout, final mockup and the tech pack — so the
      account officer can see and send them to the client. --}}
 @php
     $designTasks = [
         'Layout' => $order->tasks->firstWhere('department', 'Layout'),
         'Final mockup' => $order->tasks->firstWhere('department', 'Final mockup'),
-        'Production template' => $order->tasks->firstWhere('department', 'Production template'),
+        'Tech pack' => $order->tasks->first(fn ($t) => $t->isTechPackStep()),
     ];
     $latestFiles = function ($task) {
         if (! $task) return collect();
@@ -643,12 +647,12 @@
         </div>
     @endif
 
-@if (($canRecordPayment || $isLeader) && $hasDesign && $order->jobOrder)
+@if (($canRecordPayment || $isLeader) && $hasDesign && $order->jobOrder && $mockupApproved)
     @php $mockupPreview = $latestFiles($designTasks['Final mockup'] ?? null)->first(fn ($f) => $f->isImage())
         ?? $latestFiles($designTasks['Layout'] ?? null)->first(fn ($f) => $f->isImage()); @endphp
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Design package</h2>
-        <p class="sub">The job order, mockup and production template as one document — the same package the leader approves.</p>
+        <p class="sub">The Tech Pack, mockup and production template as one document — the same package the leader approves.</p>
         <div style="display:flex; gap:1.1rem; align-items:center; flex-wrap:wrap;">
             @if ($mockupPreview)
                 <a href="{{ route('orders.package', $order) }}" style="flex-shrink:0;">
@@ -671,7 +675,7 @@
                         @endif
                     @endforeach
                 </div>
-                <a href="{{ route('orders.package', $order) }}" class="btn btn-primary btn-sm">📄 Open design package</a>
+                <a href="{{ route('orders.package', $order) }}" class="btn btn-primary btn-sm">📄 Open full tech pack document</a>
                 @php
                     $exportFile = $order->tasks->flatMap->files->firstWhere('label', 'Export file')
                         ?? $order->tasks->flatMap->files->firstWhere('label', 'Print file (TIFF)');

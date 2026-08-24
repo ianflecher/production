@@ -237,7 +237,7 @@ class WholePipelineTest extends TestCase
         $this->clearStage(ProductionOrder::STAGE_LAYOUT);
         $this->assertTrue($this->order->fresh()->layoutApproved());
 
-        // ---- 3. Downpayment, then the job order is sent ---------------------
+        // ---- 3. Downpayment releases the final mockup -----------------------
         $total = (float) $this->order->fresh()->total_price;
 
         // The account officer collects the money; finance's own screens are
@@ -253,6 +253,25 @@ class WholePipelineTest extends TestCase
 
         $this->assertTrue($this->order->fresh()->hasDownpayment(), 'the downpayment was not recorded');
 
+        // The artist can't build the mockup without the client's reference.
+        $this->actingAs($this->staff['sales'])
+            ->post("/job-orders/{$this->order->id}/reference", [
+                'reference_files' => [UploadedFile::fake()->image('client-peg.jpg')],
+                'kind' => 'peg',
+            ])->assertRedirect();
+
+        // ---- 4. Mockup approval, then fill and send the Tech Pack ------------
+        // The mockup is the client's design, so their account officer signs it
+        // off. The leader's sign-off is the TECH PACK — the sheet the floor
+        // works from, with the template as one panel inside it.
+        // The mockup first — the pack is built FROM the approved design, so it
+        // stays locked until the client has said yes to the mockup.
+        foreach ($this->tasksAt('Final mockup') as $task) {
+            $this->workStep($task, approve: false);
+            $this->actingAs($this->staff['sales'])
+                ->post("/tasks/{$task->id}/approve")->assertRedirect();
+        }
+
         $this->actingAs($this->staff['sales'])
             ->post("/job-orders/{$this->order->id}/update", [
                 'print_type' => 'full_sublimation',
@@ -262,23 +281,13 @@ class WholePipelineTest extends TestCase
                 'packaging' => 'One piece per plastic',
             ])->assertRedirect();
 
-        // The artist can't build the mockup without the client's reference.
-        $this->actingAs($this->staff['sales'])
-            ->post("/job-orders/{$this->order->id}/reference", [
-                'reference_files' => [UploadedFile::fake()->image('client-peg.jpg')],
-                'kind' => 'peg',
-            ])->assertRedirect();
-
         $this->actingAs($this->staff['sales'])
             ->post("/job-orders/{$this->order->id}/send")->assertRedirect();
 
         $this->assertSame('sent_to_artist', $this->order->fresh()->jobOrder->status);
 
-        // ---- 4. Mockup + template, approved as a package --------------------
-        // Both are handed in, then the leader signs off the pair in one go —
-        // that's the approve-package button, not two separate approvals.
-        foreach ($this->tasksAt('Final mockup')->merge($this->tasksAt('Production template')) as $task) {
-            $this->workStep($task, approve: false);
+        foreach ($this->tasksAt('Tech pack') as $task) {
+            $this->workStep($task->fresh(), approve: false);
         }
 
         $this->actingAs($this->staff['leader'])

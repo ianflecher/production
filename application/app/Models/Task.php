@@ -45,7 +45,7 @@ class Task extends Model
 
     protected $fillable = [
         'production_order_id', 'sequence', 'stage', 'department', 'team', 'instructions',
-        'assigned_to', 'operator_name', 'status', 'approver_role', 'auto_assign', 'auto_submit',
+        'assigned_to', 'operator_name', 'note', 'status', 'approver_role', 'auto_assign', 'auto_submit',
         'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at',
     ];
 
@@ -81,16 +81,29 @@ class Task extends Model
     }
 
     /**
+     * The stage-2 step the leader signs off: the tech pack.
+     *
+     * It was called "Production template" until the template stopped being its
+     * own sheet and became the flats inside the pack. Orders that were already
+     * running when it was renamed still carry the old name, so both count.
+     */
+    public function isTechPackStep(): bool
+    {
+        return str_starts_with((string) $this->department, 'Tech pack')
+            || str_starts_with((string) $this->department, 'Production template');
+    }
+
+    /**
      * Files this step must hand over when submitted, as slot => label.
      *
      * @return array<string, string>
      */
     public function fileSlots(): array
     {
-        if (str_starts_with($this->department, 'Production template')) {
-            // The artist only uploads the template — the mockup (from the final
-            // mockup step) and the job order come across automatically on submit.
-            return ['file' => 'Template file'];
+        if ($this->isTechPackStep()) {
+            // The saved interactive Tech Pack is the deliverable. Requiring a
+            // second "Template file" upload here duplicated the same work.
+            return [];
         }
 
         if (str_starts_with($this->department, 'Final mockup')) {

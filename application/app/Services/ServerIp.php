@@ -47,6 +47,27 @@ class ServerIp
         return null;
     }
 
+    /**
+     * This machine's name on the network.
+     *
+     * The better half of a path: \IC-PRINT-01\FOR PRINT keeps working when
+     * the router hands the machine a different address, which an IP path does
+     * not. The address stays on the sheet as the alternative, for a PC that
+     * cannot resolve the name.
+     */
+    public static function deviceName(): ?string
+    {
+        $host = gethostname();
+
+        if (! is_string($host) || trim($host) === '') {
+            return null;
+        }
+
+        // Just the machine, not machine.office.local — a UNC path takes the
+        // short name and the domain suffix only gets in the way.
+        return strtoupper(explode('.', trim($host))[0]);
+    }
+
     /** True for an office-network address (not loopback, not the internet). */
     public static function isPrivate(string $ip): bool
     {

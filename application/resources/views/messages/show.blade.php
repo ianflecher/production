@@ -88,7 +88,9 @@
     {{-- The job order SHEET, not the order admin page — that one opens on
          payments and pricing, which is the account officer's business, not the
          floor's. --}}
-    <a href="{{ route('orders.job-order', $order) }}" class="btn btn-primary">Open job order</a>
+    @if($order->mockupApproved())
+        <a href="{{ route('orders.job-order', $order) }}" class="btn btn-primary">Open tech pack</a>
+    @endif
 </div>
 
 @include('partials.delay-alert', ['order' => $order])

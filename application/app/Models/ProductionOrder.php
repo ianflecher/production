@@ -355,6 +355,22 @@ class ProductionOrder extends Model
         return $this->hasMany(Task::class)->orderBy('sequence');
     }
 
+    /**
+     * The tech pack — the sheet the floor works the garment from.
+     *
+     * Made on demand: an order has one from the moment anybody types into it,
+     * and asking for it should not depend on remembering to create it first.
+     */
+    public function techPack(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TechPack::class);
+    }
+
+    public function techPackOrNew(): TechPack
+    {
+        return $this->techPack ?? $this->techPack()->make();
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
@@ -449,6 +465,16 @@ class ProductionOrder extends Model
             : $this->tasks()->where('stage', self::STAGE_LAYOUT)->get();
 
         return $layout->isNotEmpty() && $layout->every(fn ($t) => $t->status === 'complete');
+    }
+
+    /** The client, through the account officer, approved the final mockup. */
+    public function mockupApproved(): bool
+    {
+        $mockups = $this->relationLoaded('tasks')
+            ? $this->tasks->filter(fn ($task) => str_starts_with($task->department, 'Final mockup'))
+            : $this->tasks()->where('department', 'like', 'Final mockup%')->get();
+
+        return $mockups->isNotEmpty() && $mockups->every(fn ($task) => $task->status === 'complete');
     }
 
     /**
@@ -772,12 +798,19 @@ class ProductionOrder extends Model
     /**
      * Steps that stay LOCKED until other step(s) IN THE SAME STAGE finish. A
      * value can be a single department or a list — the step waits for ALL of
-     * them. Both the printer AND the sticker station wait for the single Export
-     * step; embroidery is done after the garment is sewn.
+     * them. The press waits for the print AND the fabric; embroidery is done
+     * after the garment is sewn.
      */
     public const STEP_PREREQUISITES = [
-        'Printer' => 'Export',
-        'Sticker' => 'Export',
+        // The pack is built FROM the approved design, so it cannot start until
+        // the client has approved the mockup. Both are stage 2, and
+        // prerequisites are matched within a stage.
+        //
+        // The printer and the sticker station used to wait on an Export step.
+        // They now wait on nothing within their stage: stage 3 only opens once
+        // the leader has approved the tech pack, and the pack carries the file
+        // location the printer opens.
+        'Tech pack' => 'Final mockup',
         'Embroidery' => 'Sewing',
         // The press can't run until the print is ready (Printer) AND the fabric
         // has been issued (Raw materials) — you press the transfer onto the cloth.
@@ -812,12 +845,30 @@ class ProductionOrder extends Model
         return true;
     }
 
-    /** Resolve a department to its specific role, else the broad fallback team. */
+    /**
+     * Resolve a department to its specific role, else the broad fallback team.
+     *
+     * Matched without regard to case, and the role is returned SPELLED THE WAY
+     * THE STAFF LIST SPELLS IT. Job roles are typed by hand, so the desk that
+     * issues materials is "Raw Materials" on one account and "Raw materials"
+     * here — an exact match missed, the step fell back to the whole supply
+     * chain, and the board named somebody who does not do that job.
+     */
     public static function teamFor(string $department, ?string $fallback, array $activeRoles): ?string
     {
         $role = self::DEPARTMENT_ROLES[$department] ?? null;
 
-        return ($role !== null && in_array($role, $activeRoles, true)) ? $role : $fallback;
+        if ($role === null) {
+            return $fallback;
+        }
+
+        foreach ($activeRoles as $active) {
+            if (is_string($active) && strcasecmp($active, $role) === 0) {
+                return $active;
+            }
+        }
+
+        return $fallback;
     }
 
     /**
@@ -860,9 +911,13 @@ class ProductionOrder extends Model
         // 1 — Layout: artist work, the CLIENT decides (via sales).
         $add(1, 'Layout', $artist, 'sales');
 
-        // 2 — Final mockup AND production template, approved by leader.
-        $add(2, 'Final mockup', $artist, 'leader');
-        $add(2, 'Production template', $artist, 'leader');
+        // 2 — the mockup goes to the CLIENT (via sales), the way the layout
+        // does: it is the client's design, and only they can say it is right.
+        // The leader's sign-off is on the TECH PACK, which is the sheet the
+        // floor works from — the template is one panel inside it now, not its
+        // own document.
+        $add(2, 'Final mockup', $artist, 'sales');
+        $add(2, 'Tech pack', $artist, 'leader');
 
         $this->addProductionStages($decorationMethods, $cuttingType, $seq);
     }
@@ -941,33 +996,33 @@ class ProductionOrder extends Model
         // they are all done. Workers don't open them from "My Tasks" — they run
         // them at their station, and finishing there completes the task.
 
-        // Artist export steps (stage 3): the print-ready files production needs.
-        // These come FIRST in the production stage — right after the template —
-        // because the artist exports straight after finishing the template, and
-        // the printer/sticker stay locked until the matching file is uploaded.
-        // A single Export step covers ALL the print-ready files (print, sticker
-        // and embroidery). There are no separate "Export sticker"/"Export
-        // embroidery" steps — the printer and sticker station both wait on Export.
-        $artist = User::JOB_ARTIST;
-        $add(3, 'Export', $artist);
+        // There is no separate Export step any more. Where the print-ready
+        // files were saved is recorded on the TECH PACK, in its file location
+        // panel — the same sheet the floor already reads. A step whose whole
+        // job was to carry one path is a step that only ever held the printer
+        // up waiting for someone to close it.
 
-        // 3 — supply: materials, printing, and the free logo sticker if ordered.
+        // 3 — what happens the moment the leader signs off the tech pack, in the
+        // order the shop does it: the fabric is issued, the design is printed,
+        // it is pressed onto the cloth, and the sticker is run if the job has
+        // one. The press used to be created after the sticker, which put the
+        // board out of step with the floor.
         $add(3, 'Raw materials', $supply);
         $add(3, 'Printer', $supply);
 
-        if ($this->needs_sticker) {
-            $add(3, 'Sticker', $supply);
-        }
-
-        // Decoration press runs at stage 3, gated on the Printer (see
-        // STEP_PREREQUISITES) so it starts as soon as printing is done — not
-        // waiting on raw materials or the sticker. Embroidery is NOT here — it's
-        // done on the sewn garment, after sewing (see below).
+        // The press is gated on the Printer AND Raw materials (see
+        // STEP_PREREQUISITES) — you press the transfer onto cloth, so both have
+        // to be there. Embroidery is NOT here: it runs on the sewn garment.
         foreach ($this->decorationSteps($decorationMethods) as $label) {
             if ($label === self::DECORATION_METHODS['embroidery']) {
                 continue;
             }
             $add(3, $label, $prod);
+        }
+
+        // Only when the client ordered one.
+        if ($this->needs_sticker) {
+            $add(3, 'Sticker', $supply);
         }
 
         // Stages 5-9 are the SAMPLE run: one piece is cut, paired, sewn, QC'd and
@@ -1131,7 +1186,7 @@ class ProductionOrder extends Model
     private function syncStickerStep(): void
     {
         // Only the sticker STATION step tracks needs_sticker now — the export is a
-        // single step (no separate "Export sticker"), so nothing artist-side here.
+        // the tech pack's file location, so nothing artist-side here.
         foreach ([['Sticker', User::JOB_SUPPLY_CHAIN]] as [$dept, $team]) {
             $existing = $this->tasks()->where('department', $dept)->first();
 
@@ -1156,8 +1211,8 @@ class ProductionOrder extends Model
         $label = self::DECORATION_METHODS['embroidery'];
 
         // The embroidery steps run on the sewn garment (stages 7 & 13) and appear
-        // only when embroidery is set. There is no separate artist "Export
-        // embroidery" step — the single Export step covers the embroidery file.
+        // only when embroidery is set. There is no artist export step — the
+        // tech pack's file location covers the embroidery file too.
         $steps = [[7, $label, User::JOB_PRODUCTION], [13, $label, User::JOB_PRODUCTION]];
 
         foreach ($steps as [$stage, $dept, $team]) {
@@ -1270,13 +1325,18 @@ class ProductionOrder extends Model
 
         $new = 0;
         foreach ($materials as $material) {
+            $needs = $this->jobOrder?->rawMaterialQuantity($material);
+
             $mr = MaterialRequest::firstOrCreate(
                 ['production_order_id' => $this->id, 'material' => $material],
-                ['status' => 'pending']
+                ['status' => 'pending', 'requested_quantity' => $needs]
             );
 
             if ($mr->wasRecentlyCreated) {
                 $new++;
+            } elseif ($mr->status === 'pending' && (float) $mr->requested_quantity !== (float) $needs) {
+                // The job order was corrected before the desk got to it.
+                $mr->update(['requested_quantity' => $needs]);
             }
         }
 
@@ -1324,8 +1384,8 @@ class ProductionOrder extends Model
 
         foreach ($todo as $task) {
             // Hold a step whose same-stage prerequisite(s) aren't finished yet
-            // (Printer waits for Export; the press waits for Printer AND Raw
-            // materials). Released in handleTaskCompleted once they complete.
+            // (the press waits for Printer AND Raw materials). Released in
+            // handleTaskCompleted once they complete.
             if (! self::prerequisitesMet($task->department, $stageAll)) {
                 continue;
             }
@@ -1378,13 +1438,19 @@ class ProductionOrder extends Model
         $stageTasks = $this->tasks()->where('stage', $task->stage)->get();
 
         // Release any held step in this stage whose same-stage prerequisite is now
-        // complete (Printer and Sticker once Export is done;
+        // complete (the press once Printer and Raw materials are done;
         // Embroidery once Sewing). Each held step runs on its own, after its prereq.
         $releasedAny = false;
         foreach ($stageTasks->where('status', 'todo') as $held) {
             // Only steps that actually have prerequisites, and only once ALL of
             // them are done (the press needs Printer AND Raw materials).
             if (! isset(self::STEP_PREREQUISITES[$held->department])) {
+                continue;
+            }
+            // After mockup approval, the account officer completes and sends
+            // the Tech Pack. Do not release that artist task merely because its
+            // mockup prerequisite finished.
+            if ($held->isTechPackStep() && $this->jobOrder?->status !== 'sent_to_artist') {
                 continue;
             }
             if (self::prerequisitesMet($held->department, $stageTasks)) {
@@ -1505,17 +1571,23 @@ class ProductionOrder extends Model
     }
 
     /**
-     * The client approved the first physical sample — count that one piece into
-     * finished-products stock straight away, so the approved sample is the first
-     * unit in inventory. Idempotent per order (a second approval won't add a
-     * second piece); never throws, so it can't break sample approval.
+     * The client approved the first physical sample — queue that one piece for
+     * the inventory desk to receive.
+     *
+     * It used to be counted straight into finished-products stock on approval,
+     * which put a garment on the shelf that nobody had handed over: stock said
+     * one piece was there and had a Release button beside it, while the piece
+     * itself was still in somebody's hands on the floor. Nothing enters stock
+     * without being received now — the sample included.
+     *
+     * Idempotent per order (a second approval won't queue a second piece); never
+     * throws, so it can't break sample approval.
      */
     public function stockFirstSample(): void
     {
         try {
-            // Already stocked once for this order? Do nothing.
-            if (\App\Models\ProductMovement::where('production_order_id', $this->id)
-                ->where('reason', 'sample')->exists()) {
+            if (\App\Models\ProductReceipt::where('production_order_id', $this->id)
+                ->where('is_sample', true)->exists()) {
                 return;
             }
 
@@ -1531,16 +1603,20 @@ class ProductionOrder extends Model
                 $name = trim((string) ($this->product_type ?: $this->customer_name)) ?: ('Order '.$this->order_number);
             }
 
-            $product = \App\Models\ProductItem::firstOrCreate(
-                ['name' => $name],
-                ['unit' => 'pcs', 'quantity' => 0]
-            );
+            \App\Models\ProductReceipt::create([
+                'production_order_id' => $this->id,
+                'name' => $name,
+                'unit' => 'pcs',
+                'expected_quantity' => 1,
+                'status' => 'pending',
+                'is_sample' => true,
+            ]);
 
-            $product->recordMovement(
-                1,
-                'sample',
-                'Approved first sample for order '.$this->order_number,
-                $this->id,
+            AppNotification::toRole(
+                User::JOB_PRODUCTION,
+                '📦 Approved sample to receive',
+                "{$this->order_number} — the client approved the sample. Receive the piece into finished goods.",
+                route('products.index'),
             );
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error(

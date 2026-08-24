@@ -9,12 +9,17 @@ class MaterialRequest extends Model
 {
     protected $fillable = [
         'production_order_id', 'material', 'status',
-        'inventory_item_id', 'quantity', 'note', 'decided_by', 'decided_by_name', 'decided_at',
+        'inventory_item_id', 'quantity', 'requested_quantity', 'issued_quantity', 'note', 'decided_by', 'decided_by_name', 'decided_at',
     ];
 
     protected function casts(): array
     {
-        return ['decided_at' => 'datetime', 'quantity' => 'decimal:2'];
+        return [
+            'decided_at' => 'datetime',
+            'quantity' => 'decimal:2',
+            'requested_quantity' => 'decimal:2',
+            'issued_quantity' => 'decimal:2',
+        ];
     }
 
     public function order(): BelongsTo

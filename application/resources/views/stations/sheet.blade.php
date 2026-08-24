@@ -1,11 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Job order sheet — '.$order->order_number)
-@section('page-title', 'Job order sheet — '.$order->order_number)
+@section('title', 'Tech pack — '.$order->order_number)
+@section('page-title', 'Tech pack — '.$order->order_number)
 
 @section('content')
+<link rel="stylesheet" href="{{ asset('css/tech-pack.css') }}?v={{ filemtime(public_path('css/tech-pack.css')) }}">
 <style>
-    .sh-wrap { max-width: 900px; margin: 0 auto; }
+    .sh-wrap { max-width: 1200px; margin: 0 auto; }  /* the tech pack is a wide sheet */
     .sh-head {
         background: var(--surface); border: 1px solid var(--border-strong);
         border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1.1rem;
@@ -37,13 +38,18 @@
         </div>
     @endif
 
+    {{-- The spec the floor works to is the tech pack, so that is what the
+         station reads. The record below it is where this station writes. --}}
+    @include('partials.tech-pack', ['order' => $order])
+
     <form method="POST" action="{{ route('orders.sheet.update', $order) }}">
         @csrf
 
         @include('partials.job-order-sheet', [
             'order' => $order,
-            'showMockup' => true,
+            'showMockup' => false,
             'editable' => $fields,
+            'recordOnly' => true,
         ])
 
         <div class="sh-bar">

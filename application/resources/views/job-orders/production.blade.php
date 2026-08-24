@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Job Order production details — '.$order->order_number)
+@section('title', 'Tech Pack production details — '.$order->order_number)
 @section('page-title', 'Production details — '.$order->order_number)
 
 @section('content')
@@ -14,7 +14,12 @@
     }
     $rawMaterials = old('raw_materials', $jobOrder->rawMaterialsList());
     $rawMaterials = array_values(array_filter((array) $rawMaterials, fn ($v) => filled($v)));
-    if (empty($rawMaterials)) { $rawMaterials = ['']; }
+    // How much of each, in the same order as the names.
+    $rawQty = old('raw_material_qty', array_map(
+        fn ($m) => $jobOrder->rawMaterialQuantity($m),
+        $rawMaterials
+    ));
+    if (empty($rawMaterials)) { $rawMaterials = ['']; $rawQty = [null]; }
     $refs = $jobOrder->referenceFiles;
 @endphp
 
@@ -46,11 +51,17 @@
     @csrf
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
-        <h2>Raw materials <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">(client preference — add one per item)</span></h2>
+        <h2>Raw materials <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">(one per item, and how much of it)</span></h2>
+        <p class="muted" style="font-size: 0.8rem; margin: -0.3rem 0 0.7rem;">
+            The amount is what the materials desk is allowed to issue. Leave it blank
+            and the desk can issue any amount, the way it worked before.
+        </p>
         <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 480px;">
-            @foreach ($rawMaterials as $rm)
+            @foreach ($rawMaterials as $i => $rm)
                 <div class="raw-row" style="display: flex; gap: 0.4rem;">
                     <input type="text" name="raw_materials[]" list="dl_raw_materials" maxlength="255" value="{{ $rm }}" placeholder="e.g. lanyard, cloth, ribbing" style="flex: 1;">
+                    <input type="number" name="raw_material_qty[]" min="0" step="0.01" value="{{ $rawQty[$i] ?? '' }}"
+                           placeholder="How many" style="width: 110px;" aria-label="How much of this material">
                     <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('.raw-row').remove()">✕</button>
                 </div>
             @endforeach
@@ -246,6 +257,7 @@
         row.className = 'raw-row';
         row.style.cssText = 'display: flex; gap: 0.4rem;';
         row.innerHTML = '<input type="text" name="raw_materials[]" list="dl_raw_materials" maxlength="255" placeholder="e.g. lanyard, cloth, ribbing" style="flex: 1;">'
+            + '<input type="number" name="raw_material_qty[]" min="0" step="0.01" placeholder="How many" style="width: 110px;" aria-label="How much of this material">'
             + '<button type="button" class="btn btn-ghost btn-sm">✕</button>';
         row.querySelector('button').addEventListener('click', () => row.remove());
         list.appendChild(row);

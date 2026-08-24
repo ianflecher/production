@@ -74,6 +74,15 @@ class MoverSeesTheFloorOnlyTest extends TestCase
     /** Open the floor window at a given moment. */
     private function reachedTheFloor(ProductionOrder $order, $at): void
     {
+        // A real order cannot reach production before the final mockup has
+        // been approved. Keep the fixture on that same path so the Tech Pack
+        // link is available to the floor without weakening the approval gate.
+        $order->tasks()->where('department', 'Final mockup')
+            ->update([
+                'status' => 'complete',
+                'approved_at' => $at,
+            ]);
+
         $order->tasks()->where('department', 'Printer')
             ->update(['status' => 'in_progress', 'released_at' => $at]);
     }
@@ -200,7 +209,7 @@ class MoverSeesTheFloorOnlyTest extends TestCase
             ->assertSee($order->order_number, false);
     }
 
-    public function test_open_job_order_goes_to_the_sheet_not_the_money(): void
+    public function test_open_tech_pack_goes_to_the_pack_not_the_money(): void
     {
         $order = $this->order();
         $this->reachedTheFloor($order, now()->subHour());

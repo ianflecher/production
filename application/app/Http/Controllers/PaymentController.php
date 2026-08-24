@@ -94,13 +94,16 @@ class PaymentController extends Controller
             ]);
         }
 
-        // Flow: layout approved → downpayment → FILL JOB ORDER → send → artist
-        // makes the final mockup → template → leader. The first payment opens the
-        // job order for the account officer to fill in right away.
+        // Flow: layout approved → downpayment → artist makes the final
+        // mockup → client approves it → account officer fills and sends
+        // the Tech Pack. The first payment releases only the mockup; the Tech
+        // Pack remains held behind both approval and the officer's send action.
         if ($wasFirst) {
-            return redirect()->route('job-orders.edit', $order)->with(
+            $order->refresh()->unlockStage(ProductionOrder::STAGE_MOCKUP);
+
+            return redirect()->route('orders.show', $order)->with(
                 'success',
-                'Downpayment recorded (₱'.number_format($amount, 2).'). Fill in the job order below, then send it to the artist.'
+                'Downpayment recorded (₱'.number_format($amount, 2).'). The artist can now prepare the final mockup.'
             );
         }
 

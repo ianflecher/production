@@ -24,6 +24,12 @@
     // Everywhere else this is empty and the sheet is read-only, as before.
     $editable = $editable ?? [];
 
+    // At a station the tech pack is already on the page above this, so the
+    // spec half of the sheet is the same answers twice — and twice as far to
+    // scroll past to reach the seam you are writing. Record only: the sewing
+    // grid and the quality check, which is what the floor fills in.
+    $recordOnly = $recordOnly ?? false;
+
     // One filled-in box: the value as printed, or a box to type it into if
     // this viewer owns that field.
     $fill = function (string $field, bool $shout = true) use ($jo, $editable) {
@@ -86,7 +92,12 @@
     /* Keep the whole sheet on ONE printed page: tighter rows, smaller type, and
        the app shell reset to block flow (page rules are ignored inside flex). */
     @media print {
-        @page { size: A4 portrait; margin: 6mm; }
+        /* A NAMED page, not the document's. This partial is included under the
+           tech pack, and its inline style loads after the pack's stylesheet —
+           so setting the document default here turned the pack's landscape page
+           portrait and printed it half a page wide. */
+        @page record-page { size: A4 portrait; margin: 6mm; }
+        .jo-sheet { page: record-page; }
         html, body { height: auto !important; background: #fff !important; }
         .shell { display: block !important; min-height: 0 !important; }
         .main { display: block !important; }
@@ -179,6 +190,7 @@
     .jo-mockup:hover .jo-mockup-hint { opacity: 1; }
 </style>
 <div class="jo-sheet">
+    @unless ($recordOnly)
     {{-- Title --}}
     <div class="jo-title">
         <div class="t1">{{ $order->massprod_priority ? 'MASSPROD - ' : '' }}<span class="pri">{{ $order->massprod_priority ? 'PRIORITY' : 'JOB ORDER' }}</span></div>
@@ -326,118 +338,66 @@
         <tr><td class="lbl-l">Mover:</td><td colspan="3">{{ $order->moverNames() ?: '' }}</td></tr>
     </table>
 
-    {{-- SEWING --}}
+    @endunless
+
+    {{-- SEWING — who did what.
+
+         Laid out the way the station types it: five slots across, what was
+         done above the name of whoever did it. It was twenty-one boxes named
+         after seams, each wanting a sewer and a thread code; every garment is
+         different, so most printed blank and the ones that mattered were lost
+         in the grid. --}}
+    @php
+        $slots = $jo?->sewingLog() ?? [];
+        // The floor fills these in on their own page, and corrects them here.
+        $logEditable = in_array('sewing_log', $editable, true);
+    @endphp
     <table class="jo">
-        <tr><td colspan="4" class="sec">Sewing</td></tr>
+        <tr><td colspan="5" class="sec">Sewing</td></tr>
         <tr>
-            <td class="lbl" style="width: 25%;">Neck</td>
-            <td class="lbl" style="width: 25%;">Cuff / Arm Sleeves</td>
-            <td class="lbl" style="width: 25%;">Neck Label</td>
-            <td class="lbl" style="width: 25%;">Bottom Hem</td>
+            @foreach ($slots as $row)
+                <td class="lbl" style="width: 20%;">What was done</td>
+            @endforeach
         </tr>
         <tr>
-            <td class="yellow">{{ strtoupper($y($jo?->neck)) }}</td>
-            <td class="yellow">{{ strtoupper($y($jo?->cuff_arm_sleeves)) }}</td>
-            <td class="yellow">{{ strtoupper($y($jo?->neck_label)) }}</td>
-            <td class="yellow">{{ strtoupper($y($jo?->bottom_hem)) }}</td>
-        </tr>
-        {{-- Size on the two that are cut to a measurement, thread colour on the
-             two that are stitched on. --}}
-        <tr>
-            <td class="fld">Size: {!! $fill('neck_size') !!}</td>
-            <td class="fld">Size: {!! $fill('cuff_size') !!}</td>
-            <td class="fld">Thread Color: {!! $fill('neck_label_thread') !!}</td>
-            <td class="fld">Thread Color: {!! $fill('bottom_hem_thread') !!}</td>
-        </tr>
-
-        {{-- Each seam group names the sewer who ran it and the thread they used,
-             so a fault found later can be traced back to the machine it came off. --}}
-        <tr>
-            <td class="lbl">Neckbond Shoulder</td>
-            <td class="lbl">Top / Neck / Hangtag Woven</td>
-            <td class="lbl">Flatbed</td>
-            <td class="lbl">Close Side Body &amp; Sleeve</td>
+            @foreach ($slots as $i => $row)
+                <td class="yellow">
+                    @if ($logEditable)
+                        <input type="text" class="fill-in" name="sheet[sewing_log][{{ $i }}][work]"
+                               maxlength="255" value="{{ $row['work'] }}" list="dl_sheet_work"
+                               placeholder="&mdash;" autocomplete="off">
+                    @else
+                        {{ strtoupper($row['work']) }}
+                    @endif
+                </td>
+            @endforeach
         </tr>
         <tr>
-            <td class="fld">Sewer: {!! $fill('neckbond_sewer') !!}</td>
-            <td class="fld">Sewer: {!! $fill('hangtag_woven_sewer') !!}</td>
-            <td class="fld">Sewer: {!! $fill('flatbed_sewer') !!}</td>
-            <td class="fld">Sewer: {!! $fill('close_side_sewer') !!}</td>
+            @foreach ($slots as $row)
+                <td class="lbl">Who did it</td>
+            @endforeach
         </tr>
         <tr>
-            <td class="fld">Thread Code/Color: {!! $fill('neckbond_thread') !!}</td>
-            <td class="fld">Thread Code/Color: {!! $fill('hangtag_woven_thread') !!}</td>
-            <td class="fld">Thread Code/Color: {!! $fill('flatbed_thread') !!}</td>
-            <td class="fld">Thread Color: {!! $fill('close_side_thread') !!}</td>
-        </tr>
-
-        <tr>
-            <td class="lbl">Attached Sleeve / Cuffs</td>
-            <td class="lbl">Topping Side / Sleeve</td>
-            <td class="lbl">Pipping</td>
-            {{-- The spare column, named on the form for whatever this garment
-                 needed — blank on the paper version. --}}
-            <td class="lbl">{{ strtoupper($y($jo?->extra_seam_label)) }}</td>
+            @foreach ($slots as $i => $row)
+                <td class="yellow">
+                    @if ($logEditable)
+                        <input type="text" class="fill-in" name="sheet[sewing_log][{{ $i }}][name]"
+                               maxlength="100" value="{{ $row['name'] }}" list="dl_sheet_sewer"
+                               placeholder="&mdash;" autocomplete="off">
+                    @else
+                        {{ strtoupper($row['name']) }}
+                    @endif
+                </td>
+            @endforeach
         </tr>
         <tr>
-            <td class="fld">Sewer: {!! $fill('attached_sleeve_sewer') !!}</td>
-            <td class="fld">Sewer: {!! $fill('topping_side_sewer') !!}</td>
-            <td class="fld">Sewer: {!! $fill('pipping_sewer') !!}</td>
-            <td class="fld">{!! $fill('extra_seam_note') !!}</td>
-        </tr>
-        <tr>
-            <td class="fld">Thread Color: {!! $fill('attached_sleeve_thread') !!}</td>
-            <td class="fld">Thread Color: {!! $fill('topping_side_thread') !!}</td>
-            <td class="fld">Thread Color: {!! $fill('pipping_thread') !!}</td>
-            <td class="fld">Sewer: {!! $fill('extra_seam_sewer') !!}</td>
-        </tr>
-
-        {{-- Whoever closed the sewing step, for the seams the form doesn't break
-             out by name. --}}
-        @if ($who(['Sewing']))
-            <tr><td class="fld" colspan="4">Sewing Station: <span class="fill">{{ $who(['Sewing']) }}</span></td></tr>
-        @endif
-
-        <tr>
-            <td class="fld red" colspan="4" style="text-align: left; white-space: pre-line;">Notes from Sewer: {!! $fill('sewer_notes', false) !!}</td>
-        </tr>
-    </table>
-
-    {{-- QUALITY CHECK --}}
-    <table class="jo">
-        <tr><td colspan="4" class="sec">Quality Check</td></tr>
-        {{-- The checker's standing list — what "checked" is supposed to mean. --}}
-        <tr>
-            <td colspan="4" class="lbl-l red" style="text-align: left;">
-                Quality Control: full mock up approved design / thread stiches / needle mark / wrinkle / stain / standard size / special instructions
+            <td colspan="5" class="fld" style="text-align: left;">
+                Notes from sewer: {!! $fill('sewer_notes', false) !!}
             </td>
         </tr>
-        <tr>
-            <td class="lbl" style="width: 25%;">Packaging</td>
-            <td class="lbl" style="width: 25%;">Quality Checked By:</td>
-            <td class="lbl" colspan="2">Notes from QC:</td>
-        </tr>
-        <tr>
-            <td class="yellow">{{ strtoupper($y($jo?->packaging)) }}</td>
-            <td class="fld ctr">{!! filled($jo?->qc_checked_by) || in_array('qc_checked_by', $editable, true)
-                ? $fill('qc_checked_by')
-                : '<span class="fill">'.e($who(['Quality control'])).'</span>' !!}</td>
-            <td colspan="2" class="fld" style="text-align: left; white-space: pre-line;">{!! $fill('qc_notes', false) !!}</td>
-        </tr>
-        <tr>
-            <td class="lbl">Agent</td>
-            <td class="lbl">Artist</td>
-            <td class="lbl">Supply Chain</td>
-            <td class="lbl">Inventory Incharge</td>
-        </tr>
-        <tr>
-            <td class="ctr">{{ $order->creator?->name ?? '' }}</td>
-            <td class="ctr">{{ $artistName !== '—' ? $artistName : '' }}</td>
-            <td class="ctr">{{ $who(['Raw materials']) }}</td>
-            <td class="ctr">{{ $who(['Inventory']) }}</td>
-        </tr>
     </table>
 
+    @unless ($recordOnly)
     {{-- SPECIAL INSTRUCTIONS --}}
     <table class="jo">
         <tr><td class="sec red" style="background: #fff; text-align: left; border-bottom: none;">Special Instructions / Notes from Agent</td></tr>
@@ -450,6 +410,7 @@
          On the standalone sheet the design is on this page already. --}}
     @unless ($showMockup)
         <div class="jo-footnote">FULL MOCK UP DESIGN — PLEASE CHECK THE NEXT PAGE!</div>
+    @endunless
     @endunless
 
 </div>

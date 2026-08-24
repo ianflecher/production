@@ -477,12 +477,23 @@ class InventoryController extends Controller
         // once the material has been restocked.
         abort_unless(in_array($materialRequest->status, ['pending', 'rejected'], true), 403);
 
+        // How much goes out is the job's number, not a typed one. The desk used
+        // to key it in with only the shelf to argue back, which is how a hundred
+        // blanks went out against an order that needed fifty-five. When the job
+        // never said (older requests, or a material left blank), the box is
+        // still there and the old rule applies.
+        $needs = $materialRequest->requested_quantity !== null
+            ? (float) $materialRequest->requested_quantity
+            : null;
+
         $data = $request->validate([
             'inventory_item_id' => ['required', 'integer', 'exists:inventory_items,id'],
-            'quantity' => ['required', 'numeric', 'gt:0', 'max:999999999'],
+            'quantity' => [$needs === null ? 'required' : 'nullable', 'numeric', 'gt:0', 'max:999999999'],
             // Who is handing the materials out.
             'operator_name' => ['required', 'string', 'max:100'],
         ], ['operator_name.required' => 'Enter the name of the person issuing the materials.']);
+
+        $data['quantity'] = $needs ?? $data['quantity'];
 
         return DB::transaction(function () use ($data, $materialRequest, $request) {
             $item = InventoryItem::lockForUpdate()->find($data['inventory_item_id']);
@@ -506,6 +517,9 @@ class InventoryController extends Controller
                 'status' => 'approved',
                 'decided_by_name' => $data['operator_name'],
                 'inventory_item_id' => $item->id,
+                // What went out, kept apart from what was asked for. The one
+                // column used to hold both, so issuing erased the request.
+                'issued_quantity' => $data['quantity'],
                 'quantity' => $data['quantity'],
                 'decided_by' => $request->user()->id,
                 'decided_at' => now(),

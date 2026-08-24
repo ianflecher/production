@@ -40,7 +40,7 @@
 @elseif ($task->status === 'ready')
     <form method="POST" action="{{ route('tasks.start', $task->id) }}">
         @csrf
-        <button class="btn btn-primary">▶ Start working</button>
+        <button class="btn btn-primary">{{ $task->isTechPackStep() ? '📋 Open Tech Pack' : '▶ Start working' }}</button>
     </form>
 @elseif ($task->status === 'revision_required')
     <form method="POST" action="{{ route('tasks.start', $task->id) }}">
@@ -137,6 +137,10 @@
                 <p style="font-size: 0.78rem; color: var(--ink-3); margin: -0.4rem 0 0.9rem;">All {{ count($slots) }} files are required.</p>
             @endif
             <div style="font-size: 0.75rem; color: var(--ink-3); margin-bottom: 0.8rem;">Image, PDF, AI, PSD, EPS, CDR or ZIP.</div>
+        @elseif ($task->isTechPackStep())
+            <div style="font-size:0.9rem; color:var(--ink-1); margin-bottom:0.8rem; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:6px; padding:0.7rem 0.9rem;">
+                Your saved Tech Pack is the file for checking. No separate template upload is needed.
+            </div>
         @else
             <div class="field" style="max-width: 420px;">
                 <label for="file_{{ $task->id }}">Attach a file (optional)</label>
@@ -157,8 +161,8 @@
                 $submitLabel = 'Submit to '.$destLabel.' ✓';
                 $submitConfirm = 'Send the export files to the '.$destLabel.'?';
             } else {
-                $submitLabel = 'Submit for checking ✓';
-                $submitConfirm = 'Are you sure you want to submit this for checking?';
+                $submitLabel = $task->isTechPackStep() ? 'Submit Tech Pack for checking ✓' : 'Submit for checking ✓';
+                $submitConfirm = $task->isTechPackStep() ? 'Submit the saved Tech Pack for checking?' : 'Are you sure you want to submit this for checking?';
             }
         @endphp
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">

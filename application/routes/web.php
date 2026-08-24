@@ -162,6 +162,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     // rather than linked: it lives on the private disk like every other upload.
     Route::get('/orders/{order}/folder-shot', [JobOrderController::class, 'folderShot'])
         ->whereNumber('order')->name('job-orders.folder-shot');
+    Route::get('/orders/{order}/tech-pack-images/{slot}', [JobOrderController::class, 'techPackImage'])
+        ->whereNumber('order')->name('job-orders.tech-pack-image');
 
     Route::get('/job-order-files/{file}/view', [OrderReferenceFileController::class, 'viewReferenceFile'])
         ->whereNumber('file')->name('job-order-files.view');

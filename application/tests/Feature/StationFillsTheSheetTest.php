@@ -63,7 +63,7 @@ class StationFillsTheSheetTest extends TestCase
         return StationSession::where('station', $station)->whereNull('ended_at')->firstOrFail();
     }
 
-    public function test_the_sewer_writes_the_seam_record_when_they_finish(): void
+    public function test_the_sewer_writes_who_did_what_when_they_finish(): void
     {
         [$sewer, $order] = $this->orderAtSewing();
         $session = $this->runningOn($sewer, 'sewing_1', $order);
@@ -71,43 +71,55 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
             'end_reason' => 'done',
             'sheet' => [
-                'neckbond_sewer' => 'Marites Bautista',
-                'neckbond_thread' => 'TC-220 navy',
-                'flatbed_sewer' => 'Angel Ramos',
-                'flatbed_thread' => 'TC-004 white',
-                'pipping_thread' => 'Metallic gold',
-                'sewer_notes' => 'Double stitch on the XL pieces.',
+                'sewing_log' => [
+                    ['work' => 'Closed the sides', 'name' => 'Marites Bautista'],
+                    ['work' => 'Attached the sleeves', 'name' => 'Angel Ramos'],
+                    ['work' => '', 'name' => ''],
+                    ['work' => '', 'name' => ''],
+                    ['work' => '', 'name' => ''],
+                ],
             ],
         ])->assertSessionHasNoErrors();
 
-        $jo = $order->fresh()->jobOrder;
+        $log = $order->fresh()->jobOrder->sewing_log;
 
-        $this->assertSame('Marites Bautista', $jo->neckbond_sewer);
-        $this->assertSame('TC-220 navy', $jo->neckbond_thread);
-        $this->assertSame('Angel Ramos', $jo->flatbed_sewer);
-        $this->assertSame('Metallic gold', $jo->pipping_thread);
-        $this->assertSame('Double stitch on the XL pieces.', $jo->sewer_notes);
+        // The slots nobody used are not kept as three empty rows.
+        $this->assertCount(2, $log);
+        $this->assertSame('Closed the sides', $log[0]['work']);
+        $this->assertSame('Marites Bautista', $log[0]['name']);
+        $this->assertSame('Angel Ramos', $log[1]['name']);
     }
 
-    public function test_a_box_left_alone_keeps_what_the_last_shift_wrote(): void
+    public function test_five_slots_is_room_not_a_quota(): void
     {
         [$sewer, $order] = $this->orderAtSewing();
-        $order->jobOrder->update(['neckbond_sewer' => 'Jhun Delos Reyes']);
-
-        // Second shift fills a different seam and leaves the first one blank.
-        $order->tasks()->update(['status' => 'ready']);
         $session = $this->runningOn($sewer, 'sewing_1', $order);
 
+        // One person did the whole thing. That is a normal job.
         $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
             'end_reason' => 'done',
-            'sheet' => ['neckbond_sewer' => '', 'flatbed_sewer' => 'Angel Ramos'],
-        ]);
+            'sheet' => ['sewing_log' => [['work' => 'All of it', 'name' => 'Jhun Delos Reyes']]],
+        ])->assertSessionHasNoErrors();
 
-        $jo = $order->fresh()->jobOrder;
+        $this->assertCount(1, $order->fresh()->jobOrder->sewing_log);
+    }
 
-        $this->assertSame('Jhun Delos Reyes', $jo->neckbond_sewer,
-            'an empty box must not wipe what an earlier shift recorded');
-        $this->assertSame('Angel Ramos', $jo->flatbed_sewer);
+    public function test_the_step_carries_a_note_about_what_happened(): void
+    {
+        [$sewer, $order] = $this->orderAtSewing();
+        $session = $this->runningOn($sewer, 'sewing_1', $order);
+
+        // Not the spec, and not why it came back — what happened while it was
+        // being made. That used to go in a group chat, or nowhere.
+        $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
+            'end_reason' => 'done',
+            'task_note' => 'Machine 2 was down till noon, ran the batch on 3.',
+            'sheet' => ['sewing_log' => [['work' => 'All of it', 'name' => 'Marites Bautista']]],
+        ])->assertSessionHasNoErrors();
+
+        $task = $order->fresh()->tasks()->where('department', 'Sewing')->first();
+
+        $this->assertSame('Machine 2 was down till noon, ran the batch on 3.', $task->note);
     }
 
     public function test_the_checker_writes_the_qc_note(): void
@@ -139,22 +151,23 @@ class StationFillsTheSheetTest extends TestCase
         );
     }
 
-    public function test_what_the_checker_wrote_is_printed_on_the_sheet(): void
+    public function test_what_the_floor_wrote_is_printed_on_the_sheet(): void
     {
         [$sewer, $order] = $this->orderAtSewing();
-        // The officer who took the order — anyone else is not allowed to open it.
-        $sales = User::find($order->created_by);
 
         $order->jobOrder->update([
-            'qc_notes' => 'Two pieces returned for a loose hem.',
-            'flatbed_sewer' => 'Angel Ramos',
+            'sewing_log' => [['work' => 'Attached the sleeves', 'name' => 'Angel Ramos']],
         ]);
 
-        $this->actingAs($sales)
-            ->get("/orders/{$order->id}/job-order")
+        // The production record was deliberately removed from the Tech Pack.
+        // It remains on the floor's separate correction sheet, where the
+        // people who actually did the work can read and correct it.
+        $this->actingAs($sewer)
+            ->get(route('orders.sheet', $order))
             ->assertOk()
-            ->assertSee('Two pieces returned for a loose hem.', false)
-            ->assertSee('ANGEL RAMOS', false);
+            ->assertSee('Attached the sleeves', false)
+            ->assertSee('Angel Ramos', false)
+            ->assertDontSee('Quality Check', false);
     }
 
     public function test_a_station_with_nothing_to_record_is_asked_for_nothing(): void
@@ -174,8 +187,15 @@ class StationFillsTheSheetTest extends TestCase
 
     public function test_the_office_form_no_longer_asks_for_what_the_floor_records(): void
     {
+        // The pack only opens once the client has approved the mockup, so the
+        // fixture has to get that far before the page can be read.
         [$sewer, $order] = $this->orderAtSewing();
         $sales = User::find($order->created_by);
+
+        Task::create([
+            'production_order_id' => $order->id, 'department' => 'Final mockup',
+            'sequence' => 2, 'stage' => 2, 'status' => 'complete', 'approved_at' => now(),
+        ]);
 
         $form = $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")->assertOk();
 
@@ -190,21 +210,19 @@ class StationFillsTheSheetTest extends TestCase
             ->assertSee('name="bottom_hem"', false);
     }
 
-    public function test_sewers_and_threads_typed_at_the_station_are_suggested_next_time(): void
+    public function test_sewers_typed_at_the_station_are_suggested_next_time(): void
     {
         [$sewer, $order] = $this->orderAtSewing();
         $session = $this->runningOn($sewer, 'sewing_1', $order);
 
         $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
             'end_reason' => 'done',
-            'sheet' => ['neckbond_sewer' => 'Marites Bautista', 'pipping_thread' => 'Metallic gold'],
+            'sheet' => ['sewing_log' => [['work' => 'Closed the sides', 'name' => 'Marites Bautista']]],
         ]);
 
-        $suggest = JobOrder::fieldSuggestions();
-
-        // One shared pool, so the next job offers them on any seam.
-        $this->assertContains('Marites Bautista', $suggest['sewer']);
-        $this->assertContains('Metallic gold', $suggest['thread']);
+        // One shared pool: the next job offers the people who did the last one,
+        // whether their name went into the log or an older seam column.
+        $this->assertContains('Marites Bautista', JobOrder::stationSuggestions()['sewer']);
     }
 
     public function test_finishing_closes_the_step_and_credits_the_names_off_the_sheet(): void
@@ -215,8 +233,10 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
             'end_reason' => 'done',
             'sheet' => [
-                'neckbond_sewer' => 'Marites Bautista',
-                'flatbed_sewer' => 'Angel Ramos',
+                'sewing_log' => [
+                    ['work' => 'Closed the sides', 'name' => 'Marites Bautista'],
+                    ['work' => 'Attached the sleeves', 'name' => 'Angel Ramos'],
+                ],
             ],
         ])->assertSessionHasNoErrors();
 
@@ -266,10 +286,10 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)
             ->get("/station-sessions/{$session->id}/finish")
             ->assertOk()
-            // The boxes are IN the sheet, not in a second list of the same
-            // questions underneath it.
-            ->assertSee('class="fill-in" name="sheet[neckbond_sewer]"', false)
-            ->assertSee('Neckbond Shoulder', false);
+            // Five slots: what was done, and who did it.
+            ->assertSee('name="sheet[sewing_log][0][name]"', false)
+            ->assertSee('name="sheet[sewing_log][4][work]"', false)
+            ->assertSee('Who sewed this', false);
 
         // Opening the page must not have closed anything on its own.
         $this->assertNotSame('complete', $order->fresh()->tasks()->where('department', 'Sewing')->value('status'));
@@ -329,10 +349,10 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)->post("/station-sessions/{$session->id}/end", [
             'end_reason' => 'done',
             'keep_working' => 1,
-            'sheet' => ['neckbond_sewer' => 'Marites Bautista'],
+            'sheet' => ['sewing_log' => [['work' => 'Closed the sides', 'name' => 'Marites Bautista']]],
         ])->assertRedirect(route('stations.index'));
 
-        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->neckbond_sewer,
+        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->sewing_log[0]['name'],
             'stepping away must not throw away a shift of typing');
         $this->assertTrue(StationSession::find($session->id)->isRunning(),
             'the job is still on the machine, so the clock keeps running');
@@ -357,16 +377,16 @@ class StationFillsTheSheetTest extends TestCase
     public function test_the_sheet_stays_correctable_until_the_whole_order_is_finished(): void
     {
         [$sewer, $order] = $this->orderAtSewing();
-        $order->jobOrder->update(['neckbond_sewer' => 'Marites Bautista']);
+        $order->jobOrder->update(['sewing_log' => [['work' => 'Closed the sides', 'name' => 'Marites']]]);
 
         // Still running: the floor can open it and put a wrong entry right.
         $this->actingAs($sewer)->get(route('orders.sheet', $order))->assertOk();
 
         $this->actingAs($sewer)->post(route('orders.sheet.update', $order), [
-            'sheet' => ['neckbond_thread' => 'TC-999 corrected'],
+            'sheet' => ['sewing_log' => [['work' => 'Closed the sides', 'name' => 'Marites Bautista']]],
         ])->assertSessionHasNoErrors();
 
-        $this->assertSame('TC-999 corrected', $order->fresh()->jobOrder->neckbond_thread);
+        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->sewing_log[0]['name']);
 
         // Finished: the sheet is a record of what was made, and records do not
         // change.
@@ -375,9 +395,9 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)->get(route('orders.sheet', $order))
             ->assertRedirect(route('stations.index'));
         $this->actingAs($sewer)->post(route('orders.sheet.update', $order), [
-            'sheet' => ['neckbond_thread' => 'too late'],
+            'sheet' => ['sewing_log' => [['work' => 'Closed the sides', 'name' => 'Too Late']]],
         ])->assertForbidden();
 
-        $this->assertSame('TC-999 corrected', $order->fresh()->jobOrder->neckbond_thread);
+        $this->assertSame('Marites Bautista', $order->fresh()->jobOrder->sewing_log[0]['name']);
     }
 }

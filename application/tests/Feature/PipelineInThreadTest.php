@@ -111,6 +111,18 @@ class PipelineInThreadTest extends TestCase
     {
         $order = $this->order();
 
+        // The Tech Pack appears only after the client approves the mockup.
+        // Add that earlier step without changing the mover's four floor steps.
+        $order->tasks()->create([
+            'sequence' => 0,
+            'stage' => 2,
+            'department' => 'Final mockup',
+            'status' => 'complete',
+            'approved_at' => now(),
+            'approver_role' => 'leader',
+        ]);
+        $order->refresh();
+
         $page = $this->actingAs($this->mover())->get("/messages/{$order->id}")->assertOk();
 
         // The thread carries the pipeline now, so the tab was a second way to
@@ -118,7 +130,7 @@ class PipelineInThreadTest extends TestCase
         $page->assertDontSee('>Job Orders<', false);
 
         // Still reachable from the thread itself, and still permitted.
-        $page->assertSee('Open job order', false);
+        $page->assertSee('Open tech pack', false);
         $this->actingAs($this->mover())->get("/orders/{$order->id}")->assertOk();
     }
 

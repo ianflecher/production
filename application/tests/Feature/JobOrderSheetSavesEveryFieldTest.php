@@ -8,7 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Every box on the job order sheet, filled in, saved, and read back.
+ * Every account-officer specification on the Tech Pack, filled in, saved,
+ * and read back.
  *
  * The sewing block alone is twenty-odd fields wired through a migration, the
  * model's $fillable, the controller's validation, the form and the printed
@@ -21,12 +22,13 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Field => the value typed into it. Distinct per field, so a value landing
-     * in the wrong column is a failure rather than a coincidence.
+     * JobOrder field => the value typed into it. Distinct per field, so a
+     * value landing in the wrong column is a failure rather than coincidence.
+     *
+     * Client contact, extra-seam and special-instruction boxes were removed
+     * from the Tech Pack by design, so they do not belong in this form test.
      */
     private const SHEET_FIELDS = [
-        'fb_viber_gc' => 'Mamangun Sports GC',
-
         // Production
         'fabric' => 'Dri-fit micro mesh',
         'free_logo_sticker' => 'IC round sticker',
@@ -42,11 +44,8 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         // sewing station by the person who did the work, and are covered by
         // StationFillsTheSheetTest.
 
-        // …and the spare column's name, which IS a decision made up front.
-        'extra_seam_label' => 'Shoulder taping',
-        // Quality check + agent notes
+        // Packing instruction chosen up front.
         'packaging' => 'One piece per plastic',
-        'special_instructions' => 'Fold sleeves inward before packing.',
     ];
 
     private function order(): ProductionOrder
@@ -67,6 +66,14 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
 
         $order = ProductionOrder::where('order_number', 'IC2026-07777')->firstOrFail();
         $order->jobOrder()->create(['status' => 'draft', 'created_by' => $sales->id]);
+
+        // The officer may fill the Tech Pack only after the client approves
+        // the final mockup. Reproduce that real workflow instead of bypassing
+        // the gate the application is meant to enforce.
+        $order->tasks()->where('department', 'Final mockup')->update([
+            'status' => 'complete',
+            'approved_at' => now(),
+        ]);
 
         return $order->fresh();
     }

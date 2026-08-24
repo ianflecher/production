@@ -429,7 +429,14 @@ class StationController extends Controller
     private static function whoDidTheWork(StationSession $session, array $typed): string
     {
         $fromSheet = collect($typed)
-            ->filter(fn ($v, $k) => str_ends_with($k, '_sewer') || $k === 'qc_checked_by')
+            ->flatMap(function ($value, $key) {
+                if ($key === 'sewing_log') {
+                    return collect((array) $value)->pluck('name')->all();
+                }
+
+                // The old per-seam boxes, for a job that started before the log.
+                return (str_ends_with($key, '_sewer') || $key === 'qc_checked_by') ? [$value] : [];
+            })
             ->map(fn ($v) => trim((string) $v))
             ->filter()
             ->unique(fn ($v) => mb_strtolower($v))
@@ -460,6 +467,21 @@ class StationController extends Controller
             fn ($v, $k) => in_array($k, $fields, true) && filled($v),
             ARRAY_FILTER_USE_BOTH
         );
+
+        // Five slots come back as five rows, most of them empty on most jobs.
+        // Keep the ones somebody wrote in, in the order they were written.
+        if (isset($typed['sewing_log'])) {
+            $rows = collect((array) $typed['sewing_log'])
+                ->map(fn ($row) => [
+                    'work' => trim((string) ($row['work'] ?? '')),
+                    'name' => trim((string) ($row['name'] ?? '')),
+                ])
+                ->filter(fn ($row) => $row['work'] !== '' || $row['name'] !== '')
+                ->values()
+                ->all();
+
+            $typed['sewing_log'] = $rows ?: null;
+        }
 
         if ($typed !== []) {
             $session->order->jobOrder->update($typed);
@@ -557,16 +579,37 @@ class StationController extends Controller
         // Only what this person's own stations own.
         $fields = self::sheetFieldsForUser($request->user());
 
-        $request->validate(array_fill_keys(
-            array_map(fn ($f) => 'sheet.'.$f, $fields),
-            ['nullable', 'string', 'max:1000']
-        ));
+        $request->validate([
+            // The sewing record is a list of rows, not a box of text.
+            'sheet.sewing_log' => ['nullable', 'array', 'max:'.\App\Models\JobOrder::SEWING_LOG_SLOTS],
+            'sheet.sewing_log.*.work' => ['nullable', 'string', 'max:255'],
+            'sheet.sewing_log.*.name' => ['nullable', 'string', 'max:100'],
+            ...array_fill_keys(
+                array_map(fn ($f) => 'sheet.'.$f, array_diff($fields, ['sewing_log'])),
+                ['nullable', 'string', 'max:1000']
+            ),
+        ]);
 
         // Everything typed, including a box deliberately cleared — this is the
         // correction screen, so blanking one has to mean blanking it.
         $typed = collect($request->input('sheet', []))
             ->only($fields)
-            ->map(fn ($v) => filled($v) ? trim((string) $v) : null)
+            ->map(function ($value, $key) {
+                if ($key === 'sewing_log') {
+                    $rows = collect((array) $value)
+                        ->map(fn ($row) => [
+                            'work' => trim((string) ($row['work'] ?? '')),
+                            'name' => trim((string) ($row['name'] ?? '')),
+                        ])
+                        ->filter(fn ($row) => $row['work'] !== '' || $row['name'] !== '')
+                        ->values()
+                        ->all();
+
+                    return $rows ?: null;
+                }
+
+                return filled($value) ? trim((string) $value) : null;
+            })
             ->all();
 
         if ($typed !== []) {
@@ -649,7 +692,36 @@ class StationController extends Controller
             ]),
             'fields' => self::sheetFieldsFor($stationSession->station),
             'suggest' => \App\Models\JobOrder::stationSuggestions(),
+            // The step being finished, so its note can be written here.
+            'task' => $this->stepFor($stationSession),
         ]);
+    }
+
+    /**
+     * The note the person who ran this step left on it.
+     *
+     * Written whether the run is finished or paused: a note about a machine
+     * being down is worth keeping even when the job is not done.
+     */
+    private function writeStepNote(Request $request, StationSession $session): void
+    {
+        $note = trim((string) $request->input('task_note', ''));
+
+        if ($note === '' || ! ($step = $this->stepFor($session))) {
+            return;
+        }
+
+        $step->update(['note' => $note]);
+    }
+
+    /** The task this run is closing, if the station has one open. */
+    private function stepFor(StationSession $session): ?\App\Models\Task
+    {
+        return $session->order?->tasks
+            ->whereIn('department', Stations::departments($session->station))
+            ->whereIn('status', Stations::RELEASED)
+            ->sortBy('sequence')
+            ->first();
     }
 
     public function end(Request $request, StationSession $stationSession): RedirectResponse
@@ -673,8 +745,14 @@ class StationController extends Controller
             // "Save and keep working": write the sheet, leave the clock running.
             'keep_working' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:255'],
+            // What happened at this step, in the words of whoever ran it.
+            'task_note' => ['nullable', 'string', 'max:1000'],
+            // Five slots of "what they did" and "who did it".
+            'sheet.sewing_log' => ['nullable', 'array', 'max:'.\App\Models\JobOrder::SEWING_LOG_SLOTS],
+            'sheet.sewing_log.*.work' => ['nullable', 'string', 'max:255'],
+            'sheet.sewing_log.*.name' => ['nullable', 'string', 'max:100'],
             ...array_fill_keys(
-                array_map(fn ($f) => 'sheet.'.$f, $sheetFields),
+                array_map(fn ($f) => 'sheet.'.$f, array_diff($sheetFields, ['sewing_log'])),
                 ['nullable', 'string', 'max:1000']
             ),
         ]);
@@ -684,6 +762,7 @@ class StationController extends Controller
         // twenty boxes is somebody's whole shift of typing.
         if ($request->boolean('keep_working')) {
             $this->writeSheet($request, $stationSession, $sheetFields);
+            $this->writeStepNote($request, $stationSession);
 
             return redirect()->route('stations.index')->with('success',
                 $stationSession->stationLabel().' — saved. '
@@ -695,6 +774,8 @@ class StationController extends Controller
             'end_reason' => $data['end_reason'],
             'note' => $data['note'] ?? $stationSession->note,
         ]);
+
+        $this->writeStepNote($request, $stationSession);
 
         // "Finished" means the work at this station is done, so close the matching
         // task — that's what unlocks the next stage and eventually completes the

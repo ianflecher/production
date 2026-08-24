@@ -80,8 +80,8 @@
                     {{-- The job order isn't relevant while the client is still
                          reviewing the LAYOUT (no downpayment, job order still a
                          draft) — only show it for later sample reviews. --}}
-                    @if ($task->order->jobOrder && $task->stage !== \App\Models\ProductionOrder::STAGE_LAYOUT)
-                        <a href="{{ route('orders.job-order', $task->order) }}" class="btn btn-ghost btn-sm">📋 View job order</a>
+                    @if ($task->order->jobOrder && $task->order->mockupApproved())
+                        <a href="{{ route('orders.job-order', $task->order) }}" class="btn btn-ghost btn-sm">📋 View tech pack</a>
                     @endif
                 </div>
 

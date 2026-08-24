@@ -53,16 +53,21 @@ class QueryBudgetTest extends TestCase
         // [label, url, budget]
         $pages = [
             ['Dashboard', '/dashboard', 32],
-            ['Orders list', '/orders', 20],
+            // 24: the list now loads the canonical client name (including the
+            // surname used for sorting), workflow tasks and payment existence.
+            // Those are page-wide eager loads, so the count stays flat as rows
+            // are added rather than becoming one query per order.
+            ['Orders list', '/orders', 24],
             ['Order detail', "/orders/{$order->id}", 32],
             ['New order form', '/orders/create', 18],
             ['Calendar', '/calendar', 20],
             ['Approvals', '/approvals', 22],
-            // 21, not 20: the running card names the client, and that name has
+            // 22, not 20: the running card names the client, and that name has
             // to come off the client record rather than the copy kept on the
-            // order, which goes stale the moment the record is corrected. One
-            // more query for the whole page, flat however many stations run.
-            ['Stations board', '/stations', 21],
+            // order, which goes stale the moment the record is corrected. The
+            // separate correctable floor sheet also needs its Tech Pack state.
+            // Both are page-wide loads, flat however many stations run.
+            ['Stations board', '/stations', 22],
             ['My tasks', '/my-tasks', 18],
             ['Inventory', '/inventory', 22],
             // 23: the page now also lists the orders waiting to be handed to

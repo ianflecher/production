@@ -70,7 +70,7 @@ class OrderPipelineTest extends TestCase
             'portion' => 'half',
             'method' => 'GCash',
             'proof' => UploadedFile::fake()->image('proof.jpg'),
-        ])->assertRedirect(route('job-orders.edit', $order));
+        ])->assertRedirect(route('orders.show', $order));
         $this->assertDatabaseHas('payments', ['production_order_id' => $order->id, 'kind' => 'downpayment']);
         $this->assertEqualsWithDelta(
             round((float) $order->total_price / 2, 2),

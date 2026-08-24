@@ -660,16 +660,21 @@ class ProductionOrderController extends Controller
                 // A copy of the sheet, minus everything that belonged to the
                 // first run: who sewed it, with what thread, what the checker
                 // found. Those are answered again by whoever makes it this time.
+                // LEGACY_SEWING_FIELDS too: a job sewn before the record became
+                // a log has its names in the old seam columns, and those belong
+                // to the run that filled them just as much.
+                $floorOwned = array_merge(
+                    \App\Models\JobOrder::SEWING_STATION_FIELDS,
+                    \App\Models\JobOrder::LEGACY_SEWING_FIELDS,
+                    \App\Models\JobOrder::QC_STATION_FIELDS,
+                );
+
                 $sheet = $order->jobOrder->replicate(array_merge(
                     ['production_order_id', 'created_by', 'sent_to_artist_by', 'sent_to_artist_at'],
-                    \App\Models\JobOrder::SEWING_STATION_FIELDS,
-                    \App\Models\JobOrder::QC_STATION_FIELDS,
+                    $floorOwned,
                 ));
 
-                foreach (array_merge(
-                    \App\Models\JobOrder::SEWING_STATION_FIELDS,
-                    \App\Models\JobOrder::QC_STATION_FIELDS,
-                ) as $ownedByTheFloor) {
+                foreach ($floorOwned as $ownedByTheFloor) {
                     $sheet->$ownedByTheFloor = null;
                 }
 

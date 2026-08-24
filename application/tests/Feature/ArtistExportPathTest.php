@@ -62,6 +62,29 @@ class ArtistExportPathTest extends TestCase
         $this->assertSame('192.168.150.114', $artist->fresh()->last_login_ip);
     }
 
+    public function test_signing_in_always_refreshes_the_stored_address(): void
+    {
+        // Sign-in used to keep the OLD address whenever the new sign-in was not
+        // from an office one. That is how somebody was offered a PC nobody had
+        // sat at for weeks: over the tunnel every sign-in looks like 127.0.0.1,
+        // so the stale address survived each time. A sign-in is the person
+        // saying where they are, so it is written either way — and a non-office
+        // address simply means the pack falls back to the machine holding the
+        // shared drive instead of to something stale.
+        $artist = User::factory()->create([
+            'job_role' => User::JOB_ARTIST, 'is_active' => true,
+            'last_login_ip' => '192.168.150.238',
+            'email' => 'artist@example.test',
+            'password' => bcrypt('secret-artist-pw'),
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
+            ->post('/login', ['email' => $artist->email, 'password' => 'secret-artist-pw']);
+
+        $this->assertSame('127.0.0.1', $artist->fresh()->last_login_ip,
+            'the sign-in address is written as it is, stale ones do not survive');
+    }
+
     public function test_the_tunnel_does_not_overwrite_it_with_its_own_address(): void
     {
         $artist = User::factory()->create([

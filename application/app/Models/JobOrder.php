@@ -39,6 +39,11 @@ class JobOrder extends Model
         // Tech pack header
         'design_name',
         'fitting',
+        'item_style',
+        'print_tech',
+        'color_1', 'color_2', 'color_3',
+        'front_print_placement', 'front_actual_size',
+        'back_print_placement', 'back_actual_size',
         // Production (yellow)
         'print_type',
         'printer',
@@ -51,6 +56,8 @@ class JobOrder extends Model
         'needs_embroidery',
         'fabric',
         'raw_materials',
+        'raw_material_quantities',
+        'sewing_log',
         'free_logo_sticker',
         // Sewing (yellow) — the four headline seams, each with its size/thread
         'neck',
@@ -62,12 +69,17 @@ class JobOrder extends Model
         'bottom_hem',
         'bottom_hem_thread',
         'thread_color',
-        'zipper_type',
-        'bp_pocket_color',
-        'colorways',
-        'print_placements',
+        'tshirt_color',
+        'stitch_thread',
+        'cutting_method',
+        'size_range',
+        'tag_1_details',
+        'tag_2_details',
         'folder_shot_path',
         'folder_shot_name',
+        'file_location_notes',
+        'additional_tech_notes',
+        'artist_name',
         // …then who sewed each seam group and with what thread
         'neckbond_sewer',
         'neckbond_thread',
@@ -108,8 +120,9 @@ class JobOrder extends Model
     protected function casts(): array
     {
         return [
-            'print_placements' => 'array',
             'raw_materials' => 'array',
+            'sewing_log' => 'array',
+            'raw_material_quantities' => 'array',
             'design_brief' => 'array',
             'sent_to_artist_at' => 'datetime',
             'client_brief_submitted_at' => 'datetime',
@@ -120,6 +133,20 @@ class JobOrder extends Model
     public function rawMaterialsList(): array
     {
         return array_values(array_filter((array) $this->raw_materials, fn ($v) => filled($v)));
+    }
+
+    /**
+     * How much of one material this job needs, or null when nobody said.
+     *
+     * Kept beside the name list rather than inside it, so everything that
+     * already reads rawMaterialsList() keeps reading a plain list of names.
+     */
+    public function rawMaterialQuantity(string $material): ?float
+    {
+        $map = (array) $this->raw_material_quantities;
+        $qty = $map[$material] ?? null;
+
+        return is_numeric($qty) ? (float) $qty : null;
     }
 
     public function order(): BelongsTo
@@ -330,7 +357,26 @@ class JobOrder extends Model
      *
      * @var array<int, string>
      */
-    public const SEWING_STATION_FIELDS = [
+    /**
+     * What the sewing station writes when it finishes.
+     *
+     * It used to be twenty-one boxes named after seams. Every garment is
+     * different, so most were blank on most jobs and the ones that mattered
+     * were lost somewhere in the grid. Now it is five slots — what was done and
+     * who did it — in one JSON column. The old seam columns are still on the
+     * table and still readable: a job sewn before this is unchanged.
+     */
+    public const SEWING_STATION_FIELDS = ['sewing_log', 'sewer_notes'];
+
+    /**
+     * The seam columns the sewing record used to live in.
+     *
+     * Nothing writes them any more, but a job sewn before the log has its
+     * record in them — so they are still read, and still belong to the run that
+     * filled them. A remake must not inherit them any more than it inherits the
+     * log itself.
+     */
+    public const LEGACY_SEWING_FIELDS = [
         'neck_size', 'cuff_size',
         'neck_label_thread', 'bottom_hem_thread',
         'neckbond_sewer', 'neckbond_thread',
@@ -344,19 +390,65 @@ class JobOrder extends Model
         'sewer_notes',
     ];
 
+    /** How many people can be named against one sewing run. */
+    public const SEWING_LOG_SLOTS = 5;
+
     /**
-     * The names already written on the sheet for a station, if any.
+     * The sewing log padded to its five slots, so the form always has its rows.
      *
-     * Sewing and QC do not ask who is at the machine — the names go on the
-     * sheet with the work. Until somebody has written one there is nobody to
-     * show, and naming the shared account instead would put the wrong person
-     * on the board.
+     * @return array<int, array{work: string, name: string}>
+     */
+    public function sewingLog(): array
+    {
+        $rows = [];
+
+        foreach (range(0, self::SEWING_LOG_SLOTS - 1) as $i) {
+            $row = (array) (($this->sewing_log ?? [])[$i] ?? []);
+            $rows[] = [
+                'work' => (string) ($row['work'] ?? ''),
+                'name' => (string) ($row['name'] ?? ''),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** Everyone named in the sewing log, in order, without the blanks. */
+    public function sewers(): array
+    {
+        return collect($this->sewingLog())
+            ->pluck('name')
+            ->map(fn ($n) => trim($n))
+            ->filter()
+            ->unique(fn ($n) => mb_strtolower($n))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The names already written down for a station, if any.
+     *
+     * Sewing and QC do not ask who is at the machine — the names go down with
+     * the work. Until somebody has written one there is nobody to show, and
+     * naming the shared account instead would put the wrong person on the board.
      */
     public function namesOnSheet(array $fields): string
     {
-        return collect($fields)
-            ->filter(fn ($f) => str_ends_with($f, '_sewer') || $f === 'qc_checked_by')
-            ->map(fn ($f) => trim((string) ($this->$f ?? '')))
+        // The sewing record is a log now; the checker is still one name.
+        $names = in_array('sewing_log', $fields, true) ? $this->sewers() : [];
+
+        if (in_array('qc_checked_by', $fields, true) && filled($this->qc_checked_by)) {
+            $names[] = trim((string) $this->qc_checked_by);
+        }
+
+        // A job sewn before the log has its names in the old seam columns.
+        foreach ($fields as $field) {
+            if (str_ends_with($field, '_sewer') && filled($this->$field ?? null)) {
+                $names[] = trim((string) $this->$field);
+            }
+        }
+
+        return collect($names)
             ->filter()
             ->unique(fn ($n) => mb_strtolower($n))
             ->implode(', ');
@@ -402,7 +494,27 @@ class JobOrder extends Model
             ->values()
             ->all();
 
-        return ['sewer' => $pool('sewer'), 'thread' => $pool('thread')];
+        // The sewing record is a log now, so the names people actually type
+        // are in there rather than in the old seam columns. Both feed the same
+        // pool: a job sewn last month still offers its people.
+        $logged = self::query()
+            ->whereNotNull('sewing_log')
+            ->pluck('sewing_log')
+            ->flatMap(fn ($log) => collect(is_array($log) ? $log : (json_decode((string) $log, true) ?: []))
+                ->pluck('name'))
+            ->all();
+
+        $sewers = collect($pool('sewer'))
+            ->merge($logged)
+            ->map(fn ($v) => trim((string) $v))
+            ->filter()
+            ->unique(fn ($v) => mb_strtolower($v))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->take(200)
+            ->values()
+            ->all();
+
+        return ['sewer' => $sewers, 'thread' => $pool('thread')];
     }
 
     public const SUGGEST_FIELDS = [

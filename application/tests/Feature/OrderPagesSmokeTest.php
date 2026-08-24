@@ -67,7 +67,9 @@ class OrderPagesSmokeTest extends TestCase
             'design-brief'    => ['/orders/{id}/design-brief', 200],
             'document dr'     => ['/orders/{id}/document/dr', 200],
             'document pq'     => ['/orders/{id}/document/pq', 200],
-            'job-order edit'  => ['/job-orders/{id}/edit', 200],
+            // Before mockup approval the hidden Tech Pack URL redirects back
+            // to the order with a friendly warning.
+            'tech-pack edit locked' => ['/job-orders/{id}/edit', 302],
             'job-order prod'  => ['/job-orders/{id}/production', 200],
         ];
     }

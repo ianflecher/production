@@ -74,6 +74,9 @@ class TaskController extends Controller
             'waiting' => $waiting,
             'completed' => $completed,
             'search' => $search,
+        ], [
+            'tech_pack_images.*.max' => 'Each Tech Pack image must be 40 MB or smaller.',
+            'folder_shot.max' => 'The image must be 40 MB or smaller.',
         ]);
     }
 
@@ -138,93 +141,292 @@ class TaskController extends Controller
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
 
-        $jobOrder = $task->order->jobOrder;
+        $order = $task->order;
+        $jobOrder = $order->jobOrder;
         abort_unless($jobOrder, 404);
 
         $data = $request->validate([
+            // The tech pack's own fields, named as the shop's template names them.
             'design_name' => ['nullable', 'string', 'max:120'],
             'fitting' => ['nullable', 'string', 'max:60'],
-            'thread_color' => ['nullable', 'string', 'max:60'],
+            'item_style' => ['nullable', 'string', 'max:100'],
+            'quality' => ['nullable', 'string', 'max:60'],
+            'print_tech' => ['nullable', 'string', 'max:60'],
+            'placing_title' => ['nullable', 'string', 'max:160'],
+            'color_1' => ['nullable', 'string', 'max:40'],
+            'color_2' => ['nullable', 'string', 'max:40'],
+            'color_3' => ['nullable', 'string', 'max:40'],
+            'front_print_placement' => ['nullable', 'string', 'max:60'],
+            'front_actual_size' => ['nullable', 'string', 'max:60'],
+            'back_print_placement' => ['nullable', 'string', 'max:60'],
+            'back_actual_size' => ['nullable', 'string', 'max:60'],
+            'tshirt_color' => ['nullable', 'string', 'max:60'],
+            'stitch_thread' => ['nullable', 'string', 'max:60'],
+            'cutting_method' => ['nullable', 'string', 'max:60'],
+            'size_range' => ['nullable', 'string', 'max:60'],
+            'label_type' => ['nullable', 'in:print_label,neck_label'],
+            'color_type' => ['nullable', 'in:tshirt_color,thread_color'],
             'zipper_type' => ['nullable', 'string', 'max:60'],
-            'bp_pocket_color' => ['nullable', 'string', 'max:60'],
-            'colorways' => ['nullable', 'string', 'max:200'],
+            'lip_pocket_color' => ['nullable', 'string', 'max:60'],
+            'tag_1_details' => ['nullable', 'string', 'max:120'],
+            'tag_2_details' => ['nullable', 'string', 'max:120'],
+            'file_location_notes' => ['nullable', 'string', 'max:200'],
+            'file_location_tail' => ['nullable', 'string', 'max:200'],
+            'file_location_host' => ['nullable', 'string', 'max:63'],
+            'additional_tech_notes' => ['nullable', 'string', 'max:500'],
+            'artist_name' => ['nullable', 'string', 'max:100'],
+            'bottom_text' => ['nullable', 'string', 'max:1000'],
+            'bottom_image_width' => ['nullable', 'integer', 'min:120', 'max:900'],
+            'bottom_image_height' => ['nullable', 'integer', 'min:100', 'max:700'],
+            'bottom_text_width' => ['nullable', 'integer', 'min:120', 'max:900'],
+            'bottom_text_height' => ['nullable', 'integer', 'min:80', 'max:700'],
+            'folder_shot' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
+            'remove_image' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
+            'add_image_box' => ['nullable'],
+            'restore_image_box' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
+            // Text blocks the artist added themselves.
+            'add_note_box' => ['nullable'],
+            'remove_note' => ['nullable', 'integer', 'min:0'],
+            'extra_notes' => ['nullable', 'array', 'max:12'],
+            'extra_notes.*' => ['nullable', 'string', 'max:200'],
+            // What the artist dragged each picture box to, as a share of the
+            // sheet's width.
+            // Where each box was dragged to, as a share of the sheet's width.
+            // Where each detail box points to on the garment.
+            'callouts' => ['nullable', 'array'],
+            'callouts.*.fx' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            'callouts.*.fy' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            'callouts.*.tx' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            'callouts.*.ty' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            // A line saved before both ends were movable.
+            'callouts.*.x' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            'callouts.*.y' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            'remove_callout' => ['nullable', 'string', 'max:40'],
+            'box_positions' => ['nullable', 'array'],
+            'box_positions.*.x' => ['nullable', 'numeric', 'min:-200', 'max:200'],
+            'box_positions.*.y' => ['nullable', 'numeric', 'min:-200', 'max:200'],
+            'image_sizes' => ['nullable', 'array'],
+            'image_sizes.*.w' => ['nullable', 'numeric', 'min:1', 'max:100'],
+            'image_sizes.*.h' => ['nullable', 'numeric', 'min:1', 'max:100'],
+            'tech_pack_images' => ['nullable', 'array'],
+            'tech_pack_images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
 
-            // The garment spec. It arrives on the job order from the account
-            // officer, and the artist may correct it here — the tech pack is
-            // the sheet the floor works from, so it has to be right on the pack
-            // rather than right on a form nobody prints.
+            // These belong to the JOB ORDER and keep living there — the pack
+            // shows them so they can be corrected on the sheet the floor reads,
+            // not so they get a second home.
             'fabric' => ['nullable', 'string', 'max:255'],
+            'bottom_hem' => ['nullable', 'string', 'max:255'],
             'neck' => ['nullable', 'string', 'max:100'],
-            'neck_size' => ['nullable', 'string', 'max:60'],
             'cuff_arm_sleeves' => ['nullable', 'string', 'max:100'],
-            'cuff_size' => ['nullable', 'string', 'max:60'],
             'neck_label' => ['nullable', 'string', 'max:120'],
-            'bottom_hem' => ['nullable', 'string', 'max:120'],
             'packaging' => ['nullable', 'string', 'max:120'],
             'free_logo_sticker' => ['nullable', 'string', 'max:120'],
-
-            // Routing values, so they stay something the board can place.
-            'print_type' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINT_TYPES))],
-            'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINTERS))],
-
-            // These two live on the ORDER, not the job order.
-            'product_type' => ['nullable', 'string', 'max:100'],
-            'due_date' => ['nullable', 'date'],
-            'placements' => ['nullable', 'array', 'max:20'],
-            'placements.*.label' => ['nullable', 'string', 'max:60'],
-            'placements.*.width' => ['nullable', 'numeric', 'min:0', 'max:999'],
-            'placements.*.height' => ['nullable', 'numeric', 'min:0', 'max:999'],
-            'folder_shot' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'print_type' => ['nullable', 'string', 'max:60'],
         ]);
 
-        // A row with no placement name is an empty row, not a placement. The
-        // form always offers a spare one, so most saves arrive with at least
-        // one of these.
-        $placements = collect($data['placements'] ?? [])
-            ->filter(fn ($p) => filled($p['label'] ?? null))
-            ->map(fn ($p) => [
-                'label' => trim($p['label']),
-                'width' => $p['width'] ?? null,
-                'height' => $p['height'] ?? null,
-            ])
-            ->values()
-            ->all();
+        $packFields = collect($data)->only([
+            'design_name', 'fitting', 'item_style', 'quality', 'print_tech', 'placing_title',
+            'color_1', 'color_2', 'color_3',
+            'front_print_placement', 'front_actual_size',
+            'back_print_placement', 'back_actual_size',
+            'tshirt_color', 'stitch_thread', 'cutting_method', 'size_range', 'label_type', 'color_type',
+            'zipper_type', 'lip_pocket_color',
+            'tag_1_details', 'tag_2_details',
+            'file_location_notes', 'additional_tech_notes', 'artist_name',
+            'bottom_text', 'bottom_image_width', 'bottom_image_height',
+            'bottom_text_width', 'bottom_text_height',
+        ])->all();
 
-        $fields = collect($data)
-            ->only([
-                'design_name', 'fitting', 'thread_color', 'zipper_type',
-                'bp_pocket_color', 'colorways', 'fabric', 'neck', 'neck_size',
-                'cuff_arm_sleeves', 'cuff_size', 'neck_label', 'bottom_hem',
-                'packaging', 'free_logo_sticker', 'print_type', 'printer',
-            ])
-            ->all();
+        $pack = $order->techPack()->firstOrNew([]);
 
-        $fields['print_placements'] = $placements;
+        $imageUploads = $pack->image_uploads ?? [];
+
+        // The sample panel grows and shrinks with the garment: the × takes a box
+        // away, the + adds one. The picture goes with the box — leaving the file
+        // behind would fill the disk with images nothing points at.
+        $boxes = $pack->sampleBoxes();
+
+        $hidden = $pack->hiddenBoxes();
+
+        if ($drop = $data['remove_image'] ?? null) {
+            if (filled($imageUploads[$drop]['path'] ?? null)) {
+                Storage::disk('local')->delete($imageUploads[$drop]['path']);
+            }
+            unset($imageUploads[$drop]);
+
+            // The sample panel is a list of the boxes it HAS, so one comes off
+            // that list. Every other box is part of the sheet, so the only way
+            // to take one off is to name it as one this pack does without —
+            // otherwise × emptied the box and drew it again, which looked
+            // exactly like nothing happening.
+            if (in_array($drop, $boxes, true)) {
+                $boxes = array_values(array_diff($boxes, [$drop]));
+            } else {
+                $hidden[] = $drop;
+            }
+        }
+
+        // Putting one back.
+        if ($restore = $data['restore_image_box'] ?? null) {
+            $hidden = array_values(array_diff($hidden, [$restore]));
+        }
+
+        $packFields['hidden_boxes'] = array_values(array_unique($hidden)) ?: null;
+
+        // Text blocks: what was typed into the ones already there, then one
+        // added or one taken away. Kept as a list, so the note that was second
+        // is still second when the sheet is read back.
+        if ($request->has('extra_notes') || $request->filled('add_note_box') || $request->has('remove_note')) {
+            $notes = $data['extra_notes'] ?? $pack->extraNotes();
+
+            if ($request->has('remove_note')) {
+                unset($notes[(int) $data['remove_note']]);
+            }
+
+            $notes = array_values(array_filter(array_map('trim', $notes), fn ($n) => $n !== ''));
+
+            if ($request->filled('add_note_box') && count($notes) < 12) {
+                $notes[] = '';
+            }
+
+            $packFields['extra_notes'] = $notes ?: null;
+        }
+
+        // The leader lines: whichever pins were moved, and any that were
+        // double-clicked away.
+        if ($request->has('callouts') || $request->has('remove_callout')) {
+            // Read in the shape it is stored in, so the end nobody touched is
+            // not lost when the other end moves.
+            $lines = (array) ($pack->callouts ?? []);
+
+            foreach (($data['callouts'] ?? []) as $slot => $at) {
+                $was = (array) ($lines[$slot] ?? []);
+
+                $tx = $at['tx'] ?? $at['x'] ?? ($was['tx'] ?? $was['x'] ?? null);
+                $ty = $at['ty'] ?? $at['y'] ?? ($was['ty'] ?? $was['y'] ?? null);
+
+                if (! is_numeric($tx) || ! is_numeric($ty)) {
+                    continue;
+                }
+
+                $line = ['tx' => round((float) $tx, 2), 'ty' => round((float) $ty, 2)];
+
+                $fx = $at['fx'] ?? ($was['fx'] ?? null);
+                $fy = $at['fy'] ?? ($was['fy'] ?? null);
+
+                if (is_numeric($fx) && is_numeric($fy)) {
+                    $line['fx'] = round((float) $fx, 2);
+                    $line['fy'] = round((float) $fy, 2);
+                }
+
+                $lines[$slot] = $line;
+            }
+
+            if ($gone = ($data['remove_callout'] ?? null)) {
+                unset($lines[$gone]);
+            }
+
+            $packFields['callouts'] = $lines ?: null;
+        }
+
+        // Only the boxes that were actually dragged come back, so the rest keep
+        // where they were rather than snapping home.
+        if ($moved = ($data['box_positions'] ?? [])) {
+            $places = $pack->box_positions ?? [];
+
+            foreach ($moved as $slot => $at) {
+                if (is_numeric($at['x'] ?? null) && is_numeric($at['y'] ?? null)) {
+                    $places[$slot] = ['x' => round((float) $at['x'], 2), 'y' => round((float) $at['y'], 2)];
+                }
+            }
+
+            $packFields['box_positions'] = $places ?: null;
+        }
+
+        if ($request->filled('add_image_box') && ($next = $pack->nextSampleSlot())) {
+            $boxes[] = $next;
+        }
+
+        $packFields['image_boxes'] = $boxes;
+
+        // Sizes arrive only for the boxes that were actually dragged, so the
+        // rest keep whatever they had rather than being reset to the default.
+        if ($sizes = ($data['image_sizes'] ?? [])) {
+            $kept = $pack->image_sizes ?? [];
+
+            foreach ($sizes as $slot => $size) {
+                if (! in_array($slot, \App\Models\TechPack::imageSlots(), true)) {
+                    continue;
+                }
+
+                if (is_numeric($size['w'] ?? null) && is_numeric($size['h'] ?? null)) {
+                    $kept[$slot] = ['w' => round((float) $size['w'], 2), 'h' => round((float) $size['h'], 2)];
+                }
+            }
+
+            // A box that was removed takes its size with it.
+            $packFields['image_sizes'] = array_intersect_key($kept, array_flip(
+                array_merge($boxes, \App\Models\TechPack::imageSlots())
+            )) ?: null;
+        }
+
+        // The machine and the folder are two boxes on the sheet, so the path is
+        // put back together here.
+        if ($request->has('file_location_tail') || $request->has('file_location_host')) {
+            // The machine NAME leads: \\IC-SERVER\FOR PRINT survives the router
+            // handing that PC a different address, which an IP path does not.
+            // What was typed wins, then this machine's name, and an address only
+            // if there is no name to be had — a path is no use with nothing on
+            // the front of it.
+            $host = trim((string) ($data['file_location_host'] ?? ''))
+                ?: (string) (\App\Services\ServerIp::deviceName()
+                    ?: (\App\Services\ServerIp::isPrivate((string) $request->ip())
+                        ? $request->ip()
+                        : (string) \App\Services\ServerIp::current()));
+
+            $tail = ltrim((string) ($data['file_location_tail'] ?? ''), '\\');
+
+            $packFields['file_location_notes'] = (filled($host) && filled($tail))
+                ? '\\\\'.$host.'\\'.$tail
+                : (filled($tail) ? $tail : null);
+        }
+
+        foreach (\App\Models\TechPack::imageSlots() as $slot) {
+            if (! $request->hasFile("tech_pack_images.{$slot}")) {
+                continue;
+            }
+
+            if (filled($imageUploads[$slot]['path'] ?? null)) {
+                Storage::disk('local')->delete($imageUploads[$slot]['path']);
+            }
+
+            $file = $request->file("tech_pack_images.{$slot}");
+            $imageUploads[$slot] = [
+                'path' => $file->store('tech-pack-images', 'local'),
+                'name' => $file->getClientOriginalName(),
+            ];
+        }
+        $packFields['image_uploads'] = $imageUploads ?: null;
 
         if ($request->hasFile('folder_shot')) {
             // Replace rather than accumulate: the old picture is of a folder
-            // that has since changed, which is the reason for uploading a new one.
-            if ($jobOrder->folder_shot_path) {
-                Storage::disk('local')->delete($jobOrder->folder_shot_path);
+            // that has since changed, which is the reason for a new one.
+            if ($pack->folder_shot_path) {
+                Storage::disk('local')->delete($pack->folder_shot_path);
             }
 
             $file = $request->file('folder_shot');
-            $fields['folder_shot_path'] = $file->store('folder-shots', 'local');
-            $fields['folder_shot_name'] = $file->getClientOriginalName();
+            $packFields['folder_shot_path'] = $file->store('folder-shots', 'local');
+            $packFields['folder_shot_name'] = $file->getClientOriginalName();
         }
 
-        $jobOrder->update($fields);
+        $pack->fill($packFields);
+        $order->techPack()->save($pack);
 
-        // The product and the delivery date are the order's, not the job
-        // order's — the due date drives the calendar and the shop's daily
-        // capacity, so it has to land where those read it.
-        $orderFields = collect($data)->only(['product_type', 'due_date'])
-            ->filter(fn ($v) => filled($v))
-            ->all();
-
-        if ($orderFields !== []) {
-            $task->order->update($orderFields);
-        }
+        $jobOrder->update(collect($data)->only([
+            'fabric', 'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem',
+            'packaging', 'free_logo_sticker', 'print_type',
+        ])->all());
 
         return back()->with('success', 'Tech pack saved.');
     }
@@ -298,6 +500,11 @@ class TaskController extends Controller
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
         $task->start($request->user());
 
+        if ($task->isTechPackStep()) {
+            return redirect()->route('tasks.job-order', $task->id)
+                ->with('success', 'Tech Pack opened.');
+        }
+
         return back()->with('success', $task->department.' is now IN PROGRESS.');
     }
 
@@ -363,27 +570,6 @@ class TaskController extends Controller
             }
         } elseif ($request->hasFile('file')) {
             $store($request->file('file'), null);
-        }
-
-        // The production template hands over 3 things: the template the artist just
-        // uploaded, plus the mockup carried over from the approved final mockup
-        // step. (The job order is a live document, shown as a link when reviewing.)
-        if (str_starts_with($task->department, 'Production template')) {
-            $design = $task->order->tasks->first(fn ($t) => str_starts_with($t->department, 'Final mockup')
-                || str_starts_with($t->department, 'Design layout')
-                || str_starts_with($t->department, 'Design sample'));
-            $mockup = $design?->latestFile();
-            if ($mockup) {
-                $task->files()->create([
-                    'path' => $mockup->path,
-                    'original_name' => $mockup->original_name,
-                    'label' => 'Mockup (from final mockup)',
-                    'mime' => $mockup->mime,
-                    'size' => $mockup->size,
-                    'round' => $round,
-                    'uploaded_by' => $request->user()->id,
-                ]);
-            }
         }
 
         // Export steps need no approval — handing over the file completes the step
@@ -454,8 +640,8 @@ class TaskController extends Controller
             ]);
         }
 
-        // The template step also carries the mockup's location across on submit.
-        if (str_starts_with($task->department, 'Production template')) {
+        // The tech pack step also carries the mockup's location across on submit.
+        if ($task->isTechPackStep()) {
             $design = $task->order->tasks->first(fn ($t) => str_starts_with($t->department, 'Final mockup')
                 || str_starts_with($t->department, 'Design layout')
                 || str_starts_with($t->department, 'Design sample'));
@@ -836,9 +1022,11 @@ class TaskController extends Controller
 
         // Design fixes — only the flagged item(s) go back, so the artist knows
         // exactly which one is the problem.
-        foreach (['mockup' => 'Final mockup', 'template' => 'Production template'] as $key => $dept) {
+        foreach (['mockup' => 'Final mockup', 'template' => 'Tech pack'] as $key => $dept) {
             if (in_array($key, $items, true)) {
-                $t = $tasks->firstWhere('department', $dept);
+                $t = $key === 'template'
+                    ? $tasks->first(fn ($x) => $x->isTechPackStep())
+                    : $tasks->firstWhere('department', $dept);
                 if ($t && $t->canRequestRevision()) {
                     $t->requestRevision($data['revision_note']);
                     $fixed[] = $dept;

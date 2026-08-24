@@ -14,7 +14,7 @@ class ProductReceipt extends Model
 {
     protected $fillable = [
         'production_order_id', 'name', 'unit', 'expected_quantity',
-        'received_quantity', 'status', 'product_item_id', 'received_by', 'received_at',
+        'received_quantity', 'status', 'is_sample', 'product_item_id', 'received_by', 'received_at',
     ];
 
     protected function casts(): array

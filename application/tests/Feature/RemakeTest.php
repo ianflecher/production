@@ -76,7 +76,7 @@ class RemakeTest extends TestCase
             'and ends when the pieces are counted in');
 
         // Nothing from the design half, and no second trip past the client.
-        foreach (['Layout', 'Final mockup', 'Production template', 'Export',
+        foreach (['Layout', 'Final mockup', 'Tech pack', 'Export',
             'Produce sample for client', 'Release to client'] as $gone) {
             $this->assertFalse($departments->contains($gone), "$gone should not be on a remake");
         }

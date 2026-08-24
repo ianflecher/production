@@ -75,11 +75,16 @@ class LoginController extends Controller
         // address is stamped too: staff move between PCs and each one gets its
         // address by DHCP, so this is how a file they recorded can still be
         // pointed at the machine they are actually on.
+        // Always the address this sign-in came from, office or not. Keeping the
+        // old one when the new sign-in was not from an office address sounded
+        // careful, but it is how somebody ended up being offered a PC nobody
+        // had sat at for weeks: sign in over the tunnel and the stale address
+        // survived every time. An address that is not an office one is no use
+        // in a file path either, and the pack knows that — it falls back to the
+        // machine holding the shared drive rather than to something stale.
         $request->user()->forceFill([
             'last_login_at' => now(),
-            'last_login_ip' => \App\Services\ServerIp::isPrivate((string) $request->ip())
-                ? $request->ip()
-                : $request->user()->last_login_ip,
+            'last_login_ip' => $request->ip(),
         ])->save();
 
         // When an agent logs in and is FREE (no open task), pick up ONE waiting

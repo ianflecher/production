@@ -21,12 +21,12 @@
     @if (auth()->user()->canCreateOrders() && $jo)
         @if ($jo->status === 'draft')
             @php
-                $canSend = $order->layoutApproved()
+                $canSend = $order->mockupApproved()
                     && $order->hasDownpayment()
                     && $jo->isReadyToSend()
                     && $jo->referenceFiles->isNotEmpty();
-                $sendBlockReason = ! $order->layoutApproved()
-                    ? 'The client must approve the layout first.'
+                $sendBlockReason = ! $order->mockupApproved()
+                    ? 'The final mockup must be approved first.'
                     : (! $order->hasDownpayment()
                         ? 'Record the downpayment before sending.'
                         : (! $jo->isReadyToSend()
@@ -36,21 +36,24 @@
                                 : null)));
             @endphp
             @if ($canSend)
-                <form method="POST" action="{{ route('job-orders.send', $order) }}" onsubmit="return confirm('Send this job order to the artist?');" style="margin-right: auto;">
+                <form method="POST" action="{{ route('job-orders.send', $order) }}" onsubmit="return confirm('Send this Tech Pack to the artist?');" style="margin-right: auto;">
                     @csrf
-                    <button type="submit" class="btn btn-success btn-sm">📤 Send Job Order to Artist</button>
+                    <button type="submit" class="btn btn-success btn-sm">📤 Send Tech Pack to Artist</button>
                 </form>
             @else
                 <span style="margin-right: auto; color: var(--danger-ink); font-weight: 600; font-size: 0.85rem;">⚠ {{ $sendBlockReason }}</span>
             @endif
-            <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-ghost btn-sm">✎ Edit job order</a>
+            @if($order->mockupApproved())
+                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-ghost btn-sm">✎ Edit Tech Pack</a>
+            @endif
         @else
             <span style="margin-right: auto; color: var(--success-ink); font-weight: 600; font-size: 0.85rem;">✓ Sent to the artist {{ $jo->sent_to_artist_at?->format('M j, g:i A') }}</span>
         @endif
-        {{-- Production details stay reachable before and after sending. --}}
+        {{-- Production details — press, cutting and the raw materials — stay
+             reachable before and after sending. --}}
         <a href="{{ route('job-orders.production', $order) }}" class="btn btn-primary btn-sm">⚙ Production details</a>
     @endif
-    <button onclick="window.print()" class="btn btn-ghost btn-sm">🖨 Print</button>
+    <button type="button" onclick="window.printTechPack ? window.printTechPack() : window.print()" class="btn btn-ghost btn-sm">🖨 Print</button>
     {{-- This sheet is shown to office staff (orders.job-order) AND to artists
          (tasks.job-order), so send each back somewhere they can actually open. --}}
     @php
@@ -86,36 +89,4 @@
     @include('partials.tech-pack', ['order' => $order])
 @endisset
 
-@php
-    // The seam record lives under the tech pack rather than in it. The pack is
-    // what the shop pins up: what to make and where the print goes. Who sewed
-    // which seam is what the shop wrote down afterwards — production history,
-    // needed, but not part of the spec.
-    //
-    // The floor can still correct its own boxes here: a seam typed against the
-    // wrong row should not be permanent because somebody pressed Finish. Open
-    // until the job order is finished; after that the sheet is a record, and
-    // records do not change.
-    $floorFields = \App\Http\Controllers\StationController::sheetFieldsForUser(auth()->user());
-    $canCorrect = $order->jobOrder && $order->sheetStillEditable() && $floorFields !== [];
-@endphp
-
-<details class="tp-record" @if ($canCorrect) open @endif>
-    <summary>Production record — seams, thread and quality check</summary>
-
-    @if ($canCorrect)
-        <form method="POST" action="{{ route('orders.sheet.update', $order) }}">
-            @csrf
-            @include('partials.job-order-sheet', ['order' => $order, 'editable' => $floorFields])
-            <div class="no-print" style="max-width:900px; margin:0.9rem auto 0; display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
-                <button class="btn btn-primary btn-sm">Save corrections</button>
-                <span style="font-size:0.78rem; color:var(--ink-3);">
-                    Sewing and QC boxes stay editable until this job order is finished.
-                </span>
-            </div>
-        </form>
-    @else
-        @include('partials.job-order-sheet', ['order' => $order])
-    @endif
-</details>
 @endsection
