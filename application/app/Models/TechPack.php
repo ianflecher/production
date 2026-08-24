@@ -23,12 +23,11 @@ class TechPack extends Model
         // Header
         'design_name', 'fitting', 'item_style', 'quality', 'print_tech', 'placing_title',
         // The three colourway swatches
-        'color_1', 'color_2', 'color_3',
         // Exactly a front and a back, each with the size it prints at
         'front_print_placement', 'front_actual_size',
         'back_print_placement', 'back_actual_size',
         // Materials and components the job order does not carry
-        'tshirt_color', 'stitch_thread', 'cutting_method', 'size_range', 'label_type', 'color_type',
+        'tshirt_color', 'print_label', 'thread_color', 'stitch_thread', 'cutting_method', 'size_range',
         'zipper_type', 'lip_pocket_color',
         // The two woven-tag placements printed under the materials table
         'tag_1_details', 'tag_2_details',
@@ -120,7 +119,15 @@ class TechPack extends Model
             return null;
         }
 
-        return ['x' => (float) $at['x'], 'y' => (float) $at['y']];
+        $out = ['x' => (float) $at['x'], 'y' => (float) $at['y']];
+
+        // The vertical position of a pinned text block, as a share of the
+        // sheet's HEIGHT. See boxPositionStyle for why width will not do.
+        if (isset($at['yh'])) {
+            $out['yh'] = (float) $at['yh'];
+        }
+
+        return $out;
     }
 
     /**
@@ -144,9 +151,25 @@ class TechPack extends Model
             return '';
         }
 
-        return $this->slotIsText($slot)
-            ? 'position:absolute; left:'.$at['x'].'cqw; top:'.$at['y'].'cqw; margin:0;'
-            : 'transform:translate('.$at['x'].'cqw,'.$at['y'].'cqw);';
+        // A pinned text block is placed ACROSS the sheet as a share of its
+        // width and DOWN it as a share of its height.
+        //
+        // Both used to be cqw — a share of the width. That holds a point still
+        // only while the sheet keeps one shape, and it does not: the printed
+        // sheet is a different height for the same width, so a tag's text
+        // pinned just under its picture on screen came out several bands lower
+        // on paper, underneath the File location panel. Pinned down the height
+        // instead, it lands in the same place on both.
+        //
+        // A block dragged before this was saved against the width; it keeps
+        // being read that way, so nobody's sheet moves on its own.
+        if (! $this->slotIsText($slot)) {
+            return 'transform:translate('.$at['x'].'cqw,'.$at['y'].'cqw);';
+        }
+
+        $top = isset($at['yh']) ? $at['yh'].'%' : $at['y'].'cqw';
+
+        return 'position:absolute; left:'.$at['x'].'cqw; top:'.$top.'; margin:0;';
     }
 
     /** Text blocks are the ones whose size differs between copies. */
@@ -173,12 +196,19 @@ class TechPack extends Model
         return in_array($slot, $this->hiddenBoxes(), true);
     }
 
-    /** The sample panel as it stands when nobody has added or removed a box. */
-    public const DEFAULT_SAMPLE_BOXES = ['front_flat', 'back_flat', 'flat_3', 'flat_4'];
+    /**
+     * The sample panel as it stands when nobody has added or removed a box.
+     *
+     * One box, not four. The artist uploads one made-up sheet of flats — front
+     * and back side by side, already laid out — so four quarter-size squares
+     * only cut that sheet into pieces and left three of them empty. A pack
+     * that already has four keeps them; the + button still adds more.
+     */
+    public const DEFAULT_SAMPLE_BOXES = ['front_flat'];
 
-    /** Room to grow. Boxes past the standard four are named in this range. */
+    /** Room to grow. Boxes past the first are named in this range. */
     public const SPARE_SAMPLE_SLOTS = [
-        'flat_3', 'flat_4', 'flat_5', 'flat_6', 'flat_7', 'flat_8',
+        'back_flat', 'flat_3', 'flat_4', 'flat_5', 'flat_6', 'flat_7', 'flat_8',
         'flat_9', 'flat_10', 'flat_11', 'flat_12',
     ];
 
@@ -194,7 +224,11 @@ class TechPack extends Model
      * were movable has only its far end; the near one is worked out from the
      * box, as it was then.
      *
-     * @return array<string, array{from: ?array{x: float, y: float}, to: array{x: float, y: float}}>
+     * New lines also keep the garment end as a percentage of the approved
+     * mockup. That is the coordinate that survives the Artist and Display
+     * copies having different controls around the same sheet.
+     *
+     * @return array<string, array{from: ?array{x: float, y: float}, to: array{x: float, y: float}, mockup?: array{x: float, y: float}}>
      */
     public function callouts(): array
     {
@@ -213,12 +247,21 @@ class TechPack extends Model
                 continue;
             }
 
-            $out[$slot] = [
+            $line = [
                 'from' => isset($at['fx'], $at['fy'])
                     ? ['x' => (float) $at['fx'], 'y' => (float) $at['fy']]
                     : null,
                 'to' => $to,
             ];
+
+            if (isset($at['mx'], $at['my'])) {
+                $line['mockup'] = [
+                    'x' => max(0, min(100, (float) $at['mx'])),
+                    'y' => max(0, min(100, (float) $at['my'])),
+                ];
+            }
+
+            $out[$slot] = $line;
         }
 
         return $out;
@@ -289,13 +332,5 @@ class TechPack extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(ProductionOrder::class, 'production_order_id');
-    }
-
-    /** The colourway swatches that were actually named, in order. */
-    public function colorways(): array
-    {
-        return array_values(array_filter([
-            $this->color_1, $this->color_2, $this->color_3,
-        ], fn ($c) => filled($c)));
     }
 }

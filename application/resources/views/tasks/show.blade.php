@@ -268,7 +268,7 @@
     @endif
 @endif
 
-<div class="card panel" style="border-left: 4px solid var(--accent);">
+<div id="task-action-{{ $task->id }}" class="card panel" style="border-left: 4px solid var(--accent); scroll-margin-top: 1.5rem;">
     <h2>What to do now</h2>
     @include('partials.task-action', ['task' => $task])
 </div>

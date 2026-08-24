@@ -118,7 +118,6 @@ class FullShopWalkthroughTest extends TestCase
                 'neck' => 'Round neck',
                 'packaging' => 'Polybag',
                 'free_logo_sticker' => 'IC sticker',
-                'color_1' => 'Black',
                 'tshirt_color' => 'Black',
                 'size_range' => 'S-XL',
                 'raw_materials' => ['Cotton shirt blank'],

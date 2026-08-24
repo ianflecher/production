@@ -78,10 +78,9 @@
         @include('partials.tech-pack', ['order' => $order, 'editable' => true])
 
         <div class="tp-save no-print">
-            <button class="btn btn-primary">Save tech pack</button>
+            <button class="btn btn-primary" name="finish_editing" value="1">Save Tech Pack and continue</button>
             <span class="hint">
-                Design name, fitting, thread, zipper, back pocket, colourways and the
-                print sizes are yours to fill — the rest comes from the order.
+                Saves your changes, then opens the Submit Tech Pack for checking button.
             </span>
         </div>
     </form>

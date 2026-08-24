@@ -120,13 +120,37 @@ class TechPackTest extends TestCase
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
             ->assertSee('name="design_name"', false)
-            ->assertSee('name="color_1"', false)
             ->assertSee('name="cutting_method"', false)
             ->assertSee('name="zipper_type"', false)
             ->assertSee('name="bottom_hem"', false)
             ->assertSee('name="lip_pocket_color"', false)
             // …around the pack, not instead of it.
             ->assertSee('tp-sheet', false);
+    }
+
+    public function test_manual_save_takes_the_artist_to_submit_for_checking(): void
+    {
+        [, $artist, , $task] = $this->shop();
+
+        // The shared fixture is the approved Final Mockup that unlocks this
+        // work. Exercise the save-and-continue flow on the actual next step,
+        // where the artist has a Submit Tech Pack action to continue to.
+        $task->update([
+            'department' => 'Tech pack',
+            'status' => 'in_progress',
+            'approved_at' => null,
+        ]);
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'design_name' => 'Windbreaker WB-001',
+            'finish_editing' => 1,
+        ])->assertRedirect(route('tasks.show', $task->id).'#task-action-'.$task->id)
+            ->assertSessionHas('success');
+
+        $this->actingAs($artist)->get(route('tasks.show', $task->id))
+            ->assertOk()
+            ->assertSee('id="task-action-'.$task->id.'"', false)
+            ->assertSee('Submit Tech Pack for checking', false);
     }
 
     public function test_the_account_officer_can_fill_text_but_does_not_get_image_uploads(): void
@@ -162,8 +186,7 @@ class TechPackTest extends TestCase
             ->assertDontSee('class="tp-logo"', false)
             ->assertSee('name="tech_pack_images[front_mockup]"', false)
             ->assertSee('name="tech_pack_images[front_artwork]"', false)
-            ->assertSee('name="tech_pack_images[flat_3]"', false)
-            ->assertSee('name="tech_pack_images[flat_4]"', false)
+            ->assertSee('name="tech_pack_images[front_flat]"', false)
             ->assertSee('name="tech_pack_images[file_location_image]"', false)
             ->assertSee('data-preview="tp_preview_front_mockup"', false)
             ->assertSee('name="tech_pack_images[tag_1]"', false)
@@ -315,7 +338,10 @@ class TechPackTest extends TestCase
         // A pack in the trade draws a line from the woven-label box to the
         // collar. Without it the floor matches pictures to places by eye.
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'callouts' => ['tag_1' => ['x' => 22.5, 'y' => 31]],
+            'callouts' => ['tag_1' => [
+                'x' => 22.5, 'y' => 31,
+                'mx' => 44.25, 'my' => 18.5,
+            ]],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         // Both ends are the artist's to place; a line saved with only its far
@@ -323,11 +349,14 @@ class TechPackTest extends TestCase
         $line = $order->fresh()->techPack->callouts()['tag_1'];
         $this->assertSame(['x' => 22.5, 'y' => 31.0], $line['to']);
         $this->assertNull($line['from']);
+        $this->assertSame(['x' => 44.25, 'y' => 18.5], $line['mockup']);
 
         // The line is on the sheet the floor reads, not just the artist's.
         $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
             ->assertOk()
             ->assertSee('data-pin-slot="tag_1"', false)
+            ->assertSee('data-mockup-x="44.25"', false)
+            ->assertSee('data-mockup-y="18.5"', false)
             // One drawer serves every copy now: two of them took turns
             // clearing each other's work and the display ended up with none.
             ->assertSee('tpDrawLines', false);
@@ -374,6 +403,70 @@ class TechPackTest extends TestCase
             ->assertSee('translate(12.5cqw,-4.25cqw)', false);
     }
 
+    public function test_a_pinned_text_block_is_held_down_the_sheets_height(): void
+    {
+        // Across as a share of the WIDTH, down as a share of the HEIGHT. Held
+        // by the width both ways, a block pinned under its tag on screen came
+        // out several bands lower on paper, where the sheet is a different
+        // height for the same width.
+        [$sales, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'box_positions' => [
+                'text_tag_1' => ['x' => 39.49, 'y' => 59.15, 'yh' => 71.2],
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pack = $order->fresh()->techPack;
+
+        $this->assertSame(
+            ['x' => 39.49, 'y' => 59.15, 'yh' => 71.2],
+            $pack->boxPosition('text_tag_1')
+        );
+        $this->assertStringContainsString('top:71.2%', $pack->boxPositionStyle('text_tag_1'));
+        $this->assertStringContainsString('left:39.49cqw', $pack->boxPositionStyle('text_tag_1'));
+
+        // The copy the floor reads is pinned the same way.
+        $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
+            ->assertOk()
+            ->assertSee('top:71.2%', false);
+    }
+
+    public function test_a_block_pinned_before_the_height_figure_still_reads(): void
+    {
+        // Nobody's sheet moves on its own: a block saved with only the old
+        // share-of-width figure goes on being placed by it.
+        [, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'box_positions' => ['text_tag_2' => ['x' => 12.0, 'y' => 40.0]],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pack = $order->fresh()->techPack;
+
+        $this->assertSame(['x' => 12.0, 'y' => 40.0], $pack->boxPosition('text_tag_2'));
+        $this->assertStringContainsString('top:40cqw', $pack->boxPositionStyle('text_tag_2'));
+    }
+
+    public function test_a_picture_box_is_still_nudged_by_the_width_alone(): void
+    {
+        // Only text blocks are pinned. A picture box keeps its place in the
+        // grid and is nudged from there, which scales with the width on both
+        // copies — a height figure would be wrong for it.
+        [, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'box_positions' => ['front_artwork' => ['x' => 5.0, 'y' => 6.0, 'yh' => 80.0]],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pack = $order->fresh()->techPack;
+
+        $this->assertSame(
+            'transform:translate(5cqw,6cqw);',
+            $pack->boxPositionStyle('front_artwork')
+        );
+    }
+
     public function test_moving_one_box_leaves_the_others_where_they_were(): void
     {
         [, $artist, $order, $task] = $this->shop();
@@ -416,6 +509,34 @@ class TechPackTest extends TestCase
             ->assertSee('tp_preview_tag_1', false);
     }
 
+    public function test_the_x_empties_the_box_before_it_removes_it(): void
+    {
+        Storage::fake('local');
+        [, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'tech_pack_images' => ['file_location_image' => UploadedFile::fake()->image('folder.png')],
+        ])->assertRedirect();
+
+        // First press: the picture goes, the box stays. One stray click used to
+        // take the whole panel away, which from the artist's chair reads as
+        // "I can no longer add a picture here".
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'remove_image' => 'file_location_image',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pack = $order->fresh()->techPack;
+        $this->assertArrayNotHasKey('file_location_image', (array) $pack->image_uploads);
+        $this->assertFalse($pack->boxIsHidden('file_location_image'), 'the box stays after the picture goes');
+
+        // Second press, on an empty box: now the box itself goes.
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'remove_image' => 'file_location_image',
+        ])->assertRedirect();
+
+        $this->assertTrue($order->fresh()->techPack->boxIsHidden('file_location_image'));
+    }
+
     public function test_a_box_taken_off_can_be_put_back(): void
     {
         [, $artist, $order, $task] = $this->shop();
@@ -438,16 +559,16 @@ class TechPackTest extends TestCase
     {
         [, $artist, $order, $task] = $this->shop();
 
-        // Four boxes stand until somebody changes them.
-        $this->assertCount(4, $order->techPackOrNew()->sampleBoxes());
+        // One box stands until somebody adds another.
+        $this->assertSame(['front_flat'], $order->techPackOrNew()->sampleBoxes());
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
             'add_image_box' => 1,
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $boxes = $order->fresh()->techPack->sampleBoxes();
-        $this->assertCount(5, $boxes);
-        $this->assertSame('flat_5', end($boxes));
+        $this->assertCount(2, $boxes);
+        $this->assertSame('back_flat', end($boxes));
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
             'remove_image' => 'back_flat',
@@ -455,7 +576,7 @@ class TechPackTest extends TestCase
 
         $left = $order->fresh()->techPack->sampleBoxes();
         $this->assertNotContains('back_flat', $left);
-        $this->assertCount(4, $left);
+        $this->assertCount(1, $left);
     }
 
     public function test_the_artist_can_empty_one_image_box(): void
@@ -546,7 +667,6 @@ class TechPackTest extends TestCase
             'stitch_thread' => 'N/A',
             'cutting_method' => 'Straight cut',
             'size_range' => 'M-2XL',
-            'color_1' => 'Black', 'color_2' => 'White', 'color_3' => 'Orange',
             'back_print_placement' => 'Back',
             'back_actual_size' => '14.0\" W x 10.633\" H',
             'front_print_placement' => 'Left chest',
@@ -559,45 +679,6 @@ class TechPackTest extends TestCase
             ->assertSee('Aerox Lifestyle (White/08 1426)')
             ->assertSee('Original fit')
             ->assertSee('M-2XL');
-    }
-
-    public function test_the_three_colourway_swatches_are_their_own_fields(): void
-    {
-        // The template has exactly three named swatches, not a comma string —
-        // so each one can carry its own colour chip.
-        [, $artist, $order, $task] = $this->shop();
-
-        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'color_1' => 'Black', 'color_2' => 'White', 'color_3' => 'Orange',
-        ]);
-
-        $this->assertSame(['Black', 'White', 'Orange'], $order->fresh()->techPack->colorways());
-    }
-
-    public function test_colourways_appear_above_the_mockup_images(): void
-    {
-        [, $artist, , $task] = $this->shop();
-
-        $html = $this->actingAs($artist)
-            ->get("/my-tasks/{$task->id}/job-order")
-            ->assertOk()
-            ->getContent();
-
-        $this->assertLessThan(
-            strpos($html, 'id="tp_preview_front_mockup"'),
-            strpos($html, 'class="tp-ref-colorways"')
-        );
-    }
-
-    public function test_a_swatch_left_blank_is_not_a_colourway(): void
-    {
-        [, $artist, $order, $task] = $this->shop();
-
-        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'color_1' => 'Black', 'color_2' => '', 'color_3' => '',
-        ]);
-
-        $this->assertSame(['Black'], $order->fresh()->techPack->colorways());
     }
 
     public function test_another_artist_cannot_fill_somebody_elses_pack(): void
