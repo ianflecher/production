@@ -226,8 +226,11 @@ class TaskController extends Controller
             'box_positions' => ['nullable', 'array'],
             'box_positions.*.x' => ['nullable', 'numeric', 'min:-200', 'max:200'],
             'box_positions.*.y' => ['nullable', 'numeric', 'min:-200', 'max:200'],
-            // A text block's vertical position, as a share of the sheet's height.
-            'box_positions.*.yh' => ['nullable', 'numeric', 'min:-200', 'max:200'],
+            // A text block's nudge from its own place, as a share of its own
+            // box. A block carried right across the sheet is a lot of its own
+            // widths away, so the range is wide.
+            'box_positions.*.ox' => ['nullable', 'numeric', 'min:-5000', 'max:5000'],
+            'box_positions.*.oy' => ['nullable', 'numeric', 'min:-5000', 'max:5000'],
             'image_sizes' => ['nullable', 'array'],
             'image_sizes.*.w' => ['nullable', 'numeric', 'min:1', 'max:100'],
             'image_sizes.*.h' => ['nullable', 'numeric', 'min:1', 'max:100'],
@@ -382,8 +385,10 @@ class TaskController extends Controller
                 if (is_numeric($at['x'] ?? null) && is_numeric($at['y'] ?? null)) {
                     $places[$slot] = ['x' => round((float) $at['x'], 2), 'y' => round((float) $at['y'], 2)];
 
-                    if (is_numeric($at['yh'] ?? null)) {
-                        $places[$slot]['yh'] = round((float) $at['yh'], 2);
+                    foreach (['ox', 'oy'] as $axis) {
+                        if (is_numeric($at[$axis] ?? null)) {
+                            $places[$slot][$axis] = round((float) $at[$axis], 2);
+                        }
                     }
                 }
             }

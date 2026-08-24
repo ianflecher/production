@@ -403,39 +403,39 @@ class TechPackTest extends TestCase
             ->assertSee('translate(12.5cqw,-4.25cqw)', false);
     }
 
-    public function test_a_pinned_text_block_is_held_down_the_sheets_height(): void
+    public function test_a_dragged_text_block_is_nudged_in_its_own_widths(): void
     {
-        // Across as a share of the WIDTH, down as a share of the HEIGHT. Held
-        // by the width both ways, a block pinned under its tag on screen came
-        // out several bands lower on paper, where the sheet is a different
-        // height for the same width.
+        // Its own box is the ruler. A share of the SHEET is two different
+        // places on two sheets of different shape — which is how a tag's
+        // caption came to sit on its picture for the artist and above it for
+        // everybody else. The same words in the same font are the same size on
+        // both, so half a box down is half a box down anywhere.
         [$sales, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
             'box_positions' => [
-                'text_tag_1' => ['x' => 39.49, 'y' => 59.15, 'yh' => 71.2],
+                'text_tag_1' => ['x' => 39.49, 'y' => 59.15, 'ox' => 120.5, 'oy' => -60.25],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $pack = $order->fresh()->techPack;
 
         $this->assertSame(
-            ['x' => 39.49, 'y' => 59.15, 'yh' => 71.2],
-            $pack->boxPosition('text_tag_1')
+            'transform:translate(120.5%,-60.25%);',
+            $pack->boxPositionStyle('text_tag_1')
         );
-        $this->assertStringContainsString('top:71.2%', $pack->boxPositionStyle('text_tag_1'));
-        $this->assertStringContainsString('left:39.49cqw', $pack->boxPositionStyle('text_tag_1'));
 
-        // The copy the floor reads is pinned the same way.
+        // And the copy the floor reads is nudged by exactly the same amount.
         $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
             ->assertOk()
-            ->assertSee('top:71.2%', false);
+            ->assertSee('translate(120.5%,-60.25%)', false);
     }
 
-    public function test_a_block_pinned_before_the_height_figure_still_reads(): void
+    public function test_a_block_moved_before_this_sits_in_its_row(): void
     {
-        // Nobody's sheet moves on its own: a block saved with only the old
-        // share-of-width figure goes on being placed by it.
+        // Only the old sheet-relative pair: it is left where its row puts it
+        // rather than dropped into whatever band that fraction now points at.
+        // One drag pins it properly again.
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
@@ -445,7 +445,7 @@ class TechPackTest extends TestCase
         $pack = $order->fresh()->techPack;
 
         $this->assertSame(['x' => 12.0, 'y' => 40.0], $pack->boxPosition('text_tag_2'));
-        $this->assertStringContainsString('top:40cqw', $pack->boxPositionStyle('text_tag_2'));
+        $this->assertSame('', $pack->boxPositionStyle('text_tag_2'));
     }
 
     public function test_a_picture_box_is_still_nudged_by_the_width_alone(): void

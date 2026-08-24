@@ -244,7 +244,7 @@
      dots between the two read as a stray mark on the sheet. It moves with the
      tag picture instead. --}}
                 @unless ($tp->boxIsHidden('text_'.$slot))
-                <div class="tp-ref-tag-text" data-move-slot="text_{{ $slot }}" style="{{ $tp->boxPositionStyle('text_'.$slot, $imageEditable) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag textbox to move">&#8942;&#8942;</span>@endif{!! $clearBtn('text_'.$slot) !!}@if($textEditable)<textarea class="tp-in tp-ref-note-in" name="{{ $field }}" maxlength="120" rows="1" wrap="off" placeholder="Type tag details">{{ $tp->$field }}</textarea>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $tp->$field }}</textarea>@endif</div>
+                <div class="tp-ref-tag-text" data-move-slot="text_{{ $slot }}" style="{{ $tp->boxPositionStyle('text_'.$slot) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag textbox to move">&#8942;&#8942;</span>@endif{!! $clearBtn('text_'.$slot) !!}@if($textEditable)<textarea class="tp-in tp-ref-note-in" name="{{ $field }}" maxlength="120" rows="1" wrap="off" placeholder="Type tag details">{{ $tp->$field }}</textarea>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $tp->$field }}</textarea>@endif</div>
                 @endunless
             </div>
         @endforeach
@@ -253,7 +253,7 @@
 
 
 
-    <div class="tp-ref-banner" data-move-slot="text_banner" style="{{ $tp->boxPositionStyle('text_banner', $imageEditable) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span>@endif @if($textEditable)<input type="text" name="placing_title" maxlength="160" value="{{ $tp->placing_title }}" placeholder="Placing note (optional) — e.g. {{ $defaultBanner }}">@else{{ $banner }}@endif</div>
+    <div class="tp-ref-banner" data-move-slot="text_banner" style="{{ $tp->boxPositionStyle('text_banner') }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span>@endif @if($textEditable)<input type="text" name="placing_title" maxlength="160" value="{{ $tp->placing_title }}" placeholder="Placing note (optional) — e.g. {{ $defaultBanner }}">@else{{ $banner }}@endif</div>
     @php $fileLocationImage=$slotSrc('file_location_image'); @endphp
     <section class="tp-ref-file-notes">
         <div class="tp-ref-light-title">File location</div>
@@ -271,7 +271,7 @@
                  newline after the opening tag printed as a blank line above
                  every note. --}}
             <div class="tp-ref-extra-note" data-move-slot="{{ $slot }}"
-                 style="{{ $tp->boxPositionStyle($slot, $imageEditable) }}">@if ($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span><textarea class="tp-in tp-ref-note-in" name="extra_notes[{{ $i }}]" maxlength="200" rows="1" wrap="off" placeholder="Write the note">{{ $note }}</textarea><button type="button" class="tp-ref-clear" name="remove_note" value="{{ $i }}" title="Remove this note" aria-label="Remove this note">&times;</button>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $note }}</textarea>@endif</div>
+                 style="{{ $tp->boxPositionStyle($slot) }}">@if ($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span><textarea class="tp-in tp-ref-note-in" name="extra_notes[{{ $i }}]" maxlength="200" rows="1" wrap="off" placeholder="Write the note">{{ $note }}</textarea><button type="button" class="tp-ref-clear" name="remove_note" value="{{ $i }}" title="Remove this note" aria-label="Remove this note">&times;</button>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $note }}</textarea>@endif</div>
         @endforeach
         <div class="tp-ref-file-content">
             @unless ($tp->boxIsHidden('file_location_image'))
@@ -712,20 +712,18 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
        is a different height for the same width, so the tag's text slid down
        into the File location panel on paper. The width figure is still written
        so an older reader of this pack finds what it expects. */
-    function remember(slot,x,y,yh){
+    function remember(slot,x,y,ox,oy){
         var f=form();if(!f)return;
         keep(f,slot,'x',x);
         keep(f,slot,'y',y);
-        if(yh!==undefined){keep(f,slot,'yh',yh);}
+        if(ox!==undefined){keep(f,slot,'ox',ox);keep(f,slot,'oy',oy);}
+    }
+    /* What a block has already been nudged by, in its own widths and heights. */
+    function nudgeOf(box){
+        var at=box.style.transform.match(/translate\(([-\d.]+)%,\s*([-\d.]+)%\)/);
+        return at?{x:parseFloat(at[1]),y:parseFloat(at[2])}:{x:0,y:0};
     }
 
-    /* Blocks pinned before the vertical figure was measured against the height.
-
-       On THIS screen the old share-of-width figure still puts the block exactly
-       where the artist left it, so the place it is sitting right now is the
-       truth — read it back off the sheet, restate it as a share of the height,
-       and post that with the next save. After one save the pack is right on
-       paper too, without anybody having to drag anything again. */
     document.querySelectorAll('[data-move-slot]').forEach(function(box){
         var slot=box.dataset.moveSlot;
         if(!/^(text_|note_)/.test(slot))return;
@@ -771,16 +769,11 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
             isText=/^(text_|note_)/.test(slot);
 
             if(isText){
-                if(box.style.position!=='absolute'||box.style.top.slice(-1)!=='%'){
-                    var here=box.getBoundingClientRect(),on=sheet.getBoundingClientRect(),
-                        acrossUnit=sheet.offsetWidth/100,downUnit=sheet.offsetHeight/100;
-                    box.style.position='absolute';
-                    box.style.margin='0';
-                    box.style.left=((here.left-on.left)/acrossUnit).toFixed(2)+'cqw';
-                    box.style.top=((here.top-on.top)/downUnit).toFixed(2)+'%';
-                }
-                baseX=parseFloat(box.style.left)||0;
-                baseY=parseFloat(box.style.top)||0;
+                /* It stays in its row and is nudged from there. Its own box is
+                   the ruler: the same words in the same font are the same size
+                   on every copy, so the nudge means the same thing on each. */
+                var already=nudgeOf(box);
+                baseX=already.x;baseY=already.y;
             }else{
                 var at=box.style.transform.match(/translate\(([-\d.]+)cqw,\s*([-\d.]+)cqw\)/);
                 baseX=at?parseFloat(at[1]):0;baseY=at?parseFloat(at[2]):0;
@@ -808,8 +801,9 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
             var per=sheet.offsetWidth/100;
 
             if(isText){
-                box.style.left=(baseX+dx/per).toFixed(2)+'cqw';
-                box.style.top=(baseY+dy/(sheet.offsetHeight/100)).toFixed(2)+'%';
+                var ownW=box.offsetWidth||1,ownH=box.offsetHeight||1;
+                box.style.transform='translate('+(baseX+dx/ownW*100).toFixed(2)+'%,'
+                    +(baseY+dy/ownH*100).toFixed(2)+'%)';
             }else{
                 box.style.transform='translate('+(baseX+dx/per).toFixed(2)+'cqw,'+(baseY+dy/per).toFixed(2)+'cqw)';
             }
@@ -826,17 +820,21 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
                 dragging=false;box.classList.remove('is-moving');
                 if(!moved)return;
                 if(isText){
-                    // Kept both ways: down the height, which is what places it,
-                    // and the old share-of-width figure worked out from the
-                    // sheet as it stands, so nothing that reads only that ends
-                    // up with a block at the top of the page.
-                    var down=parseFloat(box.style.top)||0,
-                        acrossUnit=sheet.offsetWidth/100;
+                    /* Where it ended up, in its own widths and heights. The old
+                       sheet-relative pair is still written so a reader that
+                       only knows those finds something sane. */
+                    /* NOT named `moved`: that is the drag flag this handler
+                       has already tested, and `var` hoists to the top of the
+                       function — shadowing it made every text drag bail out
+                       before it could be saved. */
+                    var nudge=nudgeOf(box),on=sheet.getBoundingClientRect(),
+                        here=box.getBoundingClientRect(),unit=sheet.offsetWidth/100;
                     remember(
                         slot,
-                        parseFloat(box.style.left)||0,
-                        acrossUnit ? (down/100*sheet.offsetHeight)/acrossUnit : 0,
-                        down
+                        unit?((here.left-on.left)/unit):0,
+                        unit?((here.top-on.top)/unit):0,
+                        nudge.x,
+                        nudge.y
                     );
                 }else{
                     var at=box.style.transform.match(/translate\(([-\d.]+)cqw,\s*([-\d.]+)cqw\)/);

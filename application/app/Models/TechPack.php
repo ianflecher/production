@@ -121,10 +121,10 @@ class TechPack extends Model
 
         $out = ['x' => (float) $at['x'], 'y' => (float) $at['y']];
 
-        // The vertical position of a pinned text block, as a share of the
-        // sheet's HEIGHT. See boxPositionStyle for why width will not do.
-        if (isset($at['yh'])) {
-            $out['yh'] = (float) $at['yh'];
+        foreach (['yh', 'ox', 'oy'] as $extra) {
+            if (isset($at[$extra])) {
+                $out[$extra] = (float) $at[$extra];
+            }
         }
 
         return $out;
@@ -143,7 +143,7 @@ class TechPack extends Model
      * sheet sat ON the picture on the floor's. A moved text block is pinned to
      * the sheet instead, at a point that means the same thing on every copy.
      */
-    public function boxPositionStyle(string $slot, bool $pinLegacy = true): string
+    public function boxPositionStyle(string $slot): string
     {
         $at = $this->boxPosition($slot);
 
@@ -151,37 +151,30 @@ class TechPack extends Model
             return '';
         }
 
-        // A pinned text block is placed ACROSS the sheet as a share of its
-        // width and DOWN it as a share of its height.
+        // A TEXT block is nudged from where its row puts it, and the nudge is
+        // a share of the BLOCK'S OWN box.
         //
-        // Both used to be cqw — a share of the width. That holds a point still
-        // only while the sheet keeps one shape, and it does not: the printed
-        // sheet is a different height for the same width, so a tag's text
-        // pinned just under its picture on screen came out several bands lower
-        // on paper, underneath the File location panel. Pinned down the height
-        // instead, it lands in the same place on both.
+        // It used to be pinned to a point on the sheet — first as a share of
+        // the width, then of the height. Both are the same mistake: the
+        // artist's sheet and the sheet the shop reads are not the same shape,
+        // so one fraction is two different places, and a tag's caption that
+        // sat on its picture for the artist sat above it for everybody else.
         //
-        // A block dragged before this was saved against the width; it keeps
-        // being read that way, so nobody's sheet moves on its own.
+        // A block's own box is the same box on both copies: same words, same
+        // font, same size. Half a box down is half a box down anywhere.
+        //
+        // A block moved before this has only the old sheet-relative pair. It
+        // is left where its row puts it rather than dropped in the wrong band;
+        // one drag pins it properly again.
         if (! $this->slotIsText($slot)) {
             return 'transform:translate('.$at['x'].'cqw,'.$at['y'].'cqw);';
         }
 
-        // A block pinned before the height figure existed has only the old
-        // share-of-WIDTH number, which means one place on the artist's sheet
-        // and a different one on everybody else's. On the artist's copy it is
-        // still honoured — that is where they put it, and the next save
-        // records it properly. On the copy the shop reads it is not: a block
-        // dropped into the wrong band reads as a block that has gone missing,
-        // and its own row beside the tag is the better answer until the artist
-        // saves once.
-        if (! isset($at['yh'])) {
-            return $pinLegacy
-                ? 'position:absolute; left:'.$at['x'].'cqw; top:'.$at['y'].'cqw; margin:0;'
-                : '';
+        if (! isset($at['ox'], $at['oy'])) {
+            return '';
         }
 
-        return 'position:absolute; left:'.$at['x'].'cqw; top:'.$at['yh'].'%; margin:0;';
+        return 'transform:translate('.$at['ox'].'%,'.$at['oy'].'%);';
     }
 
     /** Text blocks are the ones whose size differs between copies. */
