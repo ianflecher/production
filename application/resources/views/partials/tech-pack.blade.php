@@ -101,16 +101,16 @@
                 $lineAngle = rad2deg(atan2($lineDy, $lineDx));
             @endphp
             <span class="tp-ref-static-line" data-static-line="{{ $slot }}"
-                  style="left:{{ $line['from']['x'] }}cqw; top:{{ $line['from']['y'] }}cqw; width:{{ $lineLength }}cqw; transform:rotate({{ $lineAngle }}deg);"></span>
+                  style="--pin-x:{{ $line['from']['x'] }}; --pin-y:{{ $line['from']['y'] }}; width:{{ $lineLength }}cqw; transform:rotate({{ $lineAngle }}deg);"></span>
             <span class="tp-ref-pin tp-ref-pin-from"
                   data-pin-slot="{{ $slot }}" data-pin-end="from"
-                  style="left:{{ $line['from']['x'] }}cqw; top:{{ $line['from']['y'] }}cqw;"
+                  style="--pin-x:{{ $line['from']['x'] }}; --pin-y:{{ $line['from']['y'] }};"
                   title="Line starts at the edge of its box"></span>
         @endif
         <span class="tp-ref-pin{{ $imageEditable ? ' is-pin-movable' : '' }}"
               data-pin-slot="{{ $slot }}" data-pin-end="to"
               @if(isset($line['mockup'])) data-mockup-x="{{ $line['mockup']['x'] }}" data-mockup-y="{{ $line['mockup']['y'] }}" @endif
-              style="left:{{ $line['to']['x'] }}cqw; top:{{ $line['to']['y'] }}cqw;"
+              style="--pin-x:{{ $line['to']['x'] }}; --pin-y:{{ $line['to']['y'] }};"
               title="{{ $imageEditable ? 'Drag onto the garment' : '' }}"></span>
     @endforeach
 
@@ -244,7 +244,7 @@
      dots between the two read as a stray mark on the sheet. It moves with the
      tag picture instead. --}}
                 @unless ($tp->boxIsHidden('text_'.$slot))
-                <div class="tp-ref-tag-text" data-move-slot="text_{{ $slot }}" style="{{ $tp->boxPositionStyle('text_'.$slot) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag textbox to move">&#8942;&#8942;</span>@endif{!! $clearBtn('text_'.$slot) !!}@if($textEditable)<textarea class="tp-in tp-ref-note-in" name="{{ $field }}" maxlength="120" rows="1" wrap="off" placeholder="Type tag details">{{ $tp->$field }}</textarea>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $tp->$field }}</textarea>@endif</div>
+                <div class="tp-ref-tag-text" data-move-slot="text_{{ $slot }}" style="{{ $tp->boxPositionStyle('text_'.$slot, $imageEditable) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag textbox to move">&#8942;&#8942;</span>@endif{!! $clearBtn('text_'.$slot) !!}@if($textEditable)<textarea class="tp-in tp-ref-note-in" name="{{ $field }}" maxlength="120" rows="1" wrap="off" placeholder="Type tag details">{{ $tp->$field }}</textarea>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $tp->$field }}</textarea>@endif</div>
                 @endunless
             </div>
         @endforeach
@@ -253,7 +253,7 @@
 
 
 
-    <div class="tp-ref-banner" data-move-slot="text_banner" style="{{ $tp->boxPositionStyle('text_banner') }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span>@endif @if($textEditable)<input type="text" name="placing_title" maxlength="160" value="{{ $tp->placing_title }}" placeholder="Placing note (optional) — e.g. {{ $defaultBanner }}">@else{{ $banner }}@endif</div>
+    <div class="tp-ref-banner" data-move-slot="text_banner" style="{{ $tp->boxPositionStyle('text_banner', $imageEditable) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span>@endif @if($textEditable)<input type="text" name="placing_title" maxlength="160" value="{{ $tp->placing_title }}" placeholder="Placing note (optional) — e.g. {{ $defaultBanner }}">@else{{ $banner }}@endif</div>
     @php $fileLocationImage=$slotSrc('file_location_image'); @endphp
     <section class="tp-ref-file-notes">
         <div class="tp-ref-light-title">File location</div>
@@ -271,7 +271,7 @@
                  newline after the opening tag printed as a blank line above
                  every note. --}}
             <div class="tp-ref-extra-note" data-move-slot="{{ $slot }}"
-                 style="{{ $tp->boxPositionStyle($slot) }}">@if ($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span><textarea class="tp-in tp-ref-note-in" name="extra_notes[{{ $i }}]" maxlength="200" rows="1" wrap="off" placeholder="Write the note">{{ $note }}</textarea><button type="button" class="tp-ref-clear" name="remove_note" value="{{ $i }}" title="Remove this note" aria-label="Remove this note">&times;</button>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $note }}</textarea>@endif</div>
+                 style="{{ $tp->boxPositionStyle($slot, $imageEditable) }}">@if ($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span><textarea class="tp-in tp-ref-note-in" name="extra_notes[{{ $i }}]" maxlength="200" rows="1" wrap="off" placeholder="Write the note">{{ $note }}</textarea><button type="button" class="tp-ref-clear" name="remove_note" value="{{ $i }}" title="Remove this note" aria-label="Remove this note">&times;</button>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $note }}</textarea>@endif</div>
         @endforeach
         <div class="tp-ref-file-content">
             @unless ($tp->boxIsHidden('file_location_image'))
@@ -489,6 +489,23 @@
         return { x: cx + dx * scale, y: cy + dy * scale };
     }
 
+    /* A pin's place is kept as two plain numbers, each a share of the sheet's
+       WIDTH — the same pair that is saved. They are handed over as custom
+       properties rather than as left/top so the stylesheet decides what they
+       mean: across, that share of the width; down, the same share of the width
+       but never past the bottom of the sheet. On paper the sheet is a very
+       different shape from the screen, and a mark that reads as mid-sheet here
+       is off the end of the page there, which is what was printing blank
+       pages. */
+    function setPin(el, x, y) {
+        el.style.setProperty('--pin-x', x.toFixed(2));
+        el.style.setProperty('--pin-y', y.toFixed(2));
+    }
+
+    function readPin(el, axis) {
+        return parseFloat(el.style.getPropertyValue('--pin-' + axis)) || 0;
+    }
+
     function draw() {
         var box = sheet.getBoundingClientRect();
         svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
@@ -542,8 +559,7 @@
                     pin.dataset.mockupX = ((to.x - (mockupBox.left - box.left)) / mockupBox.width * 100).toFixed(2);
                     pin.dataset.mockupY = ((to.y - (mockupBox.top - box.top)) / mockupBox.height * 100).toFixed(2);
                 }
-                pin.style.left = (to.x / box.width * 100).toFixed(2) + 'cqw';
-                pin.style.top = (to.y / box.width * 100).toFixed(2) + 'cqw';
+                setPin(pin, to.x / box.width * 100, to.y / box.width * 100);
             }
 
             var start;
@@ -554,8 +570,7 @@
                 // Keep the visible source dot attached to that edge too. It is
                 // a marker now, not a second draggable point that can drift.
                 if (near) {
-                    near.style.left = (start.x / box.width * 100).toFixed(2) + 'cqw';
-                    near.style.top = (start.y / box.width * 100).toFixed(2) + 'cqw';
+                    setPin(near, start.x / box.width * 100, start.y / box.width * 100);
                 }
             } else if (near && near.offsetParent) {
                 start = centre(near);
@@ -587,6 +602,11 @@
         queued = true;
         requestAnimationFrame(function () { queued = false; draw(); });
     }
+
+    // Shared with the editing script below, which lives in its own <script>
+    // and cannot see anything declared in here.
+    window.tpSetPin = setPin;
+    window.tpReadPin = readPin;
 
     window.tpDrawLines = redraw;
     draw();
@@ -629,7 +649,15 @@
 </script>
 
 @if($imageEditable)
-<script>(function(){
+<script>
+var setPin = window.tpSetPin || function (el, x, y) {
+    el.style.setProperty('--pin-x', (+x).toFixed(2));
+    el.style.setProperty('--pin-y', (+y).toFixed(2));
+};
+var readPin = window.tpReadPin || function (el, axis) {
+    return parseFloat(el.style.getPropertyValue('--pin-' + axis)) || 0;
+};
+(function(){
 /* A box dragged bigger has to still be bigger tomorrow. The browser's own
    resize handle changes nothing but the element, so the size is written into a
    hidden field beside it and saved with the pack — as a share of the sheet's
@@ -765,8 +793,8 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
                be. The FAR end stays where it is: that end names a place on the
                garment, and the garment has not moved. */
             nearPin=document.querySelector('.tp-ref-pin[data-pin-slot="'+slot+'"][data-pin-end="from"]');
-            nearBaseX=nearPin?parseFloat(nearPin.style.left):0;
-            nearBaseY=nearPin?parseFloat(nearPin.style.top):0;
+            nearBaseX=nearPin?readPin(nearPin,'x'):0;
+            nearBaseY=nearPin?readPin(nearPin,'y'):0;
 
             box.setPointerCapture(e.pointerId);
         });
@@ -787,8 +815,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
             }
 
             if(nearPin){
-                nearPin.style.left=(nearBaseX+dx/per).toFixed(2)+'cqw';
-                nearPin.style.top=(nearBaseY+dy/per).toFixed(2)+'cqw';
+                setPin(nearPin,nearBaseX+dx/per,nearBaseY+dy/per);
                 if(window.tpDrawLines)window.tpDrawLines();
             }
         });
@@ -818,7 +845,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
 
                 // The line came along, so its new start is saved with the move.
                 if(nearPin&&window.tpRememberPin){
-                    window.tpRememberPin(slot,'from',parseFloat(nearPin.style.left),parseFloat(nearPin.style.top));
+                    window.tpRememberPin(slot,'from',readPin(nearPin,'x'),readPin(nearPin,'y'));
                 }
                 nearPin=null;
                 // Swallow the click this drag would otherwise finish with, or
@@ -897,10 +924,10 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
             var from=sheet.querySelector('.tp-ref-pin[data-pin-slot="'+slot+'"][data-pin-end="from"]');
             var to=sheet.querySelector('.tp-ref-pin[data-pin-slot="'+slot+'"][data-pin-end="to"]');
             if(!from||!to)return;
-            var fx=parseFloat(from.style.left),fy=parseFloat(from.style.top),
-                tx=parseFloat(to.style.left),ty=parseFloat(to.style.top),
+            var fx=readPin(from,'x'),fy=readPin(from,'y'),
+                tx=readPin(to,'x'),ty=readPin(to,'y'),
                 dx=tx-fx,dy=ty-fy;
-            line.style.left=fx+'cqw';line.style.top=fy+'cqw';
+            line.style.setProperty('--pin-x',fx);line.style.setProperty('--pin-y',fy);
             line.style.width=Math.hypot(dx,dy)+'cqw';
             line.style.transform='rotate('+(Math.atan2(dy,dx)*180/Math.PI)+'deg)';
         });
@@ -910,7 +937,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
         var pin=document.createElement('span');
         pin.className='tp-ref-pin is-pin-movable'+(end==='from'?' tp-ref-pin-from':'');
         pin.dataset.pinSlot=slot;pin.dataset.pinEnd=end;
-        pin.style.left=x.toFixed(2)+'cqw';pin.style.top=y.toFixed(2)+'cqw';
+        setPin(pin,x,y);
         pin.title=end==='from'?'Drag where the line starts':'Drag onto the garment';
         sheet.appendChild(pin);hold(pin);
         remember(slot,end,x,y);
@@ -966,7 +993,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
             if(!pin.classList.contains('is-pin-movable'))return;
             if(e.button!==0)return;
             e.preventDefault();e.stopPropagation();
-            baseX=parseFloat(pin.style.left)||0;baseY=parseFloat(pin.style.top)||0;
+            baseX=readPin(pin,'x');baseY=readPin(pin,'y');
             startX=e.clientX;startY=e.clientY;dragging=true;
             pin.setPointerCapture(e.pointerId);
             pin.classList.add('is-moving');
@@ -989,8 +1016,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
                 }
             }
 
-            pin.style.left=nextX.toFixed(2)+'cqw';
-            pin.style.top=nextY.toFixed(2)+'cqw';
+            setPin(pin,nextX,nextY);
 
             // While it moves, the shared coordinate follows it. The next draw
             // therefore reconstructs this same point instead of snapping back
@@ -1011,7 +1037,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
             pin.addEventListener(name,function(){
                 if(!dragging)return;
                 dragging=false;pin.classList.remove('is-moving');
-                remember(pin.dataset.pinSlot,pin.dataset.pinEnd,parseFloat(pin.style.left),parseFloat(pin.style.top));
+                remember(pin.dataset.pinSlot,pin.dataset.pinEnd,readPin(pin,'x'),readPin(pin,'y'));
             });
         });
 
@@ -1040,7 +1066,7 @@ function preview(input){const file=input.files&&input.files[0],image=document.ge
     if(lineForm){
         lineForm.addEventListener('submit',function(){
             sheet.querySelectorAll('.tp-ref-pin[data-pin-end="to"]').forEach(function(pin){
-                remember(pin.dataset.pinSlot,'to',parseFloat(pin.style.left)||0,parseFloat(pin.style.top)||0);
+                remember(pin.dataset.pinSlot,'to',readPin(pin,'x'),readPin(pin,'y'));
             });
         });
     }

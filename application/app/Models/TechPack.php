@@ -143,7 +143,7 @@ class TechPack extends Model
      * sheet sat ON the picture on the floor's. A moved text block is pinned to
      * the sheet instead, at a point that means the same thing on every copy.
      */
-    public function boxPositionStyle(string $slot): string
+    public function boxPositionStyle(string $slot, bool $pinLegacy = true): string
     {
         $at = $this->boxPosition($slot);
 
@@ -167,9 +167,21 @@ class TechPack extends Model
             return 'transform:translate('.$at['x'].'cqw,'.$at['y'].'cqw);';
         }
 
-        $top = isset($at['yh']) ? $at['yh'].'%' : $at['y'].'cqw';
+        // A block pinned before the height figure existed has only the old
+        // share-of-WIDTH number, which means one place on the artist's sheet
+        // and a different one on everybody else's. On the artist's copy it is
+        // still honoured — that is where they put it, and the next save
+        // records it properly. On the copy the shop reads it is not: a block
+        // dropped into the wrong band reads as a block that has gone missing,
+        // and its own row beside the tag is the better answer until the artist
+        // saves once.
+        if (! isset($at['yh'])) {
+            return $pinLegacy
+                ? 'position:absolute; left:'.$at['x'].'cqw; top:'.$at['y'].'cqw; margin:0;'
+                : '';
+        }
 
-        return 'position:absolute; left:'.$at['x'].'cqw; top:'.$top.'; margin:0;';
+        return 'position:absolute; left:'.$at['x'].'cqw; top:'.$at['yh'].'%; margin:0;';
     }
 
     /** Text blocks are the ones whose size differs between copies. */
