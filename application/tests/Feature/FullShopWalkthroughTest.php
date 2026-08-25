@@ -107,19 +107,27 @@ class FullShopWalkthroughTest extends TestCase
     {
         Storage::fake('local');
 
-        // ---- 1. The design, approved by the client --------------------------
+        // ---- 1. The client's own reference, before anybody draws -------------
+        // The artist works from what the client sent, so it is on file first.
+        $this->actingAs($this->staff['sales'])
+            ->post(route('job-orders.reference', $this->order), [
+                'reference_files' => [UploadedFile::fake()->image('client-peg.jpg')],
+                'kind' => 'peg',
+            ])->assertRedirect();
+
+        // ---- 2. The artist draws the layout, and the client approves it ------
         $this->order->unlockStage(1);
         $this->close('Layout');
-        $this->order->refresh()->unlockStage(2);
-        $this->close('Final mockup');
 
-        $this->assertTrue($this->order->fresh()->mockupApproved(),
-            'the pack must not open before the client has approved the design');
+        // Approving the layout releases NOTHING on its own. The shop draws the
+        // final mockup for a client who has paid, so the job waits here.
+        $this->assertSame(
+            'todo',
+            $this->order->fresh()->tasks()->where('department', 'Final mockup')->value('status'),
+            'the mockup went to the artist before the client had paid a peso'
+        );
 
-        // ---- 2. The money, and the client's own reference --------------------
-        // Before the spec goes on the sheet, not after: the shop puts nothing
-        // into production on a promise, and the order page says as much —
-        // "Downpayment recorded — put the client's spec on the tech pack".
+        // ---- 3. The downpayment, which is what starts the mockup -------------
         $paid = $this->actingAs($this->staff['sales'])
             ->post(route('orders.payment', $this->order), [
                 // Nothing is recorded on somebody's word: the shop keeps a
@@ -131,14 +139,27 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertTrue($this->order->fresh()->hasDownpayment(),
             'payment refused: '.json_encode(session('errors')?->all() ?? []));
 
-        $this->actingAs($this->staff['sales'])
-            ->post(route('job-orders.reference', $this->order), [
-                'reference_files' => [UploadedFile::fake()->image('client-peg.jpg')],
-                'kind' => 'peg',
-            ])->assertRedirect();
+        $this->assertSame(
+            'ready',
+            $this->order->fresh()->tasks()->where('department', 'Final mockup')->value('status'),
+            'the money is in and the artist has not been asked for the mockup'
+        );
 
-        // ---- 3. The officer fills their half of the PACK --------------------
-        $this->order->refresh()->unlockStage(2);
+        // The Tech Pack is NOT released with it: the officer fills their half
+        // first and sends it, which is a different event entirely.
+        $this->assertSame(
+            'todo',
+            $this->order->fresh()->tasks()->where('department', 'Tech pack')->value('status'),
+            'the pack reached the artist before the officer had written anything on it'
+        );
+
+        // ---- 4. The artist draws the mockup, and the client approves it ------
+        $this->close('Final mockup');
+
+        $this->assertTrue($this->order->fresh()->mockupApproved(),
+            'the pack must not open before the client has approved the design');
+
+        // ---- 5. The officer fills their half of the PACK --------------------
 
         $this->actingAs($this->staff['sales'])
             ->get(route('job-orders.edit', $this->order))

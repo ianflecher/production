@@ -1101,6 +1101,24 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
 
 
 
+/* ---- Make the whole sheet bigger ----------------------------------------
+   The pack is a landscape page drawn to fit a column, and the materials list
+   on it is small. This scales the sheet where it stands — the frame under it
+   scrolls, so an enlarged sheet still has a right-hand side you can reach. */
+.tp-scale {
+    display: flex; align-items: center; gap: 0.35rem;
+    margin: 0 auto 0.6rem; max-width: 1180px;
+    font-size: 0.78rem; color: var(--ink-2, #475569);
+}
+.tp-scale button {
+    min-width: 2rem; padding: 0.2rem 0.5rem;
+    border: 1px solid var(--line, #d5dbe5); border-radius: 6px;
+    background: #fff; color: inherit; font: inherit; cursor: pointer;
+}
+.tp-scale button:hover { border-color: #2563eb; color: #2563eb; }
+.tp-scale output { min-width: 3.2rem; text-align: center; font-variant-numeric: tabular-nums; }
+.tp-scale-frame { overflow: auto; max-width: 100%; }
+
 /* ---- Click a picture to see it big --------------------------------------
    A garment flat is a couple of centimetres across on the sheet, and the print
    size written on it is unreadable at a station. This is the whole of the

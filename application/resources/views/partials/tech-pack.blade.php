@@ -1139,6 +1139,70 @@ document.querySelectorAll('.tp-image-input').forEach(function(input){input.addEv
      where a garment flat is a couple of centimetres across and the print size
      written on it is unreadable. Not on the artist's copy: there a click opens
      the file picker, which is what they want it to do. --}}
+{{-- Make the sheet bigger.
+
+     Only on the copies nobody is filling in. The artist places pins and drags
+     captions against what is on screen, so a scaled sheet puts every one of
+     those measurements out by the scale factor; and a typing box that has been
+     scaled is a poor thing to type in. $imageEditable alone is not the
+     question — the officer types on a sheet where it is false. --}}
+@unless ($textEditable || $imageEditable)
+<div class="tp-scale no-print" data-tp-scale>
+    <button type="button" data-tp-scale-step="-1" aria-label="Smaller">&minus;</button>
+    <output data-tp-scale-now>100%</output>
+    <button type="button" data-tp-scale-step="1" aria-label="Bigger">+</button>
+    <button type="button" data-tp-scale-reset>Fit</button>
+</div>
+
+<script>
+(function () {
+    var bar = document.querySelector('[data-tp-scale]');
+    var sheet = document.querySelector('.tp-reference-sheet');
+    if (!bar || !sheet) { return; }
+
+    /* The sheet is scaled, so the room it needs grows with it. Without a frame
+       that scrolls, the right-hand side of an enlarged sheet is simply off the
+       page with no way to reach it. */
+    var frame = document.createElement('div');
+    frame.className = 'tp-scale-frame';
+    sheet.parentNode.insertBefore(frame, sheet);
+    frame.appendChild(sheet);
+
+    var STEPS = [1, 1.25, 1.5, 2, 2.5, 3];
+    var at = 0;
+
+    function apply() {
+        var scale = STEPS[at];
+
+        sheet.style.transformOrigin = 'top left';
+        sheet.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
+
+        /* Reserve the room the drawn sheet takes. A transform paints outside
+           the box without changing it, so the frame would scroll to the
+           unscaled width and cut the rest off. */
+        frame.style.height = scale === 1 ? '' : (sheet.offsetHeight * scale) + 'px';
+        bar.querySelector('[data-tp-scale-now]').value = Math.round(scale * 100) + '%';
+    }
+
+    bar.addEventListener('click', function (e) {
+        var step = e.target.closest('[data-tp-scale-step]');
+
+        if (step) {
+            at = Math.min(STEPS.length - 1, Math.max(0, at + Number(step.dataset.tpScaleStep)));
+            apply();
+        }
+
+        if (e.target.closest('[data-tp-scale-reset]')) { at = 0; apply(); }
+    });
+
+    /* Printing draws the sheet at the page's size, so a scale meant for
+       reading on screen has no business travelling with it. */
+    window.addEventListener('beforeprint', function () { sheet.style.transform = ''; frame.style.height = ''; });
+    window.addEventListener('afterprint', apply);
+})();
+</script>
+@endunless
+
 <div id="tpZoom" class="tp-zoom no-print" hidden>
     <img id="tpZoomImg" src="" alt="">
     <button type="button" class="tp-zoom-close" aria-label="Close">&times;</button>
