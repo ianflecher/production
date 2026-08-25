@@ -172,10 +172,6 @@ class TaskController extends Controller
             'quality' => ['nullable', 'string', 'max:60'],
             'print_tech' => ['nullable', 'string', 'max:60'],
             'placing_title' => ['nullable', 'string', 'max:160'],
-            'front_print_placement' => ['nullable', 'string', 'max:60'],
-            'front_actual_size' => ['nullable', 'string', 'max:60'],
-            'back_print_placement' => ['nullable', 'string', 'max:60'],
-            'back_actual_size' => ['nullable', 'string', 'max:60'],
             'tshirt_color' => ['nullable', 'string', 'max:60'],
             // Their own rows now, not two halves of a dropdown.
             'print_label' => ['nullable', 'string', 'max:120'],
@@ -190,7 +186,6 @@ class TaskController extends Controller
             'file_location_notes' => ['nullable', 'string', 'max:200'],
             'file_location_tail' => ['nullable', 'string', 'max:200'],
             'file_location_host' => ['nullable', 'string', 'max:63'],
-            'additional_tech_notes' => ['nullable', 'string', 'max:500'],
             'artist_name' => ['nullable', 'string', 'max:100'],
             'bottom_text' => ['nullable', 'string', 'max:1000'],
             'bottom_image_width' => ['nullable', 'integer', 'min:120', 'max:900'],
@@ -255,10 +250,8 @@ class TaskController extends Controller
         // here too, not just a box they cannot click into.
         $packFields = collect($data)->only([
             'placing_title',
-            'front_print_placement', 'front_actual_size',
-            'back_print_placement', 'back_actual_size',
             'tag_1_details', 'tag_2_details',
-            'file_location_notes', 'additional_tech_notes', 'artist_name',
+            'file_location_notes', 'artist_name',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
             'bottom_text_width', 'bottom_text_height',
         ])->all();

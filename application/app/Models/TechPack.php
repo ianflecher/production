@@ -23,9 +23,6 @@ class TechPack extends Model
         // Header
         'design_name', 'fitting', 'item_style', 'quality', 'print_tech', 'placing_title',
         // The three colourway swatches
-        // Exactly a front and a back, each with the size it prints at
-        'front_print_placement', 'front_actual_size',
-        'back_print_placement', 'back_actual_size',
         // Materials and components the job order does not carry
         'tshirt_color', 'print_label', 'thread_color', 'stitch_thread', 'cutting_method', 'size_range',
         'zipper_type', 'lip_pocket_color',
@@ -36,7 +33,7 @@ class TechPack extends Model
         'extra_notes',
         // Where the files are, and who drew it
         'folder_shot_path', 'folder_shot_name', 'file_location_notes',
-        'additional_tech_notes', 'artist_name',
+        'artist_name',
         'bottom_text', 'bottom_image_width', 'bottom_image_height',
         'bottom_text_width', 'bottom_text_height',
     ];

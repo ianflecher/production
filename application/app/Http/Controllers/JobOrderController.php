@@ -106,17 +106,12 @@ class JobOrderController extends Controller
             'zipper_type' => ['nullable', 'string', 'max:60'],
             'lip_pocket_color' => ['nullable', 'string', 'max:60'],
             'placing_title' => ['nullable', 'string', 'max:160'],
-            'front_print_placement' => ['nullable', 'string', 'max:60'],
-            'front_actual_size' => ['nullable', 'string', 'max:60'],
-            'back_print_placement' => ['nullable', 'string', 'max:60'],
-            'back_actual_size' => ['nullable', 'string', 'max:60'],
             'stitch_thread' => ['nullable', 'string', 'max:60'],
             'cutting_method' => ['nullable', 'string', 'max:60'],
             'tag_1_details' => ['nullable', 'string', 'max:120'],
             'tag_2_details' => ['nullable', 'string', 'max:120'],
             'file_location_notes' => ['nullable', 'string', 'max:200'],
             'artist_name' => ['nullable', 'string', 'max:100'],
-            'additional_tech_notes' => ['nullable', 'string', 'max:500'],
 
             // What the job is made of, and how much of each. Asked for on the
             // pack now: the production-details page it used to live on is not

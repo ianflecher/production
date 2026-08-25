@@ -217,8 +217,6 @@ class FullShopWalkthroughTest extends TestCase
                     'front_mockup' => UploadedFile::fake()->image('mockup.png'),
                     'front_artwork' => UploadedFile::fake()->image('art.png'),
                 ],
-                'front_print_placement' => 'Left chest',
-                'front_actual_size' => '4.0" W x 2.3" H',
                 'file_location_host' => 'IC-SERVER',
                 'file_location_tail' => 'FOR PRINT\\IC2026-WALK',
                 // The things built in this session: a note, a moved box, a line.

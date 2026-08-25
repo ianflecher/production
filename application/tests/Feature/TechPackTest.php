@@ -157,7 +157,6 @@ class TechPackTest extends TestCase
         $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
             ->assertOk()
             ->assertSee('name="design_name"', false)
-            ->assertDontSee('name="front_actual_size"', false)
             ->assertDontSee('name="tag_1_details"', false)
             ->assertDontSee('name="artist_name"', false);
     }
@@ -215,7 +214,6 @@ class TechPackTest extends TestCase
             ->assertOk()
             ->assertSee('name="design_name"', false)
             ->assertSee('name="printer"', false)
-            ->assertDontSee('name="front_actual_size"', false)
             ->assertDontSee('name="tech_pack_images[front_mockup]"', false);
     }
 

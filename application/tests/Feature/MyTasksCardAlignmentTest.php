@@ -27,6 +27,17 @@ class MyTasksCardAlignmentTest extends TestCase
 
     private int $seq = 0;
 
+    /**
+     * Counted, not guessed at.
+     *
+     * The number used to be random_int(1000, 9999), and order_number is unique
+     * — so two orders in the same test collided roughly once in nine thousand
+     * tries. That is often enough to fail a suite now and then and pass on the
+     * retry, which is the worst way for a test to be wrong: it teaches people
+     * to run it again rather than read it.
+     */
+    private int $made = 0;
+
     /** An artist with one open step and one finished order behind them. */
     private function artistWithWork(): User
     {
@@ -35,7 +46,7 @@ class MyTasksCardAlignmentTest extends TestCase
 
         foreach ([['Layout', 'ready'], ['Final mockup', 'complete']] as [$department, $status]) {
             $order = ProductionOrder::create([
-                'order_number' => 'IC2026-0'.random_int(1000, 9999),
+                'order_number' => 'IC2026-0'.(1000 + ++$this->made),
                 'customer_name' => 'Grid Co', 'product_type' => 'round_neck',
                 'quantity' => 30, 'due_date' => now()->addWeeks(2),
                 'created_by' => $sales->id, 'status' => 'active',
