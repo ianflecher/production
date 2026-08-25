@@ -22,7 +22,9 @@
     <div class="card panel" style="text-align: center; padding: 2.5rem;">
         <p class="muted">Nothing to check right now. Submitted work will appear here.</p>
     </div>
-@else
+@endif
+
+@if ($packages->isNotEmpty() || $singles->isNotEmpty())
     <div class="card">
         <div class="tbl-wrap">
             <table class="tbl">
@@ -177,6 +179,60 @@
                                         <span style="font-size: 0.75rem; color: var(--danger-ink);">revision limit reached</span>
                                     @endif
                                 </div>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+@endif
+
+{{-- Already checked. This queue is shared — Maam Carla and the artist leader
+     both work from it — so a pack one of them signs off has to stay readable
+     to the other instead of just disappearing off the page. --}}
+@if ($checked->isNotEmpty())
+    <div class="page-head" style="margin-top: 1.5rem;">
+        <div class="grow">
+            <h2 style="margin:0;">Already checked</h2>
+            <p class="muted">Signed off in the last 7 days. Nothing left to do here — this is the record of what went through.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>What</th>
+                        <th>Artist</th>
+                        <th>Approved</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($checked as $group)
+                        @php
+                            $order = $group->first()->order;
+                            $when = $group->max('approved_at');
+                        @endphp
+                        <tr>
+                            <td>
+                                <a href="{{ route('orders.show', $order) }}" style="font-weight: 600;">{{ $order->order_number }}</a>
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $order->clientName() }}</div>
+                            </td>
+                            <td>
+                                <strong>Job package</strong>
+                                <div style="font-size: 0.74rem; color: var(--ink-3);">job order + mockup + template</div>
+                            </td>
+                            <td>{{ $group->first(fn ($t) => $t->assignee)?->assignee?->name ?? '—' }}</td>
+                            <td style="font-size: 0.84rem;">
+                                <span class="pill pill-success">Approved</span>
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $when?->diffForHumans() ?? '—' }}</div>
+                            </td>
+                            <td>
+                                <a href="{{ route('orders.job-order', $order) }}" class="btn btn-ghost btn-sm">📋 Open tech pack</a>
                             </td>
                         </tr>
                     @endforeach

@@ -46,6 +46,14 @@ class User extends Authenticatable
     public const JOB_SUPERVISOR = 'supervisor';
 
     /**
+     * The leader of the artists. He is an artist himself — he takes tech packs
+     * off the same rotation as the rest of them — and on top of that he checks
+     * their work and manages their accounts. Nothing else on the floor is his:
+     * no production orders, no station board, no calendar. See isArtistLead().
+     */
+    public const JOB_ARTIST_LEAD = 'artist leader';
+
+    /**
      * The positions the shop actually hires for, as the add-account form
      * should offer them.
      *
@@ -103,6 +111,7 @@ class User extends Authenticatable
             self::ROLE_SALES => 'Account Officer',
             self::ROLE_FINANCE => 'Finance',
             self::JOB_SUPERVISOR => 'Supervisor',
+            self::JOB_ARTIST_LEAD => 'Artist Leader',
             self::ROLE_LEADER => 'Leader',
             self::ROLE_SUPER_ADMIN => 'Super Admin',
         ];
@@ -275,6 +284,37 @@ class User extends Authenticatable
     }
 
     /**
+     * The leader of the artists. They check and revise the tech pack the
+     * artists submit, and manage the artist accounts — but the rest of the
+     * floor (printing, cutting, sewing, QC, release) is not theirs to sign off.
+     */
+    public function isArtistLead(): bool
+    {
+        return strtolower(trim((string) $this->job_role)) === self::JOB_ARTIST_LEAD;
+    }
+
+    /**
+     * Does this user's management scope cover $other? Leaders and super admins
+     * oversee everyone; a supervisor only their slice of the floor.
+     */
+    public function oversees(self $other): bool
+    {
+        $scope = $this->managementScope();
+
+        if ($scope === null || $other->id === $this->id) {
+            return true;
+        }
+
+        // The artist lead oversees the artists themselves, not the account
+        // officers who share the design domain with them.
+        if ($scope === 'artist') {
+            return $other->isArtist();
+        }
+
+        return self::roleDomain($other->job_role) === $scope;
+    }
+
+    /**
      * Which supervision domain a job role belongs to:
      *   design      → account officers & artists (agent → artist)
      *   production  → the floor from printing through QC (printer → QC)
@@ -288,7 +328,7 @@ class User extends Authenticatable
             return 'admin';
         }
 
-        if (in_array($r, [self::ROLE_SALES, self::ROLE_AGENT, self::JOB_ARTIST, 'sales', 'agent', 'artist'], true)) {
+        if (in_array($r, [self::ROLE_SALES, self::ROLE_AGENT, self::JOB_ARTIST, self::JOB_ARTIST_LEAD, 'sales', 'agent', 'artist'], true)) {
             return 'design';
         }
 
@@ -306,7 +346,7 @@ class User extends Authenticatable
         return match (true) {
             in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, 'supervisor', self::ROLE_FINANCE], true) => 'Management',
             in_array($r, [self::ROLE_SALES, self::ROLE_AGENT], true) => 'Sales',
-            $r === self::JOB_ARTIST => 'Design',
+            $r === self::JOB_ARTIST || $r === self::JOB_ARTIST_LEAD => 'Design',
             $r === self::JOB_SUPPLY_CHAIN || $r === 'printer' || str_contains($r, 'raw material') => 'Supply / Printing',
             str_contains($r, 'press') || $r === 'embroidery' => 'Add-ons',
             str_contains($r, 'cutting') => 'Cutting',
@@ -324,6 +364,11 @@ class User extends Authenticatable
     {
         if ($this->isSuperAdmin()) {
             return null;
+        }
+
+        // The artist leader's staff are the artists.
+        if ($this->isArtistLead()) {
+            return 'artist';
         }
 
         if (str_contains(strtolower((string) $this->name), 'carla')) {
@@ -385,7 +430,12 @@ class User extends Authenticatable
 
     public function isArtist(): bool
     {
-        return strtolower(trim((string) $this->job_role)) === self::JOB_ARTIST;
+        $role = strtolower(trim((string) $this->job_role));
+
+        // The artist leader works the bench too, so every artist path — the
+        // task list, the assignment rotation, the artist dashboard — has to
+        // count him in.
+        return $role === self::JOB_ARTIST || $role === self::JOB_ARTIST_LEAD;
     }
 
     public function jobRoleLabel(): ?string
@@ -502,6 +552,10 @@ class User extends Authenticatable
         // them Leader and nobody can tell the two apart.
         if ($this->isSupervisor()) {
             return 'Supervisor';
+        }
+
+        if ($this->isArtistLead()) {
+            return 'Artist Leader';
         }
 
         if ($this->isAgent()) {

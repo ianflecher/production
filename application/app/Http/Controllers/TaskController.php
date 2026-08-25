@@ -745,7 +745,7 @@ class TaskController extends Controller
 
     /* ==================== Leader side ==================== */
 
-    public function approvals(): View
+    public function approvals(Request $request): View
     {
         $mockup = \App\Models\ProductionOrder::STAGE_MOCKUP;
 
@@ -770,7 +770,34 @@ class TaskController extends Controller
             ->orderBy('submitted_at')
             ->get();
 
-        return view('tasks.approvals', ['packages' => $packages, 'singles' => $singles]);
+        // The artist leader checks the artists' work and nothing else — the
+        // rest of the floor still answers to the leader. And he draws packs
+        // himself, so his own never appear here: those wait for Maam Carla.
+        if ($request->user()->isArtistLead()) {
+            $singles = $singles->take(0);
+            $packages = $packages->reject(
+                fn ($group) => $group->contains('assigned_to', $request->user()->id)
+            );
+        }
+
+        // Two people share this queue, so a pack that one of them signs off
+        // must not simply vanish for the other — it drops into "already
+        // checked" with the time it was approved, and stays there for a week.
+        $checked = Task::with(['order.client', 'assignee'])
+            ->where('stage', $mockup)
+            ->where('approver_role', 'leader')
+            ->where('status', 'complete')
+            ->where('approved_at', '>=', now()->subWeek())
+            ->whereHas('order', fn ($q) => $q->where('status', 'active'))
+            ->get()
+            ->groupBy('production_order_id')
+            ->sortByDesc(fn ($group) => $group->max('approved_at'));
+
+        return view('tasks.approvals', [
+            'packages' => $packages,
+            'singles' => $singles,
+            'checked' => $checked,
+        ]);
     }
 
     public function assign(Request $request, Task $task): RedirectResponse
@@ -816,7 +843,12 @@ class TaskController extends Controller
             // Handing the goods over is the products desk's job — they are the
             // ones holding the stock and facing the client at the counter.
             'inventory' => $user->canManageProducts(),
-            default => $user->isLeader(),
+            // The artist leader signs off the tech pack only, and never the
+            // one he drew himself.
+            default => $user->isArtistLead()
+                ? $task->stage === \App\Models\ProductionOrder::STAGE_MOCKUP
+                    && $task->assigned_to !== $user->id
+                : $user->isLeader(),
         };
 
         abort_unless($ok, 403);
@@ -978,10 +1010,11 @@ class TaskController extends Controller
     /** The mockup + template are one job package — approve both at once. */
     public function approvePackage(Request $request, \App\Models\ProductionOrder $order): RedirectResponse
     {
-        abort_unless($request->user()->isLeader(), 403);
+        abort_unless($request->user()->isLeader() || $request->user()->isArtistLead(), 403);
 
         $tasks = $this->packageTasks($order);
         abort_if($tasks->isEmpty(), 404);
+        $this->assertNotOwnPack($request, $tasks);
 
         foreach ($tasks as $t) {
             $t->approve();
@@ -1004,7 +1037,7 @@ class TaskController extends Controller
      */
     public function revisePackage(Request $request, \App\Models\ProductionOrder $order): RedirectResponse
     {
-        abort_unless($request->user()->isLeader(), 403);
+        abort_unless($request->user()->isLeader() || $request->user()->isArtistLead(), 403);
 
         $data = $request->validate([
             'revision_note' => ['required', 'string', 'max:2000'],
@@ -1016,6 +1049,7 @@ class TaskController extends Controller
 
         $tasks = $this->packageTasks($order);
         abort_if($tasks->isEmpty(), 404);
+        $this->assertNotOwnPack($request, $tasks);
         $order->loadMissing('jobOrder');
         $items = $data['items'];
         $fixed = [];
@@ -1046,6 +1080,19 @@ class TaskController extends Controller
         }
 
         return back()->with('success', 'Sent back for revision on '.$order->order_number.': '.implode(', ', $fixed).'.');
+    }
+
+    /**
+     * Nobody signs off their own drawing. The artist leader is on the artist
+     * rotation, so a pack he made waits for a leader instead.
+     */
+    private function assertNotOwnPack(Request $request, $tasks): void
+    {
+        abort_if(
+            $request->user()->isArtistLead()
+                && $tasks->contains('assigned_to', $request->user()->id),
+            403
+        );
     }
 
     /** The stage-2 leader-check tasks (mockup + template) awaiting checking. */

@@ -44,7 +44,7 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.app', function ($view) {
             $user = auth()->user();
 
-            if ($user && $user->isLeader()) {
+            if ($user && ($user->isLeader() || $user->isArtistLead())) {
                 // Count ROWS as shown on the Approvals page: the mockup + template
                 // of an order are one "job package" row, everything else is one row
                 // each — so the badge matches what the leader actually sees.
@@ -66,7 +66,9 @@ class AppServiceProvider extends ServiceProvider
                     ->whereHas('order', fn ($q) => $q->where('status', 'active'))
                     ->count();
 
-                $view->with('pendingApprovals', $packages + $singles);
+                // The artist leader's badge counts tech packs only — the rest of
+                // the floor is not his queue.
+                $view->with('pendingApprovals', $user->isArtistLead() ? $packages : $packages + $singles);
             }
 
             if ($user && $user->isSales()) {

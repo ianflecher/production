@@ -232,7 +232,17 @@
             <div id="priceNote" style="font-size:0.8rem;color:#4b5b7a;margin-top:0.5rem;font-weight:500;"></div>
         </div>
 
-        {{-- Only relevant for custom apparel, a custom size (CS), or a quotation. --}}
+        {{-- CS and a typed "other size" are not on the price list, so the tier
+             price does not apply to them. They get their own price per piece,
+             and the charted sizes keep the automatic one. --}}
+        <div id="customSizeSection" class="field" style="margin-top:0.8rem; display:none; max-width:420px;">
+            <label for="custom_size_price">Price / piece for the off-chart sizes <span id="customSizeWhich" style="font-weight:400; color:var(--ink-3);"></span></label>
+            <input id="custom_size_price" type="number" name="custom_size_price" step="0.01" min="0"
+                   value="{{ old('custom_size_price') }}" placeholder="e.g. 800.00" oninput="updatePrice()">
+            <div id="customSizeNote" style="font-size:0.78rem; color:var(--ink-3); margin-top:0.35rem;"></div>
+        </div>
+
+        {{-- Only relevant for custom apparel, or a quotation. --}}
         <div id="overrideSection" style="margin-top: 0.8rem; display: none;">
             <button type="button" id="overrideToggle" class="btn btn-ghost btn-sm" onclick="showOverride()">Set custom price / quotation</button>
             <div id="overrideWrap" class="field" style="display: {{ old('unit_price_override') ? 'block' : 'none' }}; max-width: 340px; margin-top: 0.6rem;">
@@ -340,16 +350,42 @@
 
         const backPocket = bpBox.checked;
 
-        // The custom price only applies to custom apparel, a custom size (CS),
-        // or when no tier price exists (over 100 pcs → quotation). Hide it
-        // otherwise so standard products always use the automatic price.
+        // Pieces the price list does not cover: CS, and a typed size that is
+        // not on the chart. They are priced by hand; the charted sizes keep the
+        // automatic tier price.
         const overrideEl = document.getElementById('unit_price_override');
         const csQty = parseInt(document.querySelector('input[name="sizes[CS]"]')?.value) || 0;
+        const otherLabel = (document.getElementById('other_size')?.value || '').trim();
+        const otherQty = otherLabel ? (parseInt(document.getElementById('other_size_qty')?.value) || 0) : 0;
+        const offChartQty = csQty + otherQty;
+
         let tierBase = null;
         if (product && qty > 0) {
             for (const t of product.tiers) { if (qty >= t.min && qty <= t.max) { tierBase = Number(t.price); break; } }
         }
-        const needsCustomPrice = type === '__other__' || csQty > 0 || (qty > 0 && tierBase === null);
+
+        // The whole order goes to a typed price when the product has no list at
+        // all, or the quantity is past the top tier — the off-chart box is for
+        // the mixed case, where the rest of the order DOES have a tier price.
+        const wholeOrderIsCustom = type === '__other__' || (qty > 0 && tierBase === null);
+
+        const csSec = document.getElementById('customSizeSection');
+        const csEl = document.getElementById('custom_size_price');
+        const showOffChart = offChartQty > 0 && !wholeOrderIsCustom;
+        if (csSec) {
+            csSec.style.display = showOffChart ? 'block' : 'none';
+            if (showOffChart) {
+                const which = [];
+                if (csQty > 0) which.push(csQty + ' CS');
+                if (otherQty > 0) which.push(otherQty + ' ' + otherLabel);
+                document.getElementById('customSizeWhich').textContent = '(' + which.join(' + ') + ')';
+            } else if (csEl.value) {
+                csEl.value = '';   // don't let a hidden field price the order
+            }
+        }
+        const offChartUnit = showOffChart ? (parseFloat(csEl.value) || 0) : 0;
+
+        const needsCustomPrice = wholeOrderIsCustom;
         const sec = document.getElementById('overrideSection');
         if (sec) {
             sec.style.display = needsCustomPrice ? 'block' : 'none';
@@ -408,13 +444,26 @@
         const vatOn = document.getElementById('vat_inclusive')?.checked;
 
         if (unit !== null && qty > 0) {
-            const garment = unit * qty;
+            const chartedQty = showOffChart ? Math.max(0, qty - offChartQty) : qty;
+            const offChartAmount = showOffChart ? offChartUnit * offChartQty : 0;
+            const garment = (unit * chartedQty) + offChartAmount;
+
+            const csNote = document.getElementById('customSizeNote');
+            if (csNote) {
+                csNote.textContent = showOffChart
+                    ? (offChartUnit > 0
+                        ? offChartQty + ' pcs x ' + peso(offChartUnit) + ' = ' + peso(offChartAmount)
+                          + '  •  the other ' + chartedQty + ' pcs stay at ' + peso(unit)
+                        : 'Set a price for these ' + offChartQty + ' pcs — the other ' + chartedQty + ' are at ' + peso(unit) + '.')
+                    : '';
+            }
             const subtotal = garment + pocketAmount + rushFee;
             const vatable = Math.max(0, subtotal - discount);
             const vat = vatOn ? vatable * 0.12 : 0;
             unitOut.textContent = peso(unit);
             totalOut.textContent = peso(vatable + vat);
             const bits = [];
+            if (showOffChart && offChartUnit > 0) bits.push(offChartQty + ' off-chart pcs at ' + peso(offChartUnit));
             if (pocketAmount > 0) bits.push('back pocket ' + peso(pocketAmount));
             if (rushFee > 0) bits.push('rush ' + peso(rushFee));
             if (discount > 0) bits.push('less ' + peso(Math.min(discount, subtotal)) + ' discount');
@@ -480,6 +529,9 @@
         updatePrice();
     }
     document.querySelectorAll('.size-input').forEach(i => i.addEventListener('input', updateQty));
+    // Naming the off-chart size is what makes its pieces count, so typing the
+    // name has to refresh the price the same way its quantity does.
+    document.getElementById('other_size')?.addEventListener('input', updatePrice);
     toggleClientMode();
     updateQty();
     checkCapacity();

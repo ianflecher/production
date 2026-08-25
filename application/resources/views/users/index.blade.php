@@ -22,11 +22,12 @@
         </p>
         @if (!empty($managementScope))
             <p class="muted" style="margin-top:0.3rem; font-size:0.82rem;">
-                👁 You supervise the <strong>{{ $managementScope === 'design' ? 'design side (account officers & artists)' : 'production side (printer → QC)' }}</strong> — only that staff is shown here.
+                👁 You supervise the <strong>{{ ['design' => 'design side (account officers & artists)', 'artist' => 'artists', 'production' => 'production side (printer → QC)'][$managementScope] ?? $managementScope }}</strong> — only that staff is shown here.
             </p>
         @endif
     </div>
 
+    @if (auth()->user()->isLeader())
     <details class="inline-form">
         <summary class="btn btn-primary">
             + New account
@@ -173,6 +174,7 @@
             </form>
         </div>
     </details>
+    @endif
 </div>
 
 @include('partials.list-search', [
@@ -560,7 +562,8 @@
 
                                 {{-- Password reset --}}
                                 @if (
-                                    $user->id !== auth()->id()
+                                    auth()->user()->isLeader()
+                                    && $user->id !== auth()->id()
                                     && (
                                         ! $user->isSuperAdmin()
                                         || auth()->user()->isSuperAdmin()

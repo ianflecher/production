@@ -195,6 +195,9 @@ class ProductionOrderController extends Controller
             'massprod_priority' => ['nullable', 'boolean'],
             'skip_sample' => ['nullable', 'boolean'],
             'unit_price_override' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            // CS and a typed "other size" are off the price list, so they carry
+            // their own price per piece rather than the tier price.
+            'custom_size_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             // Rush: the fee is agreed per job, so it must be entered when ticked.
             'rush' => ['nullable', 'boolean'],
             'rush_fee' => ['nullable', 'required_if:rush,1', 'numeric', 'min:0', 'max:10000000'],
@@ -244,6 +247,10 @@ class ProductionOrderController extends Controller
             $unitPrice = $quote['unit']; // null when a quotation is needed (>100)
         }
 
+        $customSizePrice = ($data['custom_size_price'] ?? null) === null || $data['custom_size_price'] === ''
+            ? null
+            : (float) $data['custom_size_price'];
+
         // A rush order carries a one-off fee agreed for that job.
         $rush = (bool) ($data['rush'] ?? false);
         $rushFee = $rush ? round((float) ($data['rush_fee'] ?? 0), 2) : null;
@@ -286,6 +293,7 @@ class ProductionOrderController extends Controller
             'rush' => $rush,
             'rush_fee' => $rushFee,
             'unit_price' => $unitPrice,
+            'custom_size_price' => $customSizePrice,
             'total_price' => $totalPrice,
             'vat_inclusive' => $vat,
             'discount_amount' => $discount,
@@ -297,6 +305,10 @@ class ProductionOrderController extends Controller
         foreach ($sizes as $size => $qty) {
             $order->items()->create(['size' => $size, 'quantity' => $qty]);
         }
+
+        // The off-chart pieces are priced separately, so the real total is only
+        // knowable once the size breakdown is saved.
+        $order->refresh()->recomputeTotal();
 
         // Design comes first: create the draft job order now so the client
         // reference can be attached right away, then the layout is sent to an
@@ -370,6 +382,9 @@ class ProductionOrderController extends Controller
             'massprod_priority' => ['nullable', 'boolean'],
             'skip_sample' => ['nullable', 'boolean'],
             'unit_price_override' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            // CS and a typed "other size" are off the price list, so they carry
+            // their own price per piece rather than the tier price.
+            'custom_size_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'rush' => ['nullable', 'boolean'],
             'rush_fee' => ['nullable', 'required_if:rush,1', 'numeric', 'min:0', 'max:10000000'],
         ], [
@@ -403,6 +418,9 @@ class ProductionOrderController extends Controller
         $backPocketQty = $backPocket ? $quote['back_pocket_qty'] : null;
         $backPocketAmount = $quote['back_pocket_amount'];
         $unitPrice = ! empty($data['unit_price_override']) ? (float) $data['unit_price_override'] : $quote['unit'];
+        $customSizePrice = ($data['custom_size_price'] ?? null) === null || $data['custom_size_price'] === ''
+            ? null
+            : (float) $data['custom_size_price'];
         $vat = (bool) ($data['vat_inclusive'] ?? false);
         $discount = (float) ($data['discount_amount'] ?? 0);
         $rush = (bool) ($data['rush'] ?? false);
@@ -447,6 +465,7 @@ class ProductionOrderController extends Controller
             'back_pocket' => $backPocket,
             'back_pocket_qty' => $backPocketQty,
             'unit_price' => $unitPrice,
+            'custom_size_price' => $customSizePrice,
             'total_price' => $totalPrice,
             'vat_inclusive' => $vat,
             'discount_amount' => $discount,
@@ -454,6 +473,10 @@ class ProductionOrderController extends Controller
             'rush' => $rush,
             'rush_fee' => $rushFee,
         ]);
+
+        // The size mix may have changed, and the off-chart pieces are priced on
+        // their own — so the total is settled from the saved breakdown.
+        $order->refresh()->recomputeTotal();
 
         return redirect()->route('orders.show', $order)->with('success', "Order {$order->order_number} updated.".$routingNote);
     }

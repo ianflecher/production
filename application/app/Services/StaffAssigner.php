@@ -22,8 +22,14 @@ class StaffAssigner
             return null;
         }
 
+        // The artist leader takes tech packs off the same rotation as the
+        // artists he leads — he is one of them, with a checking job on top.
+        $roles = $team === User::JOB_ARTIST
+            ? [User::JOB_ARTIST, User::JOB_ARTIST_LEAD]
+            : [$team];
+
         $team_members = User::where('is_active', true)
-            ->where('job_role', $team)
+            ->whereIn('job_role', $roles)
             ->with('attendances')
             ->get();
 

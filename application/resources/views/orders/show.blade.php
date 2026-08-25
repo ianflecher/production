@@ -345,7 +345,26 @@
         <div class="tbl-wrap" style="margin-bottom: 0.9rem;">
             <table class="tbl">
                 <tbody>
-                    <tr><td style="color: var(--ink-3); width: 130px;">Price / piece</td><td style="text-align: right;">{{ $order->unit_price !== null ? '₱'.number_format((float) $order->unit_price, 2) : 'For quotation' }}</td></tr>
+                    <tr>
+                        <td style="color: var(--ink-3); width: 130px;">Price / piece</td>
+                        <td style="text-align: right;">
+                            {{ $order->unit_price !== null ? '₱'.number_format((float) $order->unit_price, 2) : 'For quotation' }}
+                            @if (($pb['custom_size_qty'] ?? 0) > 0)
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $pb['charted_qty'] }} pcs on the price list</div>
+                            @endif
+                        </td>
+                    </tr>
+                    {{-- CS and the typed size are off the price list, so they are
+                         priced by hand rather than at the tier rate. --}}
+                    @if (($pb['custom_size_qty'] ?? 0) > 0)
+                        <tr>
+                            <td style="color: var(--ink-3);">Off-chart sizes ({{ $pb['custom_size_qty'] }} pcs)</td>
+                            <td style="text-align: right;">
+                                ₱{{ number_format((float) $order->custom_size_price, 2) }} / pc
+                                <div style="font-size: 0.78rem; color: var(--ink-3);">₱{{ number_format($pb['custom_size_amount'], 2) }}</div>
+                            </td>
+                        </tr>
+                    @endif
                     @if ($pb['subtotal'] !== null)
                         <tr><td style="color: var(--ink-3);">Subtotal</td><td style="text-align: right;">₱{{ number_format($pb['subtotal'], 2) }}</td></tr>
                         @if (($pb['back_pocket'] ?? 0) > 0)

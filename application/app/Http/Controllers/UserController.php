@@ -36,7 +36,7 @@ class UserController extends Controller
 
         if ($scope) {
             $users = $users
-                ->filter(fn ($u) => User::roleDomain($u->job_role) === $scope || $u->id === $request->user()->id)
+                ->filter(fn ($u) => $request->user()->oversees($u))
                 ->values();
         }
 
@@ -259,6 +259,9 @@ class UserController extends Controller
         Request $request,
         User $user
     ): RedirectResponse {
+        // The artist leader marks the artists, and nobody else.
+        abort_unless($request->user()->oversees($user), 403);
+
         $data = $request->validate([
             'status' => [
                 'required',

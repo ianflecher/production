@@ -66,7 +66,7 @@ class ProductionOrder extends Model
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
         'rush', 'rush_fee',
-        'unit_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
+        'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
         'quantity', 'due_date', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
         'replaces_order_id', 'replacement_reason',
@@ -86,6 +86,7 @@ class ProductionOrder extends Model
             'rush_fee' => 'decimal:2',
             'needs_sticker' => 'boolean',
             'unit_price' => 'decimal:2',
+            'custom_size_price' => 'decimal:2',
             'total_price' => 'decimal:2',
             'vat_inclusive' => 'boolean',
             'discount_amount' => 'decimal:2',
@@ -175,12 +176,37 @@ class ProductionOrder extends Model
         return $this->rush ? (float) $this->rush_fee : 0.0;
     }
 
+    /**
+     * The pieces the price list does not cover: CS, and a typed size such as
+     * "Kids 8" that is not on the chart. They are priced by hand.
+     */
+    public function customSizeQty(): int
+    {
+        return (int) $this->items
+            ->filter(fn ($i) => self::isCustomSize($i->size))
+            ->sum('quantity');
+    }
+
+    /** Is this size off the chart, so no tier price applies to it? */
+    public static function isCustomSize(?string $size): bool
+    {
+        return $size === 'CS' || ! in_array($size, self::SIZES, true);
+    }
+
     public function pricingBreakdown(): array
     {
-        $garment = $this->unit_price !== null ? (float) $this->unit_price * (int) $this->quantity : null;
+        // The charted sizes are on the automatic tier price; the off-chart
+        // ones are on their own price, when one has been set. Without a custom
+        // price they fall back to the tier — the way it worked before.
+        $custom = $this->custom_size_price !== null ? $this->customSizeQty() : 0;
+        $charted = max(0, (int) $this->quantity - $custom);
+
+        $garment = $this->unit_price !== null
+            ? ((float) $this->unit_price * $charted) + ((float) $this->custom_size_price * $custom)
+            : null;
 
         if ($garment === null) {
-            return ['subtotal' => null, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'rush' => 0.0, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
+            return ['subtotal' => null, 'charted_qty' => 0, 'custom_size_qty' => 0, 'custom_size_amount' => 0.0, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'rush' => 0.0, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
         }
 
         $backPocket = $this->backPocketAmount();
@@ -193,6 +219,9 @@ class ProductionOrder extends Model
 
         return [
             'subtotal' => round($garment, 2),            // garment lines only
+            'charted_qty' => $charted,
+            'custom_size_qty' => $custom,
+            'custom_size_amount' => round((float) $this->custom_size_price * $custom, 2),
             'back_pocket' => round($backPocket, 2),
             'back_pocket_qty' => $this->backPocketCount(),
             'addon' => round($addon, 2),
@@ -207,7 +236,9 @@ class ProductionOrder extends Model
 
     /**
      * Recompute total_price from the current breakdown. Called when something
-     * priced changes AFTER intake — today that's the Step 4 add-on.
+     * priced changes AFTER intake — the Step 4 add-on, and at intake once the
+     * size breakdown exists (the off-chart pieces carry their own price, so
+     * the total cannot be known until the items are saved).
      */
     public function recomputeTotal(): void
     {

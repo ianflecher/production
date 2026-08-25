@@ -69,9 +69,11 @@ class UserSeeder extends Seeder
                 'team' => null,
             ],
             [
+                // Runs the artists: leader powers over the tech pack and over
+                // the artist accounts, nothing further down the floor.
                 'name' => 'Rommel',
                 'email' => 'artist6@imprintcustoms.ph',
-                'job_role' => User::JOB_ARTIST,
+                'job_role' => User::JOB_ARTIST_LEAD,
                 'team' => null,
             ],
             [

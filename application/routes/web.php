@@ -183,7 +183,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // -------- Approve / revise: sales decide samples, leaders decide the rest
     // (the controller enforces which role owns each task).
-    Route::middleware('role:sales,leader,super_admin')->group(function () {
+    Route::middleware('role:sales,leader,super_admin,artist_lead')->group(function () {
         Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->name('tasks.approve');
         Route::post('/tasks/{task}/revision', [TaskController::class, 'requestRevision'])->name('tasks.revision');
         // Client rejected the physical sample — send it back to a production step.
@@ -279,6 +279,17 @@ Route::middleware(['auth', 'active'])->group(function () {
             ->whereNumber('payment')->name('payments.proof');
     });
 
+    // -------- Checking the artists' work, and the artist accounts --------
+    // The artist leader is not a leader of the floor; these two pages are the
+    // only ones he shares with them, and both narrow themselves to the artists.
+    Route::middleware('role:leader,super_admin,artist_lead')->group(function () {
+        Route::get('/approvals', [TaskController::class, 'approvals'])->name('approvals');
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        // Who is in today decides who the next tech pack goes to, so the artist
+        // leader marks his own team's attendance (the controller keeps him to it).
+        Route::post('/users/{user}/attendance', [UserController::class, 'markAttendance'])->name('users.attendance');
+    });
+
     // -------- Production management: Leader / Super Admin --------
     Route::middleware('role:leader,super_admin')->group(function () {
         // Remakes: a wrong colour, a damaged panel, a seam that failed QC.
@@ -287,7 +298,6 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         Route::post('/orders/{order}/status', [ProductionOrderController::class, 'updateStatus'])->name('orders.status');
 
-        Route::get('/approvals', [TaskController::class, 'approvals'])->name('approvals');
         Route::post('/tasks/{task}/assign', [TaskController::class, 'assign'])->name('tasks.assign');
         Route::post('/tasks/{task}/unlock', [TaskController::class, 'unlock'])->name('tasks.unlock');
         Route::post('/tasks/{task}/complete', [TaskController::class, 'forceComplete'])->name('tasks.force-complete');
@@ -298,11 +308,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/system/errors/dismiss', [SystemHealthController::class, 'dismiss'])->name('system.errors.dismiss');
         Route::post('/system/errors/dismiss-all', [SystemHealthController::class, 'dismissAll'])->name('system.errors.dismiss-all');
 
-        Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
         Route::post('/users/{user}/toggle', [UserController::class, 'toggle'])->name('users.toggle');
         Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset');
-        Route::post('/users/{user}/attendance', [UserController::class, 'markAttendance'])->name('users.attendance');
         Route::post('/users/{user}/team', [UserController::class, 'setTeam'])->name('users.team');
     });
 
