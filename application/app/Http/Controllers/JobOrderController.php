@@ -100,26 +100,18 @@ class JobOrderController extends Controller
             'item_style' => ['nullable', 'string', 'max:100'],
             'quality' => ['nullable', 'string', 'max:60'],
             'tshirt_color' => ['nullable', 'string', 'max:60'],
+            'print_label' => ['nullable', 'string', 'max:120'],
+            'thread_color' => ['nullable', 'string', 'max:60'],
             'size_range' => ['nullable', 'string', 'max:60'],
-            'label_type' => ['nullable', 'in:print_label,neck_label'],
-            'color_type' => ['nullable', 'in:tshirt_color,thread_color'],
             'zipper_type' => ['nullable', 'string', 'max:60'],
             'lip_pocket_color' => ['nullable', 'string', 'max:60'],
-            'color_1' => ['nullable', 'string', 'max:40'],
-            'color_2' => ['nullable', 'string', 'max:40'],
-            'color_3' => ['nullable', 'string', 'max:40'],
             'placing_title' => ['nullable', 'string', 'max:160'],
-            'front_print_placement' => ['nullable', 'string', 'max:60'],
-            'front_actual_size' => ['nullable', 'string', 'max:60'],
-            'back_print_placement' => ['nullable', 'string', 'max:60'],
-            'back_actual_size' => ['nullable', 'string', 'max:60'],
             'stitch_thread' => ['nullable', 'string', 'max:60'],
             'cutting_method' => ['nullable', 'string', 'max:60'],
             'tag_1_details' => ['nullable', 'string', 'max:120'],
             'tag_2_details' => ['nullable', 'string', 'max:120'],
             'file_location_notes' => ['nullable', 'string', 'max:200'],
             'artist_name' => ['nullable', 'string', 'max:100'],
-            'additional_tech_notes' => ['nullable', 'string', 'max:500'],
 
             // What the job is made of, and how much of each. Asked for on the
             // pack now: the production-details page it used to live on is not
@@ -134,13 +126,13 @@ class JobOrderController extends Controller
         // The pack's own fields go to the pack; everything else stays on the
         // job order, so no answer ends up with two homes.
         $packFields = collect($data)->only([
+            // The officer's half only. The placements, the sizes the print
+            // comes out at, the tag captions and the notes are the artist's —
+            // they are on this sheet to be read, not overwritten from here.
             'design_name', 'fitting', 'item_style', 'quality', 'tshirt_color',
-            'size_range', 'label_type', 'color_type', 'zipper_type', 'lip_pocket_color',
-            'color_1', 'color_2', 'color_3', 'additional_tech_notes',
-            'placing_title', 'front_print_placement', 'front_actual_size',
-            'back_print_placement', 'back_actual_size', 'stitch_thread',
-            'cutting_method', 'tag_1_details', 'tag_2_details',
-            'file_location_notes', 'artist_name',
+            'print_label', 'thread_color',
+            'size_range', 'zipper_type', 'lip_pocket_color', 'stitch_thread',
+            'cutting_method',
         ])->all();
 
         // Was this a fix requested by the leader? Clearing the note sends the
@@ -197,9 +189,7 @@ class JobOrderController extends Controller
         // A named free-logo sticker means the sticker production step is needed.
         // A blank field — or a "no sticker" placeholder like n/a / none / - —
         // must NOT create a sticker step, so only a real name turns it on.
-        $sticker = trim((string) ($data['free_logo_sticker'] ?? ''));
-        $newSticker = $sticker !== ''
-            && ! in_array(strtolower($sticker), ['n/a', 'na', 'n.a.', 'none', 'no', 'nil', '-', '--', 'x', 'wala', 'walang sticker'], true);
+        $newSticker = ProductionOrder::namesASticker($data['free_logo_sticker'] ?? null);
         if ($newSticker !== (bool) $order->needs_sticker) {
             $order->update(['needs_sticker' => $newSticker]);
         }
@@ -449,9 +439,11 @@ class JobOrderController extends Controller
                 .' this order is already past cutting, so it cannot go back through the press.';
         }
 
-        // Only prompt to send when it hasn't been sent yet.
+        // Still to send? Then the pack is where they need to be, and the send
+        // button is on it — rather than telling them to go and open it again.
         if ($order->jobOrder->status === 'draft') {
-            $note .= ' Open the Tech Pack to send it to the artist.';
+            return redirect()->route('job-orders.edit', $order)
+                ->with('success', $note.' Send it to the artist when you are ready.');
         }
 
         return redirect()->route('orders.show', $order)->with('success', $note);

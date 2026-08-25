@@ -41,9 +41,6 @@ class JobOrder extends Model
         'fitting',
         'item_style',
         'print_tech',
-        'color_1', 'color_2', 'color_3',
-        'front_print_placement', 'front_actual_size',
-        'back_print_placement', 'back_actual_size',
         // Production (yellow)
         'print_type',
         'printer',
@@ -78,7 +75,6 @@ class JobOrder extends Model
         'folder_shot_path',
         'folder_shot_name',
         'file_location_notes',
-        'additional_tech_notes',
         'artist_name',
         // …then who sewed each seam group and with what thread
         'neckbond_sewer',

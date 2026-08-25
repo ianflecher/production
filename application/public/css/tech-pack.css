@@ -39,14 +39,9 @@
     text-align: center; letter-spacing: 0.06em; font-size: 0.8rem;
 }
 
-/* ---- Left: mockup + colourways ----------------------------------------- */
+/* ---- Left: the mockup -------------------------------------------------- */
 .tp-mockup { border: 1px solid #111; display: flex; flex-direction: column; min-width: 0; }
 
-.tp-colorways {
-    display: flex; flex-wrap: wrap; gap: 0.9rem;
-    padding: 0.6rem;
-    border-bottom: 1px solid #111;
-}
 .tp-cw { text-align: center; width: 46px; }
 .tp-dot {
     display: block; width: 30px; height: 30px; margin: 0 auto 0.2rem;
@@ -335,15 +330,6 @@ select.tp-in { padding: 0.18rem 0.3rem; }
     .tp-strip { letter-spacing: 0.06em; }
     .tp-strip-dark, .tp-panel-title { background: #111; color: #fff; }
 
-    /* Colourways: chips in a black-ruled tray, as on the reference. The cells
-       are a fixed width on purpose — a text input left to size itself claims
-       twenty characters and shoves the tray clean out of the column. */
-    .tp-colorways {
-        gap: 0; padding: 0; margin: 0.6rem;
-        width: fit-content; max-width: calc(100% - 1.2rem);
-        margin: 0 0.6rem 0.6rem;
-        border: 1px solid #111; background: #fff;
-    }
     .tp-cw {
         flex: 0 0 auto; width: 72px; min-width: 0;
         padding: 0.4rem 0.35rem 0.3rem; border-right: 1px solid #111;
@@ -678,7 +664,6 @@ select.tp-in { padding: 0.18rem 0.3rem; }
 
 .tp-foot-artist { display: flex; align-items: center; gap: 0.4rem; }
 
-/* Colour swatch names, typed. */
 .tp-cw-in {
     width: 100%; border: 1px solid #b9bfc9; background: #fffbe6;
     border-radius: 3px; padding: 0.1rem 0.2rem;
@@ -741,21 +726,45 @@ select.tp-in { padding: 0.18rem 0.3rem; }
 .tp-ref-mockups { grid-column:1; grid-row:1/7; display:flex; flex-direction:column; border-right:1px solid #111; min-width:0; }
 /* The wordmark takes less of the row so the order details get the width. It is
    a mark, not a headline — the table beside it is what anybody is reading. */
-.tp-ref-header { grid-column:2/4; grid-row:1; display:grid; grid-template-columns:18% 82%; border-bottom:1px solid #111; min-width:0; }
+.tp-ref-header { grid-column:2/4; grid-row:1; display:grid; grid-template-columns:25% 75%; border-bottom:1px solid #111; min-width:0; }
 .tp-ref-flats { grid-column:2; grid-row:2; }
-.tp-ref-materials { grid-column:3; grid-row:2; display:flex; flex-direction:column; }
+.tp-ref-materials { grid-column:3; grid-row:2/6; display:flex; flex-direction:column; }
 /* The table keeps its own frame. The doubled rule down its side was the Sample
    block's border sitting beside it, not this one. */
 .tp-ref-materials .tp-ref-table { border:1px solid #777; }
+
+/* ---- Materials and components, read across the room ---------------------
+   This is the block the floor checks against the garment in their hands —
+   neck, cuff, label, thread, cutting, packaging. It was set at the same size
+   as everything else on the sheet, which made a list of eleven answers that
+   have to be right into the quietest thing on the page. */
+.tp-ref-materials .tp-ref-table th,
+.tp-ref-materials .tp-ref-table td {
+    font-size: 1.18em;
+    padding: 0.42cqw 0.65cqw;
+    line-height: 1.25;
+}
+.tp-ref-materials .tp-ref-table th { letter-spacing: 0.02em; }
+.tp-ref-materials .tp-ref-table td { font-weight: 700; }
+
+/* The heading over it, said properly. */
+.tp-ref-materials .tp-ref-black-title {
+    font-size: 1.5em;
+    letter-spacing: 0.06em;
+    padding: 0.85cqw 1cqw;
+}
 .tp-ref-artwork { grid-column:2; grid-row:3; }
-.tp-ref-tags { grid-column:3; grid-row:3; }
+/* The trims live inside the materials column now, not beside it. */
+.tp-ref-tags { padding-bottom:0.5cqw; }
 /* Empty and read-only: nothing to say, so it takes no room. */
 .tp-ref-banner:empty { padding:0; }
-.tp-ref-banner { grid-column:2/4; grid-row:4; padding:0.33cqw 0.4cqw; display:flex; align-items:center; justify-content:center; color:#d71920; font-size:1.55em; font-weight:900; text-transform:uppercase; white-space:nowrap; }
-.tp-ref-file-notes { grid-column:2/4; grid-row:5; display:flex; flex-direction:column; }
-.tp-ref-artist { grid-column:2; grid-row:6; justify-self:start; align-self:end; width:max-content; min-width:0; max-width:80%; margin:0 0 0.39cqw 1cqw; background:#111; color:#fff; padding:0.39cqw 1.2cqw; font-weight:500; text-transform:uppercase; display:flex; gap:7px; align-items:center; }
+.tp-ref-banner { grid-column:2; grid-row:4; padding:0.33cqw 0.4cqw; display:flex; align-items:center; justify-content:center; color:#d71920; font-size:1.55em; font-weight:900; text-transform:uppercase; white-space:nowrap; }
+.tp-ref-file-notes { grid-column:2; grid-row:5; display:flex; flex-direction:column; }
+/* Air above the two badges: they sat hard against the path box and the
+   materials table, which read as the sheet running out rather than ending. */
+.tp-ref-artist { grid-column:2; grid-row:6; justify-self:start; align-self:end; width:max-content; min-width:0; max-width:80%; margin:0.65cqw 0 0.39cqw 1cqw; background:#111; color:#fff; padding:0.39cqw 1.2cqw; font-weight:500; text-transform:uppercase; display:flex; gap:7px; align-items:center; }
 .tp-ref-artist strong { font-weight:500; }
-.tp-ref-footer-brand { grid-column:3; grid-row:6; justify-self:end; align-self:end; width:max-content; max-width:calc(100% - 2cqw); margin:0 1cqw 0.39cqw 0; background:#111; color:#fff; padding:0.39cqw 1.2cqw; font-weight:500; text-transform:uppercase; text-align:center; }
+.tp-ref-footer-brand { grid-column:3; grid-row:6; justify-self:end; align-self:end; width:max-content; max-width:calc(100% - 2cqw); margin:0.65cqw 1cqw 0.39cqw 0; background:#111; color:#fff; padding:0.39cqw 1.2cqw; font-weight:500; text-transform:uppercase; text-align:center; }
 
 .tp-ref-title { padding:0.91cqw 1.2cqw; background:#ececec; border-bottom:1px solid #111; font-size:1.55em; font-weight:900; text-transform:uppercase; }
 .tp-ref-black-title { padding:0.65cqw 1cqw; background:#111; color:#fff; font-size:1.25em; font-weight:800; text-align:center; text-transform:uppercase; }
@@ -764,19 +773,13 @@ select.tp-in { padding: 0.18rem 0.3rem; }
     padding:0.5cqw 0.5cqw; border-right:1px solid #111;
     font-family:Arial Black,Arial,sans-serif;
     /* Sized to the cell rather than a fixed 34px, which clipped both words. */
-    font-size:1.75em;
+    font-size:2.15em;
     font-weight:950; line-height:.9; letter-spacing:-0.5px;
     display:flex; flex-direction:column; justify-content:center; align-items:center;
     text-align:center; overflow:hidden;
 }
 .tp-ref-wordmark span { display:block; }
 
-.tp-ref-colorways { display:flex; align-items:flex-start; gap:1cqw; padding:0.65cqw 1.2cqw 0.39cqw; text-transform:uppercase; }
-.tp-ref-colorways>strong { margin:1.04cqw 0.3cqw 0 0; }
-.tp-ref-color { width:6cqw; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative; text-align:center; }
-.tp-ref-color-chip { display:block; width:4.2cqw; height:4.2cqw; padding:0; border:2px solid #111; border-radius:50%; background:var(--swatch); box-shadow:inset 0 0 0 1px rgba(255,255,255,.45); }
-.tp-ref-color input { width:100%; box-sizing:border-box; min-width:0; border:0; border-bottom:1px solid #aaa; padding:0.1cqw 0; background:#fff; color:#111; font:inherit; font-weight:800; text-align:center; text-transform:uppercase; }
-.tp-ref-color strong { display:block; width:100%; overflow:hidden; color:#111; font-size:10px; text-overflow:ellipsis; }
 
 .tp-ref-mockup-block { flex:1; min-height:0; padding:0.52cqw 1.2cqw 0.65cqw; display:flex; flex-direction:column; }
 .tp-ref-image { position:relative; border:1px solid #222; background:#fafafa; overflow:hidden; }
@@ -790,7 +793,7 @@ select.tp-in { padding: 0.18rem 0.3rem; }
 /* A height of its own, not a share of whatever is left over. The sheet's rows
    size to their content now, so there IS nothing left over: flex:1 collapsed
    the box to nothing and the mockup panel simply was not there. */
-.tp-ref-image-mockup { flex:0 0 auto; height:78cqw; min-height:0; }
+.tp-ref-image-mockup { flex:1 1 auto; height:auto; min-height:78cqw; }
 .tp-ref-image-small { width:100%; height:9.5cqw; min-height:0; }
 /* Its own size, not the cell's. Stretched to the track, dragging one box wider
    widened the column and squeezed the box beside it — one resize, two boxes
@@ -855,10 +858,10 @@ select.tp-in { padding: 0.18rem 0.3rem; }
 }
 .tp-ref-add-bar button:hover { border-color:#2563eb; color:#2563eb; background:#eff6ff; }
 
-/* A note the sheet has no row for. It starts under the banner and is dragged
-   to whatever it is about. */
+/* A note the sheet has no row for. It starts at the top of the File location
+   panel and is dragged to whatever it is about. */
 .tp-ref-extra-note {
-    grid-column:2/4; position:relative;
+    position:relative;
     /* As wide as what is written in it, and never wider than the sheet. */
     width:max-content; max-width:calc(100% - 1.6cqw);
     display:flex; align-items:center; gap:0.3cqw;
@@ -866,7 +869,10 @@ select.tp-in { padding: 0.18rem 0.3rem; }
     border:1px solid #777; background:#fffdf0;
 }
 .tp-ref-extra-note .tp-in {
-    width:auto; min-width:0; border:0; background:transparent;
+    /* The same box a tag's text gets: no floor under it, no margin, and only
+       the padding the words need. */
+    width:auto; min-width:0; min-height:0; margin:0; padding:0.2cqw 0.35cqw;
+    border:0; background:transparent;
     resize:none; overflow:hidden; line-height:1.25;
     /* Breaks where somebody pressed Enter and nowhere else, so the box shows
        the same number of lines the sheet will print. */
@@ -887,14 +893,23 @@ select.tp-in { padding: 0.18rem 0.3rem; }
     font:inherit; font-weight:700; text-transform:uppercase; font-size:10px;
 }
 .tp-ref-add-box:hover { border-color:#2563eb; color:#2563eb; background:#eff6ff; }
-@media print { /* Above the upload overlay and big enough to hit on the small boxes — the tag
-   marks are about a centimetre across. */
-.tp-ref-clear { display:none !important; } }
+/* The sheet's print rules live at the END of this file — see the bottom.
+   A media query adds no specificity, so a plain rule written after it wins
+   even when printing. Anything appended here later was quietly overriding the
+   printed layout, which is how the pack grew to two pages. */
+
 
 .tp-ref-placement-row,.tp-ref-size-row { display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:center; padding:6px 0; text-transform:uppercase; }
 .tp-ref-placement-row strong,.tp-ref-size-row strong { white-space:nowrap; font-size:10px; }
 .tp-ref-two-images { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.2cqw; padding:0.65cqw 1.2cqw; }
 .tp-ref-flat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.65cqw 1cqw; padding:0.65cqw 1.2cqw; align-items:start; }
+/* One sample box takes the panel whole, rather than sitting as a quarter of
+   a grid with three empty squares beside it. */
+/* The first box is the sheet of flats, so it spans the panel and keeps its
+   height however many boxes join it. Adding a second used to halve the first —
+   one press of + Picture and the picture the artist came for went small. The
+   extras stack under it, two to a row, at thumbnail size. */
+.tp-ref-flat-grid > .tp-ref-image:first-child { grid-column:1/-1; height:30cqw; }
 .tp-ref-art-column { min-width:0; }
 .tp-ref-tag-row { display:grid; grid-template-columns:auto max-content; justify-content:start; gap:0.8cqw; align-items:center; margin:0.65cqw 1cqw; }
 /* As wide as the tag's description, not as wide as the column. */
@@ -903,21 +918,35 @@ select.tp-in { padding: 0.18rem 0.3rem; }
     padding-left:10px; cursor:grab;
 }
 .tp-ref-tag-text .tp-ref-grip { flex:0 0 auto; align-self:stretch; }
-.tp-ref-tag-text .tp-in { min-height:0; width:auto; min-width:0; white-space:pre; border:1px solid #777; padding:0.2cqw 0.35cqw; }
+.tp-ref-tag-text .tp-in {
+    min-height:0; width:auto; min-width:0; white-space:pre;
+    border:1px solid #777; padding:0.2cqw 0.35cqw;
+    resize:none; overflow:hidden;
+}
 .tp-ref-tag-text:not(:has(.tp-in)) { align-items:center; width:max-content; border:1px solid #aaa; padding:0.2cqw 0.4cqw; background:#fff; }
 .tp-ref-file-content { flex:1; min-height:0; display:flex; flex-direction:column; gap:0.46cqw; padding:0.65cqw 1cqw; }
+/* On the copy the shop reads, the path box finishes where the materials table
+   beside it finishes. The panel's bottom padding left it fifteen pixels short
+   of the last row — close enough to look like a mistake rather than a margin.
+   Only here: the artist's copy has the how-to under the path and wants the air. */
+.tp-reference-sheet:not(.is-editing) .tp-ref-file-content { padding-bottom:0; }
 /* A real height of its own. It used to be flex:1 filling a fixed band; once
    the band grew with its content there was nothing left to fill and the box
    collapsed to two pixels — the picture was there, with no room to be seen. */
 .tp-ref-file-image { width:100%; flex:0 0 auto; height:10cqw; min-height:0; }
-.tp-ref-file-path,.tp-ref-file-content .tp-ref-note-value { width:100%; min-height:0; border:1px solid #9ca3af; padding:0.26cqw 0.6cqw; background:#fff; font:inherit; }
+/* margin:0 is the point here. The panel's own big note box carries a 10px
+   margin all round, and the path inherited it: on the copy the shop reads it
+   sat ten pixels in from the picture above it and ten short of the materials
+   row beside it. The path is not that box; it is the field under the picture,
+   and it lines up with it. */
+.tp-ref-file-path,.tp-ref-file-content .tp-ref-note-value { width:100%; min-height:0; margin:0; border:1px solid #9ca3af; padding:0.26cqw 0.6cqw; background:#fff; font:inherit; }
 
 /* The artist's help under the file path: how to share a folder and copy a
    path. Screen only — it is not part of the printed sheet. */
 /* The path in two boxes: the machine, then the folder and file on it. The
    address cannot be emptied, but it can be corrected — the detection is a guess
    whenever the request arrives over the tunnel. */
-.tp-ref-path-line { display:flex; align-items:stretch; min-width:0; }
+
 .tp-ref-path-slashes {
     display:flex; align-items:center; padding:0 3px; background:#f1f1f1;
     border:1px solid #9ca3af; font-family:ui-monospace,Consolas,monospace; font-weight:700;
@@ -928,6 +957,7 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     border-left:0; border-right:0; padding:7px 4px; background:#fff;
     font-family:ui-monospace,Consolas,monospace; font-weight:700; text-align:center;
 }
+.tp-ref-path-line { display:flex; align-items:stretch; min-width:0; }
 .tp-ref-path-line .tp-ref-file-path { flex:1; min-width:0; }
 /* The same folder by address, for a PC that cannot resolve the name. */
 .tp-ref-path-alt { margin-top:0.4cqw; font-size:0.85em; color:#555; }
@@ -938,9 +968,42 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
 }
 
 .tp-ref-path-help { font-size:10px; color:#444; line-height:1.5; padding:0 2px; }
-.tp-ref-path-help .path-help summary { cursor:pointer; font-weight:700; color:#2563eb; margin-top:3px; }
-.tp-ref-path-help .path-help-videos { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
-.tp-ref-path-help figure { margin:0; }
+/* A button, not a line of blue text. It opens two videos and it is the thing
+   an artist who is stuck actually reaches for, so it should look like
+   something you press. Still a <summary>, so it keeps the disclosure
+   behaviour and the keyboard handling that comes with it. */
+.tp-ref-path-help .path-help summary {
+    display:inline-flex; align-items:center; gap:6px;
+    margin-top:5px; padding:5px 11px;
+    border:1px solid #2563eb; border-radius:999px;
+    background:#eff6ff; color:#1d4ed8;
+    font-weight:700; font-size:10px; line-height:1.2;
+    cursor:pointer; list-style:none;
+    transition:background .14s ease, color .14s ease, box-shadow .14s ease;
+}
+.tp-ref-path-help .path-help summary::-webkit-details-marker { display:none; }
+/* The caret is drawn here so it can turn when the guide opens. */
+.tp-ref-path-help .path-help summary::after {
+    content:'▾'; font-size:9px; transition:transform .14s ease;
+}
+.tp-ref-path-help .path-help[open] summary::after { transform:rotate(180deg); }
+.tp-ref-path-help .path-help summary:hover {
+    background:#2563eb; color:#fff; box-shadow:0 2px 8px rgba(37,99,235,.25);
+}
+.tp-ref-path-help .path-help summary:focus-visible {
+    outline:2px solid #1d4ed8; outline-offset:2px;
+}
+/* Two columns that line up. A caption that wraps to a second line used to
+   push its own video down while the one beside it stayed put, so the pair read
+   as two unrelated clips. The rows are shared between the figures instead:
+   captions sit on one row, videos on the next, whatever the wrapping does. */
+.tp-ref-path-help .path-help-videos {
+    display:grid; grid-template-columns:1fr 1fr; grid-template-rows:auto auto;
+    gap:8px; margin-top:6px; align-items:start;
+}
+.tp-ref-path-help figure {
+    margin:0; display:grid; grid-row:span 2; grid-template-rows:subgrid; gap:0;
+}
 .tp-ref-path-help figcaption { font-weight:700; margin-bottom:3px; }
 .tp-ref-path-help video { width:100%; border:1px solid #bbb; background:#000; }
 @media (max-width:700px) { .tp-ref-path-help .path-help-videos { grid-template-columns:1fr; } }
@@ -980,14 +1043,19 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
    grid holding both rows, so the two line up by construction rather than by two
    tables agreeing about widths. Each column hugs its own size, and the spacer
    after the label soaks up the slack so the run packs against the right. */
+/* The size run lives in the materials column now, which is narrower than the
+   header band it came from. The spare column that used to push the sizes to
+   the right is gone, and the sizes share what is left evenly — an eleven-size
+   order still fits rather than running off the edge. */
 .tp-ref-sizegrid {
     display:grid;
-    grid-template-columns:max-content 1fr repeat(calc(var(--sizes) + 1), max-content);
+    grid-template-columns:max-content repeat(calc(var(--sizes) + 1), minmax(0, 1fr));
     align-items:stretch;
 }
+.tp-ref-sizegap { display:none; }
 .tp-ref-sizelbl, .tp-ref-sizegap, .tp-ref-sizecol {
     border:1px solid #777; border-left:0; border-top:0;
-    padding:3px 6px; line-height:1.15;
+    padding:3px 4px; line-height:1.15; min-width:0;
     white-space:nowrap; text-transform:uppercase; text-align:center;
     display:flex; align-items:center; justify-content:center;
 }
@@ -1012,7 +1080,13 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     outline:2px solid #2563eb; outline-offset:-2px; background:#fff;
 }
 .tp-ref-banner input { color:#d71920; font-size:15px; font-weight:900; text-transform:uppercase; }
-.tp-ref-file-notes textarea,.tp-ref-additional-notes textarea { flex:1; width:calc(100% - 20px); min-height:120px; margin:10px; padding:8px; border:1px solid #777; resize:none; font:inherit; }
+/* The panel's own big note box. Scoped off the dragged notes that now open
+   this panel: they are textareas too, and this rule gave each one a 120px
+   floor and a 10px margin, so a one-line note came out the size of the box it
+   was sitting above. A note is sized like a tag's text — as big as what is
+   written in it. */
+.tp-ref-file-notes textarea:not(.tp-ref-note-in),
+.tp-ref-additional-notes textarea:not(.tp-ref-note-in) { flex:1; width:calc(100% - 20px); min-height:120px; margin:10px; padding:8px; border:1px solid #777; resize:none; font:inherit; }
 .tp-ref-note-value { flex:1; margin:10px; padding:8px; border:1px solid #777; white-space:pre-wrap; }
 .tp-ref-artist .tp-in { max-width:180px; background:#fff; color:#111; }
 
@@ -1024,131 +1098,26 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-banner { white-space:normal; }
 }
 
-@media print {
-    /* The sheet is drawn landscape, so it prints landscape. It used to be
-       squeezed onto a portrait page and then scaled up with a transform —
-       which does not reflow, so every cell clipped and the blocks landed on
-       top of each other. */
-    /* A NAMED page, not the document's page: this sheet also prints inside the
-       leader's full document, where every other page is portrait. Naming it
-       means the pack gets landscape paper without dragging the rest with it. */
-    /* Landscape paper. Named as well as default: on its own the pack IS the
-       document, and inside the leader's package it is one landscape page among
-       portrait ones — that document sets its own default @page after this. */
-    @page { size:A4 landscape; margin:6mm; }
-    @page tech-pack-page { size:A4 landscape; margin:6mm; }
-    .tp-reference-sheet { page:tech-pack-page; }
 
-    /* Printing this page means printing the Tech Pack only. The production
-       record below it is a separate document and previously created page 2. */
-    .tp-record { display:none !important; }
 
-    /* Sized the same way it is on screen — against its own width — rather than
-       a fixed height and fixed millimetre bands. The two fought each other, and
-       the sheet came out half a portrait page wide. */
-    .tp-reference-sheet {
-        width:100%; max-width:none; height:auto; min-height:0; margin:0;
-        grid-template-rows:auto auto auto auto auto auto;
-        transform:none;
-        page-break-inside:avoid; break-inside:avoid-page;
-        box-shadow:none;
-    }
-    .tp-reference-sheet,.tp-reference-sheet * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-    .tp-reference-sheet { border:0.35mm solid #000 !important; }
-    .tp-ref-mockups { border-right:0.3mm solid #000 !important; }
-    .tp-ref-header { border-bottom:0.3mm solid #000 !important; }
-    .tp-ref-wordmark { border-right:0.3mm solid #000 !important; }
-    .tp-ref-flats { border:0 !important; }
-    .tp-ref-artwork { border:0 !important; }
-    .tp-ref-materials { border-bottom:0 !important; }
-    .tp-ref-banner { border-bottom:0.3mm solid #000 !important; }
-    .tp-ref-file-notes { border-top:0 !important; }
-    .tp-ref-table th,.tp-ref-table td { border:0.22mm solid #000 !important; }
-    .tp-ref-sizelbl,.tp-ref-sizegap,.tp-ref-sizecol {
-        white-space:nowrap !important; word-break:normal !important;
-        border:0.22mm solid #000 !important; border-left:0 !important; border-top:0 !important;
-    }
-    .tp-ref-sizegap { border-right:0 !important; }
-    .tp-ref-image { border:0.25mm solid #000 !important; }
-    .tp-ref-color-chip { border:0.3mm solid #000 !important; }
-    .tp-ref-artist,.tp-ref-footer-brand { outline:0.25mm solid #000; outline-offset:-0.25mm; }
-    .tp-ref-title { font-size:12px; padding:2mm 3mm; }
-    .tp-ref-colorways { gap:3mm; padding:2mm 3mm 1mm; }
-    .tp-ref-color { width:14mm; }
-    .tp-ref-color-chip { width:9mm; height:9mm; }
-    .tp-ref-colorways>strong { margin-top:3mm; font-size:8px; }
-    .tp-ref-mockup-block {
-        display:block !important;
-        min-height:0 !important;
-        padding:1.5mm 3mm 2mm;
-    }
-    .tp-ref-wordmark { font-size:15px; padding:1.5mm 1mm; letter-spacing:-0.5px; line-height:.85; overflow:hidden; }
-    .tp-ref-black-title { font-size:11px; padding:5px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .tp-ref-banner { font-size:12px; }
-    /* Do not use cqw for the main mockup on paper. Chromium recalculates
-       container-query units while paginating and could resolve the old 78cqw
-       box outside the printable fragment, so its border printed but its image
-       did not. This height fits below the title and colourways on A4 landscape. */
-    .tp-ref-image-mockup {
-        display:block !important;
-        width:100% !important;
-        height:154mm !important;
-        min-height:154mm !important;
-        max-height:154mm !important;
-        overflow:hidden !important;
-    }
-    .tp-ref-image-mockup>label {
-        display:block !important;
-        width:100% !important;
-        height:100% !important;
-    }
-    /* The picture boxes keep the share of the sheet they have on screen; a
-       fixed millimetre height here would be a different sheet on paper. */
-    .tp-ref-image.is-resizable { resize:none; min-width:0; min-height:0; max-width:100%; max-height:none; }
-    .tp-ref-flat-grid,.tp-ref-two-images { gap:2mm; padding:2mm; }
-    .tp-ref-tag-row { margin:1.2mm 2mm; padding-bottom:0.8mm; gap:2mm; }
-    .tp-ref-tag-text,.tp-ref-tag-text .tp-in { min-height:0; }
-    .tp-ref-note-value { margin:1.5mm; padding:1mm; }
-    .tp-ref-file-content { gap:1.5mm; padding:2mm; }
-    .tp-ref-file-image { flex:1; height:auto; min-height:0; }
-    .tp-ref-file-path,.tp-ref-file-content .tp-ref-note-value { min-height:6mm; height:6mm; padding:1mm 2mm; }
-    .tp-ref-table { table-layout:fixed; }
-    .tp-ref-table th,.tp-ref-table td { height:auto; padding:0.8mm 1.2mm; overflow:hidden; }
-    /* Long answers wrap instead of running off the edge of their box. */
-    .tp-ref-table th,.tp-ref-table td,.tp-ref-head-table th,.tp-ref-head-table td {
-        white-space:normal; word-break:break-word;
-    }
-    /* Scoped past the generic .tp-ref-table rule below, which otherwise hands
-       these labels 40% of the row and squeezes the answers. */
-    .tp-ref-table.tp-ref-head-table th { width:15%; font-size:7px; }
-    .tp-ref-table.tp-ref-head-table td { width:35%; font-size:7.5px; }
-    .tp-ref-head-table th,.tp-ref-head-table td { height:auto; padding:0.5mm 1mm; }
-    /* Twelve rows of materials in one band — the type has to suit the band. */
-    .tp-ref-table th { width:40%; font-size:7px; }
-    .tp-ref-table td { font-size:7.5px; }
-    .tp-ref-sticker th,.tp-ref-sticker td { height:auto; }
-    .tp-ref-label-select { border:0; padding:0; font-size:7px; -webkit-appearance:none; appearance:none; }
-    .tp-reference-sheet section,.tp-ref-header { overflow:hidden; }
-    .tp-ref-image { break-inside:avoid; overflow:hidden !important; background:#fff !important; }
-    .tp-ref-image>label { position:absolute !important; inset:0 !important; display:block !important; }
-    .tp-ref-image img:not(.is-empty) { display:block !important; visibility:visible !important; opacity:1 !important; width:100% !important; height:100% !important; object-fit:fill !important; }
-    .tp-ref-color-chip { display:block !important; background-color:var(--swatch) !important; box-shadow:inset 0 0 0 1px rgba(255,255,255,.45) !important; }
-    .tp-ref-color input,.tp-ref-color strong { color:#111 !important; opacity:1 !important; }
-    .tp-ref-placeholder small { display:none; }
-    .tp-ref-artist,.tp-ref-footer-brand { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .tp-reference-sheet .tp-in,.tp-ref-banner input,
-    .tp-ref-file-path,.tp-ref-color input {
-        border:0; padding:0; background:transparent !important; color:#111 !important;
-    }
-    .tp-ref-banner input { color:#d71920 !important; }
-    /* An empty box prints as blank paper, not as its own hint text. The
-       banner is the exception: its standard wording IS the placeholder. */
-    .tp-reference-sheet input::placeholder { color:transparent !important; }
-    .tp-reference-sheet textarea::placeholder { color:transparent !important; }
-    .tp-ref-banner { padding:2mm 3mm; white-space:normal; }
-    .tp-ref-artist,.tp-ref-footer-brand { padding:1.5mm 4mm; font-size:8px; }
+
+/* ---- Make the whole sheet bigger ----------------------------------------
+   The pack is a landscape page drawn to fit a column, and the materials list
+   on it is small. This scales the sheet where it stands — the frame under it
+   scrolls, so an enlarged sheet still has a right-hand side you can reach. */
+.tp-scale {
+    display: flex; align-items: center; gap: 0.35rem;
+    margin: 0 auto 0.6rem; max-width: 1180px;
+    font-size: 0.78rem; color: var(--ink-2, #475569);
 }
-
+.tp-scale button {
+    min-width: 2rem; padding: 0.2rem 0.5rem;
+    border: 1px solid var(--line, #d5dbe5); border-radius: 6px;
+    background: #fff; color: inherit; font: inherit; cursor: pointer;
+}
+.tp-scale button:hover { border-color: #2563eb; color: #2563eb; }
+.tp-scale output { min-width: 3.2rem; text-align: center; font-variant-numeric: tabular-nums; }
+.tp-scale-frame { overflow: auto; max-width: 100%; }
 
 /* ---- Click a picture to see it big --------------------------------------
    A garment flat is a couple of centimetres across on the sheet, and the print
@@ -1163,7 +1132,14 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
 }
 .tp-zoom[hidden] { display: none; }
 .tp-zoom img {
-    max-width: 100%; max-height: 100%;
+    /* Against the VIEWPORT, not the overlay.
+       The overlay is a grid whose row is sized by what is in it — the picture —
+       so a percentage height had nothing definite to measure against and was
+       ignored. A 3000x4000 photo came out 1227x1636 in a 720-tall window and
+       ran off the bottom of the screen. */
+    max-width: calc(100vw - 6vmin);
+    max-height: calc(100vh - 6vmin);
+    width: auto; height: auto;
     object-fit: contain; background: #fff;
     box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
 }
@@ -1270,10 +1246,13 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
    and on paper. The rotated span this replaced was placed from coordinates
    saved on the artist's sheet, which is a different layout from everybody
    else's — the line pointed at where the box had been. */
-.tp-ref-static-line { display:none !important; }
+.tp-ref-static-line { left: calc(var(--pin-x, 0) * 1cqw); top: calc(var(--pin-y, 0) * 1cqw); display:none !important; }
 
 .tp-ref-pin {
     position: absolute; z-index: 5;
+    /* Across the sheet, and down it, from the pair the script hands over. */
+    left: calc(var(--pin-x, 0) * 1cqw);
+    top: calc(var(--pin-y, 0) * 1cqw);
     width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px;
     border: 1.5px solid #d21f26; border-radius: 50%;
     background: #fff;
@@ -1352,4 +1331,450 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
 .tp-reference-sheet .tp-ref-note-value,
 .tp-reference-sheet .tp-ref-file-path {
     text-transform: uppercase;
+}
+
+
+/* ============================================================================
+   PRINT — kept last on purpose.
+
+   @media print adds no specificity. A plain rule written after this block wins
+   over it, printing or not, so this has to be the last word in the file or the
+   pack stops fitting its page.
+   ========================================================================= */
+@media print { /* Above the upload overlay and big enough to hit on the small boxes — the tag
+   marks are about a centimetre across. */
+.tp-ref-clear { display:none !important; } }
+
+
+/* ---- The same shape on every copy --------------------------------------
+   A read-only value is drawn in the same box the artist typed it into, so both
+   sheets are the same shape and everything positioned on one lands in the same
+   place on the other. It just does not look like a box: no border, no
+   background, nothing to suggest it can be typed in. */
+.tp-reference-sheet .tp-in.is-printed {
+    border: 0;
+    background: transparent;
+    cursor: default;
+    pointer-events: none;
+}
+.tp-reference-sheet .tp-in.is-printed::selection { background: transparent; }
+
+
+/* ============================================================================
+   PRINT — and it has to be the last word in this file.
+
+   A media query adds no specificity of its own, so any plain rule written
+   after this block beats it, printing or not. Rules appended below here were
+   quietly overriding the printed layout, which is how the pack grew to two
+   pages. Add screen rules ABOVE.
+   ========================================================================= */
+@media print {
+    /* The sheet is drawn landscape, so it prints landscape. It used to be
+       squeezed onto a portrait page and then scaled up with a transform —
+       which does not reflow, so every cell clipped and the blocks landed on
+       top of each other. */
+    /* A NAMED page, not the document's page: this sheet also prints inside the
+       leader's full document, where every other page is portrait. Naming it
+       means the pack gets landscape paper without dragging the rest with it. */
+    /* Landscape paper. Named as well as default: on its own the pack IS the
+       document, and inside the leader's package it is one landscape page among
+       portrait ones — that document sets its own default @page after this. */
+    @page { size:A4 landscape; margin:6mm; }
+    @page tech-pack-page { size:A4 landscape; margin:6mm; }
+    .tp-reference-sheet { page:tech-pack-page; }
+
+    /* Printing this page means printing the Tech Pack only. The production
+       record below it is a separate document and previously created page 2. */
+    .tp-record { display:none !important; }
+
+    /* Sized the same way it is on screen — against its own width — rather than
+       a fixed height and fixed millimetre bands. The two fought each other, and
+       the sheet came out half a portrait page wide. */
+    .tp-reference-sheet {
+        width:100%; max-width:none; height:auto; min-height:0; margin:0;
+        grid-template-rows:auto auto auto auto auto auto;
+        transform:none;
+        page-break-inside:avoid; break-inside:avoid-page;
+        box-shadow:none;
+    }
+    .tp-reference-sheet,.tp-reference-sheet * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    .tp-reference-sheet { border:0.35mm solid #000 !important; }
+    .tp-ref-mockups { border-right:0.3mm solid #000 !important; }
+    .tp-ref-header { border-bottom:0.3mm solid #000 !important; }
+    .tp-ref-wordmark { border-right:0.3mm solid #000 !important; }
+    .tp-ref-flats { border:0 !important; }
+    .tp-ref-artwork { border:0 !important; }
+    .tp-ref-materials { border-bottom:0 !important; }
+    .tp-ref-banner { border-bottom:0.3mm solid #000 !important; }
+    .tp-ref-file-notes { border-top:0 !important; }
+    .tp-ref-table th,.tp-ref-table td { border:0.22mm solid #000 !important; }
+    .tp-ref-sizelbl,.tp-ref-sizegap,.tp-ref-sizecol {
+        white-space:nowrap !important; word-break:normal !important;
+        border:0.22mm solid #000 !important; border-left:0 !important; border-top:0 !important;
+    }
+    .tp-ref-sizegap { border-right:0 !important; }
+    .tp-ref-image { border:0.25mm solid #000 !important; }
+    .tp-ref-artist,.tp-ref-footer-brand { outline:0.25mm solid #000; outline-offset:-0.25mm; }
+    .tp-ref-title { font-size:12px; padding:2mm 3mm; }
+    .tp-ref-mockup-block {
+        display:block !important;
+        min-height:0 !important;
+        padding:1.5mm 3mm 2mm;
+    }
+    .tp-ref-wordmark { font-size:15px; padding:1.5mm 1mm; letter-spacing:-0.5px; line-height:.85; overflow:hidden; }
+    .tp-ref-black-title { font-size:11px; padding:5px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .tp-ref-banner { font-size:12px; }
+    /* Do not use cqw for the main mockup on paper. Chromium recalculates
+       container-query units while paginating and could resolve the old 78cqw
+       box outside the printable fragment, so its border printed but its image
+       did not. This height fits below the title on A4 landscape. */
+    .tp-ref-image-mockup {
+        display:block !important;
+        width:100% !important;
+        height:168mm !important;
+        min-height:168mm !important;
+        max-height:168mm !important;
+        overflow:hidden !important;
+    }
+    .tp-ref-image-mockup>label {
+        display:block !important;
+        width:100% !important;
+        height:100% !important;
+    }
+    /* The picture boxes keep the share of the sheet they have on screen; a
+       fixed millimetre height here would be a different sheet on paper. */
+    .tp-ref-image.is-resizable { resize:none; min-width:0; min-height:0; max-width:100%; max-height:none; }
+    .tp-ref-flat-grid,.tp-ref-two-images { gap:2mm; padding:2mm; }
+    .tp-ref-tag-row { margin:1.2mm 2mm; padding-bottom:0.8mm; gap:2mm; }
+    .tp-ref-tag-text,.tp-ref-tag-text .tp-in { min-height:0; }
+    .tp-ref-note-value { margin:1.5mm; padding:1mm; }
+    .tp-ref-file-content { gap:1.5mm; padding:2mm; }
+    /* A height of its own on paper too. flex:1 in a column means flex-basis:0,
+       which beats the 22mm set further down and collapsed the box to a rule —
+       the same two-pixel picture the screen sheet was already fixed for. */
+    .tp-ref-file-image { flex:0 0 auto; height:22mm; min-height:22mm; }
+    .tp-ref-file-path,.tp-ref-file-content .tp-ref-note-value { min-height:6mm; height:6mm; padding:1mm 2mm; }
+    .tp-ref-table { table-layout:fixed; }
+    .tp-ref-table th,.tp-ref-table td { height:auto; padding:0.8mm 1.2mm; overflow:hidden; }
+    /* Long answers wrap instead of running off the edge of their box. */
+    .tp-ref-table th,.tp-ref-table td,.tp-ref-head-table th,.tp-ref-head-table td {
+        white-space:normal; word-break:break-word;
+    }
+    /* Scoped past the generic .tp-ref-table rule below, which otherwise hands
+       these labels 40% of the row and squeezes the answers. */
+    .tp-ref-table.tp-ref-head-table th { width:15%; font-size:7px; }
+    .tp-ref-table.tp-ref-head-table td { width:35%; font-size:7.5px; }
+    .tp-ref-head-table th,.tp-ref-head-table td { height:auto; padding:0.5mm 1mm; }
+    /* Twelve rows of materials in one band — the type has to suit the band. */
+    .tp-ref-table th { width:40%; font-size:7px; }
+    .tp-ref-table td { font-size:7.5px; }
+    .tp-ref-sticker th,.tp-ref-sticker td { height:auto; }
+    .tp-ref-label-select { border:0; padding:0; font-size:7px; -webkit-appearance:none; appearance:none; }
+    .tp-reference-sheet section,.tp-ref-header { overflow:hidden; }
+    .tp-ref-image { break-inside:avoid; overflow:hidden !important; background:#fff !important; }
+    .tp-ref-image>label { position:absolute !important; inset:0 !important; display:block !important; }
+    .tp-ref-image img:not(.is-empty) { display:block !important; visibility:visible !important; opacity:1 !important; width:100% !important; height:100% !important; object-fit:fill !important; }
+    .tp-ref-placeholder small { display:none; }
+    .tp-ref-artist,.tp-ref-footer-brand { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .tp-reference-sheet .tp-in,.tp-ref-banner input,
+    .tp-ref-file-path {
+        border:0; padding:0; background:transparent !important; color:#111 !important;
+    }
+    .tp-ref-banner input { color:#d71920 !important; }
+    /* An empty box prints as blank paper, not as its own hint text. The
+       banner is the exception: its standard wording IS the placeholder. */
+    .tp-reference-sheet input::placeholder { color:transparent !important; }
+    .tp-reference-sheet textarea::placeholder { color:transparent !important; }
+    .tp-ref-banner { padding:2mm 3mm; white-space:normal; }
+    .tp-ref-artist,.tp-ref-footer-brand { margin-top:2mm; padding:1.5mm 4mm; font-size:8px; }
+
+    /* ---- Made to fit one landscape page ---------------------------------
+       Everything on screen is sized against the sheet's own width, which is
+       right on a screen and wrong on paper: at 285mm wide the mockup came out
+       222mm tall by itself and the pack ran to a second page. On paper the
+       page is the budget, so the parts are given millimetres.
+
+       Budget: header 30 + sample 52 + artwork 30 + banner 7 + files 34 +
+       foot 8 = 161mm of 186mm printable, leaving room for the rules. */
+    .tp-reference-sheet { font-size: 7.6px; }
+
+    .tp-ref-image-mockup { height: 142mm !important; }
+    .tp-ref-image-small  { height: 19mm !important; }
+    .tp-ref-flat-grid > .tp-ref-image:first-child { height: 58mm !important; }
+    .tp-ref-image-artwork{ height: 19mm !important; }
+    .tp-ref-image-tag    { width: 15mm !important; height: 10mm !important; }
+    .tp-ref-file-image   { flex:0 0 auto !important; height: 22mm !important; min-height: 22mm !important; }
+
+    .tp-ref-title        { padding: 1.2mm 2mm !important; font-size: 1.3em; }
+    .tp-ref-black-title  { padding: 0.8mm 1.5mm !important; font-size: 1.1em; }
+    .tp-ref-light-title  { padding: 0.8mm 1.5mm !important; font-size: 1em; }
+
+    .tp-ref-table th, .tp-ref-table td { padding: 0.4mm 1mm !important; }
+
+    /* Materials keeps its size on paper too — it is the block somebody reads
+       with the garment in their hands, and there is room on the page for it. */
+    .tp-ref-materials .tp-ref-table th,
+    .tp-ref-materials .tp-ref-table td {
+        font-size: 9.2px !important;
+        padding: 0.7mm 1.2mm !important;
+    }
+    .tp-ref-materials .tp-ref-black-title { font-size: 12px !important; padding: 1.2mm 1.5mm !important; }
+    .tp-ref-head-table th, .tp-ref-head-table td { padding: 0.4mm 1mm !important; }
+    .tp-ref-sizetbl th, .tp-ref-sizetbl td { height: auto !important; padding: 0.3mm 1mm !important; }
+
+    .tp-ref-mockup-block { padding: 1mm 2mm 1.5mm !important; }
+    .tp-ref-flat-grid, .tp-ref-two-images { gap: 1.5mm !important; padding: 1.5mm 2mm !important; }
+    .tp-ref-tag-row { margin: 1mm 2mm !important; gap: 1.5mm !important; }
+    .tp-ref-file-content { gap: 1mm !important; padding: 1mm 2mm !important; }
+    .tp-ref-banner { padding: 1mm 2mm !important; font-size: 1.3em; }
+    .tp-ref-artist, .tp-ref-footer-brand { margin-top: 2mm !important; padding: 1mm 3mm !important; font-size: 0.85em; }
+
+    /* A note breaks where somebody pressed Enter and nowhere else, on paper as
+       on screen. Wrapping it here instead turned "LOGO WITH BLACK DESIGN" into
+       three stacked lines that sat over the picture above it — the box is sized
+       to its own text, so it simply takes the width it needs. */
+    .tp-ref-note-in {
+        white-space: pre !important;
+        overflow: visible !important;
+        height: auto !important;
+        width: auto !important;
+    }
+    .tp-ref-tag-text { width: auto !important; max-width: none !important; flex: 1 1 auto; }
+    .tp-ref-tag-row { grid-template-columns: auto 1fr !important; }
+
+    /* Nothing may push the sheet onto a second page. */
+    .tp-reference-sheet { max-height: 186mm; overflow: hidden; }
+
+    /* A mark may sit anywhere on the sheet and nowhere off it.
+
+       Both of a pin's numbers are a share of the sheet's WIDTH. Going down,
+       that only holds while the sheet keeps one shape: on paper it is far
+       wider than it is tall, so a mark two thirds of the way across is past
+       the bottom edge — and Chrome prints empty pages to reach it. Capped
+       against the sheet's own HEIGHT here, which is the thing it is really
+       measured against. */
+    .tp-ref-pin,
+    .tp-ref-static-line {
+        top: min(calc(var(--pin-y, 0) * 1cqw), 97%) !important;
+        left: min(calc(var(--pin-x, 0) * 1cqw), 99%) !important;
+    }
+
+    /* And nothing AROUND the sheet may either.
+
+       The pack fits its page and always did; the blank second page came from
+       the app's own furniture. The shell stands a full viewport tall, and when
+       a browser prints, a viewport IS the page — so the shell filled the sheet
+       to the last millimetre and the body's default margin, plus the content
+       padding, spilled over the edge. A second page, empty, on every print.
+
+       Hidden furniture still takes room: display:block was set on these for
+       print, which clears the flex layout but leaves the height alone. On
+       paper none of them has a size of its own. */
+    html, body,
+    .shell, .main, .content {
+        min-height: 0 !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* The sheet is the last thing on the paper: no trailing break after it. */
+    .tp-reference-sheet {
+        page-break-after: avoid;
+        break-after: avoid-page;
+    }
+}
+
+
+/* ---- The size list, above the materials -------------------------------
+   Read down a column rather than across a row: the size, and the number
+   beside it — the way somebody counts a bundle. Its own block with air under
+   it, so it does not read as another material. */
+/* Its own block under its own black bar: what was ORDERED, above what it is
+   MADE OF. Two questions, two headings, a gap between them. */
+.tp-ref-sizelist { margin-bottom: 1.4cqw; }
+.tp-ref-sizelist .tp-ref-table th { width: 55%; }
+.tp-ref-materials .tp-ref-black-title + .tp-ref-sizelist { margin-top: 0; }
+.tp-ref-sizelist .tp-ref-table td { text-align: left; font-weight: 700; }
+.tp-ref-sizelist .tp-ref-qty-head { width: 45%; text-align: left; }
+.tp-ref-sizelist .tp-ref-size-total td {
+    background: #111; color: #fff; font-weight: 800; text-transform: uppercase;
+}
+
+
+/* ---- The materials list fills its column -------------------------------
+   It ended wherever its last row happened to end, leaving a band of white
+   between the sticker row and the trims below — on a sheet where every other
+   block runs to its own edge, that reads as something missing rather than as
+   space. The rows share the slack, so the list runs down to meet the file
+   location beside it. */
+.tp-ref-materials > .tp-ref-table { flex: 1 1 auto; height: 100%; }
+.tp-ref-materials > .tp-ref-table th,
+.tp-ref-materials > .tp-ref-table td { height: auto; }
+
+
+/* ============================================================================
+   SCREEN POLISH
+
+   The printed pack stays the strict black-and-white production document above.
+   On screen it sits in the application as a working canvas, so it gets a little
+   more hierarchy, depth and clearer editing affordances. Keeping every rule in
+   @media screen prevents visual polish from changing the proven one-page print.
+   ========================================================================== */
+@media screen {
+    .tp-reference-sheet {
+        border-color: #20252d;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow:
+            0 1px 2px rgba(15, 23, 42, .08),
+            0 18px 48px rgba(15, 23, 42, .14);
+        overflow: hidden;
+    }
+
+    /* A quiet editorial hierarchy: pale labels, dark section bands and one
+       Imprint-red marker. The marker makes the beginning of the sheet obvious
+       without colouring the production data itself. */
+    .tp-ref-title {
+        position: relative;
+        padding-left: 1.65cqw;
+        background: linear-gradient(180deg, #f8fafc 0%, #e9edf2 100%);
+        color: #151922;
+        letter-spacing: .025em;
+    }
+    .tp-ref-title::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: .42cqw;
+        min-width: 4px;
+        background: #d71920;
+    }
+    .tp-ref-black-title {
+        background: linear-gradient(180deg, #20242a 0%, #0d0f12 100%);
+        letter-spacing: .055em;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, .35);
+    }
+    .tp-ref-light-title {
+        background: linear-gradient(180deg, #f4f6f8 0%, #e5e8ec 100%);
+        letter-spacing: .04em;
+    }
+
+    .tp-ref-wordmark {
+        background:
+            radial-gradient(circle at 20% 15%, rgba(215, 25, 32, .08), transparent 45%),
+            linear-gradient(145deg, #fff 0%, #f4f5f7 100%);
+        color: #0d0f12;
+        text-shadow: 0 1px 0 #fff;
+    }
+    .tp-ref-wordmark span:last-child { color: #d71920; }
+
+    /* Labels read as labels instead of competing with the answers. */
+    .tp-ref-table th,
+    .tp-ref-sizelbl {
+        background: linear-gradient(180deg, #f4f5f7 0%, #e7e9ec 100%);
+        color: #303640;
+        letter-spacing: .025em;
+    }
+    .tp-ref-table td { color: #12161c; }
+    .tp-ref-head-table td { font-weight: 650; }
+    .tp-ref-size-total td,
+    .tp-ref-size-tot {
+        background: linear-gradient(180deg, #252a31 0%, #101216 100%);
+        color: #fff;
+    }
+
+    /* Upload panels look intentional while empty and settle down once filled. */
+    .tp-reference-sheet.is-editing .tp-ref-image:not(:has(img:not(.is-empty))) {
+        border-color: #9aa3af;
+        background:
+            linear-gradient(135deg, rgba(148, 163, 184, .07) 25%, transparent 25%) 0 0 / 12px 12px,
+            linear-gradient(315deg, rgba(148, 163, 184, .07) 25%, transparent 25%) 0 0 / 12px 12px,
+            #fbfcfd;
+    }
+    .tp-reference-sheet.is-editing .tp-ref-image {
+        transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    .tp-reference-sheet.is-editing .tp-ref-image:hover {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, .13), 0 8px 20px rgba(15, 23, 42, .10);
+    }
+    .tp-ref-placeholder { color: #596273; }
+    .tp-ref-placeholder strong { letter-spacing: .035em; }
+
+    /* Fields are visibly editable, but still compact enough to mirror paper. */
+    .tp-reference-sheet .tp-in:not(.is-printed),
+    .tp-ref-banner input,
+    .tp-ref-label-select,
+    .tp-ref-file-path,
+    .tp-ref-path-host {
+        border-color: #b8c0cb;
+        border-radius: 3px;
+        background-color: #fff;
+        box-shadow: inset 0 1px 1px rgba(15, 23, 42, .04);
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .tp-reference-sheet .tp-in:not(.is-printed):hover,
+    .tp-ref-banner input:hover,
+    .tp-ref-label-select:hover,
+    .tp-ref-file-path:hover,
+    .tp-ref-path-host:hover { border-color: #7f8a99; }
+    .tp-reference-sheet .tp-in:not(.is-printed):focus,
+    .tp-ref-banner input:focus,
+    .tp-ref-label-select:focus,
+    .tp-ref-file-path:focus,
+    .tp-ref-path-host:focus {
+        border-color: #2563eb;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, .16);
+    }
+    .tp-reference-sheet .tp-in:placeholder-shown {
+        background: linear-gradient(180deg, #fffef8 0%, #fffbea 100%);
+    }
+
+    /* Controls outside the document form one tidy workbench. */
+    .tp-actions,
+    .tp-save,
+    .tp-build {
+        max-width: 1180px;
+        border: 1px solid #d9dee6;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, .96);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .07);
+    }
+    .tp-actions { padding: .65rem .75rem; }
+    .tp-save { padding: .8rem .9rem; }
+    .tp-build {
+        margin-top: -.65rem;
+        padding: .65rem .75rem;
+        align-items: stretch;
+    }
+    .tp-build .tp-ref-add-bar,
+    .tp-build .tp-ref-restore { justify-content: flex-end; }
+    .tp-build button {
+        border-style: solid;
+        border-color: #c9d0da;
+        border-radius: 6px;
+        background: #f8fafc;
+    }
+    .tp-build button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(37, 99, 235, .10);
+    }
+
+    .tp-ref-clear,
+    .tp-ref-line-btn {
+        box-shadow: 0 2px 6px rgba(15, 23, 42, .18);
+        transition: transform .14s ease, color .14s ease, background .14s ease;
+    }
+    .tp-ref-clear:hover,
+    .tp-ref-line-btn:hover { transform: scale(1.08); }
+}
+
+@media screen and (max-width: 900px) {
+    .tp-reference-sheet { border-radius: 4px; }
+    .tp-actions,
+    .tp-save,
+    .tp-build { border-radius: 8px; }
 }

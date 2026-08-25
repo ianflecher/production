@@ -19,35 +19,14 @@
 
 <div class="tp-actions no-print">
     @if (auth()->user()->canCreateOrders() && $jo)
-        @if ($jo->status === 'draft')
-            @php
-                $canSend = $order->mockupApproved()
-                    && $order->hasDownpayment()
-                    && $jo->isReadyToSend()
-                    && $jo->referenceFiles->isNotEmpty();
-                $sendBlockReason = ! $order->mockupApproved()
-                    ? 'The final mockup must be approved first.'
-                    : (! $order->hasDownpayment()
-                        ? 'Record the downpayment before sending.'
-                        : (! $jo->isReadyToSend()
-                            ? 'Fill in Print Type, Printer and Fabric before sending.'
-                            : (! $jo->referenceFiles->isNotEmpty()
-                                ? 'Upload a client reference before sending.'
-                                : null)));
-            @endphp
-            @if ($canSend)
-                <form method="POST" action="{{ route('job-orders.send', $order) }}" onsubmit="return confirm('Send this Tech Pack to the artist?');" style="margin-right: auto;">
-                    @csrf
-                    <button type="submit" class="btn btn-success btn-sm">📤 Send Tech Pack to Artist</button>
-                </form>
-            @else
-                <span style="margin-right: auto; color: var(--danger-ink); font-weight: 600; font-size: 0.85rem;">⚠ {{ $sendBlockReason }}</span>
-            @endif
-            @if($order->mockupApproved())
-                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-ghost btn-sm">✎ Edit Tech Pack</a>
-            @endif
-        @else
-            <span style="margin-right: auto; color: var(--success-ink); font-weight: 600; font-size: 0.85rem;">✓ Sent to the artist {{ $jo->sent_to_artist_at?->format('M j, g:i A') }}</span>
+        @include('partials.tech-pack-send', ['order' => $order, 'jo' => $jo])
+
+        {{-- The pack is the only document, so the officer's way into their half
+             of it does not disappear when it goes to the artist. Saving was
+             never blocked after sending — only this link went, which left
+             correcting a spec row to whoever knew the URL. --}}
+        @if ($order->mockupApproved())
+            <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-ghost btn-sm">✎ Edit Tech Pack</a>
         @endif
         {{-- Production details — press, cutting and the raw materials — stay
              reachable before and after sending. --}}
@@ -78,10 +57,9 @@
         @include('partials.tech-pack', ['order' => $order, 'editable' => true])
 
         <div class="tp-save no-print">
-            <button class="btn btn-primary">Save tech pack</button>
+            <button class="btn btn-primary" name="finish_editing" value="1">Save Tech Pack and continue</button>
             <span class="hint">
-                Design name, fitting, thread, zipper, back pocket, colourways and the
-                print sizes are yours to fill — the rest comes from the order.
+                Saves your changes, then opens the Submit Tech Pack for checking button.
             </span>
         </div>
     </form>

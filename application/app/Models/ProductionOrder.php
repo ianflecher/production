@@ -1214,6 +1214,28 @@ class ProductionOrder extends Model
      * touches 4/5/11) would never add or drop it. Keep it in step here — but
      * never remove one that has already been worked.
      */
+    /**
+     * Does this name a sticker?
+     *
+     * A blank field means no sticker, and so does a placeholder standing in for
+     * one — somebody typing "n/a" is saying there is none, not ordering one
+     * called N/A. Kept here so the answer is the same whoever is filling the
+     * row in: the officer on the order, or the artist on the pack.
+     */
+    public static function namesASticker(?string $value): bool
+    {
+        $said = trim((string) $value);
+
+        if ($said === '') {
+            return false;
+        }
+
+        return ! in_array(mb_strtolower($said), [
+            'n/a', 'na', 'n.a.', 'none', 'no', 'nil', '-', '--', 'x',
+            'wala', 'walang sticker',
+        ], true);
+    }
+
     private function syncStickerStep(): void
     {
         // Only the sticker STATION step tracks needs_sticker now — the export is a

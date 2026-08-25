@@ -49,7 +49,7 @@
                             </td>
                             <td>
                                 <strong>Job package</strong>
-                                <div style="font-size: 0.74rem; color: var(--ink-3);">job order + mockup + template</div>
+                                <div style="font-size: 0.74rem; color: var(--ink-3);">tech pack + mockup</div>
                             </td>
                             <td>{{ $group->first()->assignee?->name ?? '—' }}</td>
                             <td style="font-size: 0.84rem;">{{ $group->min('submitted_at')?->diffForHumans() ?? '—' }}</td>
@@ -104,8 +104,8 @@
                                                         <span><strong>Tech pack</strong> — artist redoes the tech pack.</span>
                                                     </label>
                                                     <label style="display:flex; gap:0.4rem; align-items:flex-start;">
-                                                        <input type="checkbox" name="items[]" value="job_order" style="width:auto; margin-top:0.2rem;">
-                                                        <span><strong>Job order details</strong> — account officer fixes it, then it comes back to you.</span>
+                                                        <input type="checkbox" name="items[]" value="officer_half" style="width:auto; margin-top:0.2rem;">
+                                                        <span><strong>The officer's half</strong> — the spec rows on the tech pack. The account officer fixes it, then it comes back to you.</span>
                                                     </label>
                                                 </div>
                                                 <label>What needs to be fixed?</label>

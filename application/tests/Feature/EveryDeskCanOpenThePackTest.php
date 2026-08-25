@@ -97,8 +97,11 @@ class EveryDeskCanOpenThePackTest extends TestCase
             ->assertSee('Materials and components')
             ->assertSee('Cotton blend')
             // …and the routing behind it: press, add-on, cutting, materials.
+            // The production column is set in capitals on the sheet, so that is
+            // what the desk reads — asking for the typed casing here only ever
+            // described a page that does not exist.
             ->assertSee('PRODUCTION DETAILS')
-            ->assertSee('Cotton shirt blank');
+            ->assertSee('COTTON SHIRT BLANK');
     }
 
     public function test_the_printing_side_gets_the_files_page_instead_of_the_routing(): void

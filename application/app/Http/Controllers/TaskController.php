@@ -127,6 +127,25 @@ class TaskController extends Controller
         return view('orders.references', ['order' => $order]);
     }
 
+    /** The pack field a text slot writes into, or null if it is a picture. */
+    private function textFieldForSlot(string $slot): ?string
+    {
+        return match ($slot) {
+            'text_tag_1' => 'tag_1_details',
+            'text_tag_2' => 'tag_2_details',
+            'text_banner' => 'placing_title',
+            default => null,
+        };
+    }
+
+    /** True when a text slot still has something written in it. */
+    private function slotCarriesText(\App\Models\TechPack $pack, string $slot): bool
+    {
+        $field = $this->textFieldForSlot($slot);
+
+        return $field !== null && filled($pack->$field);
+    }
+
     /**
      * The artist's own part of the tech pack.
      *
@@ -153,19 +172,13 @@ class TaskController extends Controller
             'quality' => ['nullable', 'string', 'max:60'],
             'print_tech' => ['nullable', 'string', 'max:60'],
             'placing_title' => ['nullable', 'string', 'max:160'],
-            'color_1' => ['nullable', 'string', 'max:40'],
-            'color_2' => ['nullable', 'string', 'max:40'],
-            'color_3' => ['nullable', 'string', 'max:40'],
-            'front_print_placement' => ['nullable', 'string', 'max:60'],
-            'front_actual_size' => ['nullable', 'string', 'max:60'],
-            'back_print_placement' => ['nullable', 'string', 'max:60'],
-            'back_actual_size' => ['nullable', 'string', 'max:60'],
             'tshirt_color' => ['nullable', 'string', 'max:60'],
+            // Their own rows now, not two halves of a dropdown.
+            'print_label' => ['nullable', 'string', 'max:120'],
+            'thread_color' => ['nullable', 'string', 'max:60'],
             'stitch_thread' => ['nullable', 'string', 'max:60'],
             'cutting_method' => ['nullable', 'string', 'max:60'],
             'size_range' => ['nullable', 'string', 'max:60'],
-            'label_type' => ['nullable', 'in:print_label,neck_label'],
-            'color_type' => ['nullable', 'in:tshirt_color,thread_color'],
             'zipper_type' => ['nullable', 'string', 'max:60'],
             'lip_pocket_color' => ['nullable', 'string', 'max:60'],
             'tag_1_details' => ['nullable', 'string', 'max:120'],
@@ -173,7 +186,6 @@ class TaskController extends Controller
             'file_location_notes' => ['nullable', 'string', 'max:200'],
             'file_location_tail' => ['nullable', 'string', 'max:200'],
             'file_location_host' => ['nullable', 'string', 'max:63'],
-            'additional_tech_notes' => ['nullable', 'string', 'max:500'],
             'artist_name' => ['nullable', 'string', 'max:100'],
             'bottom_text' => ['nullable', 'string', 'max:1000'],
             'bottom_image_width' => ['nullable', 'integer', 'min:120', 'max:900'],
@@ -198,6 +210,10 @@ class TaskController extends Controller
             'callouts.*.fy' => ['nullable', 'numeric', 'min:-50', 'max:150'],
             'callouts.*.tx' => ['nullable', 'numeric', 'min:-50', 'max:150'],
             'callouts.*.ty' => ['nullable', 'numeric', 'min:-50', 'max:150'],
+            // The garment end inside the approved mockup. Unlike a whole-page
+            // point, this stays identical between Artist and Display copies.
+            'callouts.*.mx' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'callouts.*.my' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // A line saved before both ends were movable.
             'callouts.*.x' => ['nullable', 'numeric', 'min:-50', 'max:150'],
             'callouts.*.y' => ['nullable', 'numeric', 'min:-50', 'max:150'],
@@ -205,6 +221,11 @@ class TaskController extends Controller
             'box_positions' => ['nullable', 'array'],
             'box_positions.*.x' => ['nullable', 'numeric', 'min:-200', 'max:200'],
             'box_positions.*.y' => ['nullable', 'numeric', 'min:-200', 'max:200'],
+            // A text block's nudge from its own place, as a share of its own
+            // box. A block carried right across the sheet is a lot of its own
+            // widths away, so the range is wide.
+            'box_positions.*.ox' => ['nullable', 'numeric', 'min:-5000', 'max:5000'],
+            'box_positions.*.oy' => ['nullable', 'numeric', 'min:-5000', 'max:5000'],
             'image_sizes' => ['nullable', 'array'],
             'image_sizes.*.w' => ['nullable', 'numeric', 'min:1', 'max:100'],
             'image_sizes.*.h' => ['nullable', 'numeric', 'min:1', 'max:100'],
@@ -224,15 +245,13 @@ class TaskController extends Controller
             'print_type' => ['nullable', 'string', 'max:60'],
         ]);
 
+        // The spec rows are the officer's and are not in this list, so an artist
+        // posting them by hand changes nothing. The lock on the sheet is a lock
+        // here too, not just a box they cannot click into.
         $packFields = collect($data)->only([
-            'design_name', 'fitting', 'item_style', 'quality', 'print_tech', 'placing_title',
-            'color_1', 'color_2', 'color_3',
-            'front_print_placement', 'front_actual_size',
-            'back_print_placement', 'back_actual_size',
-            'tshirt_color', 'stitch_thread', 'cutting_method', 'size_range', 'label_type', 'color_type',
-            'zipper_type', 'lip_pocket_color',
+            'placing_title',
             'tag_1_details', 'tag_2_details',
-            'file_location_notes', 'additional_tech_notes', 'artist_name',
+            'file_location_notes', 'artist_name',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
             'bottom_text_width', 'bottom_text_height',
         ])->all();
@@ -249,20 +268,34 @@ class TaskController extends Controller
         $hidden = $pack->hiddenBoxes();
 
         if ($drop = $data['remove_image'] ?? null) {
-            if (filled($imageUploads[$drop]['path'] ?? null)) {
-                Storage::disk('local')->delete($imageUploads[$drop]['path']);
-            }
-            unset($imageUploads[$drop]);
+            // The × empties the box first and only takes the box away on the
+            // second press.
+            //
+            // It used to do both at once, which meant one stray click on the
+            // file-location picture removed the whole panel — and the way to
+            // get it back was a chip under the sheet that is easy to miss. From
+            // where the artist sits that is not "I removed a box", it is "I can
+            // no longer add a picture here". Emptying is the common thing and
+            // it is now the reversible one: upload again and it is back.
+            $hadPicture = filled($imageUploads[$drop]['path'] ?? null);
+            $hasText = $this->slotCarriesText($pack, $drop);
 
-            // The sample panel is a list of the boxes it HAS, so one comes off
-            // that list. Every other box is part of the sheet, so the only way
-            // to take one off is to name it as one this pack does without —
-            // otherwise × emptied the box and drew it again, which looked
-            // exactly like nothing happening.
-            if (in_array($drop, $boxes, true)) {
-                $boxes = array_values(array_diff($boxes, [$drop]));
+            if ($hadPicture) {
+                Storage::disk('local')->delete($imageUploads[$drop]['path']);
+                unset($imageUploads[$drop]);
+            } elseif ($hasText) {
+                // A text block empties the same way before it goes.
+                $packFields[$this->textFieldForSlot($drop)] = null;
             } else {
-                $hidden[] = $drop;
+                // Already empty: now the box itself goes. The sample panel is a
+                // list of the boxes it HAS, so one comes off that list; every
+                // other box is part of the sheet, so it is named as one this
+                // pack does without.
+                if (in_array($drop, $boxes, true)) {
+                    $boxes = array_values(array_diff($boxes, [$drop]));
+                } else {
+                    $hidden[] = $drop;
+                }
             }
         }
 
@@ -319,6 +352,14 @@ class TaskController extends Controller
                     $line['fy'] = round((float) $fy, 2);
                 }
 
+                $mx = $at['mx'] ?? ($was['mx'] ?? null);
+                $my = $at['my'] ?? ($was['my'] ?? null);
+
+                if (is_numeric($mx) && is_numeric($my)) {
+                    $line['mx'] = round(max(0, min(100, (float) $mx)), 2);
+                    $line['my'] = round(max(0, min(100, (float) $my)), 2);
+                }
+
                 $lines[$slot] = $line;
             }
 
@@ -337,6 +378,12 @@ class TaskController extends Controller
             foreach ($moved as $slot => $at) {
                 if (is_numeric($at['x'] ?? null) && is_numeric($at['y'] ?? null)) {
                     $places[$slot] = ['x' => round((float) $at['x'], 2), 'y' => round((float) $at['y'], 2)];
+
+                    foreach (['ox', 'oy'] as $axis) {
+                        if (is_numeric($at[$axis] ?? null)) {
+                            $places[$slot][$axis] = round((float) $at[$axis], 2);
+                        }
+                    }
                 }
             }
 
@@ -423,10 +470,18 @@ class TaskController extends Controller
         $pack->fill($packFields);
         $order->techPack()->save($pack);
 
-        $jobOrder->update(collect($data)->only([
-            'fabric', 'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem',
-            'packaging', 'free_logo_sticker', 'print_type',
-        ])->all());
+        // Nothing of the job order's is written here any more: fabric, neck,
+        // cuff, the labels, the hem, packaging and the sticker row are all the
+        // officer's half of the sheet.
+
+        // Clicking the explicit Save button means the Artist is finished with
+        // the sheet and is ready for its next action. Image uploads use this
+        // same endpoint for background auto-save, but they do not carry
+        // finish_editing and must not throw the Artist out after every picture.
+        if ($request->boolean('finish_editing')) {
+            return redirect(route('tasks.show', $task->id).'#task-action-'.$task->id)
+                ->with('success', 'Tech Pack saved. It is ready to submit for checking.');
+        }
 
         return back()->with('success', 'Tech pack saved.');
     }
@@ -1068,15 +1123,20 @@ class TaskController extends Controller
             }
         }
 
-        // Job-order fix — flag it for the account officer. The package waits off
-        // the leader's queue until they've corrected it; the artist isn't pulled in.
-        if (in_array('job_order', $items, true)) {
+        // The officer's half of the TECH PACK — the spec rows they fill in.
+        // There is no job order sheet any more, so the note goes back to the
+        // person who wrote those rows and the package waits off the leader's
+        // queue until they have corrected it. The artist isn't pulled in.
+        //
+        // 'job_order' is still accepted so a form opened before this still
+        // posts something the leader meant.
+        if (array_intersect(['officer_half', 'job_order'], $items)) {
             $order->jobOrder?->update(['leader_note' => $data['revision_note']]);
             \App\Models\AppNotification::toUser($order->created_by,
-                '↩ Leader wants the job order fixed',
+                '↩ Leader wants the tech pack fixed',
                 $order->order_number.' — '.\Illuminate\Support\Str::limit($data['revision_note'], 90),
                 route('orders.show', $order));
-            $fixed[] = 'job order';
+            $fixed[] = "the officer's half of the tech pack";
         }
 
         return back()->with('success', 'Sent back for revision on '.$order->order_number.': '.implode(', ', $fixed).'.');

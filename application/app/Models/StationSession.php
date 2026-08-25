@@ -85,6 +85,64 @@ class StationSession extends Model
             && trim(mb_strtolower($this->operator_name)) !== trim(mb_strtolower($this->user->name));
     }
 
+    /**
+     * What was written down at this station, for this job.
+     *
+     * Sewing keeps a line per seam — what was done and who did it — and the
+     * quality check keeps what was looked at and what was found. Both live on
+     * the job rather than on the stint, because they describe the garment and
+     * not the shift; the names inside them say who, which is why they are
+     * shown as they were written.
+     *
+     * Anything else records nothing, and gets nothing.
+     *
+     * @return array<int, string>
+     */
+    public function workDone(): array
+    {
+        $jo = $this->order?->jobOrder;
+
+        if (! $jo) {
+            return [];
+        }
+
+        if (str_starts_with((string) $this->station, 'sewing_')) {
+            $lines = collect((array) $jo->sewing_log)
+                ->map(function ($row) {
+                    $work = trim((string) ($row['work'] ?? ''));
+                    $name = trim((string) ($row['name'] ?? ''));
+
+                    if ($work === '') {
+                        return null;
+                    }
+
+                    return $name === '' ? $work : $work.' — '.$name;
+                })
+                ->filter()
+                ->values()
+                ->all();
+
+            if (filled($jo->sewer_notes)) {
+                $lines[] = $jo->sewer_notes;
+            }
+
+            return $lines;
+        }
+
+        if (str_starts_with((string) $this->station, 'qc_')) {
+            $checked = trim((string) $jo->qc_notes);
+            $by = trim((string) $jo->qc_checked_by);
+
+            if ($checked === '' && $by === '') {
+                return [];
+            }
+
+            return [$checked === '' ? 'Checked — '.$by : ($by === '' ? $checked : $checked.' — '.$by)];
+        }
+
+        return [];
+    }
+
     public function stationLabel(): string
     {
         return Stations::label($this->station);
