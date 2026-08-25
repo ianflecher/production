@@ -153,7 +153,11 @@
                         @if (! $order->hasDownpayment())
                             Waiting for <strong>downpayment</strong>.
                         @else
-                            Waiting for the <strong>job order</strong>.
+                            {{-- The job order SHEET is gone: the officer fills
+                                 their half of the tech pack and sends that.
+                                 Naming a document nobody can open any more
+                                 left the artist waiting on nothing. --}}
+                            Waiting for the <strong>tech pack</strong>.
                         @endif
                     </p>
 

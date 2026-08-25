@@ -73,13 +73,34 @@ class FullShopWalkthroughTest extends TestCase
     }
 
     /** Push a step to done without going through its station. */
-    private function close(string $department): Task
+    private function close(string $department, ?int $stage = null): Task
     {
-        $task = $this->order->tasks()->where('department', $department)->firstOrFail();
+        // Pairing, Sewing and Quality control each happen twice — once for the
+        // sample and once for the batch — so the batch half is named by stage.
+        $task = $this->order->tasks()
+            ->where('department', $department)
+            ->when($stage !== null, fn ($q) => $q->where('stage', $stage))
+            ->firstOrFail();
+
         $task->update(['status' => 'complete', 'approved_at' => now(), 'released_at' => now()]);
         $this->order->refresh()->handleTaskCompleted($task->fresh());
 
         return $task->fresh();
+    }
+
+    /** Every step still open at this stage, in the order the shop works them. */
+    private function closeStage(int $stage): void
+    {
+        $open = $this->order->fresh()->tasks()
+            ->where('stage', $stage)
+            ->whereNotIn('status', ['complete', 'cancelled'])
+            ->orderBy('sequence')
+            ->pluck('department')
+            ->all();
+
+        foreach ($open as $department) {
+            $this->close($department, $stage);
+        }
     }
 
     public function test_a_job_walks_from_the_officers_desk_to_the_door(): void
@@ -95,7 +116,28 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertTrue($this->order->fresh()->mockupApproved(),
             'the pack must not open before the client has approved the design');
 
-        // ---- 2. The officer fills their half of the PACK --------------------
+        // ---- 2. The money, and the client's own reference --------------------
+        // Before the spec goes on the sheet, not after: the shop puts nothing
+        // into production on a promise, and the order page says as much —
+        // "Downpayment recorded — put the client's spec on the tech pack".
+        $paid = $this->actingAs($this->staff['sales'])
+            ->post(route('orders.payment', $this->order), [
+                // Nothing is recorded on somebody's word: the shop keeps a
+                // picture of every payment against the order.
+                'portion' => 'half', 'method' => 'Cash',
+                'proof' => UploadedFile::fake()->image('deposit-slip.jpg'),
+            ]);
+
+        $this->assertTrue($this->order->fresh()->hasDownpayment(),
+            'payment refused: '.json_encode(session('errors')?->all() ?? []));
+
+        $this->actingAs($this->staff['sales'])
+            ->post(route('job-orders.reference', $this->order), [
+                'reference_files' => [UploadedFile::fake()->image('client-peg.jpg')],
+                'kind' => 'peg',
+            ])->assertRedirect();
+
+        // ---- 3. The officer fills their half of the PACK --------------------
         $this->order->refresh()->unlockStage(2);
 
         $this->actingAs($this->staff['sales'])
@@ -131,26 +173,8 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertSame(55.0, $this->order->fresh()->jobOrder->rawMaterialQuantity('Cotton shirt blank'),
             'the amount the desk is allowed to issue rides with the material');
 
-        // ---- 3. The money, the client's reference, then off to the artist ---
-        // Nothing reaches the artist on a promise: the downpayment is recorded
-        // and the client's own reference is on file first.
-        $paid = $this->actingAs($this->staff['sales'])
-            ->post(route('orders.payment', $this->order), [
-                // Nothing is recorded on somebody's word: the shop keeps a
-                // picture of every payment against the order.
-                'portion' => 'half', 'method' => 'Cash',
-                'proof' => UploadedFile::fake()->image('deposit-slip.jpg'),
-            ]);
-
-        $this->assertTrue($this->order->fresh()->hasDownpayment(),
-            'payment refused: '.json_encode(session('errors')?->all() ?? []));
-
-        $this->actingAs($this->staff['sales'])
-            ->post(route('job-orders.reference', $this->order), [
-                'reference_files' => [UploadedFile::fake()->image('client-peg.jpg')],
-                'kind' => 'peg',
-            ])->assertRedirect();
-
+        // ---- 4. Off to the artist -------------------------------------------
+        // The money is in and the spec is on the sheet, so it can go.
         $sent = $this->actingAs($this->staff['sales'])
             ->post(route('job-orders.send', $this->order));
 
@@ -193,7 +217,7 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertSame(['x' => 45.0, 'y' => 35.0], $pack->callouts()['front_artwork']['to']);
         $this->assertCount(1, $pack->extraNotes());
 
-        // ---- 4. The leader signs off the pack -------------------------------
+        // ---- 5. The leader signs off the pack -------------------------------
         $packTask->update(['status' => 'for_checking', 'submitted_at' => now()]);
 
         $this->actingAs($this->staff['leader'])
@@ -202,7 +226,7 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertSame('complete', $packTask->fresh()->status,
             'the leader signs off the pack, and that is what opens production');
 
-        // ---- 5. Materials: the desk issues what the job asked for -----------
+        // ---- 6. Materials: the desk issues what the job asked for -----------
         $item = InventoryItem::create(['name' => 'Cotton shirt blank', 'unit' => 'pcs', 'quantity' => 500]);
         $request = MaterialRequest::where('production_order_id', $this->order->id)->firstOrFail();
 
@@ -219,7 +243,7 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertSame('55.00', $request->fresh()->issued_quantity, 'the job asked for 55');
         $this->assertSame(445.0, (float) $item->fresh()->quantity, 'so 55 left the shelf');
 
-        // ---- 6. The floor reads the pack at its station ---------------------
+        // ---- 7. The floor reads the pack at its station ---------------------
         $this->actingAs($this->staff['printer'])
             ->get(route('orders.package', [$this->order, 'for' => 'printer']))
             ->assertOk()
@@ -233,7 +257,7 @@ class FullShopWalkthroughTest extends TestCase
             ->assertOk()
             ->assertDontSee('PRINT FILES');
 
-        // ---- 7. The sample is received before it is stock -------------------
+        // ---- 8. The sample is received before it is stock -------------------
         $this->order->fresh()->stockFirstSample();
 
         $receipt = ProductReceipt::where('production_order_id', $this->order->id)->firstOrFail();
@@ -245,6 +269,75 @@ class FullShopWalkthroughTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame(1.0, (float) ProductItem::first()->quantity);
+
+        // ---- 9. The floor works the sample through --------------------------
+        // Materials issued, the design printed and pressed, the sticker run if
+        // the job has one — then the one piece is cut, paired, sewn and checked.
+        // Each of these is what releases the next: closing them in order is the
+        // point of walking it rather than placing an order mid-pipeline.
+        $this->closeStage(3);
+
+        foreach ([5, 6, 7, 8] as $stage) {
+            $this->closeStage($stage);
+        }
+
+        // ---- 10. The client approves the sample, and the batch is made -------
+        // Nobody works this step — it lands on Sample Review and the officer
+        // answers for the client.
+        $this->close('Produce sample for client');
+
+        $this->assertSame(
+            'ready',
+            $this->order->fresh()->tasks()->where('department', 'Mass production')->value('status'),
+            'the client said yes and nothing was released to make the rest'
+        );
+
+        // 10 — the whole batch printed, then pressed onto the cloth.
+        $this->closeStage(10);
+
+        // ---- 11. The batch walks the same line the sample did ---------------
+        foreach ([11, 12, 13, 14] as $stage) {
+            $this->closeStage($stage);
+        }
+
+        // ---- 12. Counted into finished goods -------------------------------
+        // Receiving the sample already put the inventory desk to work, so this
+        // step may be closed before the batch ever gets here. Either way the
+        // goods are counted in before anything reaches the counter.
+        $inventory = $this->order->fresh()->tasks()->where('department', 'Inventory')->firstOrFail();
+
+        $this->assertNotSame('todo', $inventory->status, 'the inventory desk was never told the batch was coming');
+
+        if ($inventory->status !== 'complete') {
+            $this->close('Inventory');
+        }
+
+        // ---- 13. The counter hands it over ---------------------------------
+        // Release carries auto_submit: nobody works it, so it arrives on the
+        // finished-products desk the moment stock is counted in.
+        $release = $this->order->fresh()->tasks()->where('department', 'Release to client')->firstOrFail();
+
+        $this->assertContains(
+            $release->status,
+            ['ready', 'for_checking'],
+            'the goods are counted in and nothing is waiting at the counter'
+        );
+
+        $this->close('Release to client');
+
+        // ---- 14. And the job is done ---------------------------------------
+        $this->order->refresh();
+
+        $this->assertSame(
+            0,
+            $this->order->tasks()->whereNotIn('status', ['complete', 'cancelled'])->count(),
+            'the client has their goods and the board still shows work outstanding'
+        );
+
+        $this->assertTrue(
+            in_array($this->order->status, ['completed', 'complete'], true),
+            'every step is done and the order has not closed: status is '.$this->order->status
+        );
     }
 
     public function test_every_page_of_the_pack_opens_for_everyone_who_reads_it(): void

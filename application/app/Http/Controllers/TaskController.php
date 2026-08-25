@@ -250,12 +250,13 @@ class TaskController extends Controller
             'print_type' => ['nullable', 'string', 'max:60'],
         ]);
 
+        // The spec rows are the officer's and are not in this list, so an artist
+        // posting them by hand changes nothing. The lock on the sheet is a lock
+        // here too, not just a box they cannot click into.
         $packFields = collect($data)->only([
-            'design_name', 'fitting', 'item_style', 'quality', 'print_tech', 'placing_title',
+            'placing_title',
             'front_print_placement', 'front_actual_size',
             'back_print_placement', 'back_actual_size',
-            'tshirt_color', 'print_label', 'thread_color', 'stitch_thread', 'cutting_method', 'size_range',
-            'zipper_type', 'lip_pocket_color',
             'tag_1_details', 'tag_2_details',
             'file_location_notes', 'additional_tech_notes', 'artist_name',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
@@ -476,10 +477,9 @@ class TaskController extends Controller
         $pack->fill($packFields);
         $order->techPack()->save($pack);
 
-        $jobOrder->update(collect($data)->only([
-            'fabric', 'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem',
-            'packaging', 'free_logo_sticker', 'print_type',
-        ])->all());
+        // Nothing of the job order's is written here any more: fabric, neck,
+        // cuff, the labels, the hem, packaging and the sticker row are all the
+        // officer's half of the sheet.
 
         // Clicking the explicit Save button means the Artist is finished with
         // the sheet and is ready for its next action. Image uploads use this
@@ -1096,15 +1096,20 @@ class TaskController extends Controller
             }
         }
 
-        // Job-order fix — flag it for the account officer. The package waits off
-        // the leader's queue until they've corrected it; the artist isn't pulled in.
-        if (in_array('job_order', $items, true)) {
+        // The officer's half of the TECH PACK — the spec rows they fill in.
+        // There is no job order sheet any more, so the note goes back to the
+        // person who wrote those rows and the package waits off the leader's
+        // queue until they have corrected it. The artist isn't pulled in.
+        //
+        // 'job_order' is still accepted so a form opened before this still
+        // posts something the leader meant.
+        if (array_intersect(['officer_half', 'job_order'], $items)) {
             $order->jobOrder?->update(['leader_note' => $data['revision_note']]);
             \App\Models\AppNotification::toUser($order->created_by,
-                '↩ Leader wants the job order fixed',
+                '↩ Leader wants the tech pack fixed',
                 $order->order_number.' — '.\Illuminate\Support\Str::limit($data['revision_note'], 90),
                 route('orders.show', $order));
-            $fixed[] = 'job order';
+            $fixed[] = "the officer's half of the tech pack";
         }
 
         return back()->with('success', 'Sent back for revision on '.$order->order_number.': '.implode(', ', $fixed).'.');

@@ -30,10 +30,35 @@
     // note dragged beside a picture, the end of a leader line — landed
     // somewhere else on the sheet the floor reads. No name on the read-only
     // one: there is no form under it to post to.
-    $fill = function (string $field, string $placeholder = '', int $max = 120, $on = null) use ($tp, $textEditable) {
+    /* The account officer's rows: the client's order, written down.
+
+       Everybody READS the whole sheet. Only the officer types in these, and
+       only the artist types in the rest — the placements, the sizes the print
+       comes out at, the tag captions, the file path, their own name. Each half
+       is the answer of somebody who was there; the other one is guessing. */
+    $officerRows = [
+        'design_name', 'fitting', 'item_style', 'quality', 'print_tech',
+        'tshirt_color', 'print_label', 'thread_color', 'stitch_thread',
+        'cutting_method', 'size_range', 'zipper_type', 'lip_pocket_color',
+        // Rows the job order record still carries.
+        'fabric', 'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem',
+        'packaging', 'free_logo_sticker', 'print_type',
+    ];
+
+    $canType = function (string $field) use ($textEditable, $mode, $officerRows) {
+        if (! $textEditable) {
+            return false;
+        }
+
+        $theirs = in_array($field, $officerRows, true);
+
+        return $mode === 'officer' ? $theirs : ! $theirs;
+    };
+
+    $fill = function (string $field, string $placeholder = '', int $max = 120, $on = null) use ($tp, $canType) {
         $model = $on ?? $tp; $value = (string) ($model?->$field ?? '');
 
-        if (! $textEditable) {
+        if (! $canType($field)) {
             return '<input class="tp-in is-printed" type="text" value="'.e($value).'" readonly tabindex="-1">';
         }
 
@@ -169,7 +194,7 @@
         </div><div class="tp-ref-black-title">Materials and components</div>
         <table class="tp-ref-table">
         <tr><th>Neck type</th><td>{!! $textEditable?$fill('neck','Round neck / 1 x 1 ribbings',100,$jo):e($val(trim(($jo?->neck??'').($jo?->neck_size?' / '.$jo->neck_size:'')))) !!}</td></tr>
-        <tr><th>Cuff / hem style</th><td>{!! $fill('cuff_arm_sleeves','Tupi',100,$jo) !!}</td></tr>
+        <tr><th>Cuff / arm slv</th><td>{!! $fill('cuff_arm_sleeves','Tupi',100,$jo) !!}</td></tr>
         {{-- Four rows where there were two dropdowns. Each of those changed
              what its row was CALLED — print label or neck label, t-shirt colour
              or thread colour — so a garment that wants both could only say one,
@@ -186,37 +211,15 @@
         <tr><th>Lip pocket color</th><td>{!! $fill('lip_pocket_color','Pocket color',60) !!}</td></tr>
         <tr><th>Size range</th><td>{!! $fill('size_range','M-2XL',60) !!}</td></tr><tr class="tp-ref-sticker"><th>Sticker / extra</th><td>{!! $fill('free_logo_sticker','IC sticker',120,$jo) !!}</td></tr>
 
-        {{-- The officer's boxes only.
+        {{-- Raw materials are not here.
 
-             This list is what raises the request the materials desk answers, so
-             it has to be enterable — but it is not part of the SPEC. What a job
-             is cut from is production's business; the sheet the floor works the
-             garment to says what the garment is, not what stock it came off.
-             So nobody but the officer filling it in ever sees these rows. --}}
-        @if ($mode === 'officer')
-            @php
-                $materials = old('raw_materials', $jo?->rawMaterialsList() ?: ['']);
-                $materials = array_values(array_filter((array) $materials, fn ($m) => filled($m))) ?: [''];
-            @endphp
-            @foreach ($materials as $i => $material)
-                <tr class="tp-ref-material-row no-print">
-                    <th>{{ $i === 0 ? 'Raw materials' : '' }}</th>
-                    <td>
-                        <span class="tp-ref-material">
-                            <input class="tp-in" type="text" name="raw_materials[]" maxlength="255"
-                                   value="{{ $material }}" placeholder="e.g. Cotton shirt blank">
-                            <input class="tp-in tp-ref-material-qty" type="number" min="0" step="0.01"
-                                   name="raw_material_qty[]" placeholder="How many"
-                                   value="{{ $jo?->rawMaterialQuantity($material) }}">
-                        </span>
-                    </td>
-                </tr>
-            @endforeach
-            <tr class="tp-ref-material-row no-print">
-                <th></th>
-                <td><button type="button" class="tp-ref-add-material">+ Another material</button></td>
-            </tr>
-        @endif
+             The list raises the request the materials desk answers, and what a
+             job is cut from is production's business — the sheet the floor
+             works the garment to says what the garment IS, not what stock it
+             came off. It was enterable here for the officer and hidden from
+             everybody else, which made two homes for one answer. Production
+             details is the home: it has the amounts, the past values to pick
+             from, and a way to take a row out. --}}
 
             {{-- What was ordered, read like the size chart it came from: the
                  sizes along the top, the count for each one directly under it.
@@ -244,7 +247,7 @@
      dots between the two read as a stray mark on the sheet. It moves with the
      tag picture instead. --}}
                 @unless ($tp->boxIsHidden('text_'.$slot))
-                <div class="tp-ref-tag-text" data-move-slot="text_{{ $slot }}" style="{{ $tp->boxPositionStyle('text_'.$slot) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag textbox to move">&#8942;&#8942;</span>@endif{!! $clearBtn('text_'.$slot) !!}@if($textEditable)<textarea class="tp-in tp-ref-note-in" name="{{ $field }}" maxlength="120" rows="1" wrap="off" placeholder="Type tag details">{{ $tp->$field }}</textarea>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $tp->$field }}</textarea>@endif</div>
+                <div class="tp-ref-tag-text" data-move-slot="text_{{ $slot }}" style="{{ $tp->boxPositionStyle('text_'.$slot) }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag textbox to move">&#8942;&#8942;</span>@endif{!! $clearBtn('text_'.$slot) !!}@if($canType($field))<textarea class="tp-in tp-ref-note-in" name="{{ $field }}" maxlength="120" rows="1" wrap="off" placeholder="Type tag details">{{ $tp->$field }}</textarea>@else<textarea class="tp-in tp-ref-note-in is-printed" rows="1" wrap="off" readonly tabindex="-1">{{ $tp->$field }}</textarea>@endif</div>
                 @endunless
             </div>
         @endforeach
@@ -253,7 +256,7 @@
 
 
 
-    <div class="tp-ref-banner" data-move-slot="text_banner" style="{{ $tp->boxPositionStyle('text_banner') }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span>@endif @if($textEditable)<input type="text" name="placing_title" maxlength="160" value="{{ $tp->placing_title }}" placeholder="Placing note (optional) — e.g. {{ $defaultBanner }}">@else{{ $banner }}@endif</div>
+    <div class="tp-ref-banner" data-move-slot="text_banner" style="{{ $tp->boxPositionStyle('text_banner') }}">@if($imageEditable)<span class="tp-ref-grip no-print" title="Drag to move">&#8942;&#8942;</span>@endif @if($canType('placing_title'))<input type="text" name="placing_title" maxlength="160" value="{{ $tp->placing_title }}" placeholder="Placing note (optional) — e.g. {{ $defaultBanner }}">@else{{ $banner }}@endif</div>
     @php $fileLocationImage=$slotSrc('file_location_image'); @endphp
     <section class="tp-ref-file-notes">
         <div class="tp-ref-light-title">File location</div>
@@ -506,7 +509,38 @@
         return parseFloat(el.style.getPropertyValue('--pin-' + axis)) || 0;
     }
 
+    /* A value set small enough to be read whole.
+
+       These boxes are one line and take a hundred characters, so a long answer
+       ran past the edge and the rest of it was simply gone. Shrinking is the
+       trade the shop asked for: the row keeps its height, the words keep their
+       place, and the type gets smaller until it fits — but only down to the
+       floor below, because an answer nobody can read is no better than one
+       nobody can see. */
+    var FIT_FLOOR = 0.62, FIT_STEP = 0.04;
+
+    function fitValue(el) {
+        el.style.fontSize = '';
+
+        // Nothing to do until it is actually laid out (a hidden copy, a box
+        // with no width yet) — measuring then only produces a wrong answer.
+        if (! el.offsetWidth) { return; }
+
+        var size = 1;
+
+        while (el.scrollWidth > el.clientWidth + 1 && size > FIT_FLOOR) {
+            size -= FIT_STEP;
+            el.style.fontSize = size.toFixed(2) + 'em';
+        }
+    }
+
+    function fitValues() {
+        sheet.querySelectorAll('input.tp-in').forEach(fitValue);
+    }
+
     function draw() {
+        fitValues();
+
         var box = sheet.getBoundingClientRect();
         svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
         svg.innerHTML = '';
@@ -605,6 +639,12 @@
 
     // Shared with the editing script below, which lives in its own <script>
     // and cannot see anything declared in here.
+    // Typing a long answer shrinks it as it goes, rather than at the next
+    // redraw — otherwise the end of the word you are writing is invisible.
+    sheet.addEventListener('input', function (e) {
+        if (e.target.matches('input.tp-in')) { fitValue(e.target); }
+    });
+
     window.tpSetPin = setPin;
     window.tpReadPin = readPin;
 

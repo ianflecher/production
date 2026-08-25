@@ -18,6 +18,11 @@
 <link rel="stylesheet" href="{{ asset('css/tech-pack.css') }}?v={{ filemtime(public_path('css/tech-pack.css')) }}">
 
 <div class="tp-actions no-print">
+    {{-- Sending is the last thing the officer does, so it is on the page where
+         they finish rather than one they have to go back to. It sits ABOVE the
+         form: a form inside a form is not a form the browser will post. --}}
+    @include('partials.tech-pack-send', ['order' => $order, 'jo' => $jobOrder])
+    <a href="{{ route('job-orders.production', $order) }}" class="btn btn-primary btn-sm">⚙ Production details</a>
     <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← Back to the order</a>
 </div>
 

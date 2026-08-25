@@ -354,7 +354,7 @@ This closes the step and moves the order to the next one.');"
             <div class="tbl-wrap">
                 <table class="tbl">
                     <thead>
-                        <tr><th>Station</th><th>Operator</th><th>Job order</th><th>Started</th><th>Ended</th><th>For</th><th>Came off</th></tr>
+                        <tr><th>Station</th><th>Operator</th><th>Job order</th><th>What they did</th><th>Started</th><th>Ended</th><th>For</th><th>Came off</th></tr>
                     </thead>
                     <tbody>
                         @foreach ($groupHistory->take(25) as $h)
@@ -375,6 +375,17 @@ This closes the step and moves the order to the next one.');"
                                             {{ $h->order->order_number }}
                                         @endif
                                     @else — @endif
+                                </td>
+                                {{-- Sewing and quality write down what was done;
+                                     the rest of the stations do not, and an empty
+                                     dash says so plainly. --}}
+                                <td style="font-size:0.8rem;">
+                                    @php $did = $h->workDone(); @endphp
+                                    @forelse ($did as $line)
+                                        <div>{{ $line }}</div>
+                                    @empty
+                                        <span style="color:var(--ink-3);">—</span>
+                                    @endforelse
                                 </td>
                                 <td style="font-size:0.8rem; color:var(--ink-3); white-space:nowrap;">{{ $h->started_at->format('M j, g:i A') }}</td>
                                 <td style="font-size:0.8rem; color:var(--ink-3); white-space:nowrap;">{{ $h->ended_at?->format('M j, g:i A') ?? '—' }}</td>

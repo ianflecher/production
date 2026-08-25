@@ -115,17 +115,71 @@ class TechPackTest extends TestCase
 
     public function test_the_artist_fills_their_half_in_the_pack_itself(): void
     {
+        // Their half is what the officer cannot know: where the print goes,
+        // how big it comes out, and where the files ended up.
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertSee('name="design_name"', false)
-            ->assertSee('name="cutting_method"', false)
-            ->assertSee('name="zipper_type"', false)
-            ->assertSee('name="bottom_hem"', false)
-            ->assertSee('name="lip_pocket_color"', false)
+            ->assertSee('name="file_location_tail"', false)
+            ->assertSee('name="tag_1_details"', false)
+            ->assertSee('name="placing_title"', false)
+            // The pictures are theirs too.
+            ->assertSee('name="tech_pack_images[front_mockup]"', false)
             // …around the pack, not instead of it.
             ->assertSee('tp-sheet', false);
+    }
+
+    public function test_the_spec_rows_are_the_officers_and_the_artist_only_reads_them(): void
+    {
+        // The spec is the client's order written down. An artist quietly
+        // changing what was ordered is the thing this prevents; they still see
+        // every row, in the same boxes, so the sheet keeps its shape.
+        [, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
+            ->assertOk()
+            ->assertDontSee('name="design_name"', false)
+            ->assertDontSee('name="cutting_method"', false)
+            ->assertDontSee('name="zipper_type"', false)
+            ->assertDontSee('name="bottom_hem"', false)
+            ->assertDontSee('name="lip_pocket_color"', false)
+            // Read-only boxes, not missing rows.
+            ->assertSee('is-printed', false);
+    }
+
+    public function test_the_artists_boxes_are_theirs_and_the_officer_only_reads_them(): void
+    {
+        // The other way round: the officer has no business rewriting the tag
+        // captions or the size the print came out at.
+        [$sales, , $order] = $this->shop();
+
+        $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
+            ->assertOk()
+            ->assertSee('name="design_name"', false)
+            ->assertDontSee('name="front_actual_size"', false)
+            ->assertDontSee('name="tag_1_details"', false)
+            ->assertDontSee('name="artist_name"', false);
+    }
+
+    public function test_the_spec_rows_ignore_an_artist_who_posts_them_anyway(): void
+    {
+        // The lock on the sheet is a lock in the save as well: a box somebody
+        // cannot click into is no protection on its own.
+        [, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'cutting_method' => 'Whatever the artist fancied',
+            'zipper_type' => 'Also not theirs',
+            'tag_1_details' => 'Woven label, centre back',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pack = $order->fresh()->techPack;
+
+        $this->assertNull($pack->cutting_method, 'the artist wrote into the officer\'s row');
+        $this->assertNull($pack->zipper_type, 'the artist wrote into the officer\'s row');
+        // …while their own box saved as normal.
+        $this->assertSame('Woven label, centre back', $pack->tag_1_details);
     }
 
     public function test_manual_save_takes_the_artist_to_submit_for_checking(): void
@@ -662,23 +716,17 @@ class TechPackTest extends TestCase
         [$sales, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'design_name' => 'Aerox Lifestyle (White/08 1426)',
-            'fitting' => 'Original fit',
-            'stitch_thread' => 'N/A',
-            'cutting_method' => 'Straight cut',
-            'size_range' => 'M-2XL',
-            'back_print_placement' => 'Back',
-            'back_actual_size' => '14.0\" W x 10.633\" H',
-            'front_print_placement' => 'Left chest',
-            'front_actual_size' => '4.0\" W x 2.318\" H',
-            'artist_name' => 'Dave CAD Mick',
+            'tag_1_details' => 'Woven label, centre back',
+            'tag_2_details' => 'Size tag, side seam',
+            'placing_title' => 'Standard DTF placing for jacket',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
+        // And the sheet the shop reads carries what they wrote.
         $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
             ->assertOk()
-            ->assertSee('Aerox Lifestyle (White/08 1426)')
-            ->assertSee('Original fit')
-            ->assertSee('M-2XL');
+            ->assertSee('Woven label, centre back')
+            ->assertSee('Size tag, side seam')
+            ->assertSee('STANDARD DTF PLACING FOR JACKET');
     }
 
     public function test_another_artist_cannot_fill_somebody_elses_pack(): void

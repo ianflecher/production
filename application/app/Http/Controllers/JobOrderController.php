@@ -131,14 +131,13 @@ class JobOrderController extends Controller
         // The pack's own fields go to the pack; everything else stays on the
         // job order, so no answer ends up with two homes.
         $packFields = collect($data)->only([
+            // The officer's half only. The placements, the sizes the print
+            // comes out at, the tag captions and the notes are the artist's —
+            // they are on this sheet to be read, not overwritten from here.
             'design_name', 'fitting', 'item_style', 'quality', 'tshirt_color',
             'print_label', 'thread_color',
-            'size_range', 'zipper_type', 'lip_pocket_color',
-            'additional_tech_notes',
-            'placing_title', 'front_print_placement', 'front_actual_size',
-            'back_print_placement', 'back_actual_size', 'stitch_thread',
-            'cutting_method', 'tag_1_details', 'tag_2_details',
-            'file_location_notes', 'artist_name',
+            'size_range', 'zipper_type', 'lip_pocket_color', 'stitch_thread',
+            'cutting_method',
         ])->all();
 
         // Was this a fix requested by the leader? Clearing the note sends the
@@ -195,9 +194,7 @@ class JobOrderController extends Controller
         // A named free-logo sticker means the sticker production step is needed.
         // A blank field — or a "no sticker" placeholder like n/a / none / - —
         // must NOT create a sticker step, so only a real name turns it on.
-        $sticker = trim((string) ($data['free_logo_sticker'] ?? ''));
-        $newSticker = $sticker !== ''
-            && ! in_array(strtolower($sticker), ['n/a', 'na', 'n.a.', 'none', 'no', 'nil', '-', '--', 'x', 'wala', 'walang sticker'], true);
+        $newSticker = ProductionOrder::namesASticker($data['free_logo_sticker'] ?? null);
         if ($newSticker !== (bool) $order->needs_sticker) {
             $order->update(['needs_sticker' => $newSticker]);
         }
@@ -447,9 +444,11 @@ class JobOrderController extends Controller
                 .' this order is already past cutting, so it cannot go back through the press.';
         }
 
-        // Only prompt to send when it hasn't been sent yet.
+        // Still to send? Then the pack is where they need to be, and the send
+        // button is on it — rather than telling them to go and open it again.
         if ($order->jobOrder->status === 'draft') {
-            $note .= ' Open the Tech Pack to send it to the artist.';
+            return redirect()->route('job-orders.edit', $order)
+                ->with('success', $note.' Send it to the artist when you are ready.');
         }
 
         return redirect()->route('orders.show', $order)->with('success', $note);
