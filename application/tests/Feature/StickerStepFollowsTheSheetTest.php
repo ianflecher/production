@@ -33,9 +33,8 @@ class StickerStepFollowsTheSheetTest extends TestCase
             'order_number' => 'IC2026-STICK', 'customer_name' => 'Sticker Co',
             'product_type' => 'round_neck', 'quantity' => 30,
             'due_date' => now()->addWeeks(2), 'created_by' => $sales->id, 'status' => 'active',
-            // The column defaults to TRUE, so an order nobody has said anything
-            // about arrives already wanting a sticker. Said plainly here: this
-            // order has not asked for one, which is what these tests are about.
+            // Said plainly, though it is also the default now: this order has
+            // not asked for a sticker, which is what these tests are about.
             'needs_sticker' => false,
         ]);
 
@@ -129,6 +128,30 @@ class StickerStepFollowsTheSheetTest extends TestCase
         $this->assertNull($order->refresh()->jobOrder->free_logo_sticker);
         $this->assertFalse((bool) $order->needs_sticker);
         $this->assertNull($this->stickerStep($order));
+    }
+
+    public function test_an_order_nobody_has_spoken_about_wants_no_sticker(): void
+    {
+        // The column used to default to TRUE, so a job asked the supply desk
+        // for a sticker before anybody had said a word about it. A blank row
+        // means there is none.
+        $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
+
+        $order = ProductionOrder::create([
+            'order_number' => 'IC2026-QUIET', 'customer_name' => 'Quiet Co',
+            'product_type' => 'round_neck', 'quantity' => 10,
+            'due_date' => now()->addWeek(), 'created_by' => $sales->id, 'status' => 'active',
+        ]);
+
+        $this->assertFalse((bool) $order->fresh()->needs_sticker);
+
+        $order->jobOrder()->create(['status' => 'draft', 'created_by' => $sales->id]);
+        $order->refresh()->buildPipeline([], null);
+
+        $this->assertNull(
+            $this->stickerStep($order->refresh()),
+            'a sticker step for a job that never asked for one'
+        );
     }
 
     public function test_the_rule_reads_the_words_the_shop_actually_types(): void
