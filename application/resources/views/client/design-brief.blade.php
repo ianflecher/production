@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Design questionnaire — {{ $order->order_number }}</title>
+    <title>Design questionnaire — {{ $briefTitle }}</title>
     @include('partials.fonts')
     <style>
         :root {
@@ -117,15 +117,14 @@
             </div>
         @else
         <div class="card">
-            @php $clientName = $order->clientName(); @endphp
             <h1>Tell us about your design</h1>
             <p class="lead">{{ $clientName ? 'Hi '.$clientName.'! ' : '' }}Please answer what you can — anything you leave blank is fine. This helps our artist design exactly what you want.</p>
 
             <div class="meta">
-                @if ($clientName)<strong>For {{ $clientName }}</strong> · @endif<strong>Order {{ $order->order_number }}</strong> · {{ $order->productLabel() ?? 'Custom apparel' }} · {{ number_format($order->quantity) }} pcs
+                @if ($clientName)<strong>For {{ $clientName }}</strong> · @endif{{ $briefMeta }}
             </div>
 
-            @php $refFiles = $order->jobOrder->referenceFiles ?? collect(); @endphp
+            @php $refFiles = $refFiles ?? ($order->jobOrder->referenceFiles ?? collect()); @endphp
             <form method="POST" action="{{ $submitUrl }}" enctype="multipart/form-data">
                 @csrf
                 @php $n = 0; @endphp

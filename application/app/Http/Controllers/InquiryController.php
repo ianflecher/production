@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
@@ -106,9 +107,159 @@ class InquiryController extends Controller
         ]);
 
         return redirect()
-            ->route('orders.create', ['inquiry' => $inquiry->id])
+            ->route('inquiries.layout', $inquiry)
             ->with('success', $client->fullName().' saved. They are on your follow-up list — '
-                .'fill in the order now, or come back to it.');
+                .'add the design and artist instructions next.');
+    }
+
+    /** Step two: collect exactly what the artist needs before job details. */
+    public function layout(Request $request, Inquiry $inquiry): View
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        return view('inquiries.layout', ['inquiry' => $inquiry->load('client')]);
+    }
+
+    public function uploadLayout(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        $request->validate([
+            'reference_files' => ['required', 'array'],
+            'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+        ]);
+
+        $files = $inquiry->layout_files ?? [];
+        foreach ($request->file('reference_files') as $file) {
+            $files[] = [
+                'path' => $file->store('inquiry-layouts', 'local'),
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $request->user()->id,
+                'kind' => 'output',
+            ];
+        }
+        $inquiry->update(['layout_files' => $files]);
+
+        return back()->with('success', 'Design uploaded — it will be attached to the new job order.');
+    }
+
+    public function designBrief(Request $request, Inquiry $inquiry): View
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        if (! $inquiry->brief_token) {
+            $inquiry->regenerateBriefLink();
+        }
+
+        $questions = \App\Services\DesignBrief::questions();
+        $answers = $inquiry->design_brief ?? [];
+        $prompt = null;
+        if ($answers) {
+            $lines = ['You are a senior apparel graphic designer. Create a custom apparel design concept using this client brief:'];
+            foreach ($answers as $key => $value) {
+                if (isset($questions[$key])) {
+                    $lines[] = '- '.$questions[$key]['label'].' '.(\App\Services\DesignBrief::answerLabel($key, $value) ?? $value);
+                }
+            }
+            $prompt = implode("\n", $lines);
+        }
+
+        return view('orders.design-brief', [
+            'inquiry' => $inquiry->load('client'),
+            'isInquiryBrief' => true,
+            'briefRefs' => collect($inquiry->layout_files ?? [])->whereIn('kind', ['peg', 'logo']),
+            'questions' => $questions,
+            'answers' => $answers,
+            'prompt' => $prompt,
+            'clientLink' => \App\Services\PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry)),
+            'clientLinkIsPrivate' => \App\Services\PublicUrl::isPrivate(\App\Services\PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry))),
+            'clientLinkExpiresAt' => $inquiry->brief_expires_at,
+            'clientSubmittedAt' => $inquiry->client_brief_submitted_at,
+            'briefExpired' => $inquiry->briefExpired(),
+        ]);
+    }
+
+    public function saveDesignBrief(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+        $questions = \App\Services\DesignBrief::questions();
+        $data = $request->validate([
+            'brief' => ['nullable', 'array'],
+            'brief.*' => ['nullable', 'string', 'max:2000'],
+            'files' => ['nullable', 'array'],
+            'files.*' => ['nullable', 'array'],
+            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+        ]);
+
+        $answers = collect($data['brief'] ?? [])->only(array_keys($questions))
+            ->filter(fn ($value) => filled($value))->map(fn ($value) => trim($value))->all();
+        $files = $inquiry->layout_files ?? [];
+        $allowedKinds = collect($questions)->pluck('files')->filter()->all();
+        foreach ($request->file('files', []) as $kind => $uploads) {
+            if (! in_array($kind, $allowedKinds, true)) {
+                continue;
+            }
+            foreach ($uploads as $file) {
+                $files[] = [
+                    'path' => $file->store('inquiry-layouts', 'local'),
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                    'uploaded_by' => $request->user()->id,
+                    'kind' => $kind,
+                ];
+            }
+        }
+        $inquiry->update(['design_brief' => $answers ?: null, 'layout_files' => $files ?: null]);
+
+        return redirect()->route('inquiries.design-brief', $inquiry)
+            ->with('success', 'Design questionnaire saved. Return to the artist brief when ready.');
+    }
+
+    public function reopenDesignBrief(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+        $inquiry->update(['client_brief_submitted_at' => null]);
+
+        return redirect()->route('inquiries.design-brief', $inquiry)
+            ->with('success', 'Client form reopened — the link works again for one more submission.');
+    }
+
+    public function layoutFile(Request $request, Inquiry $inquiry, int $index)
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+        $file = ($inquiry->layout_files ?? [])[$index] ?? null;
+        abort_unless($file && Storage::disk('local')->exists($file['path']), 404);
+
+        return Storage::disk('local')->response($file['path'], $file['original_name']);
+    }
+
+    public function completeLayout(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+        $data = $request->validate(['reference_note' => ['nullable', 'string', 'max:2000']]);
+
+        $hasOutput = collect($inquiry->layout_files ?? [])->contains(fn ($file) => ($file['kind'] ?? 'output') === 'output');
+        if (! $hasOutput && blank($data['reference_note'] ?? null)) {
+            return back()->withInput()->withErrors(['layout' => 'Upload the ChatGPT design output or add notes for the artist before continuing.']);
+        }
+
+        $inquiry->update([
+            'layout_reference_note' => $data['reference_note'] ?? null,
+            'layout_brief_completed_at' => now(),
+        ]);
+
+        return redirect()->route('orders.create', ['inquiry' => $inquiry->id])
+            ->with('success', 'Artist layout brief saved. Complete the new job order to send it to the artist.');
     }
 
     /** Log a chase, and say when to chase again. */

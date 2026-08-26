@@ -64,7 +64,7 @@
 <div class="page-head">
     <div class="grow">
         <h1>New job order</h1>
-        <p class="muted">Enter the job order number, client and job details. Next you'll upload the client reference and send it to an artist for the layout — the downpayment and job order come after the client approves it.</p>
+        <p class="muted">Step 3 of 3 — enter the job details. The design and artist instructions from the previous step will be attached automatically and the layout will be released when this order is saved.</p>
     </div>
 </div>
 

@@ -53,6 +53,7 @@ class OrderDesignBriefController extends Controller
             'clientLinkExpiresAt' => $order->brief_expires_at,
             // When set, the client already submitted and the link is now closed.
             'clientSubmittedAt' => $order->jobOrder->client_brief_submitted_at,
+            'briefExpired' => $order->briefExpired(),
         ]);
     }
 

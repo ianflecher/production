@@ -372,10 +372,30 @@ class ProductionOrderController extends Controller
         // Design comes first: create the draft job order now so the client
         // reference can be attached right away, then the layout is sent to an
         // artist — no downpayment needed yet.
-        $order->jobOrder()->create([
+        $jobOrder = $order->jobOrder()->create([
             'status' => 'draft',
             'created_by' => $request->user()->id,
         ]);
+
+        // The design was collected between Client Details and New Job Order.
+        // Move its metadata onto the real job order, then release the layout.
+        $jobOrder->update([
+            'reference_note' => $inquiry->layout_reference_note,
+            'design_brief' => $inquiry->design_brief,
+        ]);
+        foreach ($inquiry->layout_files ?? [] as $file) {
+            $jobOrder->referenceFiles()->create([
+                'path' => $file['path'],
+                'original_name' => $file['original_name'],
+                'kind' => $file['kind'] ?? 'output',
+                'mime' => $file['mime'] ?? null,
+                'size' => $file['size'] ?? null,
+                'uploaded_by' => $file['uploaded_by'] ?? $request->user()->id,
+            ]);
+        }
+        if (! empty($inquiry->layout_files) || filled($inquiry->layout_reference_note)) {
+            $order->unlockStage(ProductionOrder::STAGE_LAYOUT);
+        }
 
         // They asked, and now they have ordered. This is the only way a name
         // comes off the follow-up list — the inquiry keeps the job it became.
@@ -383,7 +403,7 @@ class ProductionOrderController extends Controller
 
         return redirect()
             ->route('orders.show', $order)
-            ->with('success', "Order {$order->order_number} created for {$client->fullName()} ({$order->quantity} pcs). Upload the client reference, then send it to an artist for the layout.");
+            ->with('success', "Order {$order->order_number} created for {$client->fullName()} ({$order->quantity} pcs) and sent to the artist for layout.");
     }
 
     public function edit(ProductionOrder $order): View

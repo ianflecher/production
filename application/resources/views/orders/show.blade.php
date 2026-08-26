@@ -129,8 +129,6 @@
         $nextStep = ['tone' => 'warn', 'label' => 'On hold', 'title' => 'Order is on hold', 'desc' => 'Resume the order from the actions above to continue production.'];
     } elseif ($canRecordPayment && filled($order->jobOrder?->leader_note)) {
         $nextStep = ['tone' => 'alert', 'label' => 'Action needed', 'title' => 'Fix the Tech Pack', 'desc' => 'The leader sent the Tech Pack back with changes. Correct it and it returns to the leader automatically.', 'cta' => ['label' => 'Fix Tech Pack', 'href' => route('job-orders.edit', $order)]];
-    } elseif ($canRecordPayment && ! $layoutApproved && ! $layoutReleased) {
-        $nextStep = ['tone' => 'action', 'label' => 'Step 1 — Design', 'title' => 'Send this order to an artist for the layout', 'desc' => 'Add the ChatGPT design and/or notes below, then send it. No downpayment is needed yet.', 'cta' => ['label' => 'Go to layout section', 'href' => '#layout-action']];
     } elseif (! $layoutApproved && $layoutReleased) {
         $nextStep = ['tone' => 'wait', 'label' => 'In progress', 'title' => 'With the artist', 'desc' => 'Waiting on the layout and the client’s approval before the downpayment.'];
     } elseif ($canRecordPayment && $layoutApproved && ! $order->hasDownpayment()) {
@@ -161,116 +159,6 @@
         </div>
         @if (! empty($nextStep['cta']))
             <a href="{{ $nextStep['cta']['href'] }}" class="btn btn-primary" style="flex-shrink: 0;">{{ $nextStep['cta']['label'] }} →</a>
-        @endif
-    </div>
-@endif
-
-{{-- Design first: upload the reference, then send the layout to an artist. --}}
-@if ($canRecordPayment && in_array($order->status, ['active', 'on_hold']) && ! $layoutApproved)
-    <div id="layout-action" class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--accent); scroll-margin-top: 5rem;">
-        <h2>Layout — send to an artist first</h2>
-        @php
-            $refNote = old('reference_note', $order->jobOrder?->reference_note);
-            // Only the ChatGPT design output — the peg/logo files the client sent
-            // live on the questionnaire, they're just the raw material for it.
-            $refs = ($order->jobOrder?->referenceFiles ?? collect())->where('kind', 'output');
-            $hasOutput = $refs->isNotEmpty();
-        @endphp
-
-        {{-- The design saved from ChatGPT — what the artist works from. --}}
-        @if ($refs->isNotEmpty())
-            <div style="display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1rem;">
-                @foreach ($refs as $ref)
-                    <div style="border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; text-align: center; width: 150px;">
-                        <a href="{{ route('job-order-files.view', $ref) }}" target="_blank">
-                            @if ($ref->isImage())
-                                <img src="{{ route('job-order-files.view', $ref) }}" alt="{{ $ref->original_name }}" style="max-width: 100%; max-height: 110px; border-radius: 4px; display: block; margin: 0 auto;">
-                            @else
-                                <div style="font-size: 2rem;">📄</div>
-                            @endif
-                        </a>
-                        <div style="font-size: 0.72rem; color: var(--ink-3); margin-top: 0.3rem; word-break: break-all;">{{ $ref->original_name }}</div>
-                        @if (! $layoutReleased)
-                            <form method="POST" action="{{ route('job-order-files.delete', $ref) }}" onsubmit="return confirm('Remove this design?');" style="margin-top: 0.35rem;">
-                                @csrf
-                                <button class="btn btn-danger btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;">✕ Remove</button>
-                            </form>
-                        @endif
-                    </div>
-                @endforeach
-            </div>
-        @endif
-
-        @if (! $layoutReleased)
-            <p class="sub" style="margin-bottom: 0.8rem;">Get the details from the client, then send it to an artist for the layout. No downpayment is needed yet — the client reviews and approves the layout first.</p>
-
-            <a href="{{ route('orders.design-brief', $order) }}" class="btn btn-ghost btn-sm" style="margin-bottom: 1rem;">
-                📝 Design questionnaire &amp; ChatGPT prompt
-            </a>
-        @else
-            <p style="color: var(--accent); font-weight: 600; margin-bottom: 0.8rem;">🎨 With the artist — waiting on the layout and the client's approval before the downpayment.</p>
-        @endif
-
-        {{-- The ChatGPT result, saved and uploaded here. Stays available after the
-             layout is sent so it can still be added or replaced. --}}
-        <label style="font-weight: 600; font-size: 0.9rem;">ChatGPT design output <span style="font-weight: 400; color: var(--ink-3);">— save the image from ChatGPT, then upload it here. This is what the artist works from.</span></label>
-        <form method="POST" action="{{ route('job-orders.reference', $order) }}" enctype="multipart/form-data" style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin: 0.4rem 0 1rem;">
-            @csrf
-            <input type="hidden" name="kind" value="output">
-            {{-- Uploads the moment a file is chosen, so it's never forgotten. --}}
-            <input type="file" name="reference_files[]" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip"
-                   onchange="if(this.files.length){ this.form.submit(); }">
-            <button type="submit" class="btn btn-ghost btn-sm">⬆ Upload design</button>
-            @if ($hasOutput)
-                <span style="color: var(--success-ink); font-size: 0.82rem;">✓ design uploaded — the artist sees this</span>
-            @else
-                <span style="color: var(--danger-ink); font-size: 0.82rem; font-weight: 600;">⚠ no design uploaded yet</span>
-            @endif
-        </form>
-
-        {{-- Already-uploaded files that aren't marked as the design yet. --}}
-        @php $notOutput = ($order->jobOrder?->referenceFiles ?? collect())->where('kind', '!=', 'output'); @endphp
-        @if ($notOutput->isNotEmpty())
-            <details style="margin-bottom: 1rem;">
-                <summary style="cursor:pointer; font-size:0.84rem; color:var(--ink-2);">Other uploaded files ({{ $notOutput->count() }}) — use one as the design instead</summary>
-                <div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin-top:0.6rem;">
-                    @foreach ($notOutput as $f)
-                        <div style="border:1px solid var(--border); border-radius:8px; padding:0.45rem; text-align:center; width:140px;">
-                            @if ($f->isImage())
-                                <img src="{{ route('job-order-files.view', $f) }}" alt="{{ $f->original_name }}" class="design-preview"
-                                     style="max-width:100%; max-height:80px; border-radius:4px; display:block; margin:0 auto;">
-                            @else
-                                <div style="font-size:1.6rem;">📄</div>
-                            @endif
-                            <div style="font-size:0.68rem; color:var(--ink-3); margin-top:0.25rem; word-break:break-all;">{{ $f->original_name }}</div>
-                            <form method="POST" action="{{ route('job-order-files.kind', $f) }}" style="margin-top:0.3rem;">
-                                @csrf
-                                <input type="hidden" name="kind" value="output">
-                                <button class="btn btn-ghost btn-sm" style="padding:0.2rem 0.45rem; font-size:0.7rem;">Use as design</button>
-                            </form>
-                        </div>
-                    @endforeach
-                </div>
-            </details>
-        @endif
-
-        @if (! $layoutReleased)
-            {{-- Notes + send. The design (or notes) give the artist a brief to work from. --}}
-            <form method="POST" action="{{ route('orders.send-for-layout', $order) }}" onsubmit="return confirm('Send this order to an artist for the layout?');">
-                @csrf
-                <label for="reference_note" style="font-weight: 600; font-size: 0.9rem;">Notes for the artist <span style="font-weight: 400; color: var(--ink-3);">(anything the design doesn't show — text/colors/size, must-keep details)</span></label>
-                <textarea id="reference_note" name="reference_note" rows="4" maxlength="2000" placeholder="e.g. keep the team colors, make the logo bigger on the back" style="width: 100%; margin: 0.4rem 0 0.8rem;">{{ $refNote }}</textarea>
-                <button type="submit" class="btn btn-primary btn-sm">📤 Send to artist for layout</button>
-                <span style="color: var(--ink-3); font-size: 0.8rem; margin-left: 0.4rem;">Upload the ChatGPT design and/or add notes above.</span>
-            </form>
-        @else
-            {{-- Notes stay editable while the artist works. --}}
-            <form method="POST" action="{{ route('orders.send-for-layout', $order) }}">
-                @csrf
-                <label for="reference_note" style="font-weight: 600; font-size: 0.9rem;">Notes for the artist</label>
-                <textarea id="reference_note" name="reference_note" rows="3" maxlength="2000" placeholder="Add or update instructions for the artist" style="width: 100%; margin: 0.4rem 0 0.6rem;">{{ $refNote }}</textarea>
-                <button type="submit" class="btn btn-ghost btn-sm">💾 Save notes</button>
-            </form>
         @endif
     </div>
 @endif

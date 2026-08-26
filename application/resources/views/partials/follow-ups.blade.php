@@ -44,8 +44,8 @@
                     </div>
                 </div>
 
-                <a href="{{ route('orders.create', ['inquiry' => $inq->id]) }}" class="btn btn-primary btn-sm">
-                    Make the order
+                <a href="{{ route('inquiries.layout', $inq) }}" class="btn btn-primary btn-sm">
+                    Design brief
                 </a>
             </div>
 

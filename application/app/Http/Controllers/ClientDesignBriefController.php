@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
+use App\Models\Inquiry;
 use App\Services\DesignBrief;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,6 +31,9 @@ class ClientDesignBriefController extends Controller
 
         return view('client.design-brief', [
             'order' => $order,
+            'briefTitle' => $order->order_number,
+            'clientName' => $order->clientName(),
+            'briefMeta' => 'Order '.$order->order_number.' · '.($order->productLabel() ?? 'Custom apparel').' · '.number_format($order->quantity).' pcs',
             'questions' => DesignBrief::questions(),
             'answers' => $order->jobOrder->design_brief ?? [],
             // The POST goes to the same token URL — the token is the credential.
@@ -38,6 +42,50 @@ class ClientDesignBriefController extends Controller
             'closed' => $closed,
             'expired' => $expired,
         ]);
+    }
+
+    public function showInquiry(Inquiry $inquiry): View
+    {
+        $justSaved = (bool) session('client_brief_saved', false);
+
+        return view('client.design-brief', [
+            'inquiry' => $inquiry->load('client'),
+            'briefTitle' => 'Design inquiry',
+            'clientName' => $inquiry->client->fullName(),
+            'briefMeta' => 'Design inquiry · apparel and quantity will be confirmed by our team',
+            'questions' => DesignBrief::questions(),
+            'answers' => $inquiry->design_brief ?? [],
+            'submitUrl' => route('client.inquiry-design-brief.submit', $inquiry),
+            'justSaved' => $justSaved,
+            'closed' => $inquiry->client_brief_submitted_at !== null && ! $justSaved,
+            'expired' => $inquiry->briefExpired() && ! $justSaved,
+            'refFiles' => collect($inquiry->layout_files ?? [])->whereIn('kind', ['peg', 'logo']),
+        ]);
+    }
+
+    public function submitInquiry(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        abort_if($inquiry->client_brief_submitted_at !== null || $inquiry->briefExpired(), 410);
+        $questions = DesignBrief::questions();
+        $data = $request->validate([
+            'brief' => ['nullable', 'array'], 'brief.*' => ['nullable', 'string', 'max:2000'],
+            'files' => ['nullable', 'array'], 'files.*' => ['nullable', 'array'],
+            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+        ]);
+        $answers = collect($data['brief'] ?? [])->only(array_keys($questions))
+            ->filter(fn ($value) => filled($value))->map(fn ($value) => trim($value))->all();
+        $files = $inquiry->layout_files ?? [];
+        $kinds = collect($questions)->pluck('files')->filter()->all();
+        foreach ($request->file('files', []) as $kind => $uploads) {
+            if (! in_array($kind, $kinds, true)) continue;
+            foreach ($uploads as $file) {
+                $files[] = ['path' => $file->store('inquiry-layouts', 'local'), 'original_name' => $file->getClientOriginalName(),
+                    'kind' => $kind, 'mime' => $file->getClientMimeType(), 'size' => $file->getSize(), 'uploaded_by' => null];
+            }
+        }
+        $inquiry->update(['design_brief' => $answers ?: null, 'layout_files' => $files ?: null, 'client_brief_submitted_at' => now()]);
+
+        return redirect()->route('client.inquiry-design-brief', $inquiry)->with('client_brief_saved', true);
     }
 
     public function submit(Request $request, ProductionOrder $order): RedirectResponse

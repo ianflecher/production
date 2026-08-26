@@ -1,20 +1,26 @@
 @extends('layouts.app')
 
-@section('title', 'Design brief — '.$order->order_number)
-@section('page-title', 'Design brief — '.$order->order_number)
+@section('title', 'Design brief — '.(isset($inquiry) ? $inquiry->client->fullName() : $order->order_number))
+@section('page-title', 'Design brief')
 
 @section('content')
 @php
-    $refs = $order->jobOrder?->referenceFiles ?? collect();
+    $isInquiryBrief = $isInquiryBrief ?? false;
+    $refs = $briefRefs ?? ($order->jobOrder?->referenceFiles ?? collect());
+    $refVal = fn ($ref, $key) => is_array($ref) ? ($ref[$key] ?? null) : $ref->{$key};
+    $refUrl = fn ($ref, $index = null) => $isInquiryBrief
+        ? route('inquiries.layout.file', [$inquiry, 'index' => $index])
+        : route('job-order-files.view', $ref);
+    $refImage = fn ($ref) => str_starts_with((string) $refVal($ref, 'mime'), 'image/');
     // Reference files the client attached (peg / logo) — offered for download.
     $clientImages = $refs->whereIn('kind', ['peg', 'logo']);
-    $productLabel = $order->productLabel() ?? 'custom apparel';
-    $qty = number_format($order->quantity);
+    $productLabel = $isInquiryBrief ? 'custom apparel' : ($order->productLabel() ?? 'custom apparel');
+    $qty = $isInquiryBrief ? 'quantity to follow' : number_format($order->quantity).' pcs';
 
     // Plain-text questionnaire the account officer can send to the client
     // (Messenger / Viber). Numbered, with an "Answer N:" line for each so the
     // client's reply can be imported straight back into the form below.
-    $tpl  = "Hi! For your {$productLabel} ({$qty} pcs), please answer these questions so we can design it. Just type your answer after each \"Answer\" line:\n";
+    $tpl  = "Hi! For your {$productLabel} ({$qty}), please answer these questions so we can design it. Just type your answer after each \"Answer\" line:\n";
     $i = 1;
     foreach ($questions as $key => $q) {
         $tpl .= "\n{$i}. {$q['label']}";
@@ -69,10 +75,10 @@
 <div class="page-head">
     <div class="grow">
         <h1>Client design questionnaire</h1>
-        <p class="muted">{{ $order->order_number }} · {{ $order->clientName() }} — collect the client's answers, then build a ChatGPT prompt from them.</p>
+        <p class="muted">{{ $isInquiryBrief ? $inquiry->client->fullName() : $order->order_number.' · '.$order->clientName() }} — collect the client's answers, then build a ChatGPT prompt from them.</p>
     </div>
     <div class="db-head-actions">
-        <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← Back to order</a>
+        <a href="{{ $isInquiryBrief ? route('inquiries.layout', $inquiry) : route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← {{ $isInquiryBrief ? 'Back to artist brief' : 'Back to order' }}</a>
     </div>
 </div>
 
@@ -97,16 +103,16 @@
 
         @if ($clientImages->isNotEmpty())
             <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:0.9rem; padding-top:0.9rem; border-top:1px solid var(--border);">
-                @foreach ($clientImages as $ref)
+                @foreach ($clientImages as $refIndex => $ref)
                     <div style="border:1px solid var(--border); border-radius:8px; padding:0.45rem; width:120px; text-align:center;">
-                        <a href="{{ route('job-order-files.view', $ref) }}" target="_blank" rel="noopener">
-                            @if ($ref->isImage())
-                                <img src="{{ route('job-order-files.view', $ref) }}" alt="{{ $ref->original_name }}" class="design-preview" style="max-width:100%; max-height:80px; border-radius:4px; display:block; margin:0 auto;">
+                        <a href="{{ $refUrl($ref, $refs->search($ref)) }}" target="_blank" rel="noopener">
+                            @if ($refImage($ref))
+                                <img src="{{ $refUrl($ref, $refs->search($ref)) }}" alt="{{ $refVal($ref, 'original_name') }}" class="design-preview" style="max-width:100%; max-height:80px; border-radius:4px; display:block; margin:0 auto;">
                             @else
                                 <div style="font-size:1.7rem;">📄</div>
                             @endif
                         </a>
-                        <a href="{{ route('job-order-files.view', $ref) }}" download="{{ $ref->original_name }}" class="btn btn-ghost btn-sm dl-client" data-name="{{ $ref->original_name }}" style="margin-top:0.35rem; padding:0.18rem 0.5rem; font-size:0.68rem;">⬇ Save</a>
+                        <a href="{{ $refUrl($ref, $refs->search($ref)) }}" download="{{ $refVal($ref, 'original_name') }}" class="btn btn-ghost btn-sm dl-client" data-name="{{ $refVal($ref, 'original_name') }}" style="margin-top:0.35rem; padding:0.18rem 0.5rem; font-size:0.68rem;">⬇ Save</a>
                     </div>
                 @endforeach
             </div>
@@ -131,7 +137,7 @@
                 <span aria-hidden="true">🔒</span> The client submitted on {{ $clientSubmittedAt->format('M j, Y \a\t g:i A') }} — the link is now closed.
             </div>
             <p style="font-size: 0.8rem; color: var(--ink-2); margin-bottom: 0.7rem;">Reopen it only if the client needs to change their answers. It becomes single-use again.</p>
-            <form method="POST" action="{{ route('orders.design-brief.reopen', $order) }}" onsubmit="return confirm('Reopen the client form for one more submission?');">
+            <form method="POST" action="{{ $isInquiryBrief ? route('inquiries.design-brief.reopen', $inquiry) : route('orders.design-brief.reopen', $order) }}" onsubmit="return confirm('Reopen the client form for one more submission?');">
                 @csrf
                 <button type="submit" class="btn btn-primary btn-sm">↺ Reopen client form</button>
             </form>
@@ -154,8 +160,8 @@
                 </p>
             @endif
             @if ($clientLinkExpiresAt)
-                <p style="font-size: 0.78rem; color: {{ $order->briefExpired() ? 'var(--danger-ink)' : 'var(--ink-3)' }}; margin-top: 0.55rem;">
-                    ⏰ {{ $order->briefExpired() ? 'This link expired on' : 'This link expires on' }}
+                <p style="font-size: 0.78rem; color: {{ $briefExpired ? 'var(--danger-ink)' : 'var(--ink-3)' }}; margin-top: 0.55rem;">
+                    ⏰ {{ $briefExpired ? 'This link expired on' : 'This link expires on' }}
                     <strong>{{ $clientLinkExpiresAt->format('M j, Y') }}</strong>.
                 </p>
             @endif
@@ -188,7 +194,7 @@
     </details>
 </div>
 
-<form method="POST" action="{{ route('orders.design-brief.save', $order) }}" enctype="multipart/form-data">
+<form method="POST" action="{{ $isInquiryBrief ? route('inquiries.design-brief.save', $inquiry) : route('orders.design-brief.save', $order) }}" enctype="multipart/form-data">
     @csrf
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.2rem;">
@@ -210,9 +216,13 @@
 
         {{-- Already known from the order, so it isn't asked again. --}}
         <div style="background: var(--accent-soft); border-radius: 8px; padding: 0.6rem 0.9rem; margin-bottom: 1.2rem; font-size: 0.86rem;">
-            <strong>Apparel:</strong> {{ $order->productLabel() ?? '—' }}
-            · <strong>Quantity:</strong> {{ number_format($order->quantity) }} pcs
-            <span class="muted" style="font-size: 0.78rem;">— taken from the order, added to the prompt automatically.</span>
+            @if ($isInquiryBrief)
+                <strong>Apparel and quantity:</strong> added on the New Job Order next.
+            @else
+                <strong>Apparel:</strong> {{ $order->productLabel() ?? '—' }}
+                · <strong>Quantity:</strong> {{ number_format($order->quantity) }} pcs
+                <span class="muted" style="font-size: 0.78rem;">— taken from the order, added to the prompt automatically.</span>
+            @endif
         </div>
 
         <div id="briefFields">
@@ -246,16 +256,16 @@
                             <div style="display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem;">
                                 @foreach ($mine as $ref)
                                     <div style="border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem; text-align: center; width: 130px;">
-                                        <a href="{{ route('job-order-files.view', $ref) }}" target="_blank">
-                                            @if ($ref->isImage())
-                                                <img src="{{ route('job-order-files.view', $ref) }}" alt="{{ $ref->original_name }}" class="design-preview"
+                                        <a href="{{ $refUrl($ref, $refs->search($ref)) }}" target="_blank">
+                                            @if ($refImage($ref))
+                                                <img src="{{ $refUrl($ref, $refs->search($ref)) }}" alt="{{ $refVal($ref, 'original_name') }}" class="design-preview"
                                                      style="max-width: 100%; max-height: 90px; border-radius: 4px; display: block; margin: 0 auto;">
                                             @else
                                                 <div style="font-size: 1.8rem;">📄</div>
                                             @endif
                                         </a>
-                                        <div style="font-size: 0.68rem; color: var(--ink-3); margin-top: 0.25rem; word-break: break-all;">{{ $ref->original_name }}</div>
-                                        <a href="{{ route('job-order-files.view', $ref) }}" download="{{ $ref->original_name }}" class="btn btn-ghost btn-sm" style="margin-top: 0.35rem; padding: 0.2rem 0.55rem; font-size: 0.7rem;">⬇ Download</a>
+                                        <div style="font-size: 0.68rem; color: var(--ink-3); margin-top: 0.25rem; word-break: break-all;">{{ $refVal($ref, 'original_name') }}</div>
+                                        <a href="{{ $refUrl($ref, $refs->search($ref)) }}" download="{{ $refVal($ref, 'original_name') }}" class="btn btn-ghost btn-sm" style="margin-top: 0.35rem; padding: 0.2rem 0.55rem; font-size: 0.7rem;">⬇ Download</a>
                                     </div>
                                 @endforeach
                             </div>
@@ -277,7 +287,7 @@
         <button type="submit" id="saveBtn" class="btn btn-primary" @if (! empty($answers)) style="display: none;" @endif>
             {{ ! empty($answers) ? '💾 Save changes & rebuild prompt' : '⚡ Create prompt' }}
         </button>
-        <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost">Done</a>
+        <a href="{{ $isInquiryBrief ? route('inquiries.layout', $inquiry) : route('orders.show', $order) }}" class="btn btn-ghost">Done</a>
     </div>
 </form>
 

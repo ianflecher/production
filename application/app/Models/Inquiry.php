@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * Somebody asked, and has not ordered yet.
@@ -24,6 +25,8 @@ class Inquiry extends Model
     protected $fillable = [
         'client_id', 'created_by', 'team', 'status', 'production_order_id',
         'what_they_want', 'next_follow_up_on', 'closed_at', 'closed_reason',
+        'layout_reference_note', 'layout_files', 'layout_brief_completed_at', 'design_brief',
+        'brief_token', 'brief_expires_at', 'client_brief_submitted_at',
     ];
 
     protected function casts(): array
@@ -31,7 +34,30 @@ class Inquiry extends Model
         return [
             'next_follow_up_on' => 'date',
             'closed_at' => 'datetime',
+            'layout_files' => 'array',
+            'design_brief' => 'array',
+            'layout_brief_completed_at' => 'datetime',
+            'brief_expires_at' => 'datetime',
+            'client_brief_submitted_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $inquiry) {
+            $inquiry->brief_token ??= Str::random(32);
+            $inquiry->brief_expires_at ??= now()->addDays(30);
+        });
+    }
+
+    public function briefExpired(): bool
+    {
+        return $this->brief_expires_at !== null && $this->brief_expires_at->isPast();
+    }
+
+    public function regenerateBriefLink(): void
+    {
+        $this->update(['brief_token' => Str::random(32), 'brief_expires_at' => now()->addDays(30)]);
     }
 
     public function client(): BelongsTo
