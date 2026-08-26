@@ -75,7 +75,14 @@
         <h2>Job order number</h2>
         <div class="field" style="max-width: 300px;">
             <label for="order_number">Job order #</label>
-            <input id="order_number" type="text" name="order_number" required maxlength="50" value="{{ old('order_number', $nextNumber) }}" placeholder="e.g. IC2026-00016">
+            {{-- The shop's own numbering, not a box to fill in. Typing over it
+                 was how two jobs ended up sharing a number and how the year
+                 drifted. Shown because everybody quotes it; not editable
+                 because nobody should choose it. The number is worked out
+                 again when the order is saved, so this is a preview. --}}
+            <input id="order_number" type="text" name="order_number" readonly aria-readonly="true"
+                   value="{{ $nextNumber }}" style="background: var(--surface-2, #f1f5f9); cursor: default;">
+            <span class="hint" style="font-size: 0.78rem;">Given automatically, in order.</span>
             @error('order_number')<span class="error">{{ $message }}</span>@enderror
         </div>
     </div>
@@ -448,22 +455,39 @@
             const offChartAmount = showOffChart ? offChartUnit * offChartQty : 0;
             const garment = (unit * chartedQty) + offChartAmount;
 
+            // Every piece off the chart: there is no charted piece for the
+            // tier price to apply to, so it is not this order's price and is
+            // not shown as one.
+            const allOffChart = showOffChart && chartedQty === 0;
+
             const csNote = document.getElementById('customSizeNote');
             if (csNote) {
                 csNote.textContent = showOffChart
                     ? (offChartUnit > 0
                         ? offChartQty + ' pcs x ' + peso(offChartUnit) + ' = ' + peso(offChartAmount)
-                          + '  •  the other ' + chartedQty + ' pcs stay at ' + peso(unit)
-                        : 'Set a price for these ' + offChartQty + ' pcs — the other ' + chartedQty + ' are at ' + peso(unit) + '.')
+                          + (allOffChart ? '' : '  •  the other ' + chartedQty + ' pcs stay at ' + peso(unit))
+                        : (allOffChart
+                            ? 'Every piece is off the chart — set the price for these ' + offChartQty + ' pcs.'
+                            : 'Set a price for these ' + offChartQty + ' pcs — the other ' + chartedQty + ' are at ' + peso(unit) + '.'))
                     : '';
             }
             const subtotal = garment + pocketAmount + rushFee;
             const vatable = Math.max(0, subtotal - discount);
             const vat = vatOn ? vatable * 0.12 : 0;
-            unitOut.textContent = peso(unit);
+            // The headline is what a piece on THIS order costs. With every
+            // piece off the chart that is the typed price, and a dash until
+            // somebody types one — not the tier price of a size nobody ordered.
+            unitOut.textContent = allOffChart
+                ? (offChartUnit > 0 ? peso(offChartUnit) : '—')
+                : peso(unit);
             totalOut.textContent = peso(vatable + vat);
+            if (allOffChart) {
+                noteText = offChartUnit > 0
+                    ? 'Priced by hand: ' + offChartQty + ' off-chart pcs.'
+                    : 'Off-chart sizes only — no tier price applies.';
+            }
             const bits = [];
-            if (showOffChart && offChartUnit > 0) bits.push(offChartQty + ' off-chart pcs at ' + peso(offChartUnit));
+            if (showOffChart && offChartUnit > 0 && ! allOffChart) bits.push(offChartQty + ' off-chart pcs at ' + peso(offChartUnit));
             if (pocketAmount > 0) bits.push('back pocket ' + peso(pocketAmount));
             if (rushFee > 0) bits.push('rush ' + peso(rushFee));
             if (discount > 0) bits.push('less ' + peso(Math.min(discount, subtotal)) + ' discount');
@@ -522,16 +546,28 @@
     }
     // Size breakdown drives the quantity, which drives the price tier.
     function updateQty() {
+        // A quantity against an UNNAMED size is not an order for anything. The
+        // save drops it — collectSizes() keeps the off-chart line only when it
+        // has both a name and a count — so the form must not count it either.
+        // It did: a 1 in that box with the name left blank read as a one-piece
+        // order and priced it at the tier rate, and the order then saved as
+        // nought pieces.
+        const otherName = (document.getElementById('other_size')?.value || '').trim();
+        const otherQtyEl = document.getElementById('other_size_qty');
+
         let total = 0;
-        document.querySelectorAll('.size-input').forEach(i => { total += parseInt(i.value) || 0; });
+        document.querySelectorAll('.size-input').forEach(i => {
+            if (i === otherQtyEl && otherName === '') { return; }
+            total += parseInt(i.value) || 0;
+        });
         document.getElementById('quantity').value = total;
         document.getElementById('qtyOut').textContent = total;
         updatePrice();
     }
     document.querySelectorAll('.size-input').forEach(i => i.addEventListener('input', updateQty));
-    // Naming the off-chart size is what makes its pieces count, so typing the
-    // name has to refresh the price the same way its quantity does.
-    document.getElementById('other_size')?.addEventListener('input', updatePrice);
+    // Naming the off-chart size is what makes its pieces count at all, so
+    // typing the name changes the TOTAL, not just the price.
+    document.getElementById('other_size')?.addEventListener('input', updateQty);
     toggleClientMode();
     updateQty();
     checkCapacity();

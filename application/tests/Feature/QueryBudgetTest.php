@@ -61,7 +61,12 @@ class QueryBudgetTest extends TestCase
             ['Order detail', "/orders/{$order->id}", 32],
             ['New order form', '/orders/create', 18],
             ['Calendar', '/calendar', 20],
-            ['Approvals', '/approvals', 22],
+            // 27, not 22: the artists' bench is on this page now — every open
+            // artist step with the order, the client and who has it, plus the
+            // list of artists for the dropdown. Five loads, and five however
+            // many steps are on it: the point of the budget is to catch a
+            // query per ROW, and there isn't one.
+            ['Approvals', '/approvals', 27],
             // 22, not 20: the running card names the client, and that name has
             // to come off the client record rather than the copy kept on the
             // order, which goes stale the moment the record is corrected. The

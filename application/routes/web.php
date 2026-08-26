@@ -290,6 +290,15 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/users/{user}/attendance', [UserController::class, 'markAttendance'])->name('users.attendance');
     });
 
+    // -------- Giving a step to somebody --------
+    // The leader for the whole floor, and the artist leader for the artists.
+    // He is the one who knows which of them is free, so asking the leader to
+    // pass it on was a message in the middle of a decision he had made.
+    // TaskController::assign holds him to artist steps.
+    Route::middleware('role:leader,super_admin,artist_lead')->group(function () {
+        Route::post('/tasks/{task}/assign', [TaskController::class, 'assign'])->name('tasks.assign');
+    });
+
     // -------- Production management: Leader / Super Admin --------
     Route::middleware('role:leader,super_admin')->group(function () {
         // Remakes: a wrong colour, a damaged panel, a seam that failed QC.
@@ -297,8 +306,6 @@ Route::middleware(['auth', 'active'])->group(function () {
             ->whereNumber('order')->name('orders.replacement');
 
         Route::post('/orders/{order}/status', [ProductionOrderController::class, 'updateStatus'])->name('orders.status');
-
-        Route::post('/tasks/{task}/assign', [TaskController::class, 'assign'])->name('tasks.assign');
         Route::post('/tasks/{task}/unlock', [TaskController::class, 'unlock'])->name('tasks.unlock');
         Route::post('/tasks/{task}/complete', [TaskController::class, 'forceComplete'])->name('tasks.force-complete');
 

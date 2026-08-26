@@ -848,15 +848,59 @@ class TaskController extends Controller
             ->groupBy('production_order_id')
             ->sortByDesc(fn ($group) => $group->max('approved_at'));
 
+        // The artists' bench: every step of theirs that is still open, and who
+        // has it. He decides which artist takes what, and until now the only
+        // place to say so was the order page — which is not his to open. He
+        // steered it by marking attendance and letting the rotation choose.
+        $bench = collect();
+        $artists = collect();
+
+        if ($request->user()->isArtistLead() || $request->user()->isLeader()) {
+            $bench = Task::with(['order.client', 'assignee'])
+                ->where('team', \App\Models\User::JOB_ARTIST)
+                ->whereNotIn('status', ['complete', 'cancelled', 'todo'])
+                ->whereHas('order', fn ($q) => $q->where('status', 'active'))
+                // His own work stays off this page entirely, the same way his
+                // own pack never reaches his checking queue. He draws at the
+                // bench like the rest of them, and a page where he hands work
+                // out is not where he should be looking at his own.
+                ->when(
+                    $request->user()->isArtistLead() && ! $request->user()->isLeader(),
+                    fn ($q) => $q->where(fn ($w) => $w
+                        ->whereNull('assigned_to')
+                        ->orWhere('assigned_to', '!=', $request->user()->id))
+                )
+                ->orderBy('production_order_id')
+                ->orderBy('sequence')
+                ->get();
+
+            $artists = \App\Models\User::where('is_active', true)
+                ->where(fn ($q) => $q
+                    ->where('job_role', \App\Models\User::JOB_ARTIST)
+                    ->orWhere('job_role', \App\Models\User::JOB_ARTIST_LEAD))
+                ->orderBy('name')
+                ->get();
+        }
+
         return view('tasks.approvals', [
             'packages' => $packages,
             'singles' => $singles,
             'checked' => $checked,
+            'bench' => $bench,
+            'artists' => $artists,
         ]);
     }
 
     public function assign(Request $request, Task $task): RedirectResponse
     {
+        // The artist leader gives out the ARTISTS' work and nothing else. The
+        // route lets him in; this is what he is let in for. A sewing step still
+        // belongs to the leader, and so does the person he would be handing it
+        // to — the rest of the floor does not answer to him.
+        if ($request->user()->isArtistLead() && ! $request->user()->isLeader()) {
+            abort_unless($task->team === \App\Models\User::JOB_ARTIST, 403);
+        }
+
         $data = $request->validate([
             'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
         ]);

@@ -1332,9 +1332,23 @@ class ProductionOrder extends Model
     public static function nextOrderNumber(): string
     {
         $year = now()->format('Y');
-        $countThisYear = self::where('order_number', 'like', "IC{$year}-%")->count();
 
-        return sprintf('IC%s-%05d', $year, $countThisYear + 1);
+        // The highest number used this year, not how many there are.
+        //
+        // Counting breaks the moment one is cancelled and removed: three orders
+        // less one leaves a count of two, which offers 00003 — a number already
+        // on a job — and the save fails on the unique index with nothing the
+        // officer can do about it, now that the box is read-only.
+        //
+        // Worked out here rather than in SQL: MAX(CAST(SUBSTRING(...))) is
+        // MySQL's spelling, and the tests run on SQLite. A year of numbers is
+        // a short list.
+        $highest = self::where('order_number', 'like', "IC{$year}-%")
+            ->pluck('order_number')
+            ->map(fn ($number) => preg_match('/^IC'.$year.'-(\d+)$/', (string) $number, $m) ? (int) $m[1] : 0)
+            ->max();
+
+        return sprintf('IC%s-%05d', $year, ((int) $highest) + 1);
     }
 
     /* ==================== Payments & stage engine ==================== */

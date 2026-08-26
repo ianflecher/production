@@ -241,4 +241,50 @@
         </div>
     </div>
 @endif
+
+{{-- The artists' bench.
+
+     Who has what, and the place to change it. The only assign control used to
+     be on the order page, which the artist leader cannot open — so the person
+     who knows which artist is free could only steer it sideways, by marking
+     who was in and letting the rotation choose. --}}
+@if ($bench->isNotEmpty())
+    <div class="card panel">
+        <h2>The artists' work</h2>
+        <p class="sub">Every open artist step and who has it. Changing it here hands the step over.</p>
+
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                    <tr><th>Job order</th><th>Step</th><th>Status</th><th>Who has it</th></tr>
+                </thead>
+                <tbody>
+                    @foreach ($bench as $step)
+                        <tr>
+                            <td style="font-weight:600;">{{ $step->order?->order_number ?? '—' }}
+                                <div style="font-size:0.76rem; color:var(--ink-3);">{{ $step->order?->clientName() }}</div>
+                            </td>
+                            <td>{{ $step->department }}</td>
+                            <td style="font-size:0.82rem;">{{ \App\Models\Task::STATUS_LABELS[$step->status] ?? $step->status }}</td>
+                            <td>
+                                <form method="POST" action="{{ route('tasks.assign', $step) }}"
+                                      style="display:flex; gap:0.4rem; align-items:center;">
+                                    @csrf
+                                    <select name="assigned_to"
+                                            style="width:auto; min-width:150px; padding:0.35rem 0.5rem; font-size:0.82rem;">
+                                        <option value="">— Unassigned —</option>
+                                        @foreach ($artists as $artist)
+                                            <option value="{{ $artist->id }}" @selected($step->assigned_to === $artist->id)>{{ $artist->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+@endif
 @endsection
