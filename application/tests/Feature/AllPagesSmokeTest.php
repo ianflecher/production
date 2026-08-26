@@ -27,7 +27,9 @@ class AllPagesSmokeTest extends TestCase
     #[DataProvider('pages')]
     public function test_page_loads_for_super_admin(string $path): void
     {
-        $response = $this->actingAs($this->superAdmin())->get($path);
+        $this->actingAs($this->superAdmin());
+
+        $response = $this->get($this->withInquiry($path));
 
         $this->assertLessThan(
             500,
@@ -35,6 +37,28 @@ class AllPagesSmokeTest extends TestCase
             "GET $path crashed with {$response->getStatusCode()}"
         );
         $this->assertSame(200, $response->getStatusCode(), "GET $path did not return 200");
+    }
+
+
+    /**
+     * The order form is step two now: it needs the inquiry that carries the
+     * client. Everything else on the list is reached directly.
+     */
+    private function withInquiry(string $path): string
+    {
+        if ($path !== '/orders/create') {
+            return $path;
+        }
+
+        $client = \App\Models\Client::create(['name' => 'Smoke', 'last_name' => 'Client']);
+
+        $inquiry = \App\Models\Inquiry::create([
+            'client_id' => $client->id,
+            'created_by' => auth()->id(),
+            'status' => \App\Models\Inquiry::STATUS_OPEN,
+        ]);
+
+        return $path.'?inquiry='.$inquiry->id;
     }
 
     public static function pages(): array

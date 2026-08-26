@@ -197,7 +197,7 @@
 
             <form method="POST" action="{{ route('inventory.import') }}" enctype="multipart/form-data" class="inv-import-form">
                 @csrf
-                <input type="file" name="file" accept=".csv,.txt" required>
+                <input type="file" name="file" accept=".xlsx,.xls,.csv,.txt" required>
                 <button class="inv-submit inv-submit-import" type="submit">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><polyline points="8 7 12 3 16 7"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
                     Import CSV

@@ -78,8 +78,17 @@ class AccessControlTest extends TestCase
 
     public function test_sales_can_open_order_intake(): void
     {
+        // Intake starts with the client, so that is the page they open. The
+        // order form is step two and is reached from an inquiry.
         $this->actingAs($this->user(User::ROLE_SALES))
-            ->get('/orders/create')->assertOk();
+            ->get('/inquiries/create')->assertOk();
+    }
+
+    public function test_the_order_form_sends_you_to_step_one_when_there_is_no_inquiry(): void
+    {
+        $this->actingAs($this->user(User::ROLE_SALES))
+            ->get('/orders/create')
+            ->assertRedirect(route('inquiries.create'));
     }
 
     public function test_finance_can_view_finance(): void

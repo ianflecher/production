@@ -96,14 +96,39 @@ class ProductionOrderController extends Controller
     }
 
 
-    public function create(): View
+    public function create(Request $request): View|RedirectResponse
     {
+        // Page two. The inquiry holds the client, taken on page one — an order
+        // is always reached through one, so nobody who asked goes unrecorded.
+        //
+        // Arriving here without one means starting in the middle: the way in is
+        // page one, so that is where it sends you.
+        if (blank($request->query('inquiry'))) {
+            return redirect()->route('inquiries.create');
+        }
+
+        $inquiry = \App\Models\Inquiry::with('client')->findOrFail($request->query('inquiry'));
+
+        abort_unless(
+            $inquiry->created_by === $request->user()->id
+                || $request->user()->isLeader()
+                || ($request->user()->leadsTeam() && $inquiry->team === $request->user()->team),
+            403
+        );
+
+        // The officer sells from their own price list — the merch line is a
+        // different list of products at different prices, not a discount on
+        // the standard one.
+        $list = \App\Services\PricingService::listFor(auth()->user());
+
         return view('orders.create', [
+            'inquiry' => $inquiry,
             // Listed surname-first so the office can find a client by family name.
             'clients' => Client::bySurname()->get(),
             'decorationMethods' => ProductionOrder::DECORATION_METHODS,
             'cuttingTypes' => ProductionOrder::CUTTING_TYPES,
-            'products' => \App\Services\PricingService::products(),
+            'products' => \App\Services\PricingService::products($list),
+            'priceList' => $list,
             'backPocketFee' => \App\Services\PricingService::backPocketFee(),
             'nextNumber' => ProductionOrder::nextOrderNumber(),
         ]);
@@ -156,20 +181,29 @@ class ProductionOrderController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        // Which price list this officer sells from. It is read here and
+        // written onto the order below, so the job keeps these prices even if
+        // the officer is later moved to another list.
+        $list = \App\Services\PricingService::listFor($request->user());
+
         $data = $request->validate([
             // Typed by the account officer (their own numbering, e.g. IC2026-00016).
             'order_number' => ['required', 'string', 'max:50', 'unique:production_orders,order_number'],
 
-            // Existing client OR a new one typed in. For a NEW client every
-            // detail except company and TIN is required, so half-filled
-            // records don't reach the database — the officer is told exactly
-            // which ones are missing instead of finding out later.
+            // The client was taken on page one and is read off the inquiry, so
+            // this page does not ask for them again.
+            //
+            // An order without one is still accepted, and makes its own: every
+            // order has an inquiry behind it because the record of who asked
+            // has to exist either way, and a job written straight in would
+            // otherwise be a client the follow-up list never knew about.
+            'inquiry_id' => ['nullable', 'integer', 'exists:inquiries,id'],
             'client_id' => ['nullable', 'integer', 'exists:clients,id'],
-            'client_name' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
-            'client_last_name' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
-            'client_contact' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
-            'client_office_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
-            'client_delivery_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
+            'client_name' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
+            'client_last_name' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
+            'client_contact' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
+            'client_office_address' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
+            'client_delivery_address' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
             // Genuinely optional.
             'client_company' => ['nullable', 'string', 'max:255'],
             'client_tin' => ['nullable', 'string', 'max:50'],
@@ -188,7 +222,7 @@ class ProductionOrderController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
 
-            'product_type' => ['required', 'string', 'in:'.implode(',', [...array_keys(\App\Services\PricingService::products()), '__other__'])],
+            'product_type' => ['required', 'string', 'in:'.implode(',', [...array_keys(\App\Services\PricingService::products($list)), '__other__'])],
             'product_type_custom' => ['nullable', 'required_if:product_type,__other__', 'string', 'max:100'],
             'back_pocket' => ['nullable', 'boolean'],
             'back_pocket_qty' => ['nullable', 'integer', 'min:0', 'max:1000000'],
@@ -236,7 +270,7 @@ class ProductionOrderController extends Controller
         // agent overrides it (specials, or over-100 quotations).
         $backPocket = (bool) ($data['back_pocket'] ?? false);
         $backPocketQty = $backPocket ? (int) ($data['back_pocket_qty'] ?? $data['quantity']) : null;
-        $quote = \App\Services\PricingService::quote($data['product_type'], $data['quantity'], $backPocket, $backPocketQty);
+        $quote = \App\Services\PricingService::quote($data['product_type'], $data['quantity'], $backPocket, $backPocketQty, $list);
         // The service normalises/caps the pocket count and its charge.
         $backPocketQty = $backPocket ? $quote['back_pocket_qty'] : null;
         $backPocketAmount = $quote['back_pocket_amount'];
@@ -270,19 +304,44 @@ class ProductionOrderController extends Controller
             'tin' => $data['client_tin'] ?? null,
         ];
 
-        $client = ! empty($data['client_id'])
-            ? Client::findOrFail($data['client_id'])
-            : Client::create($clientFields + [
-                'name' => $data['client_name'],
-                'last_name' => $data['client_last_name'] ?? null,
+        if (! empty($data['inquiry_id'])) {
+            // The client came from the inquiry; page two does not ask again.
+            $inquiry = \App\Models\Inquiry::findOrFail($data['inquiry_id']);
+
+            abort_unless(
+                $inquiry->created_by === $request->user()->id
+                    || $request->user()->isLeader()
+                    || ($request->user()->leadsTeam() && $inquiry->team === $request->user()->team),
+                403
+            );
+
+            $client = $inquiry->client;
+        } else {
+            $client = ! empty($data['client_id'])
+                ? Client::findOrFail($data['client_id'])
+                : Client::create($clientFields + [
+                    'name' => $data['client_name'],
+                    'last_name' => $data['client_last_name'] ?? null,
+                    'created_by' => $request->user()->id,
+                ]);
+
+            // The inquiry this order should have come from. Written now so the
+            // client database holds everyone who ever asked, however the job
+            // reached the shop.
+            $inquiry = \App\Models\Inquiry::create([
+                'client_id' => $client->id,
                 'created_by' => $request->user()->id,
+                'team' => $request->user()->team,
+                'status' => \App\Models\Inquiry::STATUS_OPEN,
             ]);
+        }
 
         $order = ProductionOrder::createJobOrder([
             'order_number' => $data['order_number'],
             'client_id' => $client->id,
             'customer_name' => $client->fullName(),
             'product_type' => $data['product_type'],
+            'price_list' => $list,
             'description' => $data['description'] ?? null,
             'quantity' => $data['quantity'],
             'due_date' => $data['due_date'],
@@ -318,6 +377,10 @@ class ProductionOrderController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        // They asked, and now they have ordered. This is the only way a name
+        // comes off the follow-up list — the inquiry keeps the job it became.
+        $inquiry->markOrdered($order);
+
         return redirect()
             ->route('orders.show', $order)
             ->with('success', "Order {$order->order_number} created for {$client->fullName()} ({$order->quantity} pcs). Upload the client reference, then send it to an artist for the layout.");
@@ -332,7 +395,11 @@ class ProductionOrderController extends Controller
 
         // If the stored price isn't the standard tier price, it was a custom
         // override — pre-open that field so the edit form preserves it.
-        $std = \App\Services\PricingService::quote($order->product_type ?? '', $order->quantity, (bool) $order->back_pocket);
+        // The list this job was quoted from — a leader opening somebody's
+        // merch order must see the merch products, not the standard ones.
+        $list = \App\Services\PricingService::resolve($order->price_list);
+
+        $std = \App\Services\PricingService::quote($order->product_type ?? '', $order->quantity, (bool) $order->back_pocket, null, $list);
         $priceOverride = null;
         if ($order->unit_price !== null && ($std['unit'] === null || (float) $order->unit_price !== (float) $std['unit'])) {
             $priceOverride = (float) $order->unit_price;
@@ -343,13 +410,18 @@ class ProductionOrderController extends Controller
             'priceOverride' => $priceOverride,
             'decorationMethods' => ProductionOrder::DECORATION_METHODS,
             'cuttingTypes' => ProductionOrder::CUTTING_TYPES,
-            'products' => \App\Services\PricingService::products(),
+            'products' => \App\Services\PricingService::products($list),
+            'priceList' => $list,
             'backPocketFee' => \App\Services\PricingService::backPocketFee(),
         ]);
     }
 
     public function update(Request $request, ProductionOrder $order): RedirectResponse
     {
+        // An edit re-prices against the list the job was created on, never the
+        // list of whoever happens to be editing it.
+        $list = \App\Services\PricingService::resolve($order->price_list);
+
         $this->assertOrderVisible($order);
         abort_unless(in_array($order->status, ['active', 'on_hold'], true), 403);
 
@@ -375,7 +447,7 @@ class ProductionOrderController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
 
-            'product_type' => ['required', 'string', 'in:'.implode(',', [...array_keys(\App\Services\PricingService::products()), '__other__'])],
+            'product_type' => ['required', 'string', 'in:'.implode(',', [...array_keys(\App\Services\PricingService::products($list)), '__other__'])],
             'product_type_custom' => ['nullable', 'required_if:product_type,__other__', 'string', 'max:100'],
             'back_pocket' => ['nullable', 'boolean'],
             'back_pocket_qty' => ['nullable', 'integer', 'min:0', 'max:1000000'],
@@ -414,7 +486,7 @@ class ProductionOrderController extends Controller
 
         $backPocket = (bool) ($data['back_pocket'] ?? false);
         $backPocketQty = $backPocket ? (int) ($data['back_pocket_qty'] ?? $data['quantity']) : null;
-        $quote = \App\Services\PricingService::quote($data['product_type'], $data['quantity'], $backPocket, $backPocketQty);
+        $quote = \App\Services\PricingService::quote($data['product_type'], $data['quantity'], $backPocket, $backPocketQty, $list);
         $backPocketQty = $backPocket ? $quote['back_pocket_qty'] : null;
         $backPocketAmount = $quote['back_pocket_amount'];
         $unitPrice = ! empty($data['unit_price_override']) ? (float) $data['unit_price_override'] : $quote['unit'];

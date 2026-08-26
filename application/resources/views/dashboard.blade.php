@@ -641,6 +641,8 @@
     </div>
 
     <div class="dash-grid-main">
+        @include('partials.follow-ups-summary')
+
         <div class="dash-card">
             <div class="dash-card-head">
                 <div>

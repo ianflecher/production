@@ -132,6 +132,13 @@ class UserController extends Controller
                 'nullable',
                 Rule::in(array_keys(User::TEAMS)),
             ],
+
+            // Which price list this officer sells from. Only account officers
+            // quote, so it is ignored for everyone else.
+            'price_list' => [
+                'nullable',
+                Rule::in(array_keys(\App\Services\PricingService::lists())),
+            ],
         ]);
 
         User::create([
@@ -149,6 +156,10 @@ class UserController extends Controller
                 ? ($data['team'] ?? null)
                 : null,
 
+            'price_list' => $data['position'] === User::ROLE_SALES
+                ? ($data['price_list'] ?? null)
+                : null,
+
             'is_active' => true,
         ]);
 
@@ -156,6 +167,57 @@ class UserController extends Controller
             'success',
             "Account for {$data['name']} created."
         );
+    }
+
+    /**
+     * Move an account officer onto another price list.
+     *
+     * Existing orders are untouched: each one carries the list it was quoted
+     * from, so this only changes what the officer sells from next.
+     */
+    public function setPriceList(
+        Request $request,
+        User $user
+    ): RedirectResponse {
+        $data = $request->validate([
+            'price_list' => [
+                'nullable',
+                Rule::in(array_keys(\App\Services\PricingService::lists())),
+            ],
+        ]);
+
+        abort_unless($user->isSales(), 403);
+
+        $user->update([
+            'price_list' => $data['price_list'] ?: null,
+        ]);
+
+        $lists = \App\Services\PricingService::lists();
+        $now = $user->price_list ?: \App\Services\PricingService::defaultList();
+
+        return back()->with(
+            'success',
+            $user->name.' now sells from the '.($lists[$now] ?? $now).' price list.'
+        );
+    }
+
+    /**
+     * Hand an account officer their team, or take it back.
+     *
+     * It is not a permission role — they get no leader pages. It widens one
+     * list: the inquiries they can see and chase become the team's, not just
+     * their own.
+     */
+    public function toggleTeamLeader(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($user->isSales(), 403);
+        abort_if(blank($user->team), 422, 'Give them a team before making them its leader.');
+
+        $user->update(['is_team_leader' => ! $user->is_team_leader]);
+
+        return back()->with('success', $user->is_team_leader
+            ? $user->name.' now leads '.strtoupper($user->team).' — they see and can chase every follow-up on the team.'
+            : $user->name.' no longer leads '.strtoupper($user->team).'.');
     }
 
     public function setTeam(

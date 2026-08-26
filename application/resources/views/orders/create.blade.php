@@ -87,64 +87,64 @@
         </div>
     </div>
 
+    {{-- The client was taken on page one. Shown here, not asked for again:
+         re-typing them is how two records of the same person get made. --}}
+    <input type="hidden" name="inquiry_id" value="{{ $inquiry->id }}">
+
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Client</h2>
-        <p class="sub">Pick an existing client, or add a new one.</p>
+        <p class="sub">Taken on step 1. Shown here rather than asked again — retyping a client is how two records of the same person get made.</p>
 
-        <div class="field" style="max-width: 420px;">
-            <label for="client_id">Existing client</label>
-            <select id="client_id" name="client_id" onchange="toggleClientMode()">
-                <option value="">— New client (fill in below) —</option>
-                @foreach ($clients as $client)
-                    <option value="{{ $client->id }}" @selected(old('client_id') == $client->id)>{{ $client->listName() }}@if ($client->company) — {{ $client->company }}@endif</option>
-                @endforeach
-            </select>
-        </div>
-
-        <div id="newClient" style="{{ old('client_id') ? 'display:none;' : '' }}">
-            <div class="form-grid">
-                <div class="field">
-                    <label for="client_name">First name <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_name" type="text" name="client_name" value="{{ old('client_name') }}" maxlength="255" placeholder="e.g. Juan" style="text-transform: capitalize;">
-                    @error('client_name')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                {{-- Held apart from the first name so the client list sorts by
-                     family name rather than by whatever was typed first. --}}
-                <div class="field">
-                    <label for="client_last_name">Last name <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_last_name" type="text" name="client_last_name" value="{{ old('client_last_name') }}" maxlength="255" placeholder="e.g. Dela Cruz" style="text-transform: capitalize;">
-                    @error('client_last_name')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                <div class="field">
-                    <label for="client_contact">Contact number <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_contact" type="text" name="client_contact" value="{{ old('client_contact') }}" maxlength="255" placeholder="e.g. 0917-555-1234">
-                    @error('client_contact')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                <div class="field">
-                    <label for="client_company">Company (optional)</label>
-                    <input id="client_company" type="text" name="client_company" value="{{ old('client_company') }}" maxlength="255" placeholder="e.g. Falcon Riders" style="text-transform: capitalize;">
-                </div>
-                <div class="field">
-                    <label for="client_office_address">Office address <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_office_address" type="text" name="client_office_address" value="{{ old('client_office_address') }}" maxlength="255" placeholder="e.g. 12 Rizal St., Angeles City" style="text-transform: capitalize;">
-                    @error('client_office_address')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                <div class="field">
-                    <label for="client_delivery_address">Delivery address <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_delivery_address" type="text" name="client_delivery_address" value="{{ old('client_delivery_address') }}" maxlength="255" placeholder="Where the order is delivered" style="text-transform: capitalize;">
-                    @error('client_delivery_address')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                <div class="field">
-                    <label for="client_tin">TIN (optional — for invoice)</label>
-                    <input id="client_tin" type="text" name="client_tin" value="{{ old('client_tin') }}" maxlength="50" placeholder="e.g. 123-456-789-000">
-                </div>
+        <div class="client-summary">
+            <div class="client-summary-name">
+                {{ $inquiry->client->fullName() }}
+                @if ($inquiry->client->company)
+                    <span>{{ $inquiry->client->company }}</span>
+                @endif
             </div>
+
+            <dl class="client-summary-grid">
+                <div>
+                    <dt>Contact number</dt>
+                    <dd>{{ $inquiry->client->contact_number ?: '—' }}</dd>
+                </div>
+                <div>
+                    <dt>Office address</dt>
+                    <dd>{{ $inquiry->client->office_address ?: '—' }}</dd>
+                </div>
+                <div>
+                    <dt>Delivery address</dt>
+                    <dd>{{ $inquiry->client->delivery_address ?: '—' }}</dd>
+                </div>
+                @if ($inquiry->client->tin)
+                    <div>
+                        <dt>TIN</dt>
+                        <dd>{{ $inquiry->client->tin }}</dd>
+                    </div>
+                @endif
+            </dl>
+
+            @if ($inquiry->what_they_want)
+                <div class="client-summary-ask">
+                    <dt>They asked about</dt>
+                    <dd>{{ $inquiry->what_they_want }}</dd>
+                </div>
+            @endif
         </div>
     </div>
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Product &amp; price</h2>
-        <p class="sub">Choose the product first, then the quantity — the price per piece is set automatically. Over 100 pcs needs a quotation; type a custom price below.</p>
+        {{-- The 100-piece ceiling is a fact about the tiered list. A flat list
+             has no bands and no top of the table to fall off. --}}
+        @php $tiered = collect($products)->contains(fn ($p) => isset($p['tiers'])); @endphp
+        <p class="sub">Choose the product first, then the quantity — the price per piece is set automatically.
+            @if ($tiered)
+                Over 100 pcs needs a quotation; type a custom price below.
+            @else
+                These prices are the same at any quantity.
+            @endif
+        </p>
 
         <div class="field" style="max-width: 340px;">
             <label for="product_type">Product type</label>
@@ -305,15 +305,22 @@
     const BACK_POCKET_FEE = {{ $backPocketFee }};
     const peso = n => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // A new client needs a complete contact record. Existing clients already
-    // have their saved details, so selecting one hides and disables this block.
-    function toggleClientMode() {
-        const isNew = !document.getElementById('client_id').value;
-        const fields = document.querySelectorAll('#newClient input');
-        document.getElementById('newClient').style.display = isNew ? 'block' : 'none';
-        fields.forEach(field => { field.disabled = !isNew; });
-        ['client_name', 'client_last_name', 'client_contact', 'client_office_address', 'client_delivery_address']
-            .forEach(id => { document.getElementById(id).required = isNew; });
+    /* What one piece costs, on whichever list this officer sells from.
+       Mirrors PricingService::basePrice.
+
+       The standard list prices by quantity band; the merch list is flat, one
+       figure whatever the quantity. Reading .tiers straight off the product
+       threw on a merch one — and the throw took the whole price updater with
+       it, so the box simply stayed empty and nothing said why.
+
+       null means there is no automatic price and somebody has to type one. */
+    function basePriceFor(product, qty) {
+        if (!product || qty < 1) { return null; }
+        if (product.price !== undefined) { return Number(product.price); }
+        for (const t of (product.tiers || [])) {
+            if (qty >= t.min && qty <= t.max) { return Number(t.price); }
+        }
+        return null;
     }
 
     function showOverride() {
@@ -368,7 +375,7 @@
 
         let tierBase = null;
         if (product && qty > 0) {
-            for (const t of product.tiers) { if (qty >= t.min && qty <= t.max) { tierBase = Number(t.price); break; } }
+            tierBase = basePriceFor(product, qty);
         }
 
         // The whole order goes to a typed price when the product has no list at
@@ -417,15 +424,16 @@
             unit = override;
             noteText = 'Custom price (override).';
         } else if (product && qty > 0) {
-            let base = null;
-            for (const t of product.tiers) {
-                if (qty >= t.min && qty <= t.max) { base = Number(t.price); break; }
-            }
+            let base = basePriceFor(product, qty);
             if (base === null) {
                 noteText = 'Over 100 pcs — enter a custom price for the quotation.';
             } else {
                 unit = base;   // garment price only; back pocket is separate
-                noteText = 'Tier price for ' + qty + ' pcs.';
+                // A flat list has no bands to name, so saying "tier price
+                // for 40 pcs" would suggest 41 costs something else.
+                noteText = product.price !== undefined
+                    ? 'List price — the same at any quantity.'
+                    : 'Tier price for ' + qty + ' pcs.';
             }
         }
 
@@ -568,7 +576,6 @@
     // Naming the off-chart size is what makes its pieces count at all, so
     // typing the name changes the TOTAL, not just the price.
     document.getElementById('other_size')?.addEventListener('input', updateQty);
-    toggleClientMode();
     updateQty();
     checkCapacity();
 

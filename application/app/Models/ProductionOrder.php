@@ -62,7 +62,7 @@ class ProductionOrder extends Model
     public const RUSH_NOTICE_DAYS = 10;
 
     protected $fillable = [
-        'order_number', 'brief_token', 'brief_expires_at', 'client_id', 'customer_name', 'product_type', 'description',
+        'order_number', 'brief_token', 'brief_expires_at', 'client_id', 'customer_name', 'product_type', 'price_list', 'description',
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
         'rush', 'rush_fee',
@@ -279,7 +279,12 @@ class ProductionOrder extends Model
     {
         // Known priced product → its config label; otherwise a custom apparel
         // type (e.g. Rash Guard) stored as free text — show it as-is.
-        return \App\Services\PricingService::label($this->product_type)
+        //
+        // Looked up in the list the job was priced from: a merch product is
+        // not in the standard list, and without this a hybrid jersey came out
+        // titled from its key ("Hybrid Riding Jersey Type 1") on every sheet
+        // that shows the product.
+        return \App\Services\PricingService::label($this->product_type, $this->price_list)
             ?? ($this->product_type ? \Illuminate\Support\Str::title($this->product_type) : null);
     }
 

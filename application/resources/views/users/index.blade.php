@@ -28,12 +28,37 @@
     </div>
 
     @if (auth()->user()->isLeader())
-    <details class="inline-form">
-        <summary class="btn btn-primary">
-            + New account
-        </summary>
+    {{-- Hiring somebody is the same kind of moment as the questions this app
+         asks: the page waits while it is answered. So it is asked the same
+         way — the confirmation dialog's backdrop and centred card — instead
+         of a panel hanging off the button that ran off the bottom of a short
+         screen and hid the Create button. --}}
+    <button type="button" class="btn btn-primary" id="newAccountOpen">
+        + New account
+    </button>
 
-        <div class="pop" style="min-width: 300px;">
+    <div id="newAccountBack" class="icc-back" hidden>
+        <div class="icc-card icc-form" role="dialog" aria-modal="true" aria-labelledby="newAccountTitle">
+            <div class="icc-head">
+                <h2 class="icc-title" id="newAccountTitle">New account</h2>
+                <button type="button" class="icc-x" id="newAccountClose" aria-label="Close">&times;</button>
+            </div>
+            <p class="icc-body">
+                They sign in with the email and password you set here, and can change the password themselves afterwards.
+            </p>
+
+            {{-- The page's own error banner is behind the backdrop, so a
+                 rejected save has to say why in here or it says nothing. --}}
+            @if ($errors->any())
+                <div class="alert alert-error" style="margin-bottom:1rem;">
+                    <ul style="margin:0; padding-left:1.1rem;">
+                        @foreach ($errors->all() as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <form
                 method="POST"
                 action="{{ route('users.store') }}"
@@ -151,6 +176,38 @@
                 </div>
 
                 <div class="field">
+                    <label for="new_user_price_list">
+                        Price list (account officers only)
+                    </label>
+
+                    <select
+                        id="new_user_price_list"
+                        name="price_list"
+                    >
+                        @foreach (\App\Services\PricingService::lists() as $key => $label)
+                            <option
+                                value="{{ $key }}"
+                                @selected(old('price_list', \App\Services\PricingService::defaultList()) === $key)
+                            >
+                                {{ $label }}
+                            </option>
+                        @endforeach
+                    </select>
+
+                    <div
+                        style="
+                            font-size: 0.75rem;
+                            color: var(--ink-3);
+                            margin-top: 0.3rem;
+                        "
+                    >
+                        Which products and prices they quote from. The merch list is
+                        a different set of products at flat prices, not a discount on
+                        the standard one.
+                    </div>
+                </div>
+
+                <div class="field">
                     <label for="new_user_password">
                         Password (minimum 8 characters)
                     </label>
@@ -165,15 +222,71 @@
                     >
                 </div>
 
-                <button
-                    type="submit"
-                    class="btn btn-primary btn-sm"
-                >
-                    Create account
-                </button>
+                <div class="icc-acts">
+                    <button
+                        type="button"
+                        class="icc-btn icc-no"
+                        id="newAccountCancel"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="icc-btn icc-go"
+                    >
+                        Create account
+                    </button>
+                </div>
             </form>
         </div>
-    </details>
+    </div>
+
+    <script>
+        (function () {
+            const back = document.getElementById('newAccountBack');
+            const open = document.getElementById('newAccountOpen');
+            const form = back.querySelector('form');
+
+            /* Out to the body, where the confirmation dialog already lives.
+               main.content carries a translateY on load, and a transformed
+               ancestor becomes the containing block for anything fixed inside
+               it — so the backdrop sized itself to the content column instead
+               of the window, and centred the card halfway down a box taller
+               than the screen, leaving it below the fold with the Create
+               button out of reach. */
+            document.body.appendChild(back);
+
+            function show() {
+                back.hidden = false;
+                document.body.style.overflow = 'hidden';
+                form.querySelector('input, select')?.focus();
+            }
+
+            function hide() {
+                back.hidden = true;
+                document.body.style.overflow = '';
+                open.focus();
+            }
+
+            open.addEventListener('click', show);
+            document.getElementById('newAccountClose').addEventListener('click', hide);
+            document.getElementById('newAccountCancel').addEventListener('click', hide);
+
+            // Same dismissals as the confirmation dialog: the backdrop and
+            // Escape. Enter is NOT one of them — in a form it submits.
+            back.addEventListener('click', e => { if (e.target === back) { hide(); } });
+            document.addEventListener('keydown', e => {
+                if (! back.hidden && e.key === 'Escape') { hide(); }
+            });
+
+            // A rejected save comes back with the reasons rendered inside the
+            // dialog, so it has to be open to be read.
+            @if ($errors->any() && old('name') !== null)
+                show();
+            @endif
+        })();
+    </script>
     @endif
 </div>
 
@@ -553,6 +666,72 @@
                                                     )
                                                 >
                                                     {{ $label }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </form>
+
+                                    {{-- Runs their team: sees and chases every
+                                         inquiry their members have taken. --}}
+                                    <form
+                                        method="POST"
+                                        action="{{ route('users.team-leader', $user) }}"
+                                        style="display:flex; align-items:center;"
+                                    >
+                                        @csrf
+
+                                        <button
+                                            type="submit"
+                                            class="btn {{ $user->leadsTeam() ? 'btn-success' : 'btn-ghost' }} btn-sm"
+                                            title="{{ $user->team ? 'Team leader for '.strtoupper($user->team) : 'Give them a team first' }}"
+                                            @disabled(! $user->team)
+                                            style="padding:0.3rem 0.5rem; font-size:0.75rem;"
+                                        >
+                                            {{ $user->leadsTeam() ? '★ Team leader' : 'Team leader' }}
+                                        </button>
+                                    </form>
+
+                                    {{-- Which price list they quote from. The
+                                         merch line is a different list of
+                                         products at different prices, not a
+                                         discount on the standard one. Orders
+                                         already written keep the list they
+                                         were quoted from. --}}
+                                    <form
+                                        method="POST"
+                                        action="{{ route(
+                                            'users.price-list',
+                                            $user
+                                        ) }}"
+                                        style="
+                                            display: flex;
+                                            gap: 0.25rem;
+                                            align-items: center;
+                                        "
+                                    >
+                                        @csrf
+
+                                        <select
+                                            name="price_list"
+                                            title="Price list"
+                                            style="
+                                                width: auto;
+                                                padding: 0.3rem 0.4rem;
+                                                font-size: 0.75rem;
+                                            "
+                                            onchange="this.form.submit()"
+                                        >
+                                            @foreach (
+                                                \App\Services\PricingService::lists()
+                                                as $key => $label
+                                            )
+                                                <option
+                                                    value="{{ $key }}"
+                                                    @selected(
+                                                        \App\Services\PricingService::listFor($user) === $key
+                                                    )
+                                                >
+                                                    {{ $label }} prices
                                                 </option>
                                             @endforeach
                                         </select>

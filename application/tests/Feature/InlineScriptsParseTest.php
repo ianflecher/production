@@ -87,6 +87,28 @@ class InlineScriptsParseTest extends TestCase
         $this->assertSame([], $this->parseErrors($ok));
     }
 
+
+    /**
+     * The order form is step two now: it needs the inquiry that carries the
+     * client. Everything else on the list is reached directly.
+     */
+    private function withInquiry(string $path): string
+    {
+        if ($path !== '/orders/create') {
+            return $path;
+        }
+
+        $client = \App\Models\Client::create(['name' => 'Smoke', 'last_name' => 'Client']);
+
+        $inquiry = \App\Models\Inquiry::create([
+            'client_id' => $client->id,
+            'created_by' => auth()->id(),
+            'status' => \App\Models\Inquiry::STATUS_OPEN,
+        ]);
+
+        return $path.'?inquiry='.$inquiry->id;
+    }
+
     public static function pages(): array
     {
         return [
@@ -112,7 +134,9 @@ class InlineScriptsParseTest extends TestCase
         $this->requireNode();
 
         $admin = User::factory()->create(['job_role' => User::ROLE_SUPER_ADMIN, 'is_active' => true]);
-        $html = $this->actingAs($admin)->get($url)->assertOk()->getContent();
+        $this->actingAs($admin);
+
+        $html = $this->get($this->withInquiry($url))->assertOk()->getContent();
 
         $this->assertSame([], $this->parseErrors($html), $url.' has broken inline JavaScript');
     }

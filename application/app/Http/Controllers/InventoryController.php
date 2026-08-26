@@ -282,11 +282,31 @@ class InventoryController extends Controller
         $this->assertAccess();
 
         $request->validate(
-            ['file' => ['required', 'file', 'mimes:csv,txt', 'max:10240']],
-            ['file.mimes' => 'Upload a CSV file (in Excel: File → Save As → CSV).']
+            ['file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:25600']],
+            [
+                'file.mimes' => 'Upload the stock sheet as Excel (.xlsx or .xls) or CSV.',
+                'file.max' => 'That file is over 25 MB. A stock sheet with photos pasted into it '
+                    .'is mostly photos — save a copy without them, or export it as CSV.',
+            ]
         );
 
-        $rows = array_map('str_getcsv', file($request->file('file')->getRealPath(), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
+        $upload = $request->file('file');
+
+        try {
+            $rows = in_array(strtolower((string) $upload->getClientOriginalExtension()), ['xlsx', 'xls'], true)
+                ? $this->rowsFromSpreadsheet($upload->getRealPath())
+                : array_map('str_getcsv', file($upload->getRealPath(), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
+        } catch (\Throwable $e) {
+            // Nearly always a file that never finished copying out of Excel or
+            // off a drive: a workbook is a zip, and a half-written one has no
+            // index at the end, so nothing can open it — Excel included.
+            report($e);
+
+            return back()->withErrors(['file' => 'That file could not be read. If it came off a shared '
+                .'drive, or was still open in Excel when it was copied, open it and use File → Save As '
+                .'to write a fresh copy, then upload that.']);
+        }
+
         if ($rows === []) {
             return back()->withErrors(['file' => 'The file is empty.']);
         }
@@ -321,7 +341,7 @@ class InventoryController extends Controller
 
                 // Log the difference so an import is attributable like any other change.
                 $delta = max(0, (float) $qty) - (float) $item->quantity;
-                $item->recordMovement($delta, $delta > 0 ? 'restock' : 'correction', 'CSV import', null, auth()->user()?->name);
+                $item->recordMovement($delta, $delta > 0 ? 'restock' : 'correction', 'Spreadsheet import', null, auth()->user()?->name);
                 $imported++;
             }
         });
@@ -329,6 +349,46 @@ class InventoryController extends Controller
         $note = $skipped > 0 ? " ({$skipped} row(s) skipped — missing name or quantity)" : '';
 
         return back()->with('success', "Imported {$imported} item(s) from the file.{$note}");
+    }
+
+    /**
+     * Read a workbook into the same array of rows the CSV path produces, so
+     * everything downstream — the stock-sheet detection, both importers —
+     * cannot tell which kind of file it came from.
+     *
+     * Data only, and the first sheet only. The shop's stock sheet has photos
+     * pasted into it and runs to a couple of hundred megabytes, nearly all of
+     * it images; reading values without styles or drawings is what keeps that
+     * from being loaded into memory a second time as objects.
+     *
+     * @return array<int, array<int, string>>
+     */
+    private function rowsFromSpreadsheet(string $path): array
+    {
+        $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($path);
+        $reader->setReadDataOnly(true);
+
+        $names = $reader->listWorksheetNames($path);
+
+        if ($names !== []) {
+            $reader->setLoadSheetsOnly($names[0]);
+        }
+
+        $sheet = $reader->load($path)->getActiveSheet();
+
+        $rows = [];
+
+        foreach ($sheet->toArray(null, true, false, false) as $row) {
+            // A blank row is a spacer in the sheet; the CSV path never produced
+            // one, because the file read skips empty lines.
+            if (collect($row)->filter(fn ($c) => trim((string) $c) !== '')->isEmpty()) {
+                continue;
+            }
+
+            $rows[] = array_map(fn ($c) => (string) ($c ?? ''), $row);
+        }
+
+        return $rows;
     }
 
     /**

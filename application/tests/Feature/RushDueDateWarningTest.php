@@ -23,9 +23,24 @@ class RushDueDateWarningTest extends TestCase
         return User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
     }
 
+    /** The order form is step two, so it is opened through an inquiry. */
+    private function formUrl(User $sales): string
+    {
+        $client = \App\Models\Client::create(['name' => 'Rush', 'last_name' => 'Client']);
+
+        $inquiry = \App\Models\Inquiry::create([
+            'client_id' => $client->id,
+            'created_by' => $sales->id,
+            'status' => \App\Models\Inquiry::STATUS_OPEN,
+        ]);
+
+        return '/orders/create?inquiry='.$inquiry->id;
+    }
+
     public function test_the_order_form_asks_before_accepting_a_rush_date(): void
     {
-        $this->actingAs($this->sales())->get('/orders/create')
+        $sales = $this->sales();
+        $this->actingAs($sales)->get($this->formUrl($sales))
             ->assertOk()
             ->assertSee('onsubmit="return confirmRush(this);"', false)
             // Asked through the app's own dialog, not the browser's grey box.
@@ -50,7 +65,8 @@ class RushDueDateWarningTest extends TestCase
 
     public function test_the_threshold_comes_from_the_model_not_a_number_in_a_script(): void
     {
-        $this->actingAs($this->sales())->get('/orders/create')
+        $sales = $this->sales();
+        $this->actingAs($sales)->get($this->formUrl($sales))
             ->assertOk()
             ->assertSee('const RUSH_DAYS = '.ProductionOrder::RUSH_NOTICE_DAYS.';', false);
     }
@@ -86,7 +102,8 @@ class RushDueDateWarningTest extends TestCase
         // window.confirm() prints "127.0.0.1:8000 says" above the question,
         // cannot mark which button is the dangerous one, and on a shop screen
         // reads as something having gone wrong rather than a question.
-        $html = $this->actingAs($this->sales())->get('/orders/create')->assertOk()->getContent();
+        $sales = $this->sales();
+        $html = $this->actingAs($sales)->get($this->formUrl($sales))->assertOk()->getContent();
 
         $this->assertStringContainsString('id="icConfirm"', $html, 'the dialog markup should be on the page');
         $this->assertStringNotContainsString('window.confirm(', $html,

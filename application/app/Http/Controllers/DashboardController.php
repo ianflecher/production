@@ -220,9 +220,18 @@ class DashboardController extends Controller
             }
             $recentActivity = $activity->sortByDesc('at')->take(6)->values();
 
+            // ---- Follow-ups: who asked and has not ordered -------------
+            // Everyone still waiting, longest first. A team leader's list is
+            // the whole team's, which is what leading one amounts to here.
+            $followUps = \App\Models\Inquiry::with(['client', 'officer', 'followUps.user'])
+                ->visibleTo($user)
+                ->forFollowUp()
+                ->get();
+
             return view('dashboard', compact('user', 'greeting', 'stats', 'recentOrders',
                 'statusBreakdown', 'statusTotal', 'stepSlices', 'stepTotal',
-                'alerts', 'quickSummary', 'monthSeries', 'recentActivity'));
+                'alerts', 'quickSummary', 'monthSeries', 'recentActivity',
+                'followUps'));
         }
 
         // ---- Finance desk: all payments across every order ----------------

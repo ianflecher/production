@@ -91,7 +91,9 @@ class InventoryImportTest extends TestCase
         // An import is attributable like any other stock change.
         $this->assertDatabaseHas('stock_movements', [
             'inventory_item_id' => InventoryItem::first()->id,
-            'note' => 'CSV import',
+            // The sheet may arrive as CSV or as a workbook; the note says
+            // where the change came from, not which format carried it.
+            'note' => 'Spreadsheet import',
         ]);
     }
 

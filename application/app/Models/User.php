@@ -154,6 +154,8 @@ class User extends Authenticatable
         'password',
         'job_role',
         'team',
+        'price_list',
+        'is_team_leader',
         'is_active',
         'last_login_at',
         'last_login_ip',
@@ -181,6 +183,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'is_team_leader' => 'boolean',
             'last_login_at' => 'datetime',
             'last_auto_assigned_at' => 'datetime',
         ];
@@ -389,6 +392,19 @@ class User extends Authenticatable
     public function isLeader(): bool
     {
         return $this->role === self::ROLE_LEADER || $this->isSuperAdmin() || $this->isSupervisor();
+    }
+
+    /**
+     * An account officer who also runs their team: Kyson on META, Paula on
+     * VIP. They see and chase every inquiry their members have taken, while
+     * still carrying their own clients like anyone else.
+     *
+     * It is not a permission role — they get no leader pages — so it is asked
+     * about directly rather than through the role.
+     */
+    public function leadsTeam(): bool
+    {
+        return $this->isSales() && $this->is_team_leader && filled($this->team);
     }
 
     public function isSales(): bool

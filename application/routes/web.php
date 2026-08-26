@@ -210,6 +210,14 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // -------- Order intake: Sales (and Super Admin) create orders --------
     Route::middleware('role:sales,super_admin')->group(function () {
+        // Page one of taking an order: who is asking. Saved on its own so a
+        // person who does not order today is still a name that can be called.
+        Route::get('/inquiries', [\App\Http\Controllers\InquiryController::class, 'index'])->name('inquiries.index');
+        Route::get('/inquiries/create', [\App\Http\Controllers\InquiryController::class, 'create'])->name('inquiries.create');
+        Route::post('/inquiries', [\App\Http\Controllers\InquiryController::class, 'store'])->name('inquiries.store');
+        Route::post('/inquiries/{inquiry}/follow-up', [\App\Http\Controllers\InquiryController::class, 'followUp'])->name('inquiries.follow-up');
+
+        // Page two: the job itself, reached from an enquiry.
         Route::get('/orders/create', [ProductionOrderController::class, 'create'])->name('orders.create');
         Route::post('/orders', [ProductionOrderController::class, 'store'])->name('orders.store');
         Route::get('/orders/{order}/edit', [ProductionOrderController::class, 'edit'])->whereNumber('order')->name('orders.edit');
@@ -319,6 +327,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/users/{user}/toggle', [UserController::class, 'toggle'])->name('users.toggle');
         Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset');
         Route::post('/users/{user}/team', [UserController::class, 'setTeam'])->name('users.team');
+        Route::post('/users/{user}/price-list', [UserController::class, 'setPriceList'])->name('users.price-list');
+        Route::post('/users/{user}/team-leader', [UserController::class, 'toggleTeamLeader'])->name('users.team-leader');
     });
 
 

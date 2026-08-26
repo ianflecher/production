@@ -207,6 +207,24 @@
     const BACK_POCKET_FEE = {{ $backPocketFee }};
     const peso = n => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    /* What one piece costs, on whichever list this officer sells from.
+       Mirrors PricingService::basePrice.
+
+       The standard list prices by quantity band; the merch list is flat, one
+       figure whatever the quantity. Reading .tiers straight off the product
+       threw on a merch one — and the throw took the whole price updater with
+       it, so the box simply stayed empty and nothing said why.
+
+       null means there is no automatic price and somebody has to type one. */
+    function basePriceFor(product, qty) {
+        if (!product || qty < 1) { return null; }
+        if (product.price !== undefined) { return Number(product.price); }
+        for (const t of (product.tiers || [])) {
+            if (qty >= t.min && qty <= t.max) { return Number(t.price); }
+        }
+        return null;
+    }
+
     function showOverride() {
         document.getElementById('overrideWrap').style.display = 'block';
         document.getElementById('overrideToggle').style.display = 'none';
@@ -242,7 +260,7 @@
 
         let tierBase = null;
         if (product && qty > 0) {
-            for (const t of product.tiers) { if (qty >= t.min && qty <= t.max) { tierBase = Number(t.price); break; } }
+            tierBase = basePriceFor(product, qty);
         }
         const hadOverride = {{ $priceOverride !== null ? 'true' : 'false' }};
 
@@ -288,11 +306,15 @@
             unit = override; noteText = 'Custom price (override).';
         } else if (product && qty > 0) {
             let base = null;
-            for (const t of product.tiers) { if (qty >= t.min && qty <= t.max) { base = Number(t.price); break; } }
+            base = basePriceFor(product, qty);
             if (base === null) { noteText = 'Over 100 pcs — enter a custom price for the quotation.'; }
             else {
                 unit = base;   // garment price only; back pocket is separate
-                noteText = 'Tier price for ' + qty + ' pcs.';
+                // A flat list has no bands to name, so saying "tier price
+                // for 40 pcs" would suggest 41 costs something else.
+                noteText = product.price !== undefined
+                    ? 'List price — the same at any quantity.'
+                    : 'Tier price for ' + qty + ' pcs.';
             }
         }
 

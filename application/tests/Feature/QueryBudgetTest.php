@@ -50,16 +50,23 @@ class QueryBudgetTest extends TestCase
         $admin = User::all()->first(fn ($u) => $u->role === 'super_admin');
         $order = ProductionOrder::where('status', 'active')->latest('id')->first();
 
+        // The order form is step two: it is opened through the inquiry that
+        // carries the client.
+        $inquiry = \App\Models\Inquiry::firstOrCreate(
+            ['client_id' => $order->client_id],
+            ['created_by' => $admin->id, 'status' => \App\Models\Inquiry::STATUS_OPEN],
+        );
+
         // [label, url, budget]
         $pages = [
-            ['Dashboard', '/dashboard', 32],
+['Dashboard', '/dashboard', 32],
             // 24: the list now loads the canonical client name (including the
             // surname used for sorting), workflow tasks and payment existence.
             // Those are page-wide eager loads, so the count stays flat as rows
             // are added rather than becoming one query per order.
             ['Orders list', '/orders', 24],
             ['Order detail', "/orders/{$order->id}", 32],
-            ['New order form', '/orders/create', 18],
+            ['New order form', '/orders/create?inquiry='.$inquiry->id, 18],
             ['Calendar', '/calendar', 20],
             // 27, not 22: the artists' bench is on this page now — every open
             // artist step with the order, the client and who has it, plus the
