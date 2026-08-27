@@ -122,6 +122,10 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
         $this->artist('Maru');
         $inquiry = $this->inquiryOf($officer);
 
+        $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
+            ->assertOk()
+            ->assertSee('name="reference_files[]"', false);
+
         $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry), [
             'reference_note' => 'Keep the team colours',
         ]);
@@ -129,6 +133,7 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
         $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
             ->assertOk()
             ->assertSee('Waiting on Maru', false)
+            ->assertDontSee('name="reference_files[]"', false)
             ->assertDontSee('Send to artist for layout', false)
             ->assertDontSee('Create the job order', false);
     }
