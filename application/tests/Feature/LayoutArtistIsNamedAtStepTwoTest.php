@@ -138,6 +138,67 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
             ->assertDontSee('Create the job order', false);
     }
 
+    public function test_a_wrong_design_file_can_be_removed_before_sending(): void
+    {
+        Storage::fake('local');
+        $officer = $this->officer();
+        $inquiry = $this->inquiryOf($officer);
+
+        $this->actingAs($officer)->post(route('inquiries.layout.upload', $inquiry), [
+            'reference_files' => [
+                UploadedFile::fake()->image('wrong.png'),
+                UploadedFile::fake()->image('keep.png'),
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $inquiry->refresh();
+        $wrongPath = $inquiry->layout_files[0]['path'];
+        $keepPath = $inquiry->layout_files[1]['path'];
+
+        $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
+            ->assertOk()
+            ->assertSee('Remove wrong.png', false)
+            ->assertSee('Remove keep.png', false);
+
+        $this->actingAs($officer)->post(route('inquiries.layout.file.delete', [
+            $inquiry, 'index' => 0,
+        ]))->assertRedirect()->assertSessionHas('success');
+
+        $files = $inquiry->fresh()->layout_files;
+        $this->assertCount(1, $files);
+        $this->assertSame('keep.png', $files[0]['original_name']);
+        Storage::disk('local')->assertMissing($wrongPath);
+        Storage::disk('local')->assertExists($keepPath);
+    }
+
+    public function test_a_design_file_cannot_be_removed_after_sending(): void
+    {
+        Storage::fake('local');
+        $officer = $this->officer();
+        $this->artist('Maru');
+        $inquiry = $this->inquiryOf($officer);
+
+        $this->actingAs($officer)->post(route('inquiries.layout.upload', $inquiry), [
+            'reference_files' => [UploadedFile::fake()->image('sent.png')],
+        ]);
+        $path = $inquiry->fresh()->layout_files[0]['path'];
+
+        $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry), [
+            'reference_note' => 'Use this design.',
+        ]);
+
+        $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
+            ->assertOk()
+            ->assertDontSee('Remove sent.png', false);
+
+        $this->actingAs($officer)->post(route('inquiries.layout.file.delete', [
+            $inquiry, 'index' => 0,
+        ]))->assertRedirect()->assertSessionHasErrors('layout');
+
+        $this->assertCount(1, $inquiry->fresh()->layout_files);
+        Storage::disk('local')->assertExists($path);
+    }
+
     /** The artist draws it, the officer approves it, and only then the order. */
     public function test_the_job_order_opens_only_once_the_layout_is_approved(): void
     {
@@ -236,6 +297,24 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
 
         $this->actingAs($notHolder)->get(route('inquiries.layouts'))
             ->assertOk()->assertDontSee('Mike Calaramo', false);
+    }
+
+    public function test_the_artist_can_remove_a_wrong_file_from_the_picker_before_handing_back_the_layout(): void
+    {
+        $officer = $this->officer();
+        $artist = $this->artist('Maru');
+        $inquiry = $this->inquiryOf($officer);
+
+        $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry), [
+            'reference_note' => 'Keep the team colours',
+        ]);
+
+        $this->actingAs($artist)->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertSee('class="artist-layout-files"', false)
+            ->assertSee('class="artist-layout-picked"', false)
+            ->assertSee('new DataTransfer()', false)
+            ->assertSee("remove.title = 'Remove ' + file.name", false);
     }
 
     public function test_the_artist_can_open_the_reference_they_are_drawing_from(): void

@@ -126,6 +126,10 @@ class InquiryController extends Controller
         $this->assertAccess($request);
         $this->assertMine($request, $inquiry);
 
+        if ($inquiry->layout_sent_at) {
+            return back()->withErrors(['layout' => 'Design files cannot be changed after the brief is sent to the artist.']);
+        }
+
         $request->validate([
             'reference_files' => ['required', 'array'],
             'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
@@ -145,6 +149,30 @@ class InquiryController extends Controller
         $inquiry->update(['layout_files' => $files]);
 
         return back()->with('success', 'Design uploaded — it will be attached to the new job order.');
+    }
+
+    /** Remove one mistaken design upload while the brief is still a draft. */
+    public function deleteLayoutFile(Request $request, Inquiry $inquiry, int $index): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        if ($inquiry->layout_sent_at) {
+            return back()->withErrors(['layout' => 'Design files cannot be changed after the brief is sent to the artist.']);
+        }
+
+        $files = array_values($inquiry->layout_files ?? []);
+        $file = $files[$index] ?? null;
+        abort_unless($file, 404);
+
+        unset($files[$index]);
+        $inquiry->update(['layout_files' => array_values($files) ?: null]);
+
+        if (filled($file['path'] ?? null)) {
+            Storage::disk('local')->delete($file['path']);
+        }
+
+        return back()->with('success', 'Wrong design file removed.');
     }
 
     public function designBrief(Request $request, Inquiry $inquiry): View

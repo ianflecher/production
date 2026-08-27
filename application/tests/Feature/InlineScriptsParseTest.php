@@ -122,6 +122,7 @@ class InlineScriptsParseTest extends TestCase
             'books' => ['/books'],
             'users' => ['/users'],
             'messages' => ['/messages'],
+            'artist layouts' => ['/layouts'],
             'material requests' => ['/material-requests'],
             'bottlenecks' => ['/reports/bottlenecks'],
             'dashboard' => ['/dashboard'],
@@ -153,6 +154,25 @@ class InlineScriptsParseTest extends TestCase
         ]);
 
         $html = $this->actingAs($sales)->get("/orders/{$order->id}/edit")->assertOk()->getContent();
+
+        $this->assertSame([], $this->parseErrors($html));
+    }
+
+    public function test_the_public_client_questionnaire_scripts_parse(): void
+    {
+        $this->requireNode();
+
+        $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
+        $order = ProductionOrder::create([
+            'order_number' => 'IC2026-09201', 'customer_name' => 'Public Script Co',
+            'product_type' => 'round_neck', 'quantity' => 10,
+            'due_date' => now()->addMonth(), 'created_by' => $sales->id, 'status' => 'active',
+        ]);
+        $order->jobOrder()->create(['status' => 'draft', 'created_by' => $sales->id]);
+        $order->regenerateBriefLink();
+
+        $html = $this->get('/imprint-customs/design-questionnaire/'.$order->brief_token)
+            ->assertOk()->getContent();
 
         $this->assertSame([], $this->parseErrors($html));
     }

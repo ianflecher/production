@@ -55,12 +55,23 @@
         display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 220px));
         gap: .8rem; margin-bottom: 1rem;
     }
+    .layout-file-wrap { position: relative; min-width: 0; }
+    .layout-file-wrap .layout-file-card { height: 100%; }
     .layout-file-card {
         display: flex; flex-direction: column; min-width: 0; padding: .5rem;
         border: 1px solid #dce4f0; border-radius: 12px; background: #fff;
         text-align: center; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
     .layout-file-card:hover { transform: translateY(-2px); border-color: #b9cae8; box-shadow: 0 10px 22px rgba(31, 54, 91, .1); }
+    .layout-file-remove { position: absolute; z-index: 2; top: -.42rem; right: -.42rem; margin: 0; }
+    .layout-file-remove button {
+        display: grid; place-items: center; width: 25px; height: 25px; padding: 0;
+        border: 2px solid #fff; border-radius: 999px; background: #ef4444; color: #fff;
+        box-shadow: 0 3px 9px rgba(127, 29, 29, .28); cursor: pointer;
+        font-size: 1rem; font-weight: 800; line-height: 1;
+    }
+    .layout-file-remove button:hover { background: #c81e1e; transform: scale(1.06); }
+    .layout-file-remove button:focus-visible { outline: 3px solid rgba(239, 68, 68, .28); outline-offset: 2px; }
     .layout-file-preview {
         display: grid; place-items: center; min-height: 150px; overflow: hidden;
         border-radius: 8px; background: #f4f7fb;
@@ -164,16 +175,26 @@
     @if (count($files))
         <div class="layout-file-grid">
             @foreach ($files as $index => $file)
-                <a href="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" target="_blank" class="layout-file-card">
-                    <span class="layout-file-preview">
-                        @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                            <img src="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" alt="{{ $file['original_name'] }}">
-                        @else
-                            <span style="font-size:2rem;">📄</span>
-                        @endif
-                    </span>
-                    <span class="layout-file-name">{{ $file['original_name'] }}</span>
-                </a>
+                <div class="layout-file-wrap">
+                    <a href="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" target="_blank" class="layout-file-card">
+                        <span class="layout-file-preview">
+                            @if (str_starts_with($file['mime'] ?? '', 'image/'))
+                                <img src="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" alt="{{ $file['original_name'] }}">
+                            @else
+                                <span style="font-size:2rem;">📄</span>
+                            @endif
+                        </span>
+                        <span class="layout-file-name">{{ $file['original_name'] }}</span>
+                    </a>
+
+                    @if (! $inquiry->layout_sent_at)
+                        <form method="POST" action="{{ route('inquiries.layout.file.delete', [$inquiry, 'index' => $index]) }}"
+                              class="layout-file-remove" onsubmit="return confirm('Remove this design file?');">
+                            @csrf
+                            <button type="submit" aria-label="Remove {{ $file['original_name'] }}" title="Remove wrong file">×</button>
+                        </form>
+                    @endif
+                </div>
             @endforeach
         </div>
     @else

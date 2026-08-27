@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
+use App\Models\Inquiry;
 use App\Models\ProductionOrder;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -115,5 +118,94 @@ class PublicClientBriefTest extends TestCase
         $this->get('/orders')->assertRedirect('/login');
         $this->get('/dashboard')->assertRedirect('/login');
         $this->get("/orders/{$order->id}")->assertRedirect('/login');
+    }
+
+    public function test_a_client_can_remove_their_received_order_attachment_before_submitting(): void
+    {
+        Storage::fake('local');
+        $order = $this->orderWithLink();
+        $path = 'job-order-refs/wrong-logo.png';
+        Storage::disk('local')->put($path, 'wrong');
+        $file = $order->jobOrder->referenceFiles()->create([
+            'path' => $path,
+            'original_name' => 'wrong-logo.png',
+            'kind' => 'logo',
+            'mime' => 'image/png',
+            'size' => 5,
+            'uploaded_by' => null,
+        ]);
+
+        $this->get($this->url($order))
+            ->assertOk()
+            ->assertSee('Already received', false)
+            ->assertSee('Remove wrong-logo.png', false);
+
+        $this->post(route('client.design-brief.attachment.delete', [
+            'order' => $order,
+            'file' => $file,
+        ]))->assertRedirect($this->url($order));
+
+        $this->assertDatabaseMissing('job_order_files', ['id' => $file->id]);
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_a_client_can_remove_their_received_inquiry_attachment_before_submitting(): void
+    {
+        Storage::fake('local');
+        $officer = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
+        $inquiry = Inquiry::create([
+            'client_id' => Client::create(['name' => 'Public', 'last_name' => 'Client'])->id,
+            'created_by' => $officer->id,
+            'status' => Inquiry::STATUS_OPEN,
+        ]);
+        $path = 'inquiry-layouts/wrong-peg.png';
+        Storage::disk('local')->put($path, 'wrong');
+        $inquiry->update(['layout_files' => [[
+            'path' => $path,
+            'original_name' => 'wrong-peg.png',
+            'kind' => 'peg',
+            'mime' => 'image/png',
+            'size' => 5,
+            'uploaded_by' => null,
+        ]]]);
+        $this->post('/logout');
+
+        $url = route('client.inquiry-design-brief', $inquiry);
+        $this->get($url)
+            ->assertOk()
+            ->assertSee('Remove wrong-peg.png', false);
+
+        $this->post(route('client.inquiry-design-brief.attachment.delete', [
+            'inquiry' => $inquiry,
+            'index' => 0,
+        ]))->assertRedirect($url);
+
+        $this->assertNull($inquiry->fresh()->layout_files);
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_a_received_attachment_cannot_be_removed_after_the_form_is_submitted(): void
+    {
+        Storage::fake('local');
+        $order = $this->orderWithLink();
+        $path = 'job-order-refs/received-logo.png';
+        Storage::disk('local')->put($path, 'received');
+        $file = $order->jobOrder->referenceFiles()->create([
+            'path' => $path,
+            'original_name' => 'received-logo.png',
+            'kind' => 'logo',
+            'mime' => 'image/png',
+            'size' => 8,
+            'uploaded_by' => null,
+        ]);
+        $order->jobOrder->update(['client_brief_submitted_at' => now()]);
+
+        $this->post(route('client.design-brief.attachment.delete', [
+            'order' => $order,
+            'file' => $file,
+        ]))->assertStatus(410);
+
+        $this->assertDatabaseHas('job_order_files', ['id' => $file->id]);
+        Storage::disk('local')->assertExists($path);
     }
 }

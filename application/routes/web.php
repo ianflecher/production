@@ -44,10 +44,16 @@ Route::get('/imprint-customs/design-questionnaire/{order:brief_token}', [\App\Ht
 Route::post('/imprint-customs/design-questionnaire/{order:brief_token}', [\App\Http\Controllers\ClientDesignBriefController::class, 'submit'])
     ->middleware('throttle:10,1')
     ->name('client.design-brief.submit');
+Route::post('/imprint-customs/design-questionnaire/{order:brief_token}/attachment/{file}/delete', [\App\Http\Controllers\ClientDesignBriefController::class, 'deleteOrderAttachment'])
+    ->whereNumber('file')->middleware('throttle:20,1')
+    ->name('client.design-brief.attachment.delete');
 Route::get('/imprint-customs/inquiry-questionnaire/{inquiry:brief_token}', [\App\Http\Controllers\ClientDesignBriefController::class, 'showInquiry'])
     ->middleware('throttle:30,1')->name('client.inquiry-design-brief');
 Route::post('/imprint-customs/inquiry-questionnaire/{inquiry:brief_token}', [\App\Http\Controllers\ClientDesignBriefController::class, 'submitInquiry'])
     ->middleware('throttle:10,1')->name('client.inquiry-design-brief.submit');
+Route::post('/imprint-customs/inquiry-questionnaire/{inquiry:brief_token}/attachment/{index}/delete', [\App\Http\Controllers\ClientDesignBriefController::class, 'deleteInquiryAttachment'])
+    ->whereNumber('index')->middleware('throttle:20,1')
+    ->name('client.inquiry-design-brief.attachment.delete');
 
 // ============ Authenticated routes (active accounts only) ============
 Route::middleware(['auth', 'active'])->group(function () {
@@ -224,6 +230,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/inquiries/{inquiry}/design-brief', [\App\Http\Controllers\InquiryController::class, 'saveDesignBrief'])->name('inquiries.design-brief.save');
         Route::post('/inquiries/{inquiry}/design-brief/reopen', [\App\Http\Controllers\InquiryController::class, 'reopenDesignBrief'])->name('inquiries.design-brief.reopen');
         Route::post('/inquiries/{inquiry}/layout/upload', [\App\Http\Controllers\InquiryController::class, 'uploadLayout'])->name('inquiries.layout.upload');
+        Route::post('/inquiries/{inquiry}/layout/file/{index}/delete', [\App\Http\Controllers\InquiryController::class, 'deleteLayoutFile'])
+            ->whereNumber('index')->name('inquiries.layout.file.delete');
         Route::post('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'completeLayout'])->name('inquiries.layout.complete');
         Route::post('/inquiries/{inquiry}/layout/approve', [\App\Http\Controllers\InquiryController::class, 'approveLayout'])->name('inquiries.layout.approve');
         Route::post('/inquiries/{inquiry}/layout/revise', [\App\Http\Controllers\InquiryController::class, 'reviseLayout'])->name('inquiries.layout.revise');

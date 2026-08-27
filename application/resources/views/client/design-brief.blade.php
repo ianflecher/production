@@ -76,6 +76,21 @@
         .picked figure { width: 76px; margin: 0; text-align: center; }
         .picked figure img { width: 76px; height: 76px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
         .picked figure figcaption { font-size: 0.64rem; color: var(--ink-3); margin-top: 0.2rem; word-break: break-all; line-height: 1.2; max-height: 2.4em; overflow: hidden; }
+        .picked-item { position: relative; display: inline-flex; align-items: flex-start; }
+        .picked-remove, .received-remove {
+            width: 24px; height: 24px; padding: 0; border: 0; border-radius: 999px;
+            background: var(--brand); color: #fff; font-size: 17px; font-weight: 800;
+            line-height: 24px; text-align: center; cursor: pointer;
+        }
+        .picked-remove { position: absolute; top: -7px; right: -7px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+        .received-list { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.55rem; }
+        .received-file {
+            display: inline-flex; align-items: center; gap: 0.4rem; max-width: 100%;
+            padding: 0.35rem 0.4rem 0.35rem 0.6rem; border: 1px solid #bbf7d0;
+            border-radius: 8px; background: var(--success-soft); color: var(--success);
+            font-size: 0.78rem; font-weight: 600;
+        }
+        .received-file span { min-width: 0; overflow-wrap: anywhere; }
         .hint-sm { font-size: 0.76rem; color: var(--ink-3); margin-top: 0.35rem; }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
     </style>
@@ -124,7 +139,17 @@
                 @if ($clientName)<strong>For {{ $clientName }}</strong> · @endif{{ $briefMeta }}
             </div>
 
+            @if (session('client_attachment_removed'))
+                <div class="saved" style="margin-bottom:1rem;">✓ {{ session('client_attachment_removed') }}</div>
+            @endif
+
             @php $refFiles = $refFiles ?? ($order->jobOrder->referenceFiles ?? collect()); @endphp
+            {{-- Kept outside the questionnaire form so removing one attachment
+                 never submits the client's unfinished answers. Each X points
+                 this small form at its own token-protected delete route. --}}
+            <form id="clientAttachmentDeleteForm" method="POST" style="display:none;">
+                @csrf
+            </form>
             <form method="POST" action="{{ $submitUrl }}" enctype="multipart/form-data">
                 @csrf
                 @php $n = 0; @endphp
@@ -160,7 +185,30 @@
                                 <div class="picked" id="picked_{{ $q['files'] }}"></div>
                                 <div class="hint-sm">You can attach more than one. JPG, PNG, PDF, AI, PSD, EPS, CDR or ZIP.</div>
                                 @if ($already->isNotEmpty())
-                                    <div class="hint-sm" style="margin-top:.3rem; color: var(--success);">✓ Already received: {{ $already->pluck('original_name')->implode(', ') }}</div>
+                                    <div class="hint-sm" style="margin-top:.45rem; color: var(--success);">Already received</div>
+                                    <div class="received-list">
+                                        @foreach ($already as $refIndex => $ref)
+                                            @php
+                                                $isInquiryAttachment = isset($inquiry);
+                                                $refName = $isInquiryAttachment ? ($ref['original_name'] ?? 'Attachment') : $ref->original_name;
+                                                $clientUploaded = $isInquiryAttachment
+                                                    ? (($ref['uploaded_by'] ?? null) === null)
+                                                    : ($ref->uploaded_by === null);
+                                                $deleteUrl = $isInquiryAttachment
+                                                    ? route('client.inquiry-design-brief.attachment.delete', ['inquiry' => $inquiry, 'index' => $refIndex])
+                                                    : route('client.design-brief.attachment.delete', ['order' => $order, 'file' => $ref]);
+                                            @endphp
+                                            <div class="received-file">
+                                                <span>✓ {{ $refName }}</span>
+                                                @if ($clientUploaded)
+                                                    <button type="submit" form="clientAttachmentDeleteForm" formaction="{{ $deleteUrl }}"
+                                                            class="received-remove" title="Remove {{ $refName }}"
+                                                            aria-label="Remove {{ $refName }}"
+                                                            onclick="return confirm('Remove this attachment?');">×</button>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
                                 @endif
                             </div>
                         @endif
@@ -193,6 +241,8 @@
             box.innerHTML = '';
             for (var i = 0; i < input.files.length; i++) {
                 var file = input.files[i];
+                var item = document.createElement('div');
+                item.className = 'picked-item';
                 if (file.type && file.type.indexOf('image/') === 0) {
                     var fig = document.createElement('figure');
                     var img = document.createElement('img');
@@ -203,14 +253,34 @@
                     cap.textContent = file.name;
                     fig.appendChild(img);
                     fig.appendChild(cap);
-                    box.appendChild(fig);
+                    item.appendChild(fig);
                 } else {
                     var chip = document.createElement('span');
                     chip.className = 'chip';
                     chip.textContent = '📄 ' + file.name;
-                    box.appendChild(chip);
+                    item.appendChild(chip);
                 }
+
+                var remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'picked-remove';
+                remove.textContent = '×';
+                remove.title = 'Remove ' + file.name;
+                remove.setAttribute('aria-label', 'Remove ' + file.name);
+                remove.setAttribute('data-index', i);
+                remove.onclick = function () { removePickedFile(input, Number(this.getAttribute('data-index'))); };
+                item.appendChild(remove);
+                box.appendChild(item);
             }
+        }
+
+        function removePickedFile(input, removeIndex) {
+            var remaining = new DataTransfer();
+            Array.prototype.forEach.call(input.files, function (file, index) {
+                if (index !== removeIndex) remaining.items.add(file);
+            });
+            input.files = remaining.files;
+            showPicked(input);
         }
     </script>
 </body>

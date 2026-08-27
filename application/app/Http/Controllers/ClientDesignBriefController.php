@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
 use App\Models\Inquiry;
+use App\Models\JobOrderFile;
 use App\Services\DesignBrief;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
@@ -88,6 +90,29 @@ class ClientDesignBriefController extends Controller
         return redirect()->route('client.inquiry-design-brief', $inquiry)->with('client_brief_saved', true);
     }
 
+    /** Remove one client-uploaded inquiry attachment while a reopened form is editable. */
+    public function deleteInquiryAttachment(Inquiry $inquiry, int $index): RedirectResponse
+    {
+        abort_if($inquiry->client_brief_submitted_at !== null || $inquiry->briefExpired(), 410);
+
+        $files = array_values($inquiry->layout_files ?? []);
+        $file = $files[$index] ?? null;
+
+        abort_unless(is_array($file), 404);
+        abort_unless(in_array($file['kind'] ?? null, ['peg', 'logo'], true), 404);
+        abort_unless(($file['uploaded_by'] ?? null) === null, 403);
+
+        if (filled($file['path'] ?? null)) {
+            Storage::disk('local')->delete($file['path']);
+        }
+
+        array_splice($files, $index, 1);
+        $inquiry->update(['layout_files' => $files ?: null]);
+
+        return redirect()->route('client.inquiry-design-brief', $inquiry)
+            ->with('client_attachment_removed', 'Attachment removed.');
+    }
+
     public function submit(Request $request, ProductionOrder $order): RedirectResponse
     {
         $order->load('jobOrder');
@@ -147,5 +172,22 @@ class ClientDesignBriefController extends Controller
         return redirect()
             ->route('client.design-brief', ['order' => $order])
             ->with('client_brief_saved', true);
+    }
+
+    /** Remove one client-uploaded order attachment while a reopened form is editable. */
+    public function deleteOrderAttachment(ProductionOrder $order, JobOrderFile $file): RedirectResponse
+    {
+        $order->load('jobOrder');
+        abort_unless($order->jobOrder, 404);
+        abort_if($order->jobOrder->client_brief_submitted_at !== null || $order->briefExpired(), 410);
+        abort_unless($file->job_order_id === $order->jobOrder->id, 404);
+        abort_unless(in_array($file->kind, ['peg', 'logo'], true), 404);
+        abort_unless($file->uploaded_by === null, 403);
+
+        Storage::disk('local')->delete($file->path);
+        $file->delete();
+
+        return redirect()->route('client.design-brief', ['order' => $order])
+            ->with('client_attachment_removed', 'Attachment removed.');
     }
 }

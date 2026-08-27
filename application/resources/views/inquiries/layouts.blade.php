@@ -64,10 +64,13 @@
 
             @if ($inq->layoutWithArtist())
                 <form method="POST" action="{{ route('inquiries.layout.submit', $inq) }}" enctype="multipart/form-data"
-                      style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                      class="artist-layout-upload" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
                     @csrf
-                    <input type="file" name="layout_files[]" multiple required
+                    <input id="artistLayoutFiles_{{ $inq->id }}" type="file" name="layout_files[]" multiple required
+                           class="artist-layout-files"
                            accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+                    <div class="artist-layout-picked" aria-live="polite"
+                         style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
                     <button type="submit" class="btn btn-primary btn-sm">Hand back the layout</button>
                     @error('layout_files')<span class="error">{{ $message }}</span>@enderror
                 </form>
@@ -75,5 +78,46 @@
         </div>
     @endforeach
 @endif
+
+<script>
+    document.querySelectorAll('.artist-layout-files').forEach(function (input) {
+        var picked = input.closest('.artist-layout-upload').querySelector('.artist-layout-picked');
+
+        function renderPicked() {
+            picked.innerHTML = '';
+
+            Array.prototype.forEach.call(input.files, function (file, index) {
+                var item = document.createElement('div');
+                item.style.cssText = 'display:flex;align-items:center;gap:.35rem;max-width:240px;padding:.35rem .45rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);';
+
+                var name = document.createElement('span');
+                name.textContent = file.name;
+                name.title = file.name;
+                name.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:var(--ink-2);';
+
+                var remove = document.createElement('button');
+                remove.type = 'button';
+                remove.textContent = '×';
+                remove.title = 'Remove ' + file.name;
+                remove.setAttribute('aria-label', 'Remove ' + file.name);
+                remove.style.cssText = 'flex:0 0 22px;width:22px;height:22px;padding:0;border:0;border-radius:50%;background:var(--danger,#dc2626);color:#fff;font-size:16px;font-weight:800;line-height:22px;cursor:pointer;';
+                remove.addEventListener('click', function () {
+                    var remaining = new DataTransfer();
+                    Array.prototype.forEach.call(input.files, function (candidate, candidateIndex) {
+                        if (candidateIndex !== index) remaining.items.add(candidate);
+                    });
+                    input.files = remaining.files;
+                    renderPicked();
+                });
+
+                item.appendChild(name);
+                item.appendChild(remove);
+                picked.appendChild(item);
+            });
+        }
+
+        input.addEventListener('change', renderPicked);
+    });
+</script>
 
 @endsection
