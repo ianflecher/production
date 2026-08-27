@@ -49,7 +49,7 @@
                             </td>
                             <td>
                                 <strong>Job package</strong>
-                                <div style="font-size: 0.74rem; color: var(--ink-3);">tech pack + mockup</div>
+                                <div style="font-size: 0.74rem; color: var(--ink-3);">tech pack + production details</div>
                             </td>
                             <td>{{ $group->first()->assignee?->name ?? '—' }}</td>
                             <td style="font-size: 0.84rem;">{{ $group->min('submitted_at')?->diffForHumans() ?? '—' }}</td>
@@ -224,7 +224,7 @@
                             </td>
                             <td>
                                 <strong>Job package</strong>
-                                <div style="font-size: 0.74rem; color: var(--ink-3);">job order + mockup + template</div>
+                                <div style="font-size: 0.74rem; color: var(--ink-3);">tech pack + production details</div>
                             </td>
                             <td>{{ $group->first(fn ($t) => $t->assignee)?->assignee?->name ?? '—' }}</td>
                             <td style="font-size: 0.84rem;">
