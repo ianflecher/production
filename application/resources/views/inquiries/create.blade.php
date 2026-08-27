@@ -5,8 +5,10 @@
 
 @section('content')
 
+@include('partials.intake-steps', ['on' => 1])
+
 <p class="sub" style="margin-bottom: 1.2rem;">
-    Step 1 of 3 — who is asking. This is saved on its own, so if they do not order
+    Who is asking. This is saved on its own, so if they do not order
     today they stay on your follow-up list instead of being forgotten.
 </p>
 

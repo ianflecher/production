@@ -58,6 +58,11 @@ class AppServiceProvider extends ServiceProvider
                     ->groupBy('production_order_id')
                     ->filter(fn ($group) => $group->every(fn ($t) => $t->status === 'for_checking')
                         && blank($group->first()->order->jobOrder?->leader_note))
+                    // A pack he drew himself is not his to check, and the queue
+                    // already drops it — counting it here put a 1 on a nav item
+                    // that opens an empty page. See TaskController::approvals.
+                    ->reject(fn ($group) => $user->isArtistLead() && ! $user->isLeader()
+                        && $group->contains('assigned_to', $user->id))
                     ->count();
 
                 $singles = Task::where('status', 'for_checking')
@@ -71,7 +76,32 @@ class AppServiceProvider extends ServiceProvider
                 $view->with('pendingApprovals', $user->isArtistLead() ? $packages : $packages + $singles);
             }
 
+            if ($user && $user->isArtist()) {
+                // What is waiting to be drawn — the layouts sit before any job
+                // order exists, so nothing else in the nav counts them.
+                $view->with('layoutsToDraw', \App\Models\Inquiry::drawnBy($user)
+                    ->where('layout_status', \App\Models\Inquiry::LAYOUT_WITH_ARTIST)
+                    ->count());
+
+                // Orders on the bench, counted the same way My Tasks groups
+                // them: a step that is theirs and open, on an order that is
+                // still alive. A badge that disagrees with the page it points
+                // at is worse than no badge.
+                $view->with('myActiveOrders', Task::where('assigned_to', $user->id)
+                    ->whereNotIn('status', ['todo', 'complete', 'cancelled'])
+                    ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                    ->distinct()
+                    ->count('production_order_id'));
+            }
+
             if ($user && $user->isSales()) {
+                // Work still on the books. Counted the way the Orders page
+                // opens — everything that is not finished — so the number and
+                // the list agree. Cancelled jobs are not waiting on anybody.
+                $view->with('openOrders', \App\Models\ProductionOrder::where('created_by', $user->id)
+                    ->whereNotIn('status', ['complete', 'cancelled'])
+                    ->count());
+
                 // Account officers only review samples for their own orders, so the
                 // badge must be scoped the same way as the Sample Review page.
                 $view->with('pendingSamples', Task::where('status', 'for_checking')

@@ -325,7 +325,10 @@
                 $pathHost = ($savedHost && ! $savedHostIsIp) ? $savedHost : ($deviceName ?: '');
                 $altIp = $savedHostIsIp ? $savedHost : $ip;
             @endphp
-            @if($textEditable)
+             {{-- The artist's path, so only the artist types it. An officer
+                  editing the sheet was able to overwrite where the files
+                  actually are, from a desk that cannot see that machine. --}}
+            @if($imageEditable)
                 @php
                     // The machines this path could point at: this PC by name,
                     // by address, and whatever was already saved if it was

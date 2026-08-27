@@ -22,10 +22,20 @@ class Inquiry extends Model
     public const STATUS_OPEN = 'open';
     public const STATUS_ORDERED = 'ordered';
 
+    /* Where the layout has got to. The job order does not open until the last
+       of these, because an order written before the client likes the design is
+       a number on the books for something nobody has agreed to yet. */
+    public const LAYOUT_BRIEF = 'brief';         // still being written up
+    public const LAYOUT_WITH_ARTIST = 'with_artist'; // an artist is drawing it
+    public const LAYOUT_SUBMITTED = 'submitted';     // drawn, waiting on the client
+    public const LAYOUT_APPROVED = 'approved';       // client said yes
+
     protected $fillable = [
         'client_id', 'created_by', 'team', 'status', 'production_order_id',
         'what_they_want', 'next_follow_up_on', 'closed_at', 'closed_reason',
         'layout_reference_note', 'layout_files', 'layout_brief_completed_at', 'design_brief',
+        'layout_status', 'layout_artist_id', 'layout_sent_at', 'layout_submitted_at',
+        'layout_approved_at', 'layout_revision_note',
         'brief_token', 'brief_expires_at', 'client_brief_submitted_at',
     ];
 
@@ -37,6 +47,9 @@ class Inquiry extends Model
             'layout_files' => 'array',
             'design_brief' => 'array',
             'layout_brief_completed_at' => 'datetime',
+            'layout_sent_at' => 'datetime',
+            'layout_submitted_at' => 'datetime',
+            'layout_approved_at' => 'datetime',
             'brief_expires_at' => 'datetime',
             'client_brief_submitted_at' => 'datetime',
         ];
@@ -63,6 +76,46 @@ class Inquiry extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function layoutArtist(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'layout_artist_id');
+    }
+
+    public function layoutStatus(): string
+    {
+        return $this->layout_status ?: self::LAYOUT_BRIEF;
+    }
+
+    public function layoutWithArtist(): bool
+    {
+        return $this->layoutStatus() === self::LAYOUT_WITH_ARTIST;
+    }
+
+    public function layoutSubmitted(): bool
+    {
+        return $this->layoutStatus() === self::LAYOUT_SUBMITTED;
+    }
+
+    /** The one thing that opens the job order. */
+    public function layoutApproved(): bool
+    {
+        return $this->layoutStatus() === self::LAYOUT_APPROVED;
+    }
+
+    /** The finished drawing, as opposed to the officer's brief material. */
+    public function layoutDrawings()
+    {
+        return collect($this->layout_files ?? [])->where('kind', 'layout');
+    }
+
+    /** An artist's queue: what they have been given and not yet drawn. */
+    public function scopeDrawnBy($query, User $artist)
+    {
+        return $query->where('layout_artist_id', $artist->id)
+            ->whereIn('layout_status', [self::LAYOUT_WITH_ARTIST, self::LAYOUT_SUBMITTED])
+            ->where('status', self::STATUS_OPEN);
     }
 
     public function officer(): BelongsTo

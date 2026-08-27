@@ -63,6 +63,9 @@
                     <a href="{{ route('orders.index') }}" class="nav-item {{ request()->routeIs('orders.index') || request()->routeIs('orders.show') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
                         Orders
+                        @if (($openOrders ?? 0) > 0)
+                            <span class="count-pill">{{ $openOrders }}</span>
+                        @endif
                     </a>
                     {{-- Taking an order starts by writing down who is asking,
                          so the way in is the inquiry, not the order form. --}}
@@ -100,9 +103,19 @@
                 @elseif (auth()->user()->isArtist())
                     {{-- Only artists work from a task list; everyone else on the
                          floor works from the Station board. --}}
+                    <a href="{{ route('inquiries.layouts') }}" class="nav-item {{ request()->routeIs('inquiries.layouts') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                        Layouts
+                        @if (($layoutsToDraw ?? 0) > 0)
+                            <span class="count-pill">{{ $layoutsToDraw }}</span>
+                        @endif
+                    </a>
                     <a href="{{ route('tasks.mine') }}" class="nav-item {{ request()->routeIs('tasks.*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/></svg>
                         My Tasks
+                        @if (($myActiveOrders ?? 0) > 0)
+                            <span class="count-pill">{{ $myActiveOrders }}</span>
+                        @endif
                     </a>
                     {{-- The artist leader works the bench like the rest of them,
                          and on top of that checks what they hand in. --}}

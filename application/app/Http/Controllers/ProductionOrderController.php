@@ -116,6 +116,16 @@ class ProductionOrderController extends Controller
             403
         );
 
+        // A layout that went to an artist has to come back approved before the
+        // job order opens. Nothing was sent — a walk-in with their own artwork,
+        // say — and there is nothing to wait for.
+        if ($inquiry->layout_sent_at && ! $inquiry->layoutApproved()) {
+            return redirect()->route('inquiries.layout', $inquiry)
+                ->with('success', $inquiry->layoutSubmitted()
+                    ? 'The layout is back — approve it with the client before writing the job order.'
+                    : 'The layout is still with the artist. The job order opens once the client approves it.');
+        }
+
         // The officer sells from their own price list — the merch line is a
         // different list of products at different prices, not a discount on
         // the standard one.
@@ -394,7 +404,36 @@ class ProductionOrderController extends Controller
             ]);
         }
         if (! empty($inquiry->layout_files) || filled($inquiry->layout_reference_note)) {
+            // The artist was named back on step 2, and the officer has already
+            // been told who it is. Set it before releasing the stage: unlockStage
+            // only picks somebody when the task has nobody, so this keeps the
+            // promise rather than rolling the rotation a second time.
+            if ($inquiry->layout_artist_id) {
+                $order->tasks()
+                    ->where('stage', ProductionOrder::STAGE_LAYOUT)
+                    ->whereNull('assigned_to')
+                    ->update(['assigned_to' => $inquiry->layout_artist_id]);
+            }
+
             $order->unlockStage(ProductionOrder::STAGE_LAYOUT);
+
+            // The layout was drawn and the client approved it before this order
+            // was written — that is what opened the job order at all. Leaving
+            // the step READY would put finished work back on the artist's board
+            // and stall the pipeline at its first line.
+            if ($inquiry->layoutApproved()) {
+                $order->refresh()->tasks()
+                    ->where('stage', ProductionOrder::STAGE_LAYOUT)
+                    ->where('status', '!=', 'complete')
+                    ->get()
+                    ->each(fn ($task) => $task->forceFill([
+                        'status' => 'complete',
+                        'submitted_at' => $inquiry->layout_submitted_at ?? $inquiry->layout_approved_at,
+                        'approved_at' => $inquiry->layout_approved_at,
+                    ])->save());
+
+                $order->forceFill(['layout_approved_at' => $inquiry->layout_approved_at])->save();
+            }
         }
 
         // They asked, and now they have ordered. This is the only way a name

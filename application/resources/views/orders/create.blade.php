@@ -64,9 +64,11 @@
 <div class="page-head">
     <div class="grow">
         <h1>New job order</h1>
-        <p class="muted">Step 3 of 3 — enter the job details. The design and artist instructions from the previous step will be attached automatically and the layout will be released when this order is saved.</p>
+        <p class="muted">Enter the job details. The design and artist instructions from the previous step will be attached automatically and the layout will be released when this order is saved.</p>
     </div>
 </div>
+
+@include('partials.intake-steps', ['on' => 3])
 
 <form method="POST" action="{{ route('orders.store') }}" class="form-steps" onsubmit="return confirmRush(this);">
     @csrf

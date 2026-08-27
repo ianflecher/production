@@ -234,8 +234,15 @@ class InquiryController extends Controller
 
     public function layoutFile(Request $request, Inquiry $inquiry, int $index)
     {
-        $this->assertAccess($request);
-        $this->assertMine($request, $inquiry);
+        // The artist drawing it has to be able to open the reference — it is
+        // the thing they are working from. assertAccess alone let only sales
+        // and leaders through, so every thumbnail on the layout queue came
+        // back 403 and rendered as a broken image.
+        if ($inquiry->layout_artist_id !== $request->user()->id) {
+            $this->assertAccess($request);
+            $this->assertMine($request, $inquiry);
+        }
+
         $file = ($inquiry->layout_files ?? [])[$index] ?? null;
         abort_unless($file && Storage::disk('local')->exists($file['path']), 404);
 
@@ -246,6 +253,13 @@ class InquiryController extends Controller
     {
         $this->assertAccess($request);
         $this->assertMine($request, $inquiry);
+        // Sent once. Posting again — a stale tab, a double click, the back
+        // button — would hand the same brief out a second time and re-roll the
+        // artist somebody has already been told about.
+        if ($inquiry->layout_sent_at) {
+            return redirect()->route('orders.create', ['inquiry' => $inquiry->id]);
+        }
+
         $data = $request->validate(['reference_note' => ['nullable', 'string', 'max:2000']]);
 
         $hasOutput = collect($inquiry->layout_files ?? [])->contains(fn ($file) => ($file['kind'] ?? 'output') === 'output');
@@ -253,13 +267,24 @@ class InquiryController extends Controller
             return back()->withInput()->withErrors(['layout' => 'Upload the ChatGPT design output or add notes for the artist before continuing.']);
         }
 
+        // Pick the artist now, not when the order is written, so the officer
+        // leaves this page knowing whose desk it landed on. The same person is
+        // then handed the layout task itself — a name shown here and a
+        // different artist actually doing it would be worse than showing none.
+        $artist = $inquiry->layoutArtist ?: \App\Services\StaffAssigner::next(User::JOB_ARTIST);
+
         $inquiry->update([
             'layout_reference_note' => $data['reference_note'] ?? null,
             'layout_brief_completed_at' => now(),
+            'layout_artist_id' => $artist?->id,
+            'layout_sent_at' => now(),
+            'layout_status' => Inquiry::LAYOUT_WITH_ARTIST,
         ]);
 
         return redirect()->route('orders.create', ['inquiry' => $inquiry->id])
-            ->with('success', 'Artist layout brief saved. Complete the new job order to send it to the artist.');
+            ->with('success', $artist
+                ? 'Artist layout brief saved — '.$artist->name.' has the layout. Complete the new job order.'
+                : 'Artist layout brief saved. No artist is in today, so the layout will be handed out when the job order is written.');
     }
 
     /** Log a chase, and say when to chase again. */
@@ -279,13 +304,128 @@ class InquiryController extends Controller
             'note' => $data['note'],
         ]);
 
-        return redirect()->route('dashboard')->with('success', 'Follow-up logged for '.$inquiry->client->fullName().'.');
+        // Back to whichever list the call was logged from — the Follow-ups
+        // tab, usually. Sending them to the dashboard threw away their place.
+        return back()->with('success', 'Follow-up logged for '.$inquiry->client->fullName().'.');
     }
 
     /**
      * An officer touches their own inquiries; a team leader touches their
      * team's. This is the whole of what leading a team allows.
      */
+    /* ==================== The artist's side ==================== */
+
+    /**
+     * The layouts waiting on this artist.
+     *
+     * Their own list, not their task list: there is no job order yet, so there
+     * is no task to put on it. That is the point of drawing the layout first —
+     * nothing is committed to the books until the client likes the design.
+     */
+    public function layoutQueue(Request $request): View
+    {
+        $user = $request->user();
+        abort_unless($user->isArtist() || $user->isLeader(), 403);
+
+        return view('inquiries.layouts', [
+            'queue' => Inquiry::with(['client', 'officer'])
+                ->when(! $user->isLeader(), fn ($q) => $q->drawnBy($user))
+                ->when($user->isLeader(), fn ($q) => $q->whereIn('layout_status',
+                    [Inquiry::LAYOUT_WITH_ARTIST, Inquiry::LAYOUT_SUBMITTED])->open())
+                ->orderBy('layout_sent_at')
+                ->get(),
+        ]);
+    }
+
+    /** The artist hands the finished layout back. */
+    public function submitLayout(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($user->isArtist() || $user->isLeader(), 403);
+        abort_unless($inquiry->layout_artist_id === $user->id || $user->isLeader(), 403);
+        abort_unless($inquiry->layoutWithArtist(), 403);
+
+        $request->validate([
+            'layout_files' => ['required', 'array'],
+            'layout_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+        ], ['layout_files.required' => 'Attach the layout before handing it back.']);
+
+        $files = $inquiry->layout_files ?? [];
+
+        foreach ($request->file('layout_files') as $file) {
+            $files[] = [
+                'path' => $file->store('inquiry-layouts', 'local'),
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $user->id,
+                // Kept apart from the officer's brief material: this is the
+                // drawing, that was the reference.
+                'kind' => 'layout',
+            ];
+        }
+
+        $inquiry->update([
+            'layout_files' => $files,
+            'layout_status' => Inquiry::LAYOUT_SUBMITTED,
+            'layout_submitted_at' => now(),
+            'layout_revision_note' => null,
+        ]);
+
+        \App\Models\AppNotification::toUser($inquiry->created_by,
+            '🎨 Layout ready for the client',
+            $inquiry->client->fullName().' — '.$user->name.' has finished the layout.',
+            route('inquiries.layout', $inquiry));
+
+        return back()->with('success', 'Layout handed back to '.($inquiry->officer?->name ?? 'the account officer').'.');
+    }
+
+    /* ==================== The officer's decision ==================== */
+
+    /** The client said yes. This is the only thing that opens the job order. */
+    public function approveLayout(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+        abort_unless($inquiry->layoutSubmitted(), 403);
+
+        $inquiry->update([
+            'layout_status' => Inquiry::LAYOUT_APPROVED,
+            'layout_approved_at' => now(),
+        ]);
+
+        return redirect()->route('orders.create', ['inquiry' => $inquiry->id])
+            ->with('success', 'Layout approved. Write the job order.');
+    }
+
+    /** The client wants changes. Back to the same artist with the reason. */
+    public function reviseLayout(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+        abort_unless($inquiry->layoutSubmitted(), 403);
+
+        $data = $request->validate(
+            ['layout_revision_note' => ['required', 'string', 'max:2000']],
+            ['layout_revision_note.required' => 'Say what the client wants changed.']
+        );
+
+        $inquiry->update([
+            'layout_status' => Inquiry::LAYOUT_WITH_ARTIST,
+            'layout_revision_note' => $data['layout_revision_note'],
+            'layout_submitted_at' => null,
+        ]);
+
+        if ($inquiry->layout_artist_id) {
+            \App\Models\AppNotification::toUser($inquiry->layout_artist_id,
+                '↩ Layout needs changing',
+                $inquiry->client->fullName().' — '.\Illuminate\Support\Str::limit($data['layout_revision_note'], 90),
+                route('inquiries.layouts'));
+        }
+
+        return back()->with('success', 'Sent back to '.($inquiry->layoutArtist?->name ?? 'the artist').'.');
+    }
+
     private function assertMine(Request $request, Inquiry $inquiry): void
     {
         $user = $request->user();

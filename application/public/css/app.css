@@ -1007,13 +1007,22 @@
 .follow-up-more { align-self: center; font-size: 0.8rem; color: var(--ink-3); }
 .follow-up-ask { font-size: 0.86rem; margin-top: 0.5rem; }
 .follow-up-log {
-    list-style: none; margin: 0.6rem 0 0; padding: 0.55rem 0 0;
-    border-top: 1px solid var(--border);
-    font-size: 0.8rem; color: var(--ink-2);
+    list-style: none; margin: 0.7rem 0 0; padding: 0;
+    font-size: 0.82rem;
 }
-.follow-up-log li { padding: 0.12rem 0; }
-.follow-up-log span { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 0.4rem; }
-.follow-up-log em { color: var(--ink-3); font-style: normal; }
+.follow-up-log li {
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.25rem;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    background: var(--accent-soft);
+    color: var(--ink);
+}
+.follow-up-log span {
+    color: var(--accent); font-weight: 700;
+    font-variant-numeric: tabular-nums; margin-right: 0.45rem;
+}
+.follow-up-log em { color: var(--ink-2); font-style: normal; }
 .follow-up-form { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
 .follow-up-form input {
     flex: 1; min-width: 0;
@@ -1023,6 +1032,80 @@
     background: var(--surface); color: var(--ink);
 }
 .follow-up-form input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* Logging a call is the thing this list exists for, and a ghost button beside
+   a solid red one reads as the disabled half of the pair. Solid, in the
+   interactive blue, so it stands out without competing with "Design brief" —
+   which is the step forward, not the everyday action. */
+.follow-up-form button {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #fff;
+    font-weight: 600;
+    padding: 0.45rem 1.1rem;
+}
+.follow-up-form button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* Who is drawing the layout, on step 2. */
+.layout-artist {
+    display: flex; align-items: center; gap: 0.6rem;
+    border: 1px solid var(--success-border);
+    background: var(--success-soft);
+    border-radius: 10px;
+    padding: 0.6rem 0.8rem;
+    margin: 0 0 1rem;
+    font-size: 0.88rem;
+}
+.layout-artist-avatar {
+    width: 30px; height: 30px; flex-shrink: 0;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    background: var(--success-ink); color: #fff;
+    font-weight: 700; font-size: 0.85rem;
+}
+.layout-artist-when { color: var(--ink-3); font-size: 0.8rem; }
+
+/* Taking a job in: client → design → job order. */
+.intake-steps {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    list-style: none; margin: 0 0 1.4rem; padding: 0;
+}
+.intake-step {
+    display: flex; align-items: center; gap: 0.6rem;
+    flex: 1 1 200px; min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.65rem 0.85rem;
+    background: var(--surface);
+}
+.intake-step-n {
+    width: 26px; height: 26px; flex-shrink: 0;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    font-size: 0.82rem; font-weight: 700;
+    background: var(--surface-2); color: var(--ink-3);
+    border: 1px solid var(--border-strong);
+}
+.intake-step-body { display: flex; flex-direction: column; min-width: 0; }
+.intake-step-label { font-weight: 600; font-size: 0.9rem; line-height: 1.2; }
+.intake-step-note { font-size: 0.74rem; color: var(--ink-3); }
+
+/* Done: settled, and out of the way. */
+.intake-step.is-done .intake-step-n {
+    background: var(--success-ink); border-color: var(--success-ink); color: #fff;
+}
+.intake-step.is-done .intake-step-label { color: var(--ink-2); }
+
+/* Now: the page you are actually on. */
+.intake-step.is-now {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    background: var(--accent-soft);
+}
+.intake-step.is-now .intake-step-n {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
+@media (max-width: 620px) { .intake-step { flex-basis: 100%; } }
 
 /* The client, on step 2 of taking an order.
 

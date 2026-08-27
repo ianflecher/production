@@ -224,8 +224,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/inquiries/{inquiry}/design-brief', [\App\Http\Controllers\InquiryController::class, 'saveDesignBrief'])->name('inquiries.design-brief.save');
         Route::post('/inquiries/{inquiry}/design-brief/reopen', [\App\Http\Controllers\InquiryController::class, 'reopenDesignBrief'])->name('inquiries.design-brief.reopen');
         Route::post('/inquiries/{inquiry}/layout/upload', [\App\Http\Controllers\InquiryController::class, 'uploadLayout'])->name('inquiries.layout.upload');
-        Route::get('/inquiries/{inquiry}/layout/file/{index}', [\App\Http\Controllers\InquiryController::class, 'layoutFile'])->whereNumber('index')->name('inquiries.layout.file');
         Route::post('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'completeLayout'])->name('inquiries.layout.complete');
+        Route::post('/inquiries/{inquiry}/layout/approve', [\App\Http\Controllers\InquiryController::class, 'approveLayout'])->name('inquiries.layout.approve');
+        Route::post('/inquiries/{inquiry}/layout/revise', [\App\Http\Controllers\InquiryController::class, 'reviseLayout'])->name('inquiries.layout.revise');
         Route::post('/inquiries/{inquiry}/follow-up', [\App\Http\Controllers\InquiryController::class, 'followUp'])->name('inquiries.follow-up');
 
         // Page two: the job itself, reached from an enquiry.
@@ -289,7 +290,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::middleware('role:sales,leader,super_admin,mover')->group(function () {
         Route::get('/orders', [ProductionOrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{order}', [ProductionOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
-        Route::get('/orders/{order}/job-order', [ProductionOrderController::class, 'jobOrder'])->whereNumber('order')->name('orders.job-order');
         // The whole package as one document (mockup, template, job order, production details).
         Route::get('/orders/{order}/mockup', [ProductionOrderController::class, 'mockup'])->whereNumber('order')->name('orders.mockup');
         Route::get('/orders/{order}/reference', [ProductionOrderController::class, 'references'])->whereNumber('order')->name('orders.references');
@@ -307,6 +307,23 @@ Route::middleware(['auth', 'active'])->group(function () {
         // Who is in today decides who the next tech pack goes to, so the artist
         // leader marks his own team's attendance (the controller keeps him to it).
         Route::post('/users/{user}/attendance', [UserController::class, 'markAttendance'])->name('users.attendance');
+    });
+
+    // The tech pack sheet. The artist leader is asked to check these, so he
+    // has to be able to open one — he is not an account officer, and the group
+    // below was the only place this route lived.
+    Route::middleware('role:sales,leader,super_admin,mover,artist_lead')->group(function () {
+        Route::get('/orders/{order}/job-order', [ProductionOrderController::class, 'jobOrder'])->whereNumber('order')->name('orders.job-order');
+    });
+
+    // -------- The artists' layout queue --------
+    // Drawn before there is a job order, so it cannot hang off a task.
+    Route::middleware('auth')->group(function () {
+        Route::get('/layouts', [\App\Http\Controllers\InquiryController::class, 'layoutQueue'])->name('inquiries.layouts');
+        // Out of the account-officer group: the artist drawing the layout has
+        // to open the reference, and the controller decides who may.
+        Route::get('/inquiries/{inquiry}/layout/file/{index}', [\App\Http\Controllers\InquiryController::class, 'layoutFile'])->whereNumber('index')->name('inquiries.layout.file');
+        Route::post('/layouts/{inquiry}/submit', [\App\Http\Controllers\InquiryController::class, 'submitLayout'])->name('inquiries.layout.submit');
     });
 
     // -------- Giving a step to somebody --------

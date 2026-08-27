@@ -67,7 +67,7 @@ class ProductionOrder extends Model
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
         'rush', 'rush_fee',
         'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
-        'quantity', 'due_date', 'status', 'completed_at', 'created_by',
+        'quantity', 'due_date', 'layout_approved_at', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
         'replaces_order_id', 'replacement_reason',
     ];
@@ -76,6 +76,7 @@ class ProductionOrder extends Model
     {
         return [
             'due_date' => 'date',
+            'layout_approved_at' => 'datetime',
             'completed_at' => 'datetime',
             'decoration_methods' => 'array',
             'back_pocket' => 'boolean',
@@ -478,9 +479,19 @@ class ProductionOrder extends Model
         return self::STATUS_LABELS[$this->status] ?? strtoupper($this->status);
     }
 
-    /** The layout stage has been released to an artist (no longer just TODO). */
+    /**
+     * The layout has been drawn.
+     *
+     * It is drawn on the inquiry now, before this order existed, so the answer
+     * is the stamp carried across at creation. Orders written before that
+     * change still have a Layout task, and are read the old way.
+     */
     public function layoutReleased(): bool
     {
+        if ($this->layout_approved_at !== null) {
+            return true;
+        }
+
         return $this->tasks()
             ->where('stage', self::STAGE_LAYOUT)
             ->where('status', '!=', 'todo')
@@ -496,6 +507,12 @@ class ProductionOrder extends Model
      */
     public function layoutApproved(): bool
     {
+        // Approved back on the inquiry, by the officer, once the client said
+        // yes — which is why there is no Layout task to look at.
+        if ($this->layout_approved_at !== null) {
+            return true;
+        }
+
         $layout = $this->relationLoaded('tasks')
             ? $this->tasks->where('stage', self::STAGE_LAYOUT)
             : $this->tasks()->where('stage', self::STAGE_LAYOUT)->get();

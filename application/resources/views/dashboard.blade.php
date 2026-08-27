@@ -640,9 +640,9 @@
         </div>
     </div>
 
-    <div class="dash-grid-main">
-        @include('partials.follow-ups-summary')
+    @include('partials.follow-ups-summary')
 
+    <div class="dash-grid-main">
         <div class="dash-card">
             <div class="dash-card-head">
                 <div>
