@@ -21,6 +21,22 @@ class CalendarAccessTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        /*
+         * The grid draws ONE month, and these orders are due five days out. Run
+         * on the 27th, five days out is next month, so the job the officer did
+         * not create — the one that only reaches the page through the grid —
+         * was not on the page to find. The test passed all month and failed in
+         * the last few days of it.
+         *
+         * Held to the 10th so "five days from now" is always the same month.
+         */
+        $this->travelTo(now()->startOfMonth()->addDays(9)->setTime(9, 0));
+    }
+
     private function officer(string $name = 'Rey'): User
     {
         return User::factory()->create(['job_role' => User::ROLE_SALES, 'name' => $name, 'is_active' => true]);

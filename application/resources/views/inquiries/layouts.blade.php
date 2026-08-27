@@ -10,9 +10,24 @@
     which is why they are here rather than on your task list.
 </p>
 
+{{-- The same box every other list uses. An artist with a queue full of layouts
+     was scrolling to find the one a client just rang about. --}}
+@include('partials.list-search', [
+    'action' => route('inquiries.layouts'),
+    'value' => $search,
+    'placeholder' => 'Client, company, or what they asked for…',
+    'label' => 'Search layouts',
+])
+
 @if ($queue->isEmpty())
     <div class="card panel">
-        <p class="sub" style="margin: 0;">Nothing to draw. Anything new will appear here.</p>
+        <p class="sub" style="margin: 0;">
+            @if (filled($search))
+                Nothing matches “{{ $search }}”.
+            @else
+                Nothing to draw. Anything new will appear here.
+            @endif
+        </p>
     </div>
 @else
     @foreach ($queue as $inq)

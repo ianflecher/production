@@ -21,13 +21,25 @@
     $isSales = $user->isSales();
     $hasDesk = isset($desk);
 
+    /*
+     * What this person is, in their own words.
+     *
+     * The fallback used to be the raw `role` column, which is the ACCESS level
+     * — artists, the supply desk and everyone on the floor are all "agent"
+     * there. So an artist's dashboard greeted them as AGENT while the header
+     * two inches away said ARTIST, off positionLabel().
+     *
+     * positionLabel() is the method for this question: it answers Artist,
+     * Artist Leader, Supply chain, Production, and falls back sensibly for the
+     * hand-typed roles. The badge uppercases in CSS, so it is not done here.
+     */
     $roleLabel = $isLeader
         ? 'Production Leader'
         : ($isSales
             ? 'Sales / Account Officer'
             : ($hasDesk
                 ? ($desk['title'] ?? 'Workspace')
-                : (strtoupper((string) ($user->role ?? 'Team Member')))));
+                : $user->positionLabel()));
 
     $dashboardRows = $dashboardOrders->map(function ($order) {
         [$done, $total] = method_exists($order, 'progress')

@@ -355,11 +355,24 @@ class InquiryController extends Controller
         $user = $request->user();
         abort_unless($user->isArtist() || $user->isLeader(), 403);
 
+        // Searched in the DATABASE, so it reaches every layout on the queue and
+        // not just the ones that happen to have been drawn on screen. The
+        // things somebody is told over the phone: the client, their company,
+        // and what they asked for.
+        $search = trim((string) $request->query('q', ''));
+
         return view('inquiries.layouts', [
+            'search' => $search,
             'queue' => Inquiry::with(['client', 'officer'])
                 ->when(! $user->isLeader(), fn ($q) => $q->drawnBy($user))
                 ->when($user->isLeader(), fn ($q) => $q->whereIn('layout_status',
                     [Inquiry::LAYOUT_WITH_ARTIST, Inquiry::LAYOUT_SUBMITTED])->open())
+                ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                    ->where('what_they_want', 'like', "%{$search}%")
+                    ->orWhereHas('client', fn ($c) => $c
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('company', 'like', "%{$search}%"))))
                 ->orderBy('layout_sent_at')
                 ->get(),
         ]);

@@ -224,7 +224,21 @@
                 <div class="page-title">@yield('page-title', 'Dashboard')</div>
                 <div class="topbar-right">
                     <div class="user-chip">
-                        <div class="avatar">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}{{ strtoupper(substr(strstr(auth()->user()->name, ' ') ?: ' ', 1, 1)) }}</div>
+                        {{-- The picture somebody uploaded, or their initials.
+
+                             My Account says the picture "can be displayed beside
+                             your name throughout the production system", and
+                             this is the one place their name is always beside
+                             them — so it showed initials to a person who had
+                             just chosen a photograph. --}}
+                        <div class="avatar">
+                            @if (auth()->user()->profile_photo_path)
+                                <img src="{{ asset('storage/'.auth()->user()->profile_photo_path) }}"
+                                     alt="{{ auth()->user()->name }}">
+                            @else
+                                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}{{ strtoupper(substr(strstr(auth()->user()->name, ' ') ?: ' ', 1, 1)) }}
+                            @endif
+                        </div>
                         <div class="user-meta">
                             <div class="name">{{ auth()->user()->name }}</div>
                             <div class="role">{{ auth()->user()->positionLabel() }}{{ auth()->user()->teamLabel() ? ' · '.auth()->user()->teamLabel() : '' }}</div>
