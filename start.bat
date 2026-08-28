@@ -1,19 +1,28 @@
 @echo off
 rem ============================================================================
-rem  IMPRINT PRODUCTION - START
+rem  IMPRINT - DEVELOPMENT COPY - START
 rem
-rem  Works on a fresh download: installs what's missing, prepares the database,
-rem  then opens the system. Safe to run again any time - each step is skipped
+rem  Works on a fresh clone: installs what's missing, prepares the dev database,
+rem  then opens the dev site. Safe to run again any time - each step is skipped
 rem  when it has already been done, and it never touches existing data.
+rem
+rem  This file used to be the live one, copied here unchanged. It took ROOT from
+rem  its own folder (this folder, correctly) but kept PORT=8000, bound to
+rem  0.0.0.0, and named imprint_production in its SQL. So it served THIS code on
+rem  the SHOP'S port, to the whole office network and through the tunnel, while
+rem  deciding whether to seed by counting the live users table.
+rem
+rem  Now: port 8001, this machine only, imprint_dev.
 rem ============================================================================
 setlocal
-title Imprint Production - Start
+title Imprint DEV - Start (port 8001)
 
 set "ROOT=%~dp0"
 set "ROOT=%ROOT:~0,-1%"
 set "APP=%ROOT%\application"
 set "LOGS=%ROOT%\logs"
-set "PORT=8000"
+set "PORT=8001"
+set "DBNAME=imprint_dev"
 
 rem ---- Find PHP and MySQL.
 rem      C:\xampp is tried first. An older C:\xampp1 can still be
@@ -37,7 +46,8 @@ if not exist "%MYSQL_INI%" set "MYSQL_INI=C:\xampp1\mysql\bin\my.ini"
 if not exist "%LOGS%" mkdir "%LOGS%"
 
 echo ==========================================================
-echo   IMPRINT PRODUCTION
+echo   IMPRINT - DEVELOPMENT COPY
+echo   The live shop is untouched on port 8000.
 echo ==========================================================
 echo.
 
@@ -94,9 +104,16 @@ if exist "%APP%\.env" (
     echo [2/6] Creating the settings file from .env.example...
     copy /Y "%APP%\.env.example" "%APP%\.env" >nul
     "%PHP%" "%APP%\artisan" key:generate --force
+    echo.
+    echo       [!] Point DB_DATABASE at %DBNAME% and APP_URL at port %PORT%
+    echo           in %APP%\.env before going further, or this copy will
+    echo           share the live database.
+    echo.
+    pause
 )
 
 rem ---------- 3. MySQL ----------
+rem Shared with the live site - the same server, a different database on it.
 tasklist /FI "IMAGENAME eq mysqld.exe" 2>nul | "%SystemRoot%\System32\find.exe" /I "mysqld.exe" >nul
 if errorlevel 1 (
     echo [3/6] Starting MySQL...
@@ -127,8 +144,8 @@ goto waitmysql
 echo       MySQL is up.
 
 rem ---------- 4. Database ----------
-echo [4/6] Preparing the database...
-"%MYSQL%" -u root -e "CREATE DATABASE IF NOT EXISTS imprint_production CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>&1
+echo [4/6] Preparing the %DBNAME% database...
+"%MYSQL%" -u root -e "CREATE DATABASE IF NOT EXISTS %DBNAME% CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>&1
 "%PHP%" "%APP%\artisan" migrate --force
 if errorlevel 1 (
     echo ERROR: The database could not be prepared. See the messages above.
@@ -138,11 +155,10 @@ if errorlevel 1 (
 
 rem ---------- 5. Staff accounts + uploads link ----------
 echo [5/6] Checking staff accounts...
-rem Only seed an EMPTY system. The seeder rewrites name/role/team for accounts
-rem it already knows, so running it on every start would undo any role change
-rem made on the Users page.
+rem Only seed an EMPTY system, and count THIS copy's users - counting the live
+rem ones decided dev's seeding by production's state.
 set "USERCOUNT=0"
-for /f %%c in ('""%MYSQL%" -u root -N -e "SELECT COUNT(*) FROM imprint_production.users;" 2^>nul"') do set "USERCOUNT=%%c"
+for /f %%c in ('""%MYSQL%" -u root -N -e "SELECT COUNT(*) FROM %DBNAME%.users;" 2^>nul"') do set "USERCOUNT=%%c"
 
 if "%USERCOUNT%"=="0" (
     echo       First run - creating the staff accounts...
@@ -155,40 +171,43 @@ if not exist "%APP%\public\storage" (
 )
 
 rem ---------- 6. Serve ----------
+rem 0.0.0.0 so the office network can reach this copy as well; the tunnel
+rem points at this machine's loopback, which 0.0.0.0 covers too. Use
+rem start-dev.bat for a this-machine-only run.
 powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"
 if errorlevel 1 (
     echo [6/6] Already running on port %PORT%.
 ) else (
-    echo [6/6] Starting the system on port %PORT%...
-    start "Imprint Production" /MIN cmd /c ""%PHP%" "%APP%\artisan" serve --host=0.0.0.0 --port=%PORT% > "%LOGS%\laravel.log" 2>&1"
+    echo [6/6] Starting the dev site on port %PORT% ^(whole network^)...
+    netsh advfirewall firewall show rule name="Imprint DEV LAN %PORT%" >nul 2>&1 || netsh advfirewall firewall add rule name="Imprint DEV LAN %PORT%" dir=in action=allow protocol=TCP localport=%PORT% >nul 2>&1
+    start "Imprint DEV Server" /MIN cmd /c ""%PHP%" "%APP%\artisan" serve --host=0.0.0.0 --port=%PORT% > "%LOGS%\laravel.log" 2>&1"
 )
 
 powershell -NoProfile -Command "foreach($i in 1..30){ try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:%PORT%/up' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } } catch {}; Start-Sleep -Seconds 1 }; exit 1"
 if errorlevel 1 (
-    echo ERROR: The system did not start. See %LOGS%\laravel.log
+    echo ERROR: The dev site did not start. See %LOGS%\laravel.log
     pause
     exit /b 1
 )
 
-set "LANIP="
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\get-lan-ip.ps1" 2^>nul`) do set "LANIP=%%i"
-if "%LANIP%"=="ERROR" set "LANIP="
-
 echo.
 echo ==========================================================
-echo   RUNNING
+echo   DEV COPY RUNNING
 echo ==========================================================
 echo.
 echo   On this computer :  http://127.0.0.1:%PORT%
-if not "%LANIP%"=="" echo   On the network   :  http://%LANIP%:%PORT%
+echo   Database         :  %DBNAME%
 echo.
-echo   Sign in with:  admin@imprintcustoms.ph
-echo   Password    :  imprint123
+set "LANIP="
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\get-lan-ip.ps1"`) do set "LANIP=%%i"
+if not "%LANIP%"=="ERROR" if not "%LANIP%"=="" echo   Office network   :  http://%LANIP%:%PORT%
 echo.
-echo   Change that password after the first sign-in.
+echo   No public address yet - run start-all.bat for the LAN
+echo   plus a Cloudflare tunnel. The live shop is separate, on
+echo   port 8000.
 echo.
-echo   Keep the minimised "Imprint MySQL" and "Imprint Production"
-echo   windows open - closing them stops the system.
+echo   Keep the minimised "Imprint MySQL" and "Imprint DEV Server"
+echo   windows open - closing them stops the dev site.
 echo ==========================================================
 echo.
 
