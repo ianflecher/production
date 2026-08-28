@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Task;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,6 +26,41 @@ class AppServiceProvider extends ServiceProvider
         // The framework's default pager is written for Tailwind, which this app
         // does not use. Ours is plain markup styled by app.css.
         Paginator::defaultView('pagination::imprint');
+
+        /*
+         * An artist's queue follows the artists.
+         *
+         * Work is handed to a named person, so a queue sitting with somebody
+         * who has gone home is a queue nobody is drawing. Signing off passes
+         * on what they had NOT started; signing back in takes it back, unless
+         * whoever received it has started or finished it.
+         *
+         * Wrapped because this must never be the reason somebody cannot sign
+         * in or out: if the shuffle fails, the door still opens.
+         */
+        Event::listen(function (\Illuminate\Auth\Events\Logout $event) {
+            $user = $event->user;
+
+            if ($user instanceof \App\Models\User && $user->isArtist()) {
+                try {
+                    \App\Services\ArtistBench::handOver($user);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+        });
+
+        Event::listen(function (\Illuminate\Auth\Events\Login $event) {
+            $user = $event->user;
+
+            if ($user instanceof \App\Models\User && $user->isArtist()) {
+                try {
+                    \App\Services\ArtistBench::welcomeBack($user);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+        });
 
         // Windows/XAMPP: PHP can't create EC keys (needed to sign Web Push
         // messages) unless it knows where openssl.cnf is.

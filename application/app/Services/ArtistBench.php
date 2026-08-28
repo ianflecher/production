@@ -44,7 +44,7 @@ class ArtistBench
      *
      * @return Collection<int, User>
      */
-    public static function onDuty(): Collection
+    public static function onDuty(?User $alsoOn = null): Collection
     {
         $stale = now()->subMinutes((int) config('session.lifetime', 60))->getTimestamp();
 
@@ -53,6 +53,13 @@ class ArtistBench
             ->where('last_activity', '>=', $stale)
             ->pluck('user_id')
             ->unique();
+
+        // Somebody signing in right now may not have a session row yet — the
+        // event fires before it is written. They are plainly at a desk, so
+        // they are counted.
+        if ($alsoOn) {
+            $signedIn = $signedIn->push($alsoOn->id)->unique();
+        }
 
         return User::where('is_active', true)
             ->whereIn('job_role', self::roles())
@@ -142,7 +149,7 @@ class ArtistBench
      */
     public static function levelUp(User $returning): int
     {
-        $bench = self::onDuty();
+        $bench = self::onDuty($returning);
 
         if ($bench->count() < 2 || ! $bench->contains(fn (User $u) => $u->id === $returning->id)) {
             return 0;

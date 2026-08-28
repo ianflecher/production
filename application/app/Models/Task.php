@@ -45,7 +45,7 @@ class Task extends Model
 
     protected $fillable = [
         'production_order_id', 'sequence', 'stage', 'department', 'team', 'instructions',
-        'assigned_to', 'operator_name', 'note', 'status', 'approver_role', 'auto_assign', 'auto_submit',
+        'assigned_to', 'passed_from', 'operator_name', 'note', 'status', 'approver_role', 'auto_assign', 'auto_submit',
         'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at', 'due_at',
     ];
 

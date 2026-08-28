@@ -131,6 +131,11 @@
         $nextStep = ['tone' => 'alert', 'label' => 'Action needed', 'title' => 'Fix the Tech Pack', 'desc' => 'The leader sent the Tech Pack back with changes. Correct it and it returns to the leader automatically.', 'cta' => ['label' => 'Fix Tech Pack', 'href' => route('job-orders.edit', $order)]];
     } elseif (! $layoutApproved && $layoutReleased) {
         $nextStep = ['tone' => 'wait', 'label' => 'In progress', 'title' => 'With the artist', 'desc' => 'Waiting on the layout and the client’s approval before the downpayment.'];
+    } elseif ($layoutApproved && ! $order->hasDownpayment() && $order->hasPaymentAwaitingFinance()) {
+        // Collected, not yet confirmed. Its own state: asking the officer to
+        // collect what they have already collected read as the page not
+        // knowing, and there is nothing for them to do but wait.
+        $nextStep = ['tone' => 'wait', 'label' => 'Step 2 — Payment', 'title' => 'Waiting for Finance to confirm the payment', 'desc' => 'The downpayment is recorded and with Finance. The artist starts the final mockup once they have confirmed the money landed.'];
     } elseif ($canRecordPayment && $layoutApproved && ! $order->hasDownpayment()) {
         $nextStep = ['tone' => 'action', 'label' => 'Step 2 — Payment', 'title' => 'Collect the downpayment', 'desc' => 'The layout is approved — record the downpayment so the artist can prepare the final mockup.', 'cta' => ['label' => 'Go to payment', 'href' => '#payment-section']];
     } elseif ($order->hasDownpayment() && ! $mockupApproved) {
@@ -339,7 +344,14 @@
                 </table>
             </div>
         @elseif ($layoutApproved)
-            <p class="muted" style="margin-bottom: 0.6rem;">Layout approved — collect the downpayment so the artist can prepare the final mockup.</p>
+            @if ($order->hasPaymentAwaitingFinance())
+                <p class="muted" style="margin-bottom: 0.6rem;">
+                    Recorded and waiting on <strong>Finance</strong> to confirm the money landed.
+                    The artist starts the final mockup once they have.
+                </p>
+            @else
+                <p class="muted" style="margin-bottom: 0.6rem;">Layout approved — collect the downpayment so the artist can prepare the final mockup.</p>
+            @endif
         @else
             <p class="muted" style="margin-bottom: 0.6rem;">The downpayment is collected after the client approves the layout.</p>
         @endif
