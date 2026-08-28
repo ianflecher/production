@@ -665,6 +665,7 @@
                     <th style="width: 30px;">#</th>
                     <th>Department</th>
                     <th>Status</th>
+                    <th>Due</th>
                     <th>Assigned to</th>
                     @if ($isLeader)<th>Actions</th>@endif
                 </tr>
@@ -723,6 +724,27 @@
                             @endif
                         </td>
                         <td>@include('partials.status', ['status' => $task->status])</td>
+                        {{-- The step's own share of the time between the
+                             confirmed downpayment and the order's due date.
+                             Late is only late while the work is unfinished —
+                             colouring a finished step red says nothing anybody
+                             can act on. --}}
+                        <td style="white-space: nowrap; font-size: 0.82rem;">
+                            @if ($task->due_at)
+                                @if ($task->isOverdue())
+                                    <span style="color: var(--danger-ink, #b91c1c); font-weight: 700;">
+                                        {{ $task->due_at->format('M j') }}
+                                    </span>
+                                    <div style="font-size: 0.72rem; color: var(--danger-ink, #b91c1c);">
+                                        {{ $task->due_at->diffForHumans() }}
+                                    </div>
+                                @else
+                                    <span style="color: var(--ink-2);">{{ $task->due_at->format('M j') }}</span>
+                                @endif
+                            @else
+                                <span style="color: var(--ink-3);">—</span>
+                            @endif
+                        </td>
                         <td>
                             @if (! $isLeader || in_array($task->status, ['complete', 'cancelled']))
                                 {{-- Floor accounts are shared, so show the name typed

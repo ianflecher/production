@@ -181,6 +181,16 @@ class FinanceController extends Controller
      * that watches the account agreeing — and it is what starts the job: the
      * mockup is released and the tech pack opens off the back of it.
      */
+    /** Names used before, so an accountant types theirs once. */
+    public static function pastConfirmers(): array
+    {
+        return Payment::whereNotNull('confirmed_name')
+            ->distinct()
+            ->orderBy('confirmed_name')
+            ->pluck('confirmed_name')
+            ->all();
+    }
+
     public function confirm(Request $request, Payment $payment): \Illuminate\Http\RedirectResponse
     {
         abort_unless($request->user()->canConfirmPayments(), 403);
@@ -189,9 +199,19 @@ class FinanceController extends Controller
             return back()->with('success', 'That payment was already confirmed.');
         }
 
+        // Two accountants share the finance login, so the account cannot say
+        // who looked. Asked for, and required: an unsigned confirmation is the
+        // thing this whole step exists to prevent.
+        $data = $request->validate([
+            'confirmed_name' => ['required', 'string', 'max:100'],
+        ], [
+            'confirmed_name.required' => 'Type your name — the finance login is shared, so the record needs to say who checked.',
+        ]);
+
         $payment->update([
             'confirmed_at' => now(),
             'confirmed_by' => $request->user()->id,
+            'confirmed_name' => trim($data['confirmed_name']),
         ]);
 
         // Confirming the FIRST payment is what opens the job. Asked again now
@@ -208,9 +228,10 @@ class FinanceController extends Controller
         }
 
         return back()->with('success', sprintf(
-            'Payment of ₱%s on %s confirmed.',
+            'Payment of ₱%s on %s confirmed by %s.',
             number_format((float) $payment->amount, 2),
-            $order?->order_number ?? 'the order'
+            $order?->order_number ?? 'the order',
+            $payment->confirmedByName()
         ));
     }
 

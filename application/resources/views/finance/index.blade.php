@@ -113,10 +113,21 @@
                             <td style="font-size:0.82rem; white-space:nowrap;">
                                 @if ($p->isConfirmed())
                                     <span style="color: var(--success-ink); font-weight:600;">✓ {{ $p->confirmed_at->format('M j') }}</span>
-                                    <div style="color: var(--ink-3);">{{ $p->confirmer?->name }}</div>
+                                    <div style="color: var(--ink-3);">{{ $p->confirmedByName() ?? '—' }}</div>
                                 @elseif (auth()->user()->canConfirmPayments())
-                                    <form method="POST" action="{{ route('finance.confirm', $p) }}">
+                                    {{-- The name, not the login: two accountants
+                                         share this account, so "confirmed by
+                                         finance@" says nothing about who
+                                         actually checked the bank. --}}
+                                    <form method="POST" action="{{ route('finance.confirm', $p) }}"
+                                          style="display:flex; gap:0.3rem; align-items:center;">
                                         @csrf
+                                        <input type="text" name="confirmed_name" required maxlength="100"
+                                               list="dl_confirmers" autocomplete="off"
+                                               value="{{ old('confirmed_name') }}"
+                                               placeholder="Your name"
+                                               aria-label="Which accountant is confirming this"
+                                               style="width:110px; padding:0.3rem 0.4rem; font-size:0.8rem;">
                                         <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
                                     </form>
                                 @else
@@ -127,6 +138,13 @@
                     @endforeach
                 </tbody>
             </table>
+
+            {{-- Typed once, picked thereafter. --}}
+            <datalist id="dl_confirmers">
+                @foreach (\App\Http\Controllers\FinanceController::pastConfirmers() as $name)
+                    <option value="{{ $name }}"></option>
+                @endforeach
+            </datalist>
         </div>
 
         <div style="margin-top: 1rem;">{{ $payments->links() }}</div>

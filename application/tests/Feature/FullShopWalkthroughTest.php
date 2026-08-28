@@ -154,11 +154,11 @@ class FullShopWalkthroughTest extends TestCase
 
         // The officer cannot wave their own payment through.
         $this->actingAs($this->staff['sales'])
-            ->post(route('finance.confirm', $payment))
+            ->post(route('finance.confirm', $payment), ['confirmed_name' => 'Rey'])
             ->assertForbidden();
 
         $this->actingAs($this->staff['finance'])
-            ->post(route('finance.confirm', $payment))
+            ->post(route('finance.confirm', $payment), ['confirmed_name' => 'Rey'])
             ->assertRedirect();
 
         $this->assertTrue($this->order->fresh()->hasDownpayment(),

@@ -256,7 +256,7 @@ class WholePipelineTest extends TestCase
             'an unconfirmed claim counted as money');
 
         $this->actingAs($this->staff['finance'])
-            ->post(route('finance.confirm', $this->order->fresh()->payments()->firstOrFail()))
+            ->post(route('finance.confirm', $this->order->fresh()->payments()->firstOrFail()), ['confirmed_name' => 'Rey'])
             ->assertRedirect();
 
         $this->assertTrue($this->order->fresh()->hasDownpayment(), 'the downpayment was not confirmed');

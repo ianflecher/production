@@ -11,7 +11,7 @@ class Payment extends Model
 
     protected $fillable = [
         'production_order_id', 'amount', 'method', 'reference',
-        'proof_path', 'proof_name', 'kind', 'note', 'paid_at', 'confirmed_at', 'confirmed_by', 'recorded_by',
+        'proof_path', 'proof_name', 'kind', 'note', 'paid_at', 'confirmed_at', 'confirmed_by', 'confirmed_name', 'recorded_by',
     ];
 
     public function hasProof(): bool
@@ -32,6 +32,18 @@ class Payment extends Model
     public function isConfirmed(): bool
     {
         return $this->confirmed_at !== null;
+    }
+
+    /**
+     * Who confirmed it, in the shop's own terms.
+     *
+     * The name they typed, because two accountants share one finance login —
+     * falling back to the account when a confirmation predates the question
+     * being asked.
+     */
+    public function confirmedByName(): ?string
+    {
+        return $this->confirmed_name ?: $this->confirmer?->name;
     }
 
     public function confirmer()

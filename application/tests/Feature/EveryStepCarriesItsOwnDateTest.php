@@ -101,6 +101,37 @@ class EveryStepCarriesItsOwnDateTest extends TestCase
         $this->assertTrue($due->every(fn ($d) => $d->isSameDay($order->due_date)));
     }
 
+    public function test_the_pipeline_table_shows_each_date(): void
+    {
+        // The table could say a job was 7% done without saying whether that
+        // was on time. The dates were on the steps; they were not on screen.
+        $order = $this->order();
+        $order->scheduleStepDeadlines(now());
+
+        $sales = User::find($order->created_by);
+        $step = $order->fresh()->tasks()->orderBy('sequence')->firstOrFail();
+
+        $this->actingAs($sales)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee('Due')
+            ->assertSee($step->due_at->format('M j'));
+    }
+
+    public function test_a_late_step_is_marked_late_on_the_table(): void
+    {
+        $order = $this->order();
+        $order->scheduleStepDeadlines(now());
+
+        $step = $order->fresh()->tasks()->orderBy('sequence')->firstOrFail();
+        $step->update(['due_at' => now()->subDays(2), 'status' => 'ready']);
+
+        $sales = User::find($order->created_by);
+
+        $this->actingAs($sales)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee($step->fresh()->due_at->diffForHumans());
+    }
+
     public function test_an_order_with_no_due_date_gets_none(): void
     {
         $order = $this->order();
