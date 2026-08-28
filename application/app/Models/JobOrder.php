@@ -12,7 +12,6 @@ class JobOrder extends Model
         'atexco' => 'Atexco',
         'epson' => 'Epson',
         'epson_eco_solvent' => 'Epson Eco Solvent Printer',
-        'uv_printer' => 'UV Printer',
         'dtf_printer' => 'DTF Printer',
         'manual' => 'Sticker Printer',
     ];
@@ -25,7 +24,6 @@ class JobOrder extends Model
     public const PRINT_TYPES = [
         'full_sublimation' => ['label' => 'Full Sublimation', 'printer' => 'atexco',            'cutting' => 'laser',  'press' => 'roller_press'],
         'dtf'              => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => 'heat_press'],
-        'uv'               => ['label' => 'UV Print',        'printer' => 'uv_printer',        'cutting' => 'manual', 'press' => null],
         'eco_solvent'      => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => 'heat_press'],
         'vinyl'            => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => 'heat_press'],
         'embroidery'       => ['label' => 'Embroidery',      'printer' => 'manual',            'cutting' => 'manual', 'press' => null],
