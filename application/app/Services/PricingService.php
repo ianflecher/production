@@ -49,6 +49,21 @@ class PricingService
         return config('pricing.lists.'.self::resolve($list).".products.$type.label");
     }
 
+    /**
+     * The most of this product one order may ask for.
+     *
+     * The product's own ceiling if it sets one, otherwise the shop's. Null
+     * only if somebody clears both, which means no ceiling at all.
+     */
+    public static function maxQuantity(?string $type, ?string $list = null): ?int
+    {
+        $own = config('pricing.lists.'.self::resolve($list).".products.$type.max_quantity");
+
+        $max = $own ?? config('pricing.max_quantity');
+
+        return $max === null ? null : (int) $max;
+    }
+
     public static function backPocketFee(): int
     {
         return (int) config('pricing.back_pocket_fee', 0);

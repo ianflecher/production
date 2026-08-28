@@ -11,7 +11,7 @@ class Payment extends Model
 
     protected $fillable = [
         'production_order_id', 'amount', 'method', 'reference',
-        'proof_path', 'proof_name', 'kind', 'note', 'paid_at', 'recorded_by',
+        'proof_path', 'proof_name', 'kind', 'note', 'paid_at', 'confirmed_at', 'confirmed_by', 'recorded_by',
     ];
 
     public function hasProof(): bool
@@ -24,7 +24,19 @@ class Payment extends Model
         return [
             'amount' => 'decimal:2',
             'paid_at' => 'datetime',
+            'confirmed_at' => 'datetime',
         ];
+    }
+
+    /** Finance has seen the money land. Until then it is a claim. */
+    public function isConfirmed(): bool
+    {
+        return $this->confirmed_at !== null;
+    }
+
+    public function confirmer()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'confirmed_by');
     }
 
     public function order(): BelongsTo

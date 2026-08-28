@@ -265,6 +265,18 @@ class ProductionOrderController extends Controller
 
         $sizes = $this->collectSizes($data);
 
+        // The ceiling is on the ORDER, not on any one size: five hundred split
+        // across S to XXL is still five hundred to make.
+        $max = \App\Services\PricingService::maxQuantity($data['product_type'] ?? null);
+
+        if ($max !== null && $sizes->sum() > $max) {
+            return back()->withInput()->withErrors(['sizes' => sprintf(
+                'That is %s pieces. One order takes at most %s of this product — split it across two orders, or ask a leader.',
+                number_format($sizes->sum()),
+                number_format($max)
+            )]);
+        }
+
         if ($sizes->isEmpty()) {
             return back()->withInput()->withErrors(['sizes' => 'Enter how many pieces for at least one size.']);
         }
@@ -531,6 +543,18 @@ class ProductionOrderController extends Controller
         }
 
         $sizes = $this->collectSizes($data);
+
+        // The ceiling is on the ORDER, not on any one size: five hundred split
+        // across S to XXL is still five hundred to make.
+        $max = \App\Services\PricingService::maxQuantity($data['product_type'] ?? null);
+
+        if ($max !== null && $sizes->sum() > $max) {
+            return back()->withInput()->withErrors(['sizes' => sprintf(
+                'That is %s pieces. One order takes at most %s of this product — split it across two orders, or ask a leader.',
+                number_format($sizes->sum()),
+                number_format($max)
+            )]);
+        }
 
         if ($sizes->isEmpty()) {
             return back()->withInput()->withErrors(['sizes' => 'Enter how many pieces for at least one size.']);

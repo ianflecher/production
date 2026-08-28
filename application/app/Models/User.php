@@ -291,6 +291,18 @@ class User extends Authenticatable
      * artists submit, and manage the artist accounts — but the rest of the
      * floor (printing, cutting, sewing, QC, release) is not theirs to sign off.
      */
+    /**
+     * Who may confirm that money landed.
+     *
+     * The desk that watches the account, and the admin. Not the officer who
+     * recorded it — a claim and its confirmation coming from one person is no
+     * confirmation at all.
+     */
+    public function canConfirmPayments(): bool
+    {
+        return $this->isFinance() || $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
     public function isArtistLead(): bool
     {
         return strtolower(trim((string) $this->job_role)) === self::JOB_ARTIST_LEAD;

@@ -94,12 +94,42 @@ class OrderCreationTest extends TestCase
 
     public function test_order_exceeding_daily_capacity_is_rejected(): void
     {
-        // DAILY_CAPACITY is 500; asking for 600 on one date must be refused.
-        $response = $this->actingAs($this->sales())->post('/orders', $this->payload([
-            'sizes' => ['M' => 600],
-        ]));
+        /*
+         * Capacity is what the shop can finish on ONE DATE, across every order
+         * due that day. It used to be tested with a single order of 600, but
+         * one order can no longer be that big — the per-order ceiling is 500
+         * and refuses it first, on 'sizes' rather than 'due_date'.
+         *
+         * Two orders is the shape that actually reaches the rule now, and it
+         * is also the shape the shop meets: a full day filled by one client,
+         * then another asking for the same date.
+         */
+        $sales = $this->sales();
 
-        $response->assertInvalid(['due_date']);
+        $this->actingAs($sales)->post('/orders', $this->payload([
+            'sizes' => ['M' => 400],
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame(1, ProductionOrder::count());
+
+        // 400 already promised, 300 more wanted, 500 is the day's limit.
+        $this->actingAs($sales)->post('/orders', $this->payload([
+            'order_number' => 'IC2026-FULL2',
+            'client_name' => 'Second Co',
+            'sizes' => ['M' => 300],
+        ]))->assertInvalid(['due_date']);
+
+        $this->assertSame(1, ProductionOrder::count(), 'the day was overbooked');
+    }
+
+    public function test_one_order_cannot_be_bigger_than_the_ceiling(): void
+    {
+        // The other half of the same guard: 600 in one order is refused for
+        // being too big for an order, before the date is even considered.
+        $this->actingAs($this->sales())->post('/orders', $this->payload([
+            'sizes' => ['M' => 600],
+        ]))->assertInvalid(['sizes']);
+
         $this->assertSame(0, ProductionOrder::count());
     }
 

@@ -21,6 +21,16 @@
  *                         form says which figures it must fall between
  */
 return [
+    /*
+     * The most of ONE product a single order may ask for.
+     *
+     * The tiers above price a piece; they do not say how many the shop can
+     * make. Five hundred of anything is already a long run, and an order past
+     * it is a conversation rather than a form. A product may override this
+     * with its own 'max_quantity'.
+     */
+    'max_quantity' => 500,
+
     'back_pocket_fee' => 50,
 
     'default_list' => 'standard',

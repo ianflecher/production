@@ -174,6 +174,46 @@ class FinanceController extends Controller
     }
 
     /** Serve a payment's proof file (finance sees every order's proof). */
+    /**
+     * Finance says the money landed.
+     *
+     * What the officer recorded is what the client told them. This is the desk
+     * that watches the account agreeing — and it is what starts the job: the
+     * mockup is released and the tech pack opens off the back of it.
+     */
+    public function confirm(Request $request, Payment $payment): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($request->user()->canConfirmPayments(), 403);
+
+        if ($payment->isConfirmed()) {
+            return back()->with('success', 'That payment was already confirmed.');
+        }
+
+        $payment->update([
+            'confirmed_at' => now(),
+            'confirmed_by' => $request->user()->id,
+        ]);
+
+        // Confirming the FIRST payment is what opens the job. Asked again now
+        // the answer has changed: hasDownpayment() counts confirmed money, so
+        // before this update it was false and now it is true.
+        $order = $payment->order?->fresh();
+
+        if ($order && $order->hasDownpayment()) {
+            $order->unlockStage(\App\Models\ProductionOrder::STAGE_MOCKUP);
+
+            // The clock starts here too: every step gets its share of the time
+            // between now and the due date.
+            $order->scheduleStepDeadlines();
+        }
+
+        return back()->with('success', sprintf(
+            'Payment of ₱%s on %s confirmed.',
+            number_format((float) $payment->amount, 2),
+            $order?->order_number ?? 'the order'
+        ));
+    }
+
     public function proof(Payment $payment)
     {
         abort_unless($payment->hasProof() && Storage::disk('local')->exists($payment->proof_path), 404);

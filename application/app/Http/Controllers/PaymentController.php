@@ -94,16 +94,19 @@ class PaymentController extends Controller
             ]);
         }
 
-        // Flow: layout approved → downpayment → artist makes the final
-        // mockup → client approves it → account officer fills and sends
-        // the Tech Pack. The first payment releases only the mockup; the Tech
-        // Pack remains held behind both approval and the officer's send action.
+        // Flow: layout approved → downpayment → FINANCE CONFIRMS → artist
+        // makes the final mockup → client approves it → account officer fills
+        // and sends the Tech Pack.
+        //
+        // Recording does not release anything any more. What is written here is
+        // what the client says they have sent; Finance watches the account and
+        // says whether it arrived, and the shop draws on that answer. See
+        // FinanceController::confirm, which is where the mockup is unlocked.
         if ($wasFirst) {
-            $order->refresh()->unlockStage(ProductionOrder::STAGE_MOCKUP);
-
             return redirect()->route('orders.show', $order)->with(
                 'success',
-                'Downpayment recorded (₱'.number_format($amount, 2).'). The artist can now prepare the final mockup.'
+                'Downpayment recorded (₱'.number_format($amount, 2).'). '
+                .'It goes to Finance to confirm — the artist starts the mockup once they have.'
             );
         }
 

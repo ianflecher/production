@@ -282,6 +282,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/finance/payments/{payment}/proof', [FinanceController::class, 'proof'])
             ->whereNumber('payment')->name('finance.proof');
 
+        // Confirming is the finance desk's own act, so it is not in the group
+        // with the leader: the controller checks canConfirmPayments().
+        Route::post('/finance/payments/{payment}/confirm', [FinanceController::class, 'confirm'])
+            ->whereNumber('payment')->name('finance.confirm');
+
         // -------- Bookkeeping: money in vs money out, month by month --------
         Route::get('/books', [BookkeepingController::class, 'index'])->name('books.index');
         Route::post('/books/expenses', [BookkeepingController::class, 'store'])->name('books.expenses.store');

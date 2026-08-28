@@ -46,7 +46,7 @@ class Task extends Model
     protected $fillable = [
         'production_order_id', 'sequence', 'stage', 'department', 'team', 'instructions',
         'assigned_to', 'operator_name', 'note', 'status', 'approver_role', 'auto_assign', 'auto_submit',
-        'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at',
+        'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at', 'due_at',
     ];
 
     protected function casts(): array
@@ -55,6 +55,7 @@ class Task extends Model
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
             'released_at' => 'datetime',
+            'due_at' => 'datetime',
             'auto_assign' => 'boolean',
             'auto_submit' => 'boolean',
         ];
@@ -87,6 +88,21 @@ class Task extends Model
      * own sheet and became the flats inside the pack. Orders that were already
      * running when it was renamed still carry the old name, so both count.
      */
+    /**
+     * Past its own date, and not yet finished.
+     *
+     * A finished step cannot be late any more — it is done, and colouring it
+     * red tells the floor nothing they can act on.
+     */
+    public function isOverdue(): bool
+    {
+        if (! $this->due_at || in_array($this->status, ['complete', 'cancelled'], true)) {
+            return false;
+        }
+
+        return $this->due_at->isPast();
+    }
+
     public function isTechPackStep(): bool
     {
         return str_starts_with((string) $this->department, 'Tech pack')

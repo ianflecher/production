@@ -237,11 +237,11 @@ class WholePipelineTest extends TestCase
         $this->clearStage(ProductionOrder::STAGE_LAYOUT);
         $this->assertTrue($this->order->fresh()->layoutApproved());
 
-        // ---- 3. Downpayment releases the final mockup -----------------------
+        // ---- 3. Downpayment, confirmed by finance, releases the mockup ------
         $total = (float) $this->order->fresh()->total_price;
 
-        // The account officer collects the money; finance's own screens are
-        // read-only reporting.
+        // The account officer collects the money and writes down what the
+        // client says they sent.
         $this->actingAs($this->staff['sales'])
             ->post("/orders/{$this->order->id}/payment", [
                 'portion' => 'half',
@@ -251,7 +251,15 @@ class WholePipelineTest extends TestCase
                 'proof' => UploadedFile::fake()->image('gcash.jpg'),
             ])->assertRedirect();
 
-        $this->assertTrue($this->order->fresh()->hasDownpayment(), 'the downpayment was not recorded');
+        // Which is a claim until the desk watching the account agrees.
+        $this->assertFalse($this->order->fresh()->hasDownpayment(),
+            'an unconfirmed claim counted as money');
+
+        $this->actingAs($this->staff['finance'])
+            ->post(route('finance.confirm', $this->order->fresh()->payments()->firstOrFail()))
+            ->assertRedirect();
+
+        $this->assertTrue($this->order->fresh()->hasDownpayment(), 'the downpayment was not confirmed');
 
         // The artist can't build the mockup without the client's reference.
         $this->actingAs($this->staff['sales'])

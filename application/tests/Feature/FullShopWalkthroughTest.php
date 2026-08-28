@@ -45,6 +45,8 @@ class FullShopWalkthroughTest extends TestCase
             // The finished-goods desk: the materials desk issues cloth, this
             // one counts garments in and hands them over.
             'inventory' => 'Inventory',
+            // Watches the account and says whether the money landed.
+            'finance' => User::ROLE_FINANCE,
         ] as $who => $role) {
             $this->staff[$who] = User::factory()->create([
                 'job_role' => $role, 'is_active' => true, 'name' => ucfirst($who),
@@ -127,8 +129,8 @@ class FullShopWalkthroughTest extends TestCase
             'the mockup went to the artist before the client had paid a peso'
         );
 
-        // ---- 3. The downpayment, which is what starts the mockup -------------
-        $paid = $this->actingAs($this->staff['sales'])
+        // ---- 3. The downpayment, and the desk that confirms it --------------
+        $this->actingAs($this->staff['sales'])
             ->post(route('orders.payment', $this->order), [
                 // Nothing is recorded on somebody's word: the shop keeps a
                 // picture of every payment against the order.
@@ -136,13 +138,36 @@ class FullShopWalkthroughTest extends TestCase
                 'proof' => UploadedFile::fake()->image('deposit-slip.jpg'),
             ]);
 
+        // Recorded is not received. What the officer wrote down is what the
+        // client told them; the shop does not draw on it yet.
+        $this->assertFalse($this->order->fresh()->hasDownpayment(),
+            'the claim counted as money before anybody checked the account');
+        $this->assertTrue($this->order->fresh()->hasPaymentAwaitingFinance());
+
+        $this->assertSame(
+            'todo',
+            $this->order->fresh()->tasks()->where('department', 'Final mockup')->value('status'),
+            'the artist was sent the mockup on a payment nobody had confirmed'
+        );
+
+        $payment = $this->order->fresh()->payments()->firstOrFail();
+
+        // The officer cannot wave their own payment through.
+        $this->actingAs($this->staff['sales'])
+            ->post(route('finance.confirm', $payment))
+            ->assertForbidden();
+
+        $this->actingAs($this->staff['finance'])
+            ->post(route('finance.confirm', $payment))
+            ->assertRedirect();
+
         $this->assertTrue($this->order->fresh()->hasDownpayment(),
-            'payment refused: '.json_encode(session('errors')?->all() ?? []));
+            'finance confirmed it and the order still says nothing is paid');
 
         $this->assertSame(
             'ready',
             $this->order->fresh()->tasks()->where('department', 'Final mockup')->value('status'),
-            'the money is in and the artist has not been asked for the mockup'
+            'the money is confirmed and the artist has not been asked for the mockup'
         );
 
         // The Tech Pack is NOT released with it: the officer fills their half

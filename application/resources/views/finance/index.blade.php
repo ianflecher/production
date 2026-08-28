@@ -78,6 +78,7 @@
                         <th>Proof</th>
                         <th>Recorded by</th>
                         <th>When</th>
+                        <th>Confirmed</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -106,6 +107,22 @@
                             </td>
                             <td style="font-size:0.82rem;">{{ $p->recorder?->name ?? '—' }}</td>
                             <td style="font-size:0.82rem; color: var(--ink-3); white-space:nowrap;">{{ $p->paid_at?->format('M j, Y g:i A') ?? '—' }}</td>
+                            {{-- What the officer recorded is the client's word
+                                 for it. This column is the account agreeing,
+                                 and the job does not start without it. --}}
+                            <td style="font-size:0.82rem; white-space:nowrap;">
+                                @if ($p->isConfirmed())
+                                    <span style="color: var(--success-ink); font-weight:600;">✓ {{ $p->confirmed_at->format('M j') }}</span>
+                                    <div style="color: var(--ink-3);">{{ $p->confirmer?->name }}</div>
+                                @elseif (auth()->user()->canConfirmPayments())
+                                    <form method="POST" action="{{ route('finance.confirm', $p) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
+                                    </form>
+                                @else
+                                    <span style="color: var(--ink-3);">Waiting on finance</span>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

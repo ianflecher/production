@@ -74,9 +74,15 @@ class PaymentTest extends TestCase
             'proof' => UploadedFile::fake()->image('proof.jpg'),
         ]);
 
-        // First payment releases the final mockup to the artist.
+        // Recording it is not receiving it. What the officer writes down is
+        // what the client told them; the mockup waits for Finance to confirm
+        // the money landed. See FinanceConfirmsBeforeWorkStartsTest.
         $response->assertRedirect(route('orders.show', $order));
-        $this->assertTrue($order->fresh()->tasks()->where('department', 'Final mockup')->where('status', 'ready')->exists());
+        $this->assertTrue($order->fresh()->hasPaymentAwaitingFinance());
+        $this->assertFalse(
+            $order->fresh()->tasks()->where('department', 'Final mockup')->where('status', 'ready')->exists(),
+            'the artist was set to work on a payment nobody had confirmed'
+        );
 
         $this->assertDatabaseHas('payments', [
             'production_order_id' => $order->id,

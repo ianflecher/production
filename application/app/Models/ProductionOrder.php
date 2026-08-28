@@ -539,16 +539,100 @@ class ProductionOrder extends Model
      */
     public function hasDownpayment(): bool
     {
+        // CONFIRMED money only. What the officer records is what the client
+        // says they have sent; Finance watches the account and says whether it
+        // arrived. The shop draws on the second answer, not the first.
         if (array_key_exists('payments_exists', $this->attributes)) {
             return (bool) $this->attributes['payments_exists'];
         }
 
         // The dashboard loads the payments themselves — no need to ask again.
         if ($this->relationLoaded('payments')) {
-            return $this->payments->isNotEmpty();
+            return $this->payments->contains(fn ($payment) => $payment->isConfirmed());
         }
 
-        return $this->payments()->exists();
+        return $this->payments()->whereNotNull('confirmed_at')->exists();
+    }
+
+    /**
+     * Give every step the date it has to be finished by.
+     *
+     * The order has a due date and the floor has sixteen steps to reach it, so
+     * "due the 14th" told a sewer nothing about whether they were late. The
+     * span from the confirmed downpayment to the due date is shared out evenly
+     * and each step gets its own moment, in sequence — step one a share in,
+     * the last one landing on the due date itself.
+     *
+     * Evenly on purpose. Weighting a cut against a sew is a guess about work
+     * nobody has measured, and a wrong weight is worse than an even split
+     * because it looks considered.
+     *
+     * The clock starts when the money is confirmed, not when the order was
+     * taken: an order sitting unpaid for a fortnight has not used any of its
+     * time. A job already past its due date gets today for everything that is
+     * left — it is late, and pretending otherwise helps nobody.
+     */
+    public function scheduleStepDeadlines(?\Carbon\CarbonInterface $from = null): int
+    {
+        if (! $this->due_date) {
+            return 0;
+        }
+
+        $steps = $this->tasks()->orderBy('sequence')->get();
+
+        if ($steps->isEmpty()) {
+            return 0;
+        }
+
+        $start = $from ?? $this->firstConfirmedPaymentAt() ?? now();
+        $end = $this->due_date->copy()->endOfDay();
+
+        // Already late, or due today: everything outstanding is wanted now.
+        if ($end->lessThanOrEqualTo($start)) {
+            foreach ($steps as $step) {
+                $step->update(['due_at' => $end]);
+            }
+
+            return $steps->count();
+        }
+
+        $minutes = $start->diffInMinutes($end);
+        $each = $minutes / $steps->count();
+
+        $last = $steps->count() - 1;
+
+        foreach ($steps->values() as $i => $step) {
+            // The last step IS the due date, not a sum that rounds towards it —
+            // half a minute of rounding was landing it the day after.
+            $step->update([
+                'due_at' => $i === $last
+                    ? $end
+                    : $start->copy()->addMinutes((int) round($each * ($i + 1))),
+            ]);
+        }
+
+        return $steps->count();
+    }
+
+    /** When the first payment was confirmed — the moment the job starts. */
+    public function firstConfirmedPaymentAt(): ?\Carbon\CarbonInterface
+    {
+        // ->value() hands back the raw column, not a date: ask for the row so
+        // the model's own cast does the work.
+        return $this->payments()
+            ->whereNotNull('confirmed_at')
+            ->orderBy('confirmed_at')
+            ->first()?->confirmed_at;
+    }
+
+    /** Money recorded but not yet confirmed by Finance. */
+    public function hasPaymentAwaitingFinance(): bool
+    {
+        if ($this->relationLoaded('payments')) {
+            return $this->payments->contains(fn ($payment) => ! $payment->isConfirmed());
+        }
+
+        return $this->payments()->whereNull('confirmed_at')->exists();
     }
 
     /**
