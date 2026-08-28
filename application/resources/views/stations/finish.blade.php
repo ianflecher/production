@@ -34,7 +34,14 @@
         <h2>{{ $order?->order_number ?? 'No job order' }} — {{ $order?->clientName() }}</h2>
         <div class="meta">
             {{ $session->stationLabel() }} · run by <strong>{{ $session->operator() }}</strong>
-            @if ($order) · {{ $order->quantity }} pcs · due {{ $order->due_date?->format('M j, Y') ?? '—' }} @endif
+            @if ($order) · {{ $order->quantity }} pcs · order due {{ $order->due_date?->format('M j, Y') ?? '—' }} @endif
+            @if ($task?->due_at)
+                {{-- This step's own date. The order's is the client's day; this
+                     is the one the bench is working to. --}}
+                · <strong style="{{ $task->isOverdue() ? 'color:var(--danger-ink, #b91c1c);' : '' }}">
+                    this step {{ $task->due_at->format('M j') }}{{ $task->isOverdue() ? ' — overdue' : '' }}
+                </strong>
+            @endif
         </div>
         <p class="what">
             @if ($isQc)

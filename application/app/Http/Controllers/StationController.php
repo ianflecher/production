@@ -113,7 +113,7 @@ class StationController extends Controller
         );
     }
 
-    private static function ordersWaitingAt(string $station, $orders, $ordersByDepartment)
+    private static function ordersWaitingAt(string $station, $orders, $ordersByDepartment, $stepDueDates = null)
     {
         // A printer only gets the jobs whose job order actually picked THAT
         // printer — an Atexco job shouldn't show up on the DTF machine.
@@ -140,6 +140,11 @@ class StationController extends Controller
                 // can't overwrite another's step.
                 $atStation = clone $order;
                 $atStation->station_step = $department;
+
+                // And when THIS step is wanted by. The order's due date is the
+                // day the client expects the goods; a bench eight steps out
+                // cannot tell from that whether it is early or behind.
+                $atStation->station_step_due = $stepDueDates?->get($id.'|'.$department);
 
                 $waiting->put($id, $atStation);
             }
@@ -195,9 +200,16 @@ class StationController extends Controller
                 ->orWhere(fn ($w) => $w->where('status', 'complete')
                     ->whereIn('department', ['Sewing', 'Quality control'])))
             ->whereHas('order', fn ($q) => $q->where('status', 'active'))
-            ->get(['production_order_id', 'department', 'status']);
+            ->get(['production_order_id', 'department', 'status', 'due_at']);
 
         $released = $steps->whereIn('status', Stations::RELEASED);
+
+        // When each step is wanted, keyed by order and department. Read off the
+        // rows already fetched: asking the order for its tasks here is one
+        // query per job on a board that lists dozens.
+        $stepDueDates = $steps->mapWithKeys(
+            fn ($t) => [$t->production_order_id.'|'.$t->department => $t->due_at]
+        );
 
         $ordersByDepartment = $released->groupBy('department')
             ->map(fn ($rows) => $rows->pluck('production_order_id')->unique()->values());
@@ -241,7 +253,7 @@ class StationController extends Controller
                 }
                 // The operator needs to know how many and what to make, so
                 // carry the job order details onto the board.
-                $waiting = self::ordersWaitingAt($key, $orders, $ordersByDepartment);
+                $waiting = self::ordersWaitingAt($key, $orders, $ordersByDepartment, $stepDueDates);
 
                 // Dropped here rather than in the view so the count on the
                 // badge, the list under it and the job-order dropdown all say

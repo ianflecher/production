@@ -101,6 +101,31 @@
                             <div @class(['station-job', 'is-late' => $o->delayState()])>
                                 <strong>{{ $o->order_number }}</strong>
 
+                                {{-- When THIS step is wanted, beside the number
+                                     the bench is looking for. The order's due
+                                     date is the client's day; this is the one
+                                     they are working to, and it is the answer
+                                     to "am I late". --}}
+                                @if ($due = ($o->station_step_due ?? null))
+                                    @php
+                                        $stepState = $due->isPast()
+                                            ? 'is-late'
+                                            : ($due->isToday() ? 'is-at-risk' : 'is-on-time');
+                                    @endphp
+                                    <span class="delay-chip step-due-chip {{ $stepState }}">
+                                        @if ($stepState !== 'is-on-time')
+                                            <span class="delay-alert-dot" aria-hidden="true"></span>
+                                        @endif
+                                        @if ($stepState === 'is-late')
+                                            DELAYED · was due {{ $due->format('M j') }}
+                                        @elseif ($stepState === 'is-at-risk')
+                                            DUE TODAY
+                                        @else
+                                            DUE {{ strtoupper($due->format('M j')) }}
+                                        @endif
+                                    </span>
+                                @endif
+
                                 {{-- The floor is who can actually do something about
                                      a late job, so the warning belongs here too. --}}
                                 @if ($delay = $o->delayState())

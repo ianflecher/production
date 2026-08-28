@@ -758,6 +758,11 @@
         }
         .delay-chip.is-late { background: #fee2e2; color: #991b1b; }
         .delay-chip.is-at-risk { background: #ffedd5; color: #9a3412; }
+        /* A step with time left. Green because the floor reads these at a
+           glance across a bench, and "not red" has to be as quick to see as
+           red is. */
+        .delay-chip.is-on-time { background: #dcfce7; color: #166534; }
+        .step-due-chip { margin-left: 0.35rem; }
         .delay-chip .delay-alert-dot { width: 7px; height: 7px; }
 
         /* A late job in a station's queue — tinted so the row reads as urgent
