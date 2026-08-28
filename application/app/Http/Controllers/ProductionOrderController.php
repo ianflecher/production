@@ -169,14 +169,17 @@ class ProductionOrderController extends Controller
      * Production can only handle DAILY_CAPACITY pieces per due date. Returns an
      * error message when this order would push that date over, else null.
      */
-    private function capacityError(?string $dueDate, int $qty, ?int $exceptOrderId = null): ?string
+    private function capacityError(?string $dueDate, int $qty, ?int $exceptOrderId = null, ?string $productType = null): ?string
     {
         if (blank($dueDate)) {
             return null;
         }
 
-        $booked = ProductionOrder::bookedQtyForDate($dueDate, $exceptOrderId);
-        $cap = ProductionOrder::DAILY_CAPACITY;
+        // Per PRODUCT. Five hundred shirts and five hundred riding jerseys are
+        // not the same day's work and do not compete for the same bench, so a
+        // date full of shirts must not refuse a jersey.
+        $booked = ProductionOrder::bookedQtyForDate($dueDate, $exceptOrderId, $productType);
+        $cap = \App\Services\PricingService::maxQuantity($productType) ?? ProductionOrder::DAILY_CAPACITY;
 
         if ($booked + $qty <= $cap) {
             return null;
@@ -185,8 +188,12 @@ class ProductionOrderController extends Controller
         $when = \Illuminate\Support\Carbon::parse($dueDate)->format('M j, Y');
         $left = max(0, $cap - $booked);
 
-        return "{$when} already has ".number_format($booked)." of ".number_format($cap)
-            .' pcs booked — only '.number_format($left).' left. Pick another due date.';
+        $what = $productType
+            ? (\App\Services\PricingService::label($productType) ?? $productType)
+            : 'work';
+
+        return "{$when} already has ".number_format($booked).' of '.number_format($cap)
+            ." {$what} booked — only ".number_format($left).' left. Pick another due date.';
     }
 
     public function store(Request $request): RedirectResponse
@@ -284,7 +291,7 @@ class ProductionOrderController extends Controller
         $data['quantity'] = $sizes->sum();
 
         // Production can only take so many pieces per day.
-        if ($msg = $this->capacityError($data['due_date'], $data['quantity'])) {
+        if ($msg = $this->capacityError($data['due_date'], $data['quantity'], null, $data['product_type'] ?? null)) {
             return back()->withInput()->withErrors(['due_date' => $msg]);
         }
 
@@ -563,7 +570,7 @@ class ProductionOrderController extends Controller
         $data['quantity'] = $sizes->sum();
 
         // This order's own pieces don't count against its due date.
-        if ($msg = $this->capacityError($data['due_date'], $data['quantity'], $order->id)) {
+        if ($msg = $this->capacityError($data['due_date'], $data['quantity'], $order->id, $data['product_type'] ?? null)) {
             return back()->withInput()->withErrors(['due_date' => $msg]);
         }
 
@@ -682,16 +689,21 @@ class ProductionOrderController extends Controller
     {
         $date = $request->query('date');
 
+        $product = $request->query('product_type');
+        $cap = \App\Services\PricingService::maxQuantity($product) ?? ProductionOrder::DAILY_CAPACITY;
+
         if (blank($date) || ! strtotime($date)) {
-            return response()->json(['booked' => 0, 'capacity' => ProductionOrder::DAILY_CAPACITY, 'remaining' => ProductionOrder::DAILY_CAPACITY]);
+            return response()->json(['booked' => 0, 'capacity' => $cap, 'remaining' => $cap, 'product' => null]);
         }
 
-        $booked = ProductionOrder::bookedQtyForDate($date, $request->integer('except') ?: null);
+        $booked = ProductionOrder::bookedQtyForDate($date, $request->integer('except') ?: null, $product);
 
         return response()->json([
             'booked' => $booked,
-            'capacity' => ProductionOrder::DAILY_CAPACITY,
-            'remaining' => max(0, ProductionOrder::DAILY_CAPACITY - $booked),
+            'capacity' => $cap,
+            'remaining' => max(0, $cap - $booked),
+            // So the hint can say 216 of 500 WHAT.
+            'product' => $product ? (\App\Services\PricingService::label($product) ?? $product) : null,
         ]);
     }
 

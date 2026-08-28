@@ -542,12 +542,17 @@
         const el = document.getElementById('due_date');
         const out = document.getElementById('capacityNote');
         if (!el || !out || !el.value) { if (out) out.textContent = ''; return; }
-        fetch('{{ route('orders.capacity') }}?date=' + encodeURIComponent(el.value))
+        // Per product: a date full of shirts has not used up the jerseys.
+        const product = document.getElementById('product_type')?.value || '';
+
+        fetch('{{ route('orders.capacity') }}?date=' + encodeURIComponent(el.value)
+              + '&product_type=' + encodeURIComponent(product))
             .then(r => r.json())
             .then(d => {
                 const qty = parseInt(document.getElementById('quantity').value) || 0;
                 const over = d.booked + qty > d.capacity;
-                out.textContent = d.booked + ' of ' + d.capacity + ' pcs already booked for this date'
+                const what = d.product ? d.product : 'pcs';
+                out.textContent = d.booked + ' of ' + d.capacity + ' ' + what + ' already booked for this date'
                     + (over ? ' — this order (' + qty + ' pcs) will not fit. Pick another date.' : ' · ' + d.remaining + ' left');
                 out.style.color = over ? 'var(--danger-ink)' : 'var(--ink-3)';
                 out.style.fontWeight = over ? '600' : '400';

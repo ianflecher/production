@@ -268,10 +268,15 @@ class ProductionOrder extends Model
     }
 
     /** Pieces already booked on a due date (cancelled orders free up capacity). */
-    public static function bookedQtyForDate(string $date, ?int $exceptOrderId = null): int
+    public static function bookedQtyForDate(string $date, ?int $exceptOrderId = null, ?string $productType = null): int
     {
+        // Counted per PRODUCT when one is named. Five hundred shirts and five
+        // hundred riding jerseys are not the same day's work and do not
+        // compete for the same bench, so a date full of shirts must not refuse
+        // a jersey. No product named means the whole day, as before.
         return (int) self::whereDate('due_date', $date)
             ->where('status', '!=', 'cancelled')
+            ->when($productType, fn ($q) => $q->where('product_type', $productType))
             ->when($exceptOrderId, fn ($q) => $q->where('id', '!=', $exceptOrderId))
             ->sum('quantity');
     }
