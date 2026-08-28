@@ -58,6 +58,16 @@ class ProductionOrderController extends Controller
             // list. The default view is what is still open; completed orders
             // have their own tab rather than burying the live ones.
             ->when($status === '', fn ($q) => $q->where('status', '!=', 'complete'))
+            // Sixty days after it finished, a job leaves the lists — the
+            // completed tab included, because on a busy year that tab is most
+            // of the list and none of it is anything anybody is doing.
+            //
+            // It answers to its NUMBER, though: typing IC2026-00042 brings it
+            // straight back. Searching a client's name does not, or one long
+            // customer would drag five years of finished work up with them.
+            ->where(fn ($q) => $q
+                ->whereNot(fn ($a) => $a->archived())
+                ->when($search !== '', fn ($w) => $w->orWhere('order_number', 'like', "%{$search}%")))
             // Late work first, then what is due today, then everything else.
             // The list is read from the top and the badges are already drawn in
             // red — but a delayed job used to sit wherever its order number put

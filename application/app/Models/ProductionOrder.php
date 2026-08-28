@@ -48,6 +48,15 @@ class ProductionOrder extends Model
     /** Maximum pieces that may be due on any single date. */
     public const DAILY_CAPACITY = 500;
 
+    /**
+     * How long a finished job stays on the lists.
+     *
+     * Sixty days after it is completed it is delivered, paid and settled. It
+     * stops being work and becomes history — still here, still searchable by
+     * its number, just not in the way of the jobs somebody is doing today.
+     */
+    public const ARCHIVE_AFTER_DAYS = 60;
+
     /** VAT added to the total when the order is marked VAT inclusive. */
     public const VAT_RATE = 0.12;
 
@@ -268,6 +277,39 @@ class ProductionOrder extends Model
     }
 
     /** Pieces already booked on a due date (cancelled orders free up capacity). */
+    /**
+     * Finished long enough ago to be out of the way.
+     *
+     * completed_at is the honest date, but orders finished before that column
+     * was filled in fall back to when they were last touched — otherwise the
+     * oldest jobs in the shop are the ones that never leave the list.
+     */
+    public function scopeArchived($query, ?\Carbon\CarbonInterface $before = null)
+    {
+        $cutoff = $before ?? now()->subDays(self::ARCHIVE_AFTER_DAYS);
+
+        // Both halves are NULL-safe on purpose. `completed_at <= X` against a
+        // NULL is not FALSE, it is UNKNOWN — and NOT UNKNOWN is UNKNOWN, so a
+        // finished order with no completion date fell out of the list the
+        // moment this scope was negated. It has to say IS NOT NULL first.
+        return $query->where('status', 'complete')
+            ->where(fn ($q) => $q
+                ->where(fn ($w) => $w->whereNotNull('completed_at')->where('completed_at', '<=', $cutoff))
+                ->orWhere(fn ($w) => $w->whereNull('completed_at')->where('updated_at', '<=', $cutoff)));
+    }
+
+    /** Is this one off the lists? */
+    public function isArchived(): bool
+    {
+        if ($this->status !== 'complete') {
+            return false;
+        }
+
+        $when = $this->completed_at ?? $this->updated_at;
+
+        return $when !== null && $when->lte(now()->subDays(self::ARCHIVE_AFTER_DAYS));
+    }
+
     public static function bookedQtyForDate(string $date, ?int $exceptOrderId = null, ?string $productType = null): int
     {
         // Counted per PRODUCT when one is named. Five hundred shirts and five
