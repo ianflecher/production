@@ -229,8 +229,7 @@ class ProductionOrderController extends Controller
             'client_name' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
             'client_last_name' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
             'client_contact' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
-            'client_office_address' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
-            'client_delivery_address' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
+            'client_address' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
             // Genuinely optional.
             'client_company' => ['nullable', 'string', 'max:255'],
             'client_tin' => ['nullable', 'string', 'max:50'],
@@ -265,8 +264,7 @@ class ProductionOrderController extends Controller
         ], [
             'client_last_name.required_without' => "Enter the client's last name.",
             'client_contact.required_without' => 'Enter the contact number.',
-            'client_office_address.required_without' => 'Enter the office address.',
-            'client_delivery_address.required_without' => 'Enter the delivery address.',
+            'client_address.required_without' => 'Enter the address.',
             'rush_fee.required_if' => 'Enter the rush fee, or untick Rush order.',
         ]);
 
@@ -338,8 +336,8 @@ class ProductionOrderController extends Controller
         $clientFields = [
             'contact_number' => $data['client_contact'] ?? null,
             'company' => $data['client_company'] ?? null,
-            'office_address' => $data['client_office_address'] ?? null,
-            'delivery_address' => $data['client_delivery_address'] ?? null,
+            'office_address' => $data['client_address'] ?? null,
+            'delivery_address' => $data['client_address'] ?? null,
             'tin' => $data['client_tin'] ?? null,
         ];
 
@@ -518,8 +516,7 @@ class ProductionOrderController extends Controller
             'client_last_name' => ['required', 'string', 'max:255'],
             'client_contact' => ['required', 'string', 'max:255'],
             'client_company' => ['nullable', 'string', 'max:255'],
-            'client_office_address' => ['required', 'string', 'max:255'],
-            'client_delivery_address' => ['required', 'string', 'max:255'],
+            'client_address' => ['required', 'string', 'max:255'],
             'client_tin' => ['nullable', 'string', 'max:50'],
 
             'description' => ['nullable', 'string', 'max:1000'],
@@ -550,8 +547,7 @@ class ProductionOrderController extends Controller
         ], [
             'client_last_name.required' => "Enter the client's last name.",
             'client_contact.required' => 'Enter the contact number.',
-            'client_office_address.required' => 'Enter the office address.',
-            'client_delivery_address.required' => 'Enter the delivery address.',
+            'client_address.required' => 'Enter the address.',
             'rush_fee.required_if' => 'Enter the rush fee, or untick Rush order.',
         ]);
 
@@ -607,8 +603,8 @@ class ProductionOrderController extends Controller
             'last_name' => $data['client_last_name'],
             'contact_number' => $data['client_contact'] ?? null,
             'company' => $data['client_company'] ?? null,
-            'office_address' => $data['client_office_address'] ?? null,
-            'delivery_address' => $data['client_delivery_address'] ?? null,
+            'office_address' => $data['client_address'] ?? null,
+            'delivery_address' => $data['client_address'] ?? null,
             'tin' => $data['client_tin'] ?? null,
         ]);
 

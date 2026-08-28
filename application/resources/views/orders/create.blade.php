@@ -111,13 +111,15 @@
                     <dd>{{ $inquiry->client->contact_number ?: '—' }}</dd>
                 </div>
                 <div>
-                    <dt>Office address</dt>
-                    <dd>{{ $inquiry->client->office_address ?: '—' }}</dd>
+                    <dt>Address</dt>
+                    <dd>{{ $inquiry->client->delivery_address ?: $inquiry->client->office_address ?: '—' }}</dd>
                 </div>
-                <div>
-                    <dt>Delivery address</dt>
-                    <dd>{{ $inquiry->client->delivery_address ?: '—' }}</dd>
-                </div>
+                @if ($inquiry->client->office_address && $inquiry->client->office_address !== $inquiry->client->delivery_address)
+                    <div>
+                        <dt>Office address</dt>
+                        <dd>{{ $inquiry->client->office_address }}</dd>
+                    </div>
+                @endif
                 @if ($inquiry->client->tin)
                     <div>
                         <dt>TIN</dt>

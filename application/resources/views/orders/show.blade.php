@@ -181,11 +181,19 @@
                     @if ($order->client?->company)
                         <tr><td>Company</td><td>{{ $order->client->company }}</td></tr>
                     @endif
-                    @if ($order->client?->office_address)
-                        <tr><td>Office address</td><td>{{ $order->client->office_address }}</td></tr>
+                    {{-- One address is asked for now. An older client whose two
+                         differ still shows both, so nothing already recorded is
+                         hidden; a client saved since shows the single line. --}}
+                    @php
+                        $addr = $order->client?->delivery_address ?: $order->client?->office_address;
+                        $otherAddr = $order->client?->office_address !== $order->client?->delivery_address
+                            ? $order->client?->office_address : null;
+                    @endphp
+                    @if ($addr)
+                        <tr><td>Address</td><td>{{ $addr }}</td></tr>
                     @endif
-                    @if ($order->client?->delivery_address)
-                        <tr><td>Delivery address</td><td>{{ $order->client->delivery_address }}</td></tr>
+                    @if ($otherAddr)
+                        <tr><td>Office address</td><td>{{ $otherAddr }}</td></tr>
                     @endif
                     @if ($order->client?->tin)
                         <tr><td>TIN</td><td>{{ $order->client->tin }}</td></tr>

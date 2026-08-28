@@ -125,8 +125,7 @@ class AnotherProductShowsOnEverySheetTest extends TestCase
             ->post("/orders/{$order->id}", [
                 'client_name' => 'Second', 'client_last_name' => 'Line',
                 'client_contact' => '0917 555 0000',
-                'client_office_address' => 'Cebu City',
-                'client_delivery_address' => 'Cebu City',
+                'client_address' => 'Cebu City',
                 'due_date' => now()->addWeeks(2)->toDateString(),
                 'product_type' => 'round_neck',
                 // The line that was already there, plus the new one.

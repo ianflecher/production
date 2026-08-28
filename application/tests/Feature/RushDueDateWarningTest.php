@@ -88,7 +88,7 @@ class RushDueDateWarningTest extends TestCase
             'order_number' => 'IC2026-09101',
             'client_name' => 'Rush', 'client_last_name' => 'Job',
             'client_contact' => '0917-000-1111',
-            'client_office_address' => 'Angeles City', 'client_delivery_address' => 'Angeles City',
+            'client_address' => 'Angeles City',
             'due_date' => now()->addDays(2)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 10],

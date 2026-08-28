@@ -30,8 +30,7 @@ class ClientAndRushTest extends TestCase
             'client_name' => 'Juan',
             'client_last_name' => 'Dela Cruz',
             'client_contact' => '0917-555-1234',
-            'client_office_address' => '12 Rizal St., Angeles City',
-            'client_delivery_address' => 'Same as office',
+            'client_address' => '12 Rizal St., Angeles City',
             'due_date' => now()->addWeeks(3)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 10],
@@ -86,8 +85,7 @@ class ClientAndRushTest extends TestCase
             'client_name',
             'client_last_name',
             'client_contact',
-            'client_office_address',
-            'client_delivery_address',
+            'client_address',
         ]);
 
         $this->assertSame(0, ProductionOrder::count());
@@ -194,8 +192,7 @@ class ClientAndRushTest extends TestCase
             'client_name' => 'Juan',
             'client_last_name' => 'Dela Cruz',
             'client_contact' => '0917-555-1234',
-            'client_office_address' => '12 Rizal St., Angeles City',
-            'client_delivery_address' => 'Same as office',
+            'client_address' => '12 Rizal St., Angeles City',
             'due_date' => now()->addWeeks(3)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 10],
@@ -235,8 +232,8 @@ class ClientAndRushTest extends TestCase
         $this->actingAs($user)->post("/orders/{$order->id}", $this->editPayload([
             'client_last_name' => '',
             'client_contact' => '',
-            'client_delivery_address' => '',
-        ]))->assertInvalid(['client_last_name', 'client_contact', 'client_delivery_address']);
+            'client_address' => '',
+        ]))->assertInvalid(['client_last_name', 'client_contact', 'client_address']);
     }
 
     public function test_an_edit_keeps_the_surname_on_the_client(): void

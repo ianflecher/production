@@ -33,8 +33,7 @@ class OneOrderHasACeilingTest extends TestCase
         return [
             'client_name' => 'Big', 'client_last_name' => 'Order',
             'client_contact' => '0917 555 0000',
-            'client_office_address' => 'Cebu City',
-            'client_delivery_address' => 'Cebu City',
+            'client_address' => 'Cebu City',
             'order_number' => 'IC2026-BIG1',
             'product_type' => 'riding_jersey',
             'due_date' => now()->addWeeks(6)->toDateString(),

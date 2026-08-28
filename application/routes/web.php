@@ -218,11 +218,25 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/job-order-files/{file}/kind', [OrderReferenceFileController::class, 'markReferenceKind'])->whereNumber('file')->name('job-order-files.kind');
     });
 
+    // -------- The client book and the follow-up list --------
+    // Both are oversight pages: they only read. Sales work them day to day,
+    // and the leader group (leader, supervisor, super admin) watches the whole
+    // shop's — InquiryController::index already hands a leader every inquiry,
+    // it was only this gate that kept them out.
+    Route::middleware('role:sales,leader,super_admin')->group(function () {
+        Route::get('/inquiries', [\App\Http\Controllers\InquiryController::class, 'index'])->name('inquiries.index');
+    });
+
+    // The client book itself is oversight only — the names are written down on
+    // the inquiry form, not here.
+    Route::middleware('role:leader,super_admin')->group(function () {
+        Route::get('/clients', [\App\Http\Controllers\ClientController::class, 'index'])->name('clients.index');
+    });
+
     // -------- Order intake: Sales (and Super Admin) create orders --------
     Route::middleware('role:sales,super_admin')->group(function () {
         // Page one of taking an order: who is asking. Saved on its own so a
         // person who does not order today is still a name that can be called.
-        Route::get('/inquiries', [\App\Http\Controllers\InquiryController::class, 'index'])->name('inquiries.index');
         Route::get('/inquiries/create', [\App\Http\Controllers\InquiryController::class, 'create'])->name('inquiries.create');
         Route::post('/inquiries', [\App\Http\Controllers\InquiryController::class, 'store'])->name('inquiries.store');
         Route::get('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'layout'])->name('inquiries.layout');

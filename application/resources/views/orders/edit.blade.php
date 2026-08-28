@@ -38,13 +38,13 @@
                 <label for="client_company">Company (optional)</label>
                 <input id="client_company" type="text" name="client_company" value="{{ old('client_company', $order->client?->company) }}" maxlength="255" style="text-transform: capitalize;">
             </div>
+            {{-- One address — see the inquiry form. Existing clients whose two
+                 addresses differ show the delivery one, which is the address
+                 the shop actually acts on. --}}
             <div class="field">
-                <label for="client_office_address">Office address <span style="color: var(--danger-ink);">*</span></label>
-                <input id="client_office_address" type="text" name="client_office_address" value="{{ old('client_office_address', $order->client?->office_address) }}" maxlength="255" style="text-transform: capitalize;">
-            </div>
-            <div class="field">
-                <label for="client_delivery_address">Delivery address <span style="color: var(--danger-ink);">*</span></label>
-                <input id="client_delivery_address" type="text" name="client_delivery_address" value="{{ old('client_delivery_address', $order->client?->delivery_address) }}" maxlength="255" style="text-transform: capitalize;">
+                <label for="client_address">Address <span style="color: var(--danger-ink);">*</span></label>
+                <input id="client_address" type="text" name="client_address" value="{{ old('client_address', $order->client?->delivery_address ?: $order->client?->office_address) }}" maxlength="255" style="text-transform: capitalize;">
+                @error('client_address')<span class="error">{{ $message }}</span>@enderror
             </div>
             <div class="field">
                 <label for="client_tin">TIN (optional — for invoice)</label>

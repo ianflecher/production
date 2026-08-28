@@ -49,8 +49,7 @@ class InquiryFollowUpTest extends TestCase
             'client_name' => 'Juan',
             'client_last_name' => 'Dela Cruz',
             'client_contact' => '0917-555-1234',
-            'client_office_address' => 'Cebu City',
-            'client_delivery_address' => 'Cebu City',
+            'client_address' => 'Cebu City',
             'what_they_want' => '30 jerseys, asking for a price',
         ])->assertRedirect();
 
@@ -184,8 +183,7 @@ class InquiryFollowUpTest extends TestCase
             'client_name' => 'Walk',
             'client_last_name' => 'In',
             'client_contact' => '0917-000-0000',
-            'client_office_address' => 'Cebu',
-            'client_delivery_address' => 'Cebu',
+            'client_address' => 'Cebu',
             'product_type' => 'round_neck',
             'quantity' => 10,
             'sizes' => ['M' => 10],
