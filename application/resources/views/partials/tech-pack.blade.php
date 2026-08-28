@@ -55,14 +55,26 @@
         return $mode === 'officer' ? $theirs : ! $theirs;
     };
 
-    $fill = function (string $field, string $placeholder = '', int $max = 120, $on = null) use ($tp, $canType) {
+    /* What the shop typed into these boxes before, so the same answer is
+       picked rather than spelled four ways across four sheets. Only where the
+       sheet can be typed in — a read-only copy has no boxes to offer them to.
+       $canType is a closure asking about ONE field; whether the sheet is
+       typeable at all is $textEditable. */
+    $suggest = $textEditable
+        ? \App\Models\TechPack::fieldSuggestions() + \App\Models\JobOrder::fieldSuggestions()
+        : [];
+
+    $fill = function (string $field, string $placeholder = '', int $max = 120, $on = null) use ($tp, $canType, $suggest) {
         $model = $on ?? $tp; $value = (string) ($model?->$field ?? '');
 
         if (! $canType($field)) {
             return '<input class="tp-in is-printed" type="text" value="'.e($value).'" readonly tabindex="-1">';
         }
 
-        return '<input class="tp-in" type="text" name="'.$field.'" value="'.e($value).'" maxlength="'.$max.'" placeholder="'.e($placeholder).'">';
+        // Offered from what was typed before, when there is anything to offer.
+        $list = ! empty($suggest[$field]) ? ' list="dl_tp_'.$field.'"' : '';
+
+        return '<input class="tp-in" type="text" name="'.$field.'" value="'.e($value).'" maxlength="'.$max.'" placeholder="'.e($placeholder).'"'.$list.'>';
     };
     // The × takes the BOX away, picture and all — a plain tee does not want two
     // empty boxes printed under it. It is a submit button, so it travels the
@@ -393,6 +405,15 @@
      These build the pack; they are not part of it. Inside the sheet they took a
      strip out of the materials column and left a gap on the paper. Out here
      they read as the workbench rather than the document. --}}
+{{-- The pools behind every box above. Rendered once, after the sheet, so a
+     box can offer them without the sheet carrying a list inside each cell. --}}
+@foreach ($suggest as $field => $values)
+    @continue (empty($values))
+    <datalist id="dl_tp_{{ $field }}">
+        @foreach ($values as $value)<option value="{{ $value }}"></option>@endforeach
+    </datalist>
+@endforeach
+
 @if ($imageEditable)
     <div class="tp-build no-print">
         <div class="tp-ref-add-bar">

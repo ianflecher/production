@@ -463,17 +463,36 @@
                             <div style="width: {{ $progress }}%;"></div>
                         </div>
 
-                        {{-- Footer: due date only (the task count is already
-                             shown by the "X/Y complete" progress line above). --}}
+                        {{-- Footer: this step's date first, then the order's.
+                             The order is due weeks out and says nothing about
+                             today; the step they are holding is what they are
+                             working to. --}}
+                        @php $mine = $currentTask ?? null; @endphp
+                        @if ($mine?->due_at)
+                            <div style="margin-top: 0.7rem;">
+                                <span class="delay-chip {{ $mine->isOverdue() ? 'is-late' : ($mine->due_at->isToday() ? 'is-at-risk' : 'is-on-time') }}">
+                                    @if ($mine->isOverdue())
+                                        <span class="delay-alert-dot" aria-hidden="true"></span>
+                                        DELAYED · was due {{ $mine->due_at->format('M j') }}
+                                    @elseif ($mine->due_at->isToday())
+                                        <span class="delay-alert-dot" aria-hidden="true"></span>
+                                        DUE TODAY
+                                    @else
+                                        DUE {{ strtoupper($mine->due_at->format('M j')) }}
+                                    @endif
+                                </span>
+                            </div>
+                        @endif
+
                         @if ($order->due_date)
                             <div
                                 style="
-                                    margin-top: 0.7rem;
+                                    margin-top: 0.45rem;
                                     font-size: 0.76rem;
                                     color: var(--ink-3);
                                 "
                             >
-                                Due {{ $order->due_date->format('M j, Y') }}
+                                Order due {{ $order->due_date->format('M j, Y') }}
                             </div>
                         @endif
 

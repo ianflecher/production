@@ -331,6 +331,52 @@ class TechPack extends Model
         );
     }
 
+    /**
+     * The boxes worth remembering: free text that repeats between jobs.
+     *
+     * Not the ones that are unique to a job (design name), and not the ones
+     * that are already a list somewhere else.
+     */
+    public const SUGGEST_FIELDS = [
+        'fitting', 'item_style', 'quality', 'print_tech',
+        'tshirt_color', 'print_label', 'thread_color', 'stitch_thread',
+        'cutting_method', 'size_range', 'zipper_type', 'lip_pocket_color',
+        'tag_1_details', 'tag_2_details',
+    ];
+
+    /**
+     * What has been typed into each of those boxes before.
+     *
+     * ONE query. A distinct-per-column pass would be fourteen of them on a
+     * page that already has a query budget, so the recent packs come back once
+     * and the answers are picked out here. Recent rather than all: what the
+     * shop wrote last year is not what it is writing now, and a dropdown of
+     * four hundred is a dropdown nobody reads.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public static function fieldSuggestions(int $lookBack = 200): array
+    {
+        $rows = self::query()
+            ->latest('id')
+            ->limit($lookBack)
+            ->get(self::SUGGEST_FIELDS);
+
+        $out = [];
+
+        foreach (self::SUGGEST_FIELDS as $field) {
+            $out[$field] = $rows->pluck($field)
+                ->map(fn ($v) => trim((string) $v))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        return $out;
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(ProductionOrder::class, 'production_order_id');
