@@ -33,8 +33,7 @@ class OrderPipelineTest extends TestCase
             'client_name' => 'Pipeline Co',
             'client_last_name' => 'Cruz',
             'client_contact' => '0917-000-0000',
-            'client_office_address' => 'Angeles City',
-            'client_delivery_address' => 'Angeles City',
+            'client_address' => 'Angeles City',
             'due_date' => now()->addWeeks(3)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 12, 'L' => 8], // 20 pcs

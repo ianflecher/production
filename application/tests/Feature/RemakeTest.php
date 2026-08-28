@@ -27,7 +27,7 @@ class RemakeTest extends TestCase
             'order_number' => 'IC2026-08888',
             'client_name' => 'Remake', 'client_last_name' => 'Co',
             'client_contact' => '0917-000-2222',
-            'client_office_address' => 'Angeles City', 'client_delivery_address' => 'Angeles City',
+            'client_address' => 'Angeles City',
             'due_date' => now()->addWeeks(3)->toDateString(),
             'product_type' => 'round_neck',
             'sizes' => ['M' => 20, 'L' => 10],

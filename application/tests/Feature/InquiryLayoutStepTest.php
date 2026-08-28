@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Inquiry;
 use App\Models\ProductionOrder;
 use App\Models\User;
+use App\Services\PublicUrl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -17,14 +18,21 @@ class InquiryLayoutStepTest extends TestCase
     public function test_client_details_lead_to_layout_then_to_the_new_job_order(): void
     {
         Storage::fake('local');
+
+        // The questionnaire link on the page is the PUBLIC one, not the address
+        // the officer is browsing — see PublicUrl. Left to itself this test read
+        // whatever current-tunnel-url.txt happened to hold, so it passed on a
+        // machine with no tunnel running and failed on one with it up. Pin the
+        // public base so the assertion is about the feature, not the desk.
+        config(['app.public_url' => 'https://tunnel.example.test']);
+
         $officer = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
 
         $this->actingAs($officer)->post(route('inquiries.store'), [
             'client_name' => 'Ana',
             'client_last_name' => 'Santos',
             'client_contact' => '09170000000',
-            'client_office_address' => 'Angeles City',
-            'client_delivery_address' => 'Angeles City',
+            'client_address' => 'Angeles City',
         ])->assertRedirect(route('inquiries.layout', Inquiry::firstOrFail()));
 
         $inquiry = Inquiry::firstOrFail();
@@ -41,7 +49,7 @@ class InquiryLayoutStepTest extends TestCase
         $this->actingAs($officer)->get(route('inquiries.design-brief', $inquiry))
             ->assertOk()->assertSee('Client design questionnaire')
             ->assertSee('Share a form link with the client')
-            ->assertSee(route('client.inquiry-design-brief', $inquiry), false);
+            ->assertSee(PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry)), false);
 
         $this->get(route('client.inquiry-design-brief', $inquiry))
             ->assertOk()->assertSee('Tell us about your design');

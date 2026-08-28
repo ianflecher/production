@@ -72,8 +72,7 @@ class InquiryController extends Controller
             'client_last_name' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
             'client_contact' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
             'client_company' => ['nullable', 'string', 'max:255'],
-            'client_office_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
-            'client_delivery_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
+            'client_address' => ['required_without:client_id', 'nullable', 'string', 'max:255'],
             'client_tin' => ['nullable', 'string', 'max:50'],
 
             'what_they_want' => ['nullable', 'string', 'max:2000'],
@@ -81,8 +80,7 @@ class InquiryController extends Controller
             'client_name.required_without' => 'Enter the first name.',
             'client_last_name.required_without' => 'Enter the last name.',
             'client_contact.required_without' => 'Enter a contact number — it is what a follow-up needs.',
-            'client_office_address.required_without' => 'Enter the office address.',
-            'client_delivery_address.required_without' => 'Enter the delivery address.',
+            'client_address.required_without' => 'Enter the address.',
         ]);
 
         $client = ! empty($data['client_id'])
@@ -92,8 +90,11 @@ class InquiryController extends Controller
                 'last_name' => $data['client_last_name'],
                 'contact_number' => $data['client_contact'],
                 'company' => $data['client_company'] ?? null,
-                'office_address' => $data['client_office_address'] ?? null,
-                'delivery_address' => $data['client_delivery_address'] ?? null,
+                // The form asks once and both columns are written, so every
+                // reader — the invoice, the order sheet, the follow-up card —
+                // keeps finding the address where it already looks for it.
+                'office_address' => $data['client_address'] ?? null,
+                'delivery_address' => $data['client_address'] ?? null,
                 'tin' => $data['client_tin'] ?? null,
                 'created_by' => $request->user()->id,
             ]);

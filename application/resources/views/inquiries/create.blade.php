@@ -50,15 +50,13 @@
                     <label for="client_company">Company (optional)</label>
                     <input id="client_company" type="text" name="client_company" value="{{ old('client_company') }}" maxlength="255" placeholder="e.g. Falcon Riders" style="text-transform: capitalize;">
                 </div>
+                {{-- One address, not two. The office and the delivery point were
+                     asked for separately and answered the same way every time,
+                     so the second box only ever cost the officer a keystroke. --}}
                 <div class="field">
-                    <label for="client_office_address">Office address <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_office_address" type="text" name="client_office_address" value="{{ old('client_office_address') }}" maxlength="255" placeholder="e.g. 12 Rizal St., Angeles City" style="text-transform: capitalize;">
-                    @error('client_office_address')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                <div class="field">
-                    <label for="client_delivery_address">Delivery address <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="client_delivery_address" type="text" name="client_delivery_address" value="{{ old('client_delivery_address') }}" maxlength="255" placeholder="Where the order is delivered" style="text-transform: capitalize;">
-                    @error('client_delivery_address')<span class="error">{{ $message }}</span>@enderror
+                    <label for="client_address">Address <span style="color: var(--danger-ink);">*</span></label>
+                    <input id="client_address" type="text" name="client_address" value="{{ old('client_address') }}" maxlength="255" placeholder="e.g. 12 Rizal St., Angeles City" style="text-transform: capitalize;">
+                    @error('client_address')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <div class="field">
                     <label for="client_tin">TIN (optional — for invoice)</label>

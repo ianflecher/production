@@ -100,8 +100,7 @@ class CapacityIsCountedPerProductTest extends TestCase
         $this->actingAs($officer)->post(route('orders.store'), [
             'client_name' => 'Late', 'client_last_name' => 'Client',
             'client_contact' => '0917 555 0000',
-            'client_office_address' => 'Cebu City',
-            'client_delivery_address' => 'Cebu City',
+            'client_address' => 'Cebu City',
             'order_number' => 'IC2026-LATEJ',
             'product_type' => 'riding_jersey',
             'due_date' => now()->addWeeks(6)->toDateString(),
