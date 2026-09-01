@@ -150,7 +150,15 @@
                         "
                     >
                         ✓ Layout approved.
-                        @if (! $order->hasDownpayment())
+                        {{-- The same order the job actually runs in. The card
+                             knew only "paid or not", so it jumped from the
+                             downpayment straight to the tech pack and named a
+                             step two places ahead — the artist's own final
+                             mockup, and the client's approval of it, both
+                             happen first. --}}
+                        @if (! $order->hasDownpayment() && $order->hasPaymentAwaitingFinance())
+                            Waiting for <strong>Finance</strong> to confirm the payment.
+                        @elseif (! $order->hasDownpayment())
                             Waiting for <strong>downpayment</strong>.
                         @else
                             {{-- The job order SHEET is gone: the officer fills

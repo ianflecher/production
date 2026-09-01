@@ -1718,11 +1718,18 @@ class ProductionOrder extends Model
         }
 
         if ($stageTasks->every(fn ($t) => $t->status === 'complete')) {
-            // The layout is approved early, before payment. Pause here until the
-            // account officer collects the downpayment and SENDS the job order —
-            // that's what releases the final mockup (stage 2). See
-            // ProductionOrderController::sendJobOrderToArtist().
-            if ($task->stage === self::STAGE_LAYOUT && $this->jobOrder?->status !== 'sent_to_artist') {
+            // The layout is approved early, before payment. Pause here until
+            // the money is settled — and no longer than that.
+            //
+            // It used to wait for the officer to SEND the job order as well,
+            // which held the artist's own next piece of work behind somebody
+            // else's paperwork: the mockup is drawn from the approved layout,
+            // not from the tech pack, so there was nothing in the wait for it.
+            // The artist starts the mockup while the officer fills their half.
+            //
+            // hasDownpayment() is confirmed money, or a job that owes nothing
+            // at all — a sponsored sample has no payment coming to release it.
+            if ($task->stage === self::STAGE_LAYOUT && ! $this->hasDownpayment()) {
                 $this->refreshCompletion();
 
                 return;
