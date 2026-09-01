@@ -51,11 +51,16 @@
             $bookedDays++;
         }
 
-        if ($summaryQuantity > $dailyCapacity) {
+        // A day counts as full when one of its PRODUCTS is at its own ceiling.
+        // On the flat total a day of 300 shirts and 300 jerseys was "over" and
+        // a day of 480 shirts was not, which had it exactly backwards.
+        $summaryFullest = (int) $fullestByDay->get($summaryKey, 0);
+
+        if ($summaryFullest > 100) {
             $overCapacityDays++;
-        } elseif ($summaryQuantity === $dailyCapacity && $summaryQuantity > 0) {
+        } elseif ($summaryFullest === 100) {
             $fullDays++;
-        } elseif ($summaryQuantity >= 400) {
+        } elseif ($summaryFullest >= 80) {
             $warningDays++;
         }
 
@@ -151,7 +156,7 @@
                 </span>
             </div>
             <div class="calendar-kpi-value">{{ number_format($monthUtilization) }}%</div>
-            <div class="calendar-kpi-note">Based on {{ number_format($dailyCapacity) }} pcs daily capacity</div>
+            <div class="calendar-kpi-note">Each product against its own daily ceiling</div>
         </article>
 
         <article class="calendar-kpi" style="--kpi-color: #16a34a;">
@@ -236,18 +241,24 @@
                                         $dayOrders = $ordersByDay->get($dateKey, collect());
                                         $dayQuantity = (int) $quantityByDay->get($dateKey, 0);
                                         $companyOrderCount = (int) $orderCountByDay->get($dateKey, 0);
-                                        $remaining = $dailyCapacity - $dayQuantity;
-                                        $capacityPercent = $dailyCapacity > 0
-                                            ? min(100, (int) round(($dayQuantity / $dailyCapacity) * 100))
-                                            : 0;
+                                        // Capacity is per PRODUCT, the way the order form already
+                                        // refuses it. The day's headline is its fullest bench:
+                                        // 300 shirts beside 300 jerseys is two half-full days'
+                                        // work, not one overbooked one.
+                                        $dayProducts = $productLoadByDay->get($dateKey, []);
+                                        $tightest = collect($dayProducts)->sortByDesc('percent')->first();
+                                        $capacityPercent = (int) $fullestByDay->get($dateKey, 0);
 
-                                        if ($dayQuantity > $dailyCapacity) {
+                                        $remaining = $tightest ? max(0, $tightest['cap'] - $tightest['qty']) : 0;
+                                        $overBy = $tightest ? max(0, $tightest['qty'] - $tightest['cap']) : 0;
+
+                                        if ($overBy > 0) {
                                             $capacityClass = 'cap-over';
-                                            $capacityStatus = '+' . number_format($dayQuantity - $dailyCapacity) . ' over';
-                                        } elseif ($dayQuantity === $dailyCapacity && $dayQuantity > 0) {
+                                            $capacityStatus = '+' . number_format($overBy) . ' over';
+                                        } elseif ($tightest && $tightest['over']) {
                                             $capacityClass = 'cap-full';
                                             $capacityStatus = 'Full';
-                                        } elseif ($dayQuantity >= 400) {
+                                        } elseif ($capacityPercent >= 80) {
                                             $capacityClass = 'cap-warning';
                                             $capacityStatus = number_format($remaining) . ' left';
                                         } elseif ($dayQuantity > 0) {
@@ -257,6 +268,13 @@
                                             $capacityClass = 'cap-empty';
                                             $capacityStatus = 'Available';
                                         }
+
+                                        // The cell can only show the tightest bench, so the
+                                        // tooltip carries every one of them.
+                                        $capacityTip = collect($dayProducts)
+                                            ->map(fn ($line) => $line['label'] . ' ' . number_format($line['qty'])
+                                                . '/' . number_format($line['cap']))
+                                            ->implode(' | ');
 
                                         // Every order the viewer may see is rendered; the ones past the
                                         // third start hidden and the toggle below reveals them. They used
@@ -276,17 +294,26 @@
                                         @if ($inMonth)
                                             <div
                                                 class="cal-capacity {{ $capacityClass }}"
-                                                data-tip="{{ $day->format('F j') }}: {{ number_format($dayQuantity) }} of {{ number_format($dailyCapacity) }} pieces booked across {{ number_format($companyOrderCount) }} {{ Str::plural('order', $companyOrderCount) }}."
+                                                data-tip="{{ $day->format('F j') }}: {{ $capacityTip ?: 'nothing booked' }} - {{ number_format($companyOrderCount) }} {{ Str::plural('order', $companyOrderCount) }}."
                                             >
                                                 <div class="cal-capacity-top">
                                                     <span class="cal-capacity-main">
-                                                        {{ number_format($dayQuantity) }}/{{ number_format($dailyCapacity) }} pcs
+                                                        @if ($tightest)
+                                                            {{ number_format($tightest['qty']) }}/{{ number_format($tightest['cap']) }} {{ Str::limit($tightest['label'], 12) }}
+                                                        @else
+                                                            0 pcs
+                                                        @endif
                                                     </span>
                                                     <span class="cal-capacity-status">{{ $capacityStatus }}</span>
                                                 </div>
 
                                                 <div class="cal-capacity-meta">
-                                                    <span>{{ number_format($companyOrderCount) }} {{ Str::plural('order', $companyOrderCount) }}</span>
+                                                    <span>
+                                                        {{ number_format($companyOrderCount) }} {{ Str::plural('order', $companyOrderCount) }}
+                                                        @if (count($dayProducts) > 1)
+                                                            · {{ count($dayProducts) }} products
+                                                        @endif
+                                                    </span>
                                                     <span>{{ $capacityPercent }}%</span>
                                                 </div>
 
@@ -358,8 +385,17 @@
                                 </div>
                             </div>
 
+                            @php
+                                $mobileTightest = collect($productLoadByDay->get($mobileKey, []))
+                                    ->sortByDesc('percent')->first();
+                            @endphp
                             <div class="mobile-capacity">
-                                {{ number_format($mobileQuantity) }}/{{ number_format($dailyCapacity) }} pcs
+                                @if ($mobileTightest)
+                                    {{ number_format($mobileTightest['qty']) }}/{{ number_format($mobileTightest['cap']) }}
+                                    {{ $mobileTightest['label'] }}
+                                @else
+                                    0 pcs
+                                @endif
                             </div>
                         </div>
 

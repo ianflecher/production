@@ -109,6 +109,64 @@ class CalendarController extends Controller
             );
 
         /*
+         * =========================================================
+         * CAPACITY, PER PRODUCT
+         * =========================================================
+         *
+         * Five hundred shirts and five hundred riding jerseys are not the same
+         * day's work and do not compete for the same bench — order intake has
+         * counted it that way since capacity was made per product. The grid
+         * did not, so a day holding 300 shirts and 300 jerseys read as 600/500
+         * and looked overbooked when neither product was near its own ceiling.
+         *
+         * Each product gets its own line against its own cap:
+         *
+         * [
+         *     '2026-07-22' => [
+         *         ['type' => 'round_neck', 'label' => 'Round Neck', 'qty' => 300,
+         *          'cap' => 500, 'percent' => 60, 'over' => false],
+         *     ],
+         * ]
+         */
+        $productLoadByDay = $allCompanyOrders
+            ->groupBy(fn (ProductionOrder $order): string => $order->due_date->toDateString())
+            ->map(function ($orders) {
+                return $orders
+                    ->groupBy(fn (ProductionOrder $order) => (string) $order->product_type)
+                    ->map(function ($sameProduct, $type) {
+                        $qty = (int) $sameProduct->sum('quantity');
+                        $first = $sameProduct->first();
+
+                        // The ceiling this product is actually held to, read
+                        // from the list the job was priced from — the same
+                        // figure the order form refuses against.
+                        $cap = \App\Services\PricingService::maxQuantity($type ?: null, $first->price_list)
+                            ?? ProductionOrder::DAILY_CAPACITY;
+
+                        return [
+                            'type' => $type,
+                            'label' => $first->productLabel() ?? 'Other work',
+                            'qty' => $qty,
+                            'cap' => (int) $cap,
+                            'percent' => $cap > 0 ? min(100, (int) round($qty / $cap * 100)) : 0,
+                            'over' => $cap > 0 && $qty >= $cap,
+                        ];
+                    })
+                    ->sortByDesc('percent')
+                    ->values()
+                    ->all();
+            });
+
+        /*
+         * A day is "full" when ANY product on it has reached its own ceiling —
+         * that is the day something must move, whatever the other benches are
+         * doing. The old flat total could not say this.
+         */
+        $fullestByDay = $productLoadByDay->map(
+            fn (array $lines): int => collect($lines)->max('percent') ?? 0
+        );
+
+        /*
          * Number of all company orders booked on each date.
          */
         $orderCountByDay = $allCompanyOrders
@@ -198,6 +256,8 @@ class CalendarController extends Controller
              * Company-wide capacity information.
              */
             'dailyCapacity' => self::DAILY_CAPACITY,
+            'productLoadByDay' => $productLoadByDay,
+            'fullestByDay' => $fullestByDay,
             'quantityByDay' => $quantityByDay,
             'orderCountByDay' => $orderCountByDay,
 
