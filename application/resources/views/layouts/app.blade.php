@@ -190,15 +190,11 @@
             @if (auth()->user()->isLeader())
             <nav class="nav-section">
                 <div class="nav-label">Management</div>
-                {{-- Problems surface here rather than waiting for someone to report them. --}}
-                @php $errCount = \App\Services\ErrorLog::countRecent(7); @endphp
-                <a href="{{ route('system.errors') }}" class="nav-item {{ request()->routeIs('system.*') ? 'active' : '' }}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    Errors
-                    @if ($errCount > 0)
-                        <span style="margin-left:auto; min-width:20px; padding:0 6px; border-radius:99px; background:#E31B23; color:#fff; font-weight:700; font-size:0.72rem; line-height:20px; text-align:center;">{{ $errCount > 99 ? '99+' : $errCount }}</span>
-                    @endif
-                </a>
+                {{-- Errors is not in the sidebar. It is a page for whoever is
+                     working ON the system, not for the people running the shop
+                     on it, and a red count of things they cannot act on only
+                     ever read as something being wrong with their work. Still
+                     at /system/errors for anyone who needs it. --}}
 
                 {{-- The board says what every station is doing and the calendar
                      says what is due. Neither answers "what is holding us up?" --}}
