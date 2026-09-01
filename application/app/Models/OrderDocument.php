@@ -143,6 +143,28 @@ class OrderDocument extends Model
             ];
         }
 
+        // The discount the order was given, as its own line.
+        //
+        // It was recorded on the order and applied there, but the sheet knew
+        // nothing about it: the client was shown the full price, VAT was
+        // charged on the undiscounted amount, and saving the sheet wrote that
+        // larger figure back over the order's total. A line is what makes all
+        // of those agree at once — every total on this document is built by
+        // adding up the lines, so the discount is subtracted everywhere the
+        // moment it is one of them.
+        //
+        // Capped at the gross by pricingBreakdown(), so it can never turn the
+        // sheet into a negative amount.
+        if ($pb['discount'] > 0) {
+            $items[] = [
+                'description' => 'Discount'.($order->discount_note ? ' — '.$order->discount_note : ''),
+                'size' => '',
+                'quantity' => 1,
+                'unit_price' => -1 * (float) $pb['discount'],
+                'addon' => true,
+            ];
+        }
+
         return [
             'number' => self::numberFor($order, $type),
             'items' => $items,
@@ -191,7 +213,12 @@ class OrderDocument extends Model
             $amount += $q * $u;
         }
 
-        $vat = $this->isVat() ? round($amount * ProductionOrder::VAT_RATE, 2) : 0.0;
+        // On what is owed after the discount line, matching the order's own
+        // pricingBreakdown(). max() guards a sheet edited into the negative:
+        // the shop does not refund VAT on a discount bigger than the job.
+        $vat = $this->isVat()
+            ? round(max(0, $amount) * ProductionOrder::VAT_RATE, 2)
+            : 0.0;
 
         return [
             'quantity' => $qty,

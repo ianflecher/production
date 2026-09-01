@@ -76,7 +76,10 @@ class OrderDocumentController extends Controller
             'items.*.description' => ['nullable', 'string', 'max:255'],
             'items.*.size' => ['nullable', 'string', 'max:50'],
             'items.*.quantity' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
-            'items.*.unit_price' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            // A discount is a line that takes money off, so a unit price is
+            // allowed to be negative. min:0 silently threw the discount row
+            // away on every save, which put the undiscounted total back.
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:-10000000', 'max:10000000'],
             'items.*.addon' => ['nullable', 'boolean'],
         ]);
 
@@ -107,8 +110,16 @@ class OrderDocumentController extends Controller
             $net += (float) ($row['quantity'] ?? 0) * (float) ($row['unit_price'] ?? 0);
         }
         $gross = $type === \App\Models\OrderDocument::TYPE_PQ ? $net * 1.12 : $net;
+
+        // A sheet with a discount line can legitimately come to nothing — a
+        // fully sponsored job is worth zero and the order should say so. The
+        // guard is there to stop an EMPTY sheet wiping a total, so it asks
+        // whether anything is priced rather than whether the answer is > 0.
+        $hasPricedLine = collect($items)
+            ->contains(fn ($row) => (float) ($row['unit_price'] ?? 0) != 0.0);
+
         $synced = false;
-        if ($gross > 0) {
+        if ($hasPricedLine && $gross >= 0) {
             $order->update([
                 'total_price' => round($gross, 2),
                 'vat_inclusive' => $type === \App\Models\OrderDocument::TYPE_PQ,
