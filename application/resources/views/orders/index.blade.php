@@ -385,9 +385,18 @@
                                         && ! $order->hasDownpayment()
                                     )
 
-                                        <span class="current-step warning">
-                                            ⚠ Needs downpayment
-                                        </span>
+                                        {{-- Recorded and with Finance, or not paid
+                                             at all: two different jobs for two
+                                             different desks. --}}
+                                        @if ($order->hasPaymentAwaitingFinance())
+                                            <span class="current-step warning">
+                                                ⏳ Waiting for Finance to confirm
+                                            </span>
+                                        @else
+                                            <span class="current-step warning">
+                                                ⚠ Needs downpayment
+                                            </span>
+                                        @endif
 
                                     @elseif (
                                         $current

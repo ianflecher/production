@@ -129,7 +129,11 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
 
-            $recentOrders = ProductionOrder::with('tasks')
+            // Payments come too: the row says whether an order still needs a
+            // downpayment or is only waiting on Finance to confirm one, and
+            // both questions are answered off the loaded payments rather than
+            // a query per row.
+            $recentOrders = ProductionOrder::with(['tasks', 'payments'])
                 ->orderByDesc('id')
                 ->limit(5)
                 ->get();

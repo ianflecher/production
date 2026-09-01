@@ -584,8 +584,32 @@ class ProductionOrder extends Model
      * which answers it in the query that fetched the orders. Without that this
      * falls back to asking on its own, which is right for a single order.
      */
+    /**
+     * Nothing is owed on this job at all.
+     *
+     * A sponsored sample, or one discounted down to nothing. There is no
+     * downpayment coming because there is nothing to pay, and every gate that
+     * waits for one — sending the job order, starting the layout, the
+     * dashboard's "needs downpayment" list — would have waited forever.
+     *
+     * Priced at nothing is not the same as not priced yet: an order still
+     * saying "For quotation" has no total, is not settled, and must not walk
+     * onto the floor unpaid. Read off the column so a list can ask this per
+     * row without a query each time.
+     */
+    public function owesNothing(): bool
+    {
+        return $this->total_price !== null && (float) $this->total_price <= 0.0;
+    }
+
     public function hasDownpayment(): bool
     {
+        // Nothing to wait for. Asked before anything else, because no payment
+        // will ever arrive to answer it.
+        if ($this->owesNothing()) {
+            return true;
+        }
+
         // CONFIRMED money only. What the officer records is what the client
         // says they have sent; Finance watches the account and says whether it
         // arrived. The shop draws on the second answer, not the first.

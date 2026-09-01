@@ -116,7 +116,10 @@
             && $task->isStuckNoStaff();
     })->count();
 
-    $needsDownpaymentCount = $dashboardOrders->filter(function ($order) {
+    // Two different alerts, not one. An order whose payment is recorded and
+    // sitting with Finance is not the officer's to chase — counting both as
+    // "need downpayment" sent officers back to clients who had already paid.
+    $awaitingPayment = $dashboardOrders->filter(function ($order) {
         return method_exists($order, 'layoutApproved')
             && method_exists($order, 'hasDownpayment')
             && in_array(
@@ -126,7 +129,14 @@
             )
             && $order->layoutApproved()
             && ! $order->hasDownpayment();
-    })->count();
+    });
+
+    $awaitingFinanceCount = $awaitingPayment->filter(
+        fn ($order) => method_exists($order, 'hasPaymentAwaitingFinance')
+            && $order->hasPaymentAwaitingFinance()
+    )->count();
+
+    $needsDownpaymentCount = $awaitingPayment->count() - $awaitingFinanceCount;
 
     $nearDueCount = $dashboardOrders->filter(function ($order) {
         $rawDate = data_get($order, 'delivery_date')
@@ -733,9 +743,20 @@
 
                         <td>
                             @if ($needsDownpayment)
-                                <span class="dash-warning">
-                                    ⚠ Needs downpayment
-                                </span>
+                                {{-- Money recorded but not yet confirmed is not
+                                     the officer's to chase — it is with Finance.
+                                     Both said "needs downpayment", which sent
+                                     officers back to clients who had already
+                                     paid. --}}
+                                @if ($order->hasPaymentAwaitingFinance())
+                                    <span class="dash-warning">
+                                        ⏳ Waiting for Finance to confirm
+                                    </span>
+                                @else
+                                    <span class="dash-warning">
+                                        ⚠ Needs downpayment
+                                    </span>
+                                @endif
                             @elseif ($isStuck)
                                 <span class="dash-warning">
                                     ⚠ {{ $current->department }} — no one present
@@ -815,6 +836,21 @@
                         </a>
                     @endif
 
+                    @if ($awaitingFinanceCount > 0)
+                        <a href="{{ route('orders.index') }}" class="dash-alert amber">
+                            <span class="dash-alert-icon">⏳</span>
+                            <span>
+                                <span class="dash-alert-title">
+                                    {{ $awaitingFinanceCount }}
+                                    {{ \Illuminate\Support\Str::plural('order', $awaitingFinanceCount) }}
+                                    waiting for Finance to confirm
+                                </span>
+                                <span class="dash-alert-note">Paid — with Finance, nothing to chase</span>
+                            </span>
+                            <span class="dash-alert-arrow">›</span>
+                        </a>
+                    @endif
+
                     @if ($nearDueCount > 0)
                         <a href="{{ route('orders.index') }}" class="dash-alert amber">
                             <span class="dash-alert-icon">◷</span>
@@ -847,6 +883,7 @@
 
                     @if (
                         $needsDownpaymentCount === 0
+                        && $awaitingFinanceCount === 0
                         && $nearDueCount === 0
                         && $awaitingApprovalCount === 0
                     )
