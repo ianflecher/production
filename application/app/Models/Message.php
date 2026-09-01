@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Message extends Model
 {
-    protected $fillable = ['production_order_id', 'sender_id', 'sender_name', 'body'];
+    protected $fillable = ['production_order_id', 'inquiry_id', 'sender_id', 'sender_name', 'body'];
 
     public function sender()
     {
@@ -33,6 +33,45 @@ class Message extends Model
     public function order()
     {
         return $this->belongsTo(ProductionOrder::class, 'production_order_id');
+    }
+
+    /**
+     * The layout this was said about, when it was said before the job order
+     * existed. Kept even after the order is written, so the thread can still
+     * say which part of it happened at the drawing stage.
+     */
+    public function inquiry()
+    {
+        return $this->belongsTo(Inquiry::class, 'inquiry_id');
+    }
+
+    /**
+     * Who may read and add to a layout's thread.
+     *
+     * The officer whose inquiry it is, the artist drawing it, and the leaders
+     * — the same people who can already open the layout itself. Nobody else
+     * has any business in it, and there is no job order yet to inherit from.
+     */
+    public static function canAccessInquiry(User $user, Inquiry $inquiry): bool
+    {
+        return $user->isLeader()
+            || $inquiry->created_by === $user->id
+            || $inquiry->layout_artist_id === $user->id
+            || ($user->leadsTeam() && $inquiry->team === $user->team);
+    }
+
+    /**
+     * Hand the layout's conversation to the job order it became.
+     *
+     * Called once, when the order is written. The messages keep their inquiry
+     * so the history is not rewritten, and gain the order — which is all the
+     * existing thread needs to start showing them.
+     */
+    public static function carryLayoutThreadTo(Inquiry $inquiry, ProductionOrder $order): int
+    {
+        return self::where('inquiry_id', $inquiry->id)
+            ->whereNull('production_order_id')
+            ->update(['production_order_id' => $order->id]);
     }
 
     /** The people @mentioned in this message. */
@@ -211,7 +250,14 @@ class Message extends Model
             ->pluck('unread', 'm.production_order_id');
     }
 
-    /** Total unread across every thread this person can see (nav badge). */
+    /**
+     * Total unread across every thread this person can see (nav badge).
+     *
+     * Job orders and layouts in one count, and one query for the counting.
+     * This badge is rendered on EVERY page, so what it costs is paid on every
+     * page — reading the messages back into PHP to compare them, as this used
+     * to, was the expensive way to ask a question the database can answer.
+     */
     public static function unreadFor(int $userId): int
     {
         $user = User::find($userId);
@@ -219,18 +265,96 @@ class Message extends Model
             return 0;
         }
 
-        $reads = MessageRead::where('user_id', $user->id)
-            ->pluck('last_read_at', 'production_order_id');
-
-        return self::whereIn('production_order_id', self::accessibleOrderIds($user))
-            ->where('sender_id', '!=', $user->id)
-            ->get(['production_order_id', 'created_at'])
-            ->filter(function ($m) use ($reads) {
-                $seen = $reads[$m->production_order_id] ?? null;
-
-                return $seen === null || $m->created_at > $seen;
+        return (int) self::query()
+            ->from('messages as m')
+            ->leftJoin('message_reads as ro', function ($join) use ($user) {
+                $join->on('ro.production_order_id', '=', 'm.production_order_id')
+                    ->where('ro.user_id', '=', $user->id);
+            })
+            ->leftJoin('message_reads as ri', function ($join) use ($user) {
+                $join->on('ri.inquiry_id', '=', 'm.inquiry_id')
+                    ->where('ri.user_id', '=', $user->id);
+            })
+            ->where('m.sender_id', '!=', $user->id)
+            ->where(function ($q) use ($user) {
+                // On a job order she is part of, unread since she last looked.
+                $q->where(fn ($order) => $order
+                    ->whereIn('m.production_order_id', self::accessibleOrderIds($user))
+                    ->where(fn ($seen) => $seen
+                        ->whereNull('ro.last_read_at')
+                        ->orWhereColumn('m.created_at', '>', 'ro.last_read_at')))
+                    // …or on a layout that has no job order yet. Once it has
+                    // one the message is counted on the order instead, never
+                    // on both.
+                    ->orWhere(fn ($layout) => $layout
+                        ->whereNull('m.production_order_id')
+                        ->whereIn('m.inquiry_id', self::accessibleInquiryQuery($user))
+                        ->where(fn ($seen) => $seen
+                            ->whereNull('ri.last_read_at')
+                            ->orWhereColumn('m.created_at', '>', 'ri.last_read_at')));
             })
             ->count();
+    }
+
+    /**
+     * Unread per LAYOUT thread, for the inbox rows that have no job order yet.
+     *
+     * Same shape as unreadCountsForOrders, keyed on the inquiry instead. A
+     * layout message raised no badge at all before this, so an artist could be
+     * waiting on an answer nobody knew had been asked for.
+     */
+    public static function unreadCountsForInquiries(User $user, array $inquiryIds): \Illuminate\Support\Collection
+    {
+        if ($inquiryIds === []) {
+            return collect();
+        }
+
+        return self::query()
+            ->from('messages as m')
+            ->leftJoin('message_reads as r', function ($join) use ($user) {
+                $join->on('r.inquiry_id', '=', 'm.inquiry_id')
+                    ->where('r.user_id', '=', $user->id);
+            })
+            ->whereIn('m.inquiry_id', $inquiryIds)
+            ->where('m.sender_id', '!=', $user->id)
+            ->where(fn ($q) => $q
+                ->whereNull('r.last_read_at')
+                ->orWhereColumn('m.created_at', '>', 'r.last_read_at'))
+            ->groupBy('m.inquiry_id')
+            ->selectRaw('m.inquiry_id, COUNT(*) as unread')
+            ->pluck('unread', 'm.inquiry_id');
+    }
+
+    /**
+     * The layouts whose threads this person is part of — the same rule the
+     * thread page enforces, in one query so the badge and the inbox agree.
+     */
+    public static function accessibleInquiryIds(User $user): \Illuminate\Support\Collection
+    {
+        return self::accessibleInquiryQuery($user)->pluck('id');
+    }
+
+    /** The same rule as a query, for folding into a bigger one. */
+    public static function accessibleInquiryQuery(User $user)
+    {
+        return Inquiry::query()
+            ->select('id')
+            ->whereNull('production_order_id')
+            ->when(! $user->isLeader(), fn ($q) => $q->where(fn ($w) => $w
+                ->where('created_by', $user->id)
+                ->orWhere('layout_artist_id', $user->id)
+                ->orWhere(fn ($team) => $user->leadsTeam()
+                    ? $team->where('team', $user->team)
+                    : $team->whereRaw('1 = 0'))));
+    }
+
+    /** Mark a layout's thread as read up to now. */
+    public static function markInquiryRead(User $user, int $inquiryId): void
+    {
+        MessageRead::updateOrCreate(
+            ['user_id' => $user->id, 'inquiry_id' => $inquiryId],
+            ['last_read_at' => now()],
+        );
     }
 
     /** Mark an order's thread as read up to now. */

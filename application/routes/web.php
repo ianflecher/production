@@ -110,6 +110,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/messages/unread', [MessageController::class, 'unread'])->name('messages.unread');
     Route::get('/message-files/{file}', [MessageController::class, 'file'])
         ->whereNumber('file')->name('messages.file');
+    // Before /messages/{order}: a layout thread is keyed by its inquiry, and
+    // the numeric route below would otherwise swallow it.
+    Route::get('/messages/layout/{inquiry}', [MessageController::class, 'layout'])
+        ->whereNumber('inquiry')->name('messages.layout');
     Route::get('/messages/{order}', [MessageController::class, 'show'])
         ->whereNumber('order')->name('messages.show');
     Route::post('/messages/{order}', [MessageController::class, 'store'])
@@ -316,6 +320,12 @@ Route::middleware(['auth', 'active'])->group(function () {
             ->whereNumber('expense')->name('books.expenses.receipt');
         Route::get('/books/export', [BookkeepingController::class, 'export'])->name('books.export');
     });
+
+    // -------- Talking about a layout, before there is a job order --------
+    // The artist is not sales and not a leader, so this cannot live in either
+    // group. Who may post is checked per inquiry in Message::canAccessInquiry.
+    Route::post('/inquiries/{inquiry}/messages', [\App\Http\Controllers\InquiryMessageController::class, 'store'])
+        ->whereNumber('inquiry')->name('inquiries.messages.store');
 
     // -------- Order viewing + calendar: Sales, Leader, Super Admin, Mover --------
     // The mover reads job orders to chase progress round the floor. Read-only:

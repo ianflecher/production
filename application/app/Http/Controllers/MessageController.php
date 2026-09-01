@@ -72,13 +72,81 @@ class MessageController extends Controller
             ])
         );
 
+        // Layouts still being drawn. They have no job order to be a row
+        // against, but the conversation about them belongs in the inbox — it
+        // is the same conversation, started before the order existed.
+        $layoutThreads = \App\Models\Inquiry::query()
+            ->whereNull('production_order_id')
+            ->where(fn ($q) => $q->whereNotNull('layout_artist_id')->orWhereHas('messages'))
+            ->when(! $me->isLeader(), fn ($q) => $q->where(fn ($w) => $w
+                ->where('created_by', $me->id)
+                ->orWhere('layout_artist_id', $me->id)
+                ->orWhere(fn ($team) => $me->leadsTeam()
+                    ? $team->where('team', $me->team)
+                    : $team->whereRaw('1 = 0'))))
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->whereHas('client', fn ($c) => $c->where('name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%"))
+                ->orWhereHas('messages', fn ($m) => $m->where('body', 'like', "%{$search}%"))))
+            ->with(['client', 'layoutArtist', 'messages' => fn ($q) => $q->latest('id')->limit(1)])
+            ->get()
+            ->map(fn ($inquiry) => [
+                'inquiry' => $inquiry,
+                'last' => $inquiry->messages->first(),
+                'unread' => 0, // filled in below, in one query for the section
+                'stage' => match (true) {
+                    $inquiry->layoutApproved() => 'Approved',
+                    $inquiry->layoutSubmitted() => 'With the client',
+                    $inquiry->layoutWithArtist() => 'Being drawn',
+                    default => 'Brief',
+                },
+            ])
+            // Talked-about layouts first, then the quiet ones.
+            ->sortByDesc(fn ($row) => $row['last']?->id ?? 0)
+            ->values();
+
+        // One query for the whole section, the same way the order rows do it.
+        $layoutUnread = Message::unreadCountsForInquiries(
+            $me,
+            $layoutThreads->pluck('inquiry.id')->all()
+        );
+
+        $layoutThreads = $layoutThreads
+            ->map(fn ($row) => ['unread' => (int) ($layoutUnread[$row['inquiry']->id] ?? 0)] + $row)
+            // An unanswered question outranks an old one nobody is waiting on.
+            ->sortByDesc(fn ($row) => [$row['unread'] > 0 ? 1 : 0, $row['last']?->id ?? 0])
+            ->values();
+
         return view('messages.index', [
+            'layoutThreads' => $layoutThreads,
             'threads' => $threads,
             'search' => $search,
             // Counted across the whole inbox, not the page on screen.
             'talkedAbout' => ProductionOrder::whereIn('id', $orderIds)
                 ->whereHas('messages')
                 ->count(),
+        ]);
+    }
+
+    /**
+     * One layout's thread, before the job order exists.
+     *
+     * Its own page rather than a panel on the layout screen: this is a
+     * conversation, and conversations live in Messages. When the order is
+     * written these same messages appear on its thread instead.
+     */
+    public function layout(Request $request, \App\Models\Inquiry $inquiry): View
+    {
+        abort_unless(Message::canAccessInquiry($request->user(), $inquiry), 403);
+
+        $messages = $inquiry->messages()->with('sender')->orderBy('id')->get();
+
+        // Opening it is reading it — same as a job order's thread.
+        Message::markInquiryRead($request->user(), $inquiry->id);
+
+        return view('messages.layout', [
+            'inquiry' => $inquiry->load(['client', 'layoutArtist']),
+            'messages' => $messages,
         ]);
     }
 

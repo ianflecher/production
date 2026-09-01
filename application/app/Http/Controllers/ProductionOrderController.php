@@ -467,6 +467,11 @@ class ProductionOrderController extends Controller
         // comes off the follow-up list — the inquiry keeps the job it became.
         $inquiry->markOrdered($order);
 
+        // Everything said while the layout was being drawn becomes this order's
+        // thread. The conversation was already about this job; it only lacked
+        // the job to be filed under.
+        \App\Models\Message::carryLayoutThreadTo($inquiry, $order);
+
         return redirect()
             ->route('orders.show', $order)
             ->with('success', "Order {$order->order_number} created for {$client->fullName()} ({$order->quantity} pcs) and sent to the artist for layout.");

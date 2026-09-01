@@ -59,6 +59,56 @@
     'label' => 'Search conversations',
 ])
 
+{{-- Layouts being drawn. They have no job order yet, so they cannot be a row
+     in the list below — but the conversation about them belongs here, not on
+     the layout page, and it becomes the job order's thread when one is written. --}}
+@if ($layoutThreads->isNotEmpty())
+    <div class="card panel" style="margin-bottom: 1.1rem;">
+        <h2>Layouts being drawn</h2>
+        <p class="sub">
+            Before the job order exists. Whatever is said here carries over to it.
+        </p>
+
+        <div class="msg-list">
+            @foreach ($layoutThreads as $t)
+                <a href="{{ route('messages.layout', $t['inquiry']) }}" class="msg-row">
+                    <span class="jo-tag" style="background: var(--ink-3);">LAY</span>
+
+                    <div class="msg-mid">
+                        <div class="msg-name">
+                            {{ $t['inquiry']->client?->fullName() ?? 'Client' }}
+                            <span class="stage-tag is-live">{{ $t['stage'] }}</span>
+                        </div>
+                        <div class="msg-client">
+                            {{ $t['inquiry']->what_they_want ?: 'Layout' }}
+                            @if ($t['inquiry']->layoutArtist)
+                                · {{ $t['inquiry']->layoutArtist->name }}
+                            @endif
+                        </div>
+                        <div class="msg-prev {{ $t['unread'] ? 'unread' : '' }}">
+                            @if ($t['last'])
+                                <span style="color: var(--ink-3);">{{ $t['last']->senderLabel() }}:</span>
+                                {{ $t['last']->preview() }}
+                            @else
+                                <span style="font-style: italic;">No messages yet</span>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="msg-meta">
+                        @if ($t['last'])
+                            <div>{{ $t['last']->created_at?->diffForHumans(short: true) }}</div>
+                        @endif
+                        @if ($t['unread'])
+                            <div style="margin-top: 0.3rem;"><span class="msg-badge">{{ $t['unread'] }}</span></div>
+                        @endif
+                    </div>
+                </a>
+            @endforeach
+        </div>
+    </div>
+@endif
+
 <div class="card panel">
     <h2>Job order conversations</h2>
     <p class="sub">
