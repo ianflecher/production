@@ -246,6 +246,30 @@
         </div>
     @endif
 
+    {{-- A leader can move the layout to somebody else, and can do it here,
+         before the job order exists. An artist who goes home sick used to take
+         the layout with them until the order was written. --}}
+    @if (auth()->user()->isLeader() && $artists->isNotEmpty())
+        <form method="POST" action="{{ route('inquiries.layout.artist', $inquiry) }}"
+              style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap; margin:.6rem 0 1rem;">
+            @csrf
+            <div class="field" style="margin:0;">
+                <label for="layout_artist_id">
+                    {{ $inquiry->layoutArtist ? 'Hand it to someone else' : 'Give it to an artist' }}
+                </label>
+                <select id="layout_artist_id" name="layout_artist_id" required>
+                    @foreach ($artists as $candidate)
+                        <option value="{{ $candidate->id }}" @selected($inquiry->layout_artist_id === $candidate->id)>
+                            {{ $candidate->name }}@if (! $candidate->isPresentToday()) — not in today @endif
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <button type="submit" class="btn btn-ghost btn-sm">Move the layout</button>
+        </form>
+        @error('layout_artist_id')<div class="error" style="margin-bottom:.6rem;">{{ $message }}</div>@enderror
+    @endif
+
     @if ($inquiry->layout_sent_at)
         {{-- Already sent. Sending twice would hand the same brief out again, so
              what is left to do here is the job order — and that is the only

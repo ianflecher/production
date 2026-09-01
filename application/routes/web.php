@@ -238,6 +238,20 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/inquiries/{inquiry}/layout/revise', [\App\Http\Controllers\InquiryController::class, 'reviseLayout'])->name('inquiries.layout.revise');
     });
 
+    // The layout page itself. Sales work it; a leader reads it and is the only
+    // one who may move it to another artist, so they have to be able to open it
+    // — it lived in the sales-only group, which 403'd every leader.
+    Route::middleware('role:sales,leader,super_admin')->group(function () {
+        Route::get('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'layout'])->name('inquiries.layout');
+    });
+
+    // Moving a layout to another artist is the leader's, and it has to work
+    // before there is a job order — see InquiryController::reassignLayoutArtist.
+    Route::middleware('role:leader,super_admin')->group(function () {
+        Route::post('/inquiries/{inquiry}/layout/artist', [\App\Http\Controllers\InquiryController::class, 'reassignLayoutArtist'])
+            ->whereNumber('inquiry')->name('inquiries.layout.artist');
+    });
+
     // The client book itself is oversight only — the names are written down on
     // the inquiry form, not here.
     Route::middleware('role:leader,super_admin')->group(function () {
@@ -250,7 +264,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         // person who does not order today is still a name that can be called.
         Route::get('/inquiries/create', [\App\Http\Controllers\InquiryController::class, 'create'])->name('inquiries.create');
         Route::post('/inquiries', [\App\Http\Controllers\InquiryController::class, 'store'])->name('inquiries.store');
-        Route::get('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'layout'])->name('inquiries.layout');
         Route::get('/inquiries/{inquiry}/design-brief', [\App\Http\Controllers\InquiryController::class, 'designBrief'])->name('inquiries.design-brief');
         Route::post('/inquiries/{inquiry}/design-brief', [\App\Http\Controllers\InquiryController::class, 'saveDesignBrief'])->name('inquiries.design-brief.save');
         Route::post('/inquiries/{inquiry}/design-brief/reopen', [\App\Http\Controllers\InquiryController::class, 'reopenDesignBrief'])->name('inquiries.design-brief.reopen');

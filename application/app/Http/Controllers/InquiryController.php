@@ -119,7 +119,18 @@ class InquiryController extends Controller
         $this->assertAccess($request);
         $this->assertMine($request, $inquiry);
 
-        return view('inquiries.layout', ['inquiry' => $inquiry->load('client')]);
+        return view('inquiries.layout', [
+            'inquiry' => $inquiry->load('client'),
+            // Only a leader may move a layout, so only a leader is asked the
+            // question — and only they pay for the query.
+            'artists' => $request->user()->isLeader()
+                ? User::where('is_active', true)
+                    ->get()
+                    ->filter(fn (User $u) => $u->isArtist())
+                    ->sortBy('name')
+                    ->values()
+                : collect(),
+        ]);
     }
 
     public function uploadLayout(Request $request, Inquiry $inquiry): RedirectResponse
@@ -314,6 +325,57 @@ class InquiryController extends Controller
             ->with('success', $artist
                 ? 'Artist layout brief saved — '.$artist->name.' has the layout. Complete the new job order.'
                 : 'Artist layout brief saved. No artist is in today, so the layout will be handed out when the job order is written.');
+    }
+
+    /**
+     * Hand a layout to a different artist, before there is a job order.
+     *
+     * The artist is picked automatically when the brief is sent, and until now
+     * nothing could change it until the job order existed — so an artist who
+     * went home sick took the layout with them and the officer could only wait.
+     * A leader can move it; the layout, its references and anything already
+     * said about it stay with the inquiry and follow the new artist.
+     */
+    public function reassignLayoutArtist(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        abort_unless($request->user()->isLeader(), 403);
+
+        $data = $request->validate(
+            ['layout_artist_id' => ['required', 'integer', 'exists:users,id']],
+            ['layout_artist_id.required' => 'Choose who is drawing it.']
+        );
+
+        $artist = User::findOrFail($data['layout_artist_id']);
+
+        if (! $artist->isArtist() || ! $artist->is_active) {
+            return back()->withErrors(['layout_artist_id' => 'That person is not an artist who can take it.']);
+        }
+
+        $previous = $inquiry->layoutArtist;
+
+        if ($previous?->id === $artist->id) {
+            return back()->with('success', $artist->name.' already has it.');
+        }
+
+        $inquiry->update(['layout_artist_id' => $artist->id]);
+
+        // Both of them need to know: one has work that is no longer theirs, the
+        // other has work they have not been told about.
+        \App\Models\AppNotification::toUser($artist->id,
+            '🎨 A layout was handed to you',
+            $inquiry->client?->fullName().' — '.($inquiry->what_they_want ?: 'layout'),
+            route('inquiries.layouts'));
+
+        if ($previous) {
+            \App\Models\AppNotification::toUser($previous->id,
+                '↪ A layout moved off your queue',
+                $inquiry->client?->fullName().' is with '.$artist->name.' now.',
+                route('inquiries.layouts'));
+        }
+
+        return back()->with('success', $previous
+            ? 'Moved from '.$previous->name.' to '.$artist->name.'.'
+            : $artist->name.' has the layout.');
     }
 
     /** Log a chase, and say when to chase again. */
