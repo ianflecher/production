@@ -385,7 +385,11 @@ class InquiryController extends Controller
         $user = $request->user();
         abort_unless($user->isArtist() || $user->isLeader(), 403);
         abort_unless($inquiry->layout_artist_id === $user->id || $user->isLeader(), 403);
-        abort_unless($inquiry->layoutWithArtist(), 403);
+        // A layout already handed back can be uploaded over. The client asks
+        // for changes through the officer, but they also ask the artist
+        // directly, and a revised drawing had nowhere to go until the officer
+        // happened to send it back — so the artist sat on it.
+        abort_unless($inquiry->layoutWithArtist() || $inquiry->layoutSubmitted(), 403);
 
         $request->validate([
             'layout_files' => ['required', 'array'],
@@ -447,15 +451,46 @@ class InquiryController extends Controller
         $this->assertMine($request, $inquiry);
         abort_unless($inquiry->layoutSubmitted(), 403);
 
-        $data = $request->validate(
-            ['layout_revision_note' => ['required', 'string', 'max:2000']],
-            ['layout_revision_note.required' => 'Say what the client wants changed.']
-        );
+        // Three rounds is what the client is promised. A leader can still send
+        // it back a fourth time — giving a round away is a decision somebody
+        // makes, not something the form should quietly allow everybody.
+        if ($inquiry->revisionsUsedUp() && ! $request->user()->isLeader()) {
+            return back()->withErrors(['layout_revision_note' =>
+                'This layout has already had its '.Inquiry::LAYOUT_REVISION_LIMIT
+                .' revisions. A leader can send it back again.']);
+        }
+
+        $data = $request->validate([
+            'layout_revision_note' => ['required', 'string', 'max:2000'],
+            // What the client wants changed is often easier shown than said —
+            // a marked-up screenshot, a photo, the reference they meant. The
+            // note stays required; the files are the optional half.
+            'revision_files' => ['nullable', 'array'],
+            'revision_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+        ], [
+            'layout_revision_note.required' => 'Say what the client wants changed.',
+        ]);
+
+        $files = $inquiry->layout_files ?? [];
+        foreach ($request->file('revision_files', []) as $file) {
+            $files[] = [
+                'path' => $file->store('inquiry-layouts', 'local'),
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $request->user()->id,
+                'kind' => 'revision',
+            ];
+        }
 
         $inquiry->update([
             'layout_status' => Inquiry::LAYOUT_WITH_ARTIST,
             'layout_revision_note' => $data['layout_revision_note'],
             'layout_submitted_at' => null,
+            'layout_files' => $files ?: null,
+            // Counted even when a leader goes past the limit: the number is a
+            // record of what the job actually cost, not just a gate.
+            'layout_revision_count' => (int) $inquiry->layout_revision_count + 1,
         ]);
 
         if ($inquiry->layout_artist_id) {

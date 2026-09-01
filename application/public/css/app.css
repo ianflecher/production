@@ -1228,3 +1228,49 @@
 @media (max-width: 520px) {
     .rec-grid { grid-template-columns: 1fr; }
 }
+
+/* A note read back as its list of instructions — see NoteLines. */
+.note-lines {
+    margin: 0.35rem 0 0;
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+
+.note-lines li {
+    margin-bottom: 0.25rem;
+    line-height: 1.45;
+}
+
+.note-lines li:last-child { margin-bottom: 0; }
+
+.note-lines-single { margin: 0.35rem 0 0; line-height: 1.45; }
+
+/* The layout's conversation — see partials/layout-thread. */
+.layout-thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+}
+
+.layout-thread-msg {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.45rem 0.6rem;
+    background: var(--surface);
+}
+
+.layout-thread-msg.is-mine { border-color: var(--brand, #E31B23); }
+
+.layout-thread-who {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ink-2);
+    margin-bottom: 0.15rem;
+}
+
+.layout-thread-when { font-weight: 400; color: var(--ink-3); margin-left: 0.35rem; }
+
+.layout-thread-body { font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; }

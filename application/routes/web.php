@@ -227,6 +227,13 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/inquiries', [\App\Http\Controllers\InquiryController::class, 'index'])->name('inquiries.index');
     });
 
+    // Sending a layout back is the officer's job, but the fourth round is the
+    // leader's to give — so this one route admits them. The controller still
+    // checks the inquiry is theirs to touch.
+    Route::middleware('role:sales,leader,super_admin')->group(function () {
+        Route::post('/inquiries/{inquiry}/layout/revise', [\App\Http\Controllers\InquiryController::class, 'reviseLayout'])->name('inquiries.layout.revise');
+    });
+
     // The client book itself is oversight only — the names are written down on
     // the inquiry form, not here.
     Route::middleware('role:leader,super_admin')->group(function () {
@@ -248,7 +255,6 @@ Route::middleware(['auth', 'active'])->group(function () {
             ->whereNumber('index')->name('inquiries.layout.file.delete');
         Route::post('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'completeLayout'])->name('inquiries.layout.complete');
         Route::post('/inquiries/{inquiry}/layout/approve', [\App\Http\Controllers\InquiryController::class, 'approveLayout'])->name('inquiries.layout.approve');
-        Route::post('/inquiries/{inquiry}/layout/revise', [\App\Http\Controllers\InquiryController::class, 'reviseLayout'])->name('inquiries.layout.revise');
         Route::post('/inquiries/{inquiry}/follow-up', [\App\Http\Controllers\InquiryController::class, 'followUp'])->name('inquiries.follow-up');
 
         // Page two: the job itself, reached from an enquiry.

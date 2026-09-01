@@ -253,9 +253,11 @@
              from them and the officer may be asked what they said. --}}
         <div class="layout-note-card">
             <strong>Notes for the artist</strong>
-            <p style="color:{{ filled($inquiry->layout_reference_note) ? 'var(--ink)' : 'var(--ink-3)' }};">
-                {{ $inquiry->layout_reference_note ?: 'None — the design speaks for itself.' }}
-            </p>
+            @if (filled($inquiry->layout_reference_note))
+                @include('partials.note-lines', ['note' => $inquiry->layout_reference_note])
+            @else
+                <p style="color: var(--ink-3);">None — the design speaks for itself.</p>
+            @endif
         </div>
 
         {{-- The job order opens on approval and not before. An order written
@@ -301,15 +303,36 @@
                     <button type="submit" class="btn btn-primary btn-sm">✓ Client approved — write the job order</button>
                 </form>
 
+                {{-- What the client wants changed is often easier shown than
+                     said — a marked-up screenshot, a photo, the reference they
+                     actually meant. The note stays required; a file is the
+                     optional half, and it lands with the artist's other refs. --}}
+                @php $spent = $inquiry->revisionsUsedUp() && ! auth()->user()->isLeader(); @endphp
                 <form method="POST" action="{{ route('inquiries.layout.revise', $inquiry) }}"
+                      enctype="multipart/form-data"
                       style="display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap;">
                     @csrf
                     <input type="text" name="layout_revision_note" maxlength="2000" required
                            placeholder="What the client wants changed" style="min-width: 260px;">
-                    <button type="submit" class="btn btn-ghost btn-sm">↩ Send back</button>
+                    <input type="file" name="revision_files[]" multiple
+                           accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip"
+                           style="max-width: 230px; font-size: 0.8rem;">
+                    <button type="submit" class="btn btn-ghost btn-sm" @disabled($spent)>
+                        ↩ Send back
+                        @if ($inquiry->layout_revision_count > 0)
+                            ({{ $inquiry->revisionsLeft() }} left)
+                        @endif
+                    </button>
                 </form>
             </div>
             @error('layout_revision_note')<div class="error" style="margin-top:.5rem;">{{ $message }}</div>@enderror
+            @error('revision_files.*')<div class="error" style="margin-top:.5rem;">{{ $message }}</div>@enderror
+            @if ($spent)
+                <div class="alert alert-error" style="margin-top:.6rem;">
+                    This layout has had its {{ \App\Models\Inquiry::LAYOUT_REVISION_LIMIT }} revisions.
+                    A leader can send it back again.
+                </div>
+            @endif
 
         @else
             <div class="alert alert-info layout-next" style="margin-bottom: 0;">

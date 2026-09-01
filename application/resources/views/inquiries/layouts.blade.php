@@ -47,12 +47,27 @@
                  this one is back. --}}
             @if (filled($inq->layout_revision_note))
                 <div class="alert alert-error" style="margin-bottom: 0.9rem;">
-                    <strong>Changes asked for:</strong> {{ $inq->layout_revision_note }}
+                    <strong>Changes asked for:</strong>
+                    @include('partials.note-lines', ['note' => $inq->layout_revision_note])
+                    @if ($inq->layout_revision_count > 0)
+                        {{-- Which round this is. The artist redrawing it should
+                             know whether the shop is near what it promised. --}}
+                        <div style="margin-top:.35rem; font-size:.78rem;">
+                            Revision {{ $inq->layout_revision_count }}
+                            of {{ \App\Models\Inquiry::LAYOUT_REVISION_LIMIT }}
+                        </div>
+                    @endif
                 </div>
             @endif
 
             @if (filled($inq->layout_reference_note))
-                <p style="margin-bottom: 0.8rem;"><strong>Notes from the officer:</strong> {{ $inq->layout_reference_note }}</p>
+                {{-- Six changes typed into one box arrived here as one unbroken
+                     paragraph, and the fourth one got missed. Read them back as
+                     the list the officer meant. --}}
+                <div style="margin-bottom: 0.8rem;">
+                    <strong>Notes from the officer:</strong>
+                    @include('partials.note-lines', ['note' => $inq->layout_reference_note])
+                </div>
             @endif
 
             @php $refs = collect($inq->layout_files ?? []); @endphp
@@ -71,13 +86,20 @@
                             <div style="font-size: 0.7rem; color: var(--ink-3); margin-top: 0.3rem; word-break: break-all;">
                                 {{ $file['original_name'] }}
                                 @if (($file['kind'] ?? '') === 'layout') <em>(your layout)</em> @endif
+                                {{-- A file sent back with a revision is the thing
+                                     being complained about — say so, or it reads
+                                     as just another reference. --}}
+                                @if (($file['kind'] ?? '') === 'revision') <em>(sent back with the change)</em> @endif
                             </div>
                         </a>
                     @endforeach
                 </div>
             @endif
 
-            @if ($inq->layoutWithArtist())
+            {{-- The box is here whether the layout is still being drawn or has
+                 already been handed back: a revision is the same act, and
+                 hiding it left the artist holding a finished revision. --}}
+            @if ($inq->layoutWithArtist() || $inq->layoutSubmitted())
                 <form method="POST" action="{{ route('inquiries.layout.submit', $inq) }}" enctype="multipart/form-data"
                       class="artist-layout-upload" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
                     @csrf
@@ -86,7 +108,9 @@
                            accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
                     <div class="artist-layout-picked" aria-live="polite"
                          style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
-                    <button type="submit" class="btn btn-primary btn-sm">Hand back the layout</button>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        {{ $inq->layoutSubmitted() ? 'Upload the revised layout' : 'Hand back the layout' }}
+                    </button>
                     @error('layout_files')<span class="error">{{ $message }}</span>@enderror
                 </form>
             @endif

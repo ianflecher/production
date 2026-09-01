@@ -30,12 +30,17 @@ class Inquiry extends Model
     public const LAYOUT_SUBMITTED = 'submitted';     // drawn, waiting on the client
     public const LAYOUT_APPROVED = 'approved';       // client said yes
 
+    /* How many times a layout may be sent back before the officer has to stop.
+       The client is told three; a leader can still allow a fourth, because the
+       call to give one away for free is theirs to make, not the form's. */
+    public const LAYOUT_REVISION_LIMIT = 3;
+
     protected $fillable = [
         'client_id', 'created_by', 'team', 'status', 'production_order_id',
         'what_they_want', 'next_follow_up_on', 'closed_at', 'closed_reason',
         'layout_reference_note', 'layout_files', 'layout_brief_completed_at', 'design_brief',
         'layout_status', 'layout_artist_id', 'layout_sent_at', 'layout_submitted_at',
-        'layout_approved_at', 'layout_revision_note',
+        'layout_approved_at', 'layout_revision_note', 'layout_revision_count',
         'brief_token', 'brief_expires_at', 'client_brief_submitted_at',
     ];
 
@@ -63,6 +68,18 @@ class Inquiry extends Model
         });
     }
 
+    /** True once the three revisions an officer may ask for are used up. */
+    public function revisionsUsedUp(): bool
+    {
+        return (int) $this->layout_revision_count >= self::LAYOUT_REVISION_LIMIT;
+    }
+
+    /** How many rounds are left to an officer — never below zero. */
+    public function revisionsLeft(): int
+    {
+        return max(0, self::LAYOUT_REVISION_LIMIT - (int) $this->layout_revision_count);
+    }
+
     public function briefExpired(): bool
     {
         return $this->brief_expires_at !== null && $this->brief_expires_at->isPast();
@@ -76,6 +93,16 @@ class Inquiry extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * What was said about this layout while it was being drawn. They keep this
+     * inquiry after the job order is written, so the early part of a thread
+     * can still be told apart from the rest.
+     */
+    public function messages()
+    {
+        return $this->hasMany(Message::class, 'inquiry_id');
     }
 
     public function layoutArtist(): BelongsTo
