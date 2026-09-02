@@ -1318,9 +1318,9 @@
     transition: outline-color .3s ease;
 }
 
-.tp-reference-sheet.tp-moving .tp-ref-image {
-    outline: 1px dashed var(--ink-3);
-    outline-offset: 2px;
-}
+/* No pointer-events switching here.
 
-.tp-reference-sheet.tp-moving .tp-ref-image img { pointer-events: none; }
+   A dashed outline while a picture is being dragged is worth nothing next to
+   the risk: a drag that starts and never cleanly ends leaves the class behind,
+   and every image on the sheet stops taking clicks - which is the whole way an
+   artist uploads one. */

@@ -1213,16 +1213,22 @@ document.querySelectorAll('.tp-image-input').forEach(function(input){input.addEv
         var slot=box.getAttribute('data-move-slot');
         if(!img||!slot)return;
 
-        img.setAttribute('draggable','true');
+        function hasPicture(){return img.getAttribute('src')&&!img.classList.contains('is-empty');}
+
+        /* Only a picture that is actually there can be dragged. An EMPTY box is
+           the one an artist clicks to upload, and marking it draggable put a
+           drag in the way of that click. */
+        function refreshDraggable(){img.setAttribute('draggable',hasPicture()?'true':'false');}
+        refreshDraggable();
+
+        var input=inputFor(box);
+        if(input)input.addEventListener('change',function(){setTimeout(refreshDraggable,0);});
 
         img.addEventListener('dragstart',function(e){
-            if(img.classList.contains('is-empty')||!img.getAttribute('src'))return;
+            if(!hasPicture()){e.preventDefault();return;}
             e.dataTransfer.setData('text/x-tp-slot',slot);
             e.dataTransfer.effectAllowed='move';
-            sheet.classList.add('tp-moving');
         });
-
-        img.addEventListener('dragend',function(){sheet.classList.remove('tp-moving');});
 
         box.addEventListener('drop',function(e){
             var from=e.dataTransfer?e.dataTransfer.getData('text/x-tp-slot'):'';
@@ -1233,7 +1239,6 @@ document.querySelectorAll('.tp-image-input').forEach(function(input){input.addEv
 
             e.preventDefault();
             e.stopPropagation();
-            sheet.classList.remove('tp-moving');
 
             var fromBox=document.querySelector('.tp-ref-image[data-move-slot="'+from+'"]');
             var fromInput=inputFor(fromBox);
