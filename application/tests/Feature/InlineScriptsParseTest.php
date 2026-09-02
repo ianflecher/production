@@ -109,6 +109,45 @@ class InlineScriptsParseTest extends TestCase
         return $path.'?inquiry='.$inquiry->id;
     }
 
+    /**
+     * The tech pack sheet, in the mode where an artist edits it.
+     *
+     * Not reachable as a plain URL - it needs an order, an approved mockup and
+     * a sent pack behind it - so it is rendered directly. It was the one page
+     * this check did not cover, and a dropped ")();" in its script killed every
+     * handler on it, including the click that uploads a picture. From the
+     * artist's side that is not "a script is broken", it is "I cannot work".
+     */
+    public function test_the_editable_tech_pack_sheet_parses(): void
+    {
+        $this->requireNode();
+
+        $officer = \App\Models\User::factory()->create(['job_role' => \App\Models\User::ROLE_SALES, 'is_active' => true]);
+
+        $order = \App\Models\ProductionOrder::create([
+            'order_number' => 'IC2026-09999',
+            'customer_name' => 'Juan Dela Cruz',
+            'client_id' => \App\Models\Client::create([
+                'name' => 'Juan', 'last_name' => 'Dela Cruz', 'contact_number' => '0917',
+                'office_address' => 'Angeles City', 'delivery_address' => 'Angeles City',
+                'created_by' => $officer->id,
+            ])->id,
+            'product_type' => 'round_neck',
+            'quantity' => 10,
+            'unit_price' => 500,
+            'total_price' => 5000,
+            'due_date' => now()->addWeeks(3)->toDateString(),
+            'status' => 'active',
+            'created_by' => $officer->id,
+        ]);
+
+        $this->actingAs($officer);
+
+        $html = view('partials.tech-pack', ['order' => $order->fresh(), 'editable' => true])->render();
+
+        $this->assertSame([], $this->parseErrors($html));
+    }
+
     public static function pages(): array
     {
         return [
