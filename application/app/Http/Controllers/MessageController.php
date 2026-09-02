@@ -139,7 +139,7 @@ class MessageController extends Controller
     {
         abort_unless(Message::canAccessInquiry($request->user(), $inquiry), 403);
 
-        $messages = $inquiry->messages()->with('sender')->orderBy('id')->get();
+        $messages = $inquiry->messages()->with(['sender', 'files'])->orderBy('id')->get();
 
         // Opening it is reading it — same as a job order's thread.
         Message::markInquiryRead($request->user(), $inquiry->id);
@@ -270,8 +270,17 @@ class MessageController extends Controller
      */
     public function file(Request $request, \App\Models\MessageFile $file)
     {
-        $order = $file->message?->order;
-        abort_unless($order && Message::canAccess($request->user(), $order), 403);
+        // A file sent on a LAYOUT thread has no order behind it yet, and this
+        // asked the order for permission — so every attachment on a layout was
+        // a 403 to the two people it was sent to.
+        $message = $file->message;
+        $order = $message?->order;
+        $inquiry = $message?->inquiry;
+
+        $allowed = ($order && Message::canAccess($request->user(), $order))
+            || ($inquiry && Message::canAccessInquiry($request->user(), $inquiry));
+
+        abort_unless($allowed, 403);
         abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($file->path), 404);
 
         return \Illuminate\Support\Facades\Storage::disk('local')

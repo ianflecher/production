@@ -24,22 +24,41 @@ class InquiryMessageController extends Controller
         $me = $request->user();
         abort_unless(Message::canAccessInquiry($me, $inquiry), 403);
 
-        $data = $request->validate(
-            ['body' => ['required', 'string', 'max:5000']],
-            ['body.required' => 'Type something first.']
-        );
+        $data = $request->validate([
+            // A photo on its own is a message: the artist sends a screenshot
+            // and asks nothing, and that is the whole point of sending it.
+            'body' => ['nullable', 'string', 'max:5000'],
+            'files' => ['nullable', 'array'],
+            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+        ]);
 
-        Message::create([
+        $body = trim((string) ($data['body'] ?? ''));
+        $hasFiles = $request->hasFile('files');
+
+        if ($body === '' && ! $hasFiles) {
+            return back()->withErrors(['body' => 'Type a message or attach a photo.'])->withInput();
+        }
+
+        $message = Message::create([
             'inquiry_id' => $inquiry->id,
             // No order yet — that is the whole point. It is filled in when the
             // job order is written, by Message::carryLayoutThreadTo().
             'production_order_id' => $inquiry->production_order_id,
             'sender_id' => $me->id,
             'sender_name' => $me->name,
-            'body' => $data['body'],
+            'body' => $body !== '' ? $body : null,
         ]);
 
-        $this->tellTheOtherSide($inquiry, $me->id, $data['body']);
+        foreach ($request->file('files', []) as $file) {
+            $message->files()->create([
+                'path' => $file->store('message-files', 'local'),
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        $this->tellTheOtherSide($inquiry, $me->id, $message->preview());
 
         return back()->with('success', 'Sent.');
     }
