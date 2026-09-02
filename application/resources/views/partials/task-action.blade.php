@@ -139,7 +139,7 @@
             <div style="font-size: 0.75rem; color: var(--ink-3); margin-bottom: 0.8rem;">Image, PDF, AI, PSD, EPS, CDR or ZIP.</div>
         @elseif ($task->isTechPackStep())
             <div style="font-size:0.9rem; color:var(--ink-1); margin-bottom:0.8rem; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:6px; padding:0.7rem 0.9rem;">
-                Your saved Tech Pack is the file for checking. No separate template upload is needed.
+                Your saved Tech Pack is the deliverable. Complete every manual field; use N/A when a row does not apply.
             </div>
         @else
             <div class="field" style="max-width: 420px;">
@@ -161,8 +161,8 @@
                 $submitLabel = 'Submit to '.$destLabel.' ✓';
                 $submitConfirm = 'Send the export files to the '.$destLabel.'?';
             } else {
-                $submitLabel = $task->isTechPackStep() ? 'Submit Tech Pack for checking ✓' : 'Submit for checking ✓';
-                $submitConfirm = $task->isTechPackStep() ? 'Submit the saved Tech Pack for checking?' : 'Are you sure you want to submit this for checking?';
+                $submitLabel = $task->isTechPackStep() ? 'Send Tech Pack to account officer ✓' : 'Submit for checking ✓';
+                $submitConfirm = $task->isTechPackStep() ? 'Send the completed Tech Pack to the account officer?' : 'Are you sure you want to submit this for checking?';
             }
         @endphp
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
@@ -177,7 +177,7 @@
         <button class="btn btn-primary">▶ Resume work</button>
     </form>
 @elseif ($task->status === 'for_checking')
-    <p class="muted">Submitted {{ $task->submitted_at?->diffForHumans() }}. Waiting for approval.</p>
+    <p class="muted">Submitted {{ $task->submitted_at?->diffForHumans() }}. Waiting for {{ $task->approver_role === 'sales' ? 'the account officer' : 'the leader' }}.</p>
 @elseif ($task->status === 'complete')
     <p class="muted">Approved {{ $task->approved_at?->diffForHumans() }}.</p>
 @else

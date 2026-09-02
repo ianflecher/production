@@ -54,9 +54,6 @@
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
         @if ($order->jobOrder && $mockupApproved)
             <a href="{{ route('orders.job-order', $order) }}" class="btn btn-ghost btn-sm">📋 Tech pack</a>
-            @if (auth()->user()->canCreateOrders() && $order->jobOrder->status === 'draft' && $order->hasDownpayment())
-                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm">✎ Fill tech pack</a>
-            @endif
         @endif
         {{-- Client documents. Only once the layout is approved — that's when the
              client is ready to pay, so the design is already settled.
@@ -96,16 +93,6 @@
     @endif
     </div>
 
-    {{-- The leader wants the account officer to fix the job order. --}}
-    @if (auth()->user()->canCreateOrders() && filled($order->jobOrder?->leader_note))
-        <div class="alert-error" style="width:100%; margin-top:0.8rem;">
-            <strong>↩ The leader wants the Tech Pack fixed:</strong>
-            <div style="white-space:pre-line; margin:0.3rem 0;">{{ $order->jobOrder->leader_note }}</div>
-            <div style="font-size:0.85rem;">Correct the Tech Pack — it goes straight back to the leader once you save.
-                <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm" style="margin-left:0.4rem;">✎ Fix the Tech Pack</a>
-            </div>
-        </div>
-    @endif
 </div>
 
 @include('partials.delay-alert', ['order' => $order, 'size' => 'big'])
@@ -127,8 +114,6 @@
         $nextStep = ['tone' => 'muted', 'label' => 'Cancelled', 'title' => 'This order was cancelled', 'desc' => 'No further action.'];
     } elseif ($order->status === 'on_hold') {
         $nextStep = ['tone' => 'warn', 'label' => 'On hold', 'title' => 'Order is on hold', 'desc' => 'Resume the order from the actions above to continue production.'];
-    } elseif ($canRecordPayment && filled($order->jobOrder?->leader_note)) {
-        $nextStep = ['tone' => 'alert', 'label' => 'Action needed', 'title' => 'Fix the Tech Pack', 'desc' => 'The leader sent the Tech Pack back with changes. Correct it and it returns to the leader automatically.', 'cta' => ['label' => 'Fix Tech Pack', 'href' => route('job-orders.edit', $order)]];
     } elseif (! $layoutApproved && $layoutReleased) {
         $nextStep = ['tone' => 'wait', 'label' => 'In progress', 'title' => 'With the artist', 'desc' => 'Waiting on the layout and the client’s approval before the downpayment.'];
     } elseif ($layoutApproved && ! $order->hasDownpayment() && $order->hasPaymentAwaitingFinance()) {
@@ -141,7 +126,7 @@
     } elseif ($order->hasDownpayment() && ! $mockupApproved) {
         $nextStep = ['tone' => 'wait', 'label' => 'Step 3 — Mockup', 'title' => 'Waiting for mockup approval', 'desc' => 'The Tech Pack will appear after the final mockup is approved.'];
     } elseif ($canRecordPayment && $mockupApproved && $jobStatus === 'draft') {
-        $nextStep = ['tone' => 'action', 'label' => 'Step 3 — Tech pack', 'title' => 'Fill in the tech pack', 'desc' => "Downpayment recorded — put the client's spec on the tech pack to release it into production.", 'cta' => ['label' => 'Fill tech pack', 'href' => route('job-orders.edit', $order)]];
+        $nextStep = ['tone' => 'action', 'label' => 'Step 3 — Tech Pack', 'title' => 'Send the Tech Pack to the artist', 'desc' => 'The artist completes every manual field. It returns to you for approval before going to the leader.', 'cta' => ['label' => 'Open Tech Pack', 'href' => route('orders.job-order', $order)]];
     } elseif ($currentTask) {
         $nextStep = ['tone' => 'info', 'label' => 'In production', 'title' => 'Now at: '.$currentTask->department, 'desc' => $done.' of '.$total.' steps complete — track live status in the pipeline below.'];
     }

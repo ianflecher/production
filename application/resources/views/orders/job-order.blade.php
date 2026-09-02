@@ -17,17 +17,16 @@
     @include('partials.delay-alert', ['order' => $order, 'size' => 'big'])
 </div>
 
+@if ($errors->any())
+    <div class="alert-error no-print" style="max-width:1180px; margin:0 auto 1rem;">
+        @foreach ($errors->all() as $error){{ $error }}<br>@endforeach
+    </div>
+@endif
+
 <div class="tp-actions no-print">
     @if (auth()->user()->canCreateOrders() && $jo)
         @include('partials.tech-pack-send', ['order' => $order, 'jo' => $jo])
 
-        {{-- The pack is the only document, so the officer's way into their half
-             of it does not disappear when it goes to the artist. Saving was
-             never blocked after sending — only this link went, which left
-             correcting a spec row to whoever knew the URL. --}}
-        @if ($order->mockupApproved())
-            <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-ghost btn-sm">✎ Edit Tech Pack</a>
-        @endif
         {{-- Production details — press, cutting and the raw materials — stay
              reachable before and after sending. --}}
         <a href="{{ route('job-orders.production', $order) }}" class="btn btn-primary btn-sm">⚙ Production details</a>
@@ -50,7 +49,7 @@
     <a href="{{ $backUrl }}" class="btn btn-ghost btn-sm">← Back to {{ $backLabel }}</a>
 </div>
 
-{{-- The artist types into the pack itself; everybody else reads it. --}}
+{{-- The assigned artist completes the entire pack; everybody else reviews it. --}}
 @isset($techPackTask)
     <form method="POST" action="{{ route('tasks.tech-pack', $techPackTask->id) }}" enctype="multipart/form-data">
         @csrf
@@ -59,7 +58,7 @@
         <div class="tp-save no-print">
             <button class="btn btn-primary" name="finish_editing" value="1">Save Tech Pack and continue</button>
             <span class="hint">
-                Saves your changes, then opens the Submit Tech Pack for checking button.
+                Saves your changes, then opens the button that sends it to your account officer.
             </span>
         </div>
     </form>

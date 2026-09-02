@@ -46,6 +46,7 @@ class Task extends Model
     protected $fillable = [
         'production_order_id', 'sequence', 'stage', 'department', 'team', 'instructions',
         'assigned_to', 'passed_from', 'operator_name', 'note', 'status', 'approver_role', 'auto_assign', 'auto_submit',
+        'officer_approved_by', 'officer_approved_at',
         'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at', 'due_at',
     ];
 
@@ -54,6 +55,7 @@ class Task extends Model
         return [
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
+            'officer_approved_at' => 'datetime',
             'released_at' => 'datetime',
             'due_at' => 'datetime',
             'auto_assign' => 'boolean',
@@ -69,6 +71,11 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function officerApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'officer_approved_by');
     }
 
     public function files(): HasMany
@@ -250,6 +257,10 @@ class Task extends Model
 
     public function approverLabel(): string
     {
+        if ($this->approver_role === 'sales' && $this->isTechPackStep()) {
+            return 'account officer';
+        }
+
         return $this->approver_role === 'sales' ? 'client (via sales)' : 'leader';
     }
 
@@ -339,10 +350,19 @@ class Task extends Model
         $url = route('orders.show', $order);
 
         if ($this->approver_role === 'sales') {
-            // The client-review step — tell the account officer who owns the order.
-            AppNotification::toUser($order->created_by,
-                '🎨 Layout ready for the client',
-                "{$order->order_number} — {$this->department} is ready to show the client.", $url);
+            if ($this->isTechPackStep()) {
+                AppNotification::toUser(
+                    $order->created_by,
+                    '📋 Tech Pack ready for your approval',
+                    "{$order->order_number} — review the artist's completed Tech Pack before it goes to the leader.",
+                    route('sample.review'),
+                );
+            } else {
+                // Client-review work is shown to the account officer who owns the order.
+                AppNotification::toUser($order->created_by,
+                    '🎨 Layout ready for the client',
+                    "{$order->order_number} — {$this->department} is ready to show the client.", $url);
+            }
         } else {
             AppNotification::toRole(User::ROLE_LEADER,
                 '📋 Ready to check',

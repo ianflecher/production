@@ -1119,13 +1119,11 @@ class ProductionOrder extends Model
         // 1 — Layout: artist work, the CLIENT decides (via sales).
         $add(1, 'Layout', $artist, 'sales');
 
-        // 2 — the mockup goes to the CLIENT (via sales), the way the layout
-        // does: it is the client's design, and only they can say it is right.
-        // The leader's sign-off is on the TECH PACK, which is the sheet the
-        // floor works from — the template is one panel inside it now, not its
-        // own document.
+        // 2 — the mockup goes to the client via sales. The artist's completed
+        // Tech Pack then goes to that same account officer first; their approval
+        // forwards it to the leader for the final production sign-off.
         $add(2, 'Final mockup', $artist, 'sales');
-        $add(2, 'Tech pack', $artist, 'leader');
+        $add(2, 'Tech pack', $artist, 'sales');
 
         $this->addProductionStages($decorationMethods, $cuttingType, $seq);
     }

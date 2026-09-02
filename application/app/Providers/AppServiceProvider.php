@@ -81,19 +81,22 @@ class AppServiceProvider extends ServiceProvider
             $user = auth()->user();
 
             if ($user && ($user->isLeader() || $user->isArtistLead())) {
-                // Count ROWS as shown on the Approvals page: the mockup + template
-                // of an order are one "job package" row, everything else is one row
-                // each — so the badge matches what the leader actually sees.
+                // Count the same Tech Pack rows shown on the Approvals page.
+                // These have already passed the account officer; other stages
+                // remain individual leader approvals.
                 $mockup = \App\Models\ProductionOrder::STAGE_MOCKUP;
 
-                $packages = Task::with('order.jobOrder')
+                $packages = Task::query()
                     ->where('stage', $mockup)
                     ->where('approver_role', 'leader')
+                    ->where('status', 'for_checking')
+                    ->where(function ($query) {
+                        $query->where('department', 'like', 'Tech pack%')
+                            ->orWhere('department', 'like', 'Production template%');
+                    })
                     ->whereHas('order', fn ($q) => $q->where('status', 'active'))
                     ->get()
                     ->groupBy('production_order_id')
-                    ->filter(fn ($group) => $group->every(fn ($t) => $t->status === 'for_checking')
-                        && blank($group->first()->order->jobOrder?->leader_note))
                     // A pack he drew himself is not his to check, and the queue
                     // already drops it — counting it here put a 1 on a nav item
                     // that opens an empty page. See TaskController::approvals.

@@ -13,22 +13,19 @@
     @php
         $canSend = $order->mockupApproved()
             && $order->hasDownpayment()
-            && $jo->isReadyToSend()
             && $jo->referenceFiles->isNotEmpty();
         $sendBlockReason = ! $order->mockupApproved()
             ? 'The final mockup must be approved first.'
             : (! $order->hasDownpayment()
                 ? 'Record the downpayment before sending.'
-                : (! $jo->isReadyToSend()
-                    ? 'Fill in Print Type, Printer and Fabric before sending.'
-                    : (! $jo->referenceFiles->isNotEmpty()
-                        ? 'Upload a client reference before sending.'
-                        : null)));
+                : (! $jo->referenceFiles->isNotEmpty()
+                    ? 'Upload a client reference before sending.'
+                    : null));
     @endphp
     @if ($canSend)
         <form method="POST" action="{{ route('job-orders.send', $order) }}" onsubmit="return confirm('Send this Tech Pack to the artist?');" style="margin-right: auto;">
             @csrf
-            <button type="submit" class="btn btn-success btn-sm">📤 Send Tech Pack to Artist</button>
+            <button type="submit" class="btn btn-success btn-sm">📤 Send blank Tech Pack to Artist</button>
         </form>
     @else
         <span style="margin-right: auto; color: var(--danger-ink); font-weight: 600; font-size: 0.85rem;">⚠ {{ $sendBlockReason }}</span>

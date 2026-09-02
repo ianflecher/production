@@ -153,8 +153,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/my-tasks', [TaskController::class, 'mine'])->name('tasks.mine');
     Route::get('/my-tasks/{taskId}', [TaskController::class, 'showMine'])->whereNumber('taskId')->name('tasks.show');
     Route::get('/my-tasks/{taskId}/job-order', [TaskController::class, 'jobOrder'])->whereNumber('taskId')->name('tasks.job-order');
-    // The artist's own part of the tech pack: design name, colourways and the
-    // actual printed size of each placement.
+    // The complete interactive Tech Pack belongs to its assigned artist.
     Route::post('/my-tasks/{taskId}/tech-pack', [TaskController::class, 'saveTechPack'])
         ->whereNumber('taskId')->name('tasks.tech-pack');
     Route::get('/my-tasks/{taskId}/reference', [TaskController::class, 'references'])->whereNumber('taskId')->name('tasks.references');

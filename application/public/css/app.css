@@ -1310,3 +1310,17 @@
     font-size: 0.68rem;
     word-break: break-all;
 }
+
+/* A picture pasted into a tech pack box, and boxes while one is being moved. */
+.tp-just-pasted {
+    outline: 2px solid var(--brand, #E31B23);
+    outline-offset: 2px;
+    transition: outline-color .3s ease;
+}
+
+.tp-reference-sheet.tp-moving .tp-ref-image {
+    outline: 1px dashed var(--ink-3);
+    outline-offset: 2px;
+}
+
+.tp-reference-sheet.tp-moving .tp-ref-image img { pointer-events: none; }

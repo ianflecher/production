@@ -106,15 +106,21 @@ class TaskController extends Controller
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
 
+        abort_unless($task->isTechPackStep(), 404);
+
         $order = $task->order->load(['jobOrder.referenceFiles', 'items', 'client', 'creator', 'tasks.assignee', 'tasks.files']);
 
         // Not shared during the layout step — the job order is only released to
         // the artist once the account officer has filled and sent it.
         abort_unless($order->jobOrder?->status === 'sent_to_artist', 403);
 
-        // The artist fills the pack in place, the way the floor fills the seam
-        // record — so the task comes with it, to post the answers back to.
-        return view('orders.job-order', ['order' => $order, 'techPackTask' => $task]);
+        // A submitted pack remains visible to the artist, but becomes read-only
+        // while either reviewer has it. Revision work becomes editable again
+        // only after the artist starts the returned task.
+        return view('orders.job-order', [
+            'order' => $order,
+            'techPackTask' => $task->status === 'in_progress' ? $task : null,
+        ]);
     }
 
     /** The artist opens the client reference for a task assigned to them. */
@@ -146,16 +152,44 @@ class TaskController extends Controller
         return $field !== null && filled($pack->$field);
     }
 
-    /**
-     * The artist's own part of the tech pack.
-     *
-     * Design name, colourways and the actual printed size of each placement:
-     * things that only exist once the artwork does, so the account officer
-     * cannot answer them at intake.
-     *
-     * Scoped to the artist's own task, like every other action on this page —
-     * the task id in the URL is not a permission.
-     */
+    /** Manual fields that must be answered before a Tech Pack can be reviewed. */
+    private function missingTechPackFields(Task $task): array
+    {
+        $order = $task->order->loadMissing(['jobOrder', 'techPack']);
+        $pack = $order->techPack;
+        $jobOrder = $order->jobOrder;
+
+        $required = [
+            [$pack, 'design_name', 'Design name'],
+            [$pack, 'fitting', 'Fitting'],
+            [$pack, 'item_style', 'Type / style'],
+            [$jobOrder, 'print_type', 'Print type'],
+            [$jobOrder, 'printer', 'Printer'],
+            [$jobOrder, 'fabric', 'Fabric'],
+            [$jobOrder, 'neck', 'Neck type'],
+            [$jobOrder, 'cuff_arm_sleeves', 'Cuff / arm sleeve'],
+            [$pack, 'print_label', 'Print label'],
+            [$jobOrder, 'neck_label', 'Neck label'],
+            [$pack, 'tshirt_color', 'T-shirt color'],
+            [$pack, 'thread_color', 'Thread color'],
+            [$pack, 'stitch_thread', 'Stitch thread'],
+            [$pack, 'cutting_method', 'Cutting method'],
+            [$jobOrder, 'packaging', 'Packaging'],
+            [$pack, 'zipper_type', 'Zipper type'],
+            [$jobOrder, 'bottom_hem', 'Bottom hem'],
+            [$pack, 'lip_pocket_color', 'Lip pocket color'],
+            [$pack, 'size_range', 'Size range'],
+            [$jobOrder, 'free_logo_sticker', 'Sticker / extra'],
+            [$pack, 'file_location_notes', 'File location'],
+        ];
+
+        return collect($required)
+            ->filter(fn ($row) => ! $row[0] || blank($row[0]->{$row[1]}))
+            ->pluck(2)
+            ->all();
+    }
+
+    /** Save the complete Tech Pack filled by its assigned artist. */
     public function saveTechPack(Request $request, int $taskId): RedirectResponse
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
@@ -163,6 +197,16 @@ class TaskController extends Controller
         $order = $task->order;
         $jobOrder = $order->jobOrder;
         abort_unless($jobOrder, 404);
+
+        if (! $task->isTechPackStep() || $task->status !== 'in_progress') {
+            return redirect()->route('tasks.show', $task)
+                ->withErrors(['tech_pack' => 'Open the active Tech Pack task before changing the sheet.']);
+        }
+
+        if ($jobOrder->status !== 'sent_to_artist' || ! $order->mockupApproved()) {
+            return redirect()->route('tasks.show', $task)
+                ->withErrors(['tech_pack' => 'The Tech Pack is not ready for editing yet.']);
+        }
 
         $data = $request->validate([
             // The tech pack's own fields, named as the shop's template names them.
@@ -194,6 +238,11 @@ class TaskController extends Controller
             'bottom_text_height' => ['nullable', 'integer', 'min:80', 'max:700'],
             'folder_shot' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
             'remove_image' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
+            // "this picture belongs in that box" - dragged from one box to
+            // another on the sheet. Only meaningful for a picture already
+            // SAVED: a freshly pasted one has not been uploaded yet and the
+            // browser moves it between file inputs on its own.
+            'move_image' => ['nullable', 'string'],
             'add_image_box' => ['nullable'],
             'restore_image_box' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
             // Text blocks the artist added themselves.
@@ -243,17 +292,25 @@ class TaskController extends Controller
             'packaging' => ['nullable', 'string', 'max:120'],
             'free_logo_sticker' => ['nullable', 'string', 'max:120'],
             'print_type' => ['nullable', 'string', 'max:60'],
+            'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINTERS))],
         ]);
 
-        // The spec rows are the officer's and are not in this list, so an artist
-        // posting them by hand changes nothing. The lock on the sheet is a lock
-        // here too, not just a box they cannot click into.
+        // The artist owns every manual field on the Tech Pack. System facts
+        // such as client, agent, dates, sizes and quantity are still automatic.
         $packFields = collect($data)->only([
-            'placing_title',
+            'design_name', 'fitting', 'item_style', 'quality', 'print_tech',
+            'placing_title', 'tshirt_color', 'print_label', 'thread_color',
+            'stitch_thread', 'cutting_method', 'size_range', 'zipper_type',
+            'lip_pocket_color',
             'tag_1_details', 'tag_2_details',
             'file_location_notes', 'artist_name',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
             'bottom_text_width', 'bottom_text_height',
+        ])->all();
+
+        $jobOrderFields = collect($data)->only([
+            'print_type', 'printer', 'fabric', 'neck', 'cuff_arm_sleeves',
+            'neck_label', 'bottom_hem', 'packaging', 'free_logo_sticker',
         ])->all();
 
         $pack = $order->techPack()->firstOrNew([]);
@@ -438,6 +495,34 @@ class TaskController extends Controller
                 : (filled($tail) ? $tail : null);
         }
 
+        // A picture dragged into another box. Sent as "from>to".
+        //
+        // The file itself does not move on disk - only which box points at it -
+        // so a picture pasted into the wrong slot is corrected without
+        // uploading it again. If the destination already holds one the two
+        // swap, which is what dragging one picture onto another looks like it
+        // should do.
+        if ($move = $data['move_image'] ?? null) {
+            [$from, $to] = array_pad(explode('>', $move, 2), 2, null);
+            $slots = \App\Models\TechPack::imageSlots();
+
+            if ($from !== $to
+                && in_array($from, $slots, true)
+                && in_array($to, $slots, true)
+                && filled($imageUploads[$from]['path'] ?? null)) {
+                $moving = $imageUploads[$from];
+                $displaced = $imageUploads[$to] ?? null;
+
+                $imageUploads[$to] = $moving;
+
+                if ($displaced) {
+                    $imageUploads[$from] = $displaced;
+                } else {
+                    unset($imageUploads[$from]);
+                }
+            }
+        }
+
         foreach (\App\Models\TechPack::imageSlots() as $slot) {
             if (! $request->hasFile("tech_pack_images.{$slot}")) {
                 continue;
@@ -470,9 +555,41 @@ class TaskController extends Controller
         $pack->fill($packFields);
         $order->techPack()->save($pack);
 
-        // Nothing of the job order's is written here any more: fabric, neck,
-        // cuff, the labels, the hem, packaging and the sticker row are all the
-        // officer's half of the sheet.
+        // Some displayed rows retain their legacy JobOrder columns so old packs
+        // and production routing keep working. They are nevertheless completed
+        // here, by the artist, from the one Tech Pack form.
+        if ($jobOrderFields !== []) {
+            $jobOrder->update($jobOrderFields);
+        }
+
+        if (array_key_exists('free_logo_sticker', $jobOrderFields)) {
+            $order->update([
+                'needs_sticker' => \App\Models\ProductionOrder::namesASticker($jobOrderFields['free_logo_sticker']),
+            ]);
+        }
+
+        // Print type determines the default press and cutting route. Apply it
+        // while production has not started, exactly when the artist completes
+        // the Tech Pack.
+        if (array_key_exists('print_type', $jobOrderFields) && $order->canEditRouting()) {
+            $config = \App\Models\JobOrder::printTypeConfig($jobOrder->fresh()->print_type);
+
+            if (! $order->cutting_type && ($config['cutting'] ?? null)) {
+                $order->update(['cutting_type' => $config['cutting']]);
+            }
+
+            if (! $jobOrder->fresh()->fabric_press) {
+                $fabricPress = $jobOrder->fresh()->defaultFabricPress();
+                $jobOrder->update([
+                    'fabric_press' => $fabricPress,
+                    'needs_embroidery' => $fabricPress === 'embroidery'
+                        ? true
+                        : (bool) $jobOrder->needs_embroidery,
+                ]);
+            }
+
+            $order->refresh()->rebuildPipeline($order->decoration_methods ?? [], $order->cutting_type);
+        }
 
         // Clicking the explicit Save button means the Artist is finished with
         // the sheet and is ready for its next action. Image uploads use this
@@ -583,6 +700,13 @@ class TaskController extends Controller
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
 
+        if ($task->isTechPackStep() && ($missing = $this->missingTechPackFields($task)) !== []) {
+            return redirect()->route('tasks.job-order', $task->id)
+                ->withErrors([
+                    'tech_pack' => 'Complete the missing Tech Pack details before submitting: '.implode(', ', $missing).'. Use N/A when a row does not apply.',
+                ]);
+        }
+
         // Each step declares the files it must hand over (mockup = 2 files).
         $slots = $task->fileSlots();
 
@@ -637,7 +761,7 @@ class TaskController extends Controller
 
         $task->submitForChecking($request->user());
 
-        $who = $task->approver_role === 'sales' ? 'The sales agent' : 'Your leader';
+        $who = $task->approver_role === 'sales' ? 'Your account officer' : 'Your leader';
 
         return back()->with('success', $task->department.' submitted FOR CHECKING. '.$who.' will review it.');
     }
@@ -722,7 +846,7 @@ class TaskController extends Controller
         }
 
         $task->submitForChecking($request->user());
-        $who = $task->approver_role === 'sales' ? 'The sales agent' : 'Your leader';
+        $who = $task->approver_role === 'sales' ? 'Your account officer' : 'Your leader';
 
         return back()->with('success', $task->department.' submitted FOR CHECKING. '.$who.' will review it.');
     }
@@ -804,17 +928,20 @@ class TaskController extends Controller
     {
         $mockup = \App\Models\ProductionOrder::STAGE_MOCKUP;
 
-        // The mockup + template of one order are a single job package. Show it as
-        // one row only when the WHOLE package is for_checking (if one item is out
-        // for revision, the package waits) and no job-order fix is pending.
+        // Tech Packs arrive here only after the account officer has approved
+        // them. Group by order because older data can contain a renamed legacy
+        // Production template row for the same deliverable.
         $packages = Task::with(['order.jobOrder', 'order.items', 'assignee', 'files'])
             ->where('stage', $mockup)
             ->where('approver_role', 'leader')
+            ->where('status', 'for_checking')
+            ->where(function ($query) {
+                $query->where('department', 'like', 'Tech pack%')
+                    ->orWhere('department', 'like', 'Production template%');
+            })
             ->whereHas('order', fn ($q) => $q->where('status', 'active'))
             ->get()
-            ->groupBy('production_order_id')
-            ->filter(fn ($group) => $group->every(fn ($t) => $t->status === 'for_checking')
-                && blank($group->first()->order->jobOrder?->leader_note));
+            ->groupBy('production_order_id');
 
         // Everything else (pairing, sewing, QC…) — one row each.
         $singles = Task::with(['order', 'assignee', 'files'])
@@ -842,6 +969,10 @@ class TaskController extends Controller
             ->where('stage', $mockup)
             ->where('approver_role', 'leader')
             ->where('status', 'complete')
+            ->where(function ($query) {
+                $query->where('department', 'like', 'Tech pack%')
+                    ->orWhere('department', 'like', 'Production template%');
+            })
             ->where('approved_at', '>=', now()->subWeek())
             ->whereHas('order', fn ($q) => $q->where('status', 'active'))
             ->get()
@@ -964,6 +1095,34 @@ class TaskController extends Controller
     {
         $this->assertApprover($request, $task);
 
+        // A Tech Pack has two sign-offs. The artist submits to the account
+        // officer first; that approval forwards the SAME for-checking task to
+        // the leader instead of completing it or unlocking production early.
+        if ($task->isTechPackStep() && $task->approver_role === 'sales') {
+            abort_unless($task->status === 'for_checking', 422);
+
+            $task->update([
+                'approver_role' => 'leader',
+                'officer_approved_by' => $request->user()->id,
+                'officer_approved_at' => now(),
+            ]);
+
+            \App\Models\AppNotification::toRole(
+                \App\Models\User::ROLE_LEADER,
+                '📋 Tech Pack approved by account officer',
+                "{$task->order->order_number} — ready for your final approval.",
+                route('approvals'),
+            );
+            \App\Models\AppNotification::toRole(
+                \App\Models\User::JOB_ARTIST_LEAD,
+                '📋 Tech Pack approved by account officer',
+                "{$task->order->order_number} — ready for your final approval.",
+                route('approvals'),
+            );
+
+            return back()->with('success', 'Tech Pack approved by the account officer and sent to the leader.');
+        }
+
         // Nothing goes out of the door on an unpaid balance. This is the last
         // step before the client has the goods, so it is the last chance to
         // catch it — after this the only leverage left is asking nicely.
@@ -1004,6 +1163,25 @@ class TaskController extends Controller
 
         $task->approve();
 
+        // Final mockup approval immediately opens the blank Tech Pack to the
+        // artist. There is no account-officer editing/sending step between the
+        // approved design and the artist's Tech Pack work.
+        if (str_starts_with((string) $task->department, 'Final mockup')
+            && $task->order->fresh()->mockupApproved()) {
+            $order = $task->order->fresh(['jobOrder', 'tasks']);
+
+            if ($order->jobOrder?->status === 'draft') {
+                $order->jobOrder->update([
+                    'status' => 'sent_to_artist',
+                    'sent_to_artist_by' => $request->user()->id,
+                    'sent_to_artist_at' => now(),
+                    'leader_note' => null,
+                ]);
+            }
+
+            $order->refresh()->unlockStage(\App\Models\ProductionOrder::STAGE_MOCKUP);
+        }
+
         // The client approved the first physical sample — count that one piece
         // into finished-products stock so it's the first unit in inventory.
         if ($task->department === 'Produce sample for client') {
@@ -1037,7 +1215,19 @@ class TaskController extends Controller
             'revision_note' => ['required', 'string', 'max:2000'],
         ]);
 
+        $leaderWasReviewingTechPack = $task->isTechPackStep() && $task->approver_role === 'leader';
+
         $task->requestRevision($data['revision_note']);
+
+        // A leader revision returns to the artist, then passes through the
+        // account officer again before it can come back to the leader.
+        if ($leaderWasReviewingTechPack) {
+            $task->update([
+                'approver_role' => 'sales',
+                'officer_approved_by' => null,
+                'officer_approved_at' => null,
+            ]);
+        }
         $task->refresh();
 
         $left = $task->revisionsLeft();
@@ -1119,7 +1309,7 @@ class TaskController extends Controller
             $t->approve();
         }
 
-        return back()->with('success', 'Design package (mockup + template) approved for '.$order->order_number.'.');
+        return back()->with('success', 'Tech Pack approved for '.$order->order_number.' — production is now released.');
     }
 
     /**
@@ -1143,14 +1333,20 @@ class TaskController extends Controller
             // Exactly which parts are wrong: the mockup, the template (both go to
             // the artist), and/or the job order (goes to the account officer).
             'items' => ['required', 'array', 'min:1'],
-            'items.*' => ['in:mockup,template,job_order'],
+            'items.*' => ['in:mockup,template,job_order,officer_half'],
         ], ['items.required' => 'Tick at least one thing that needs fixing.']);
 
         $tasks = $this->packageTasks($order);
         abort_if($tasks->isEmpty(), 404);
         $this->assertNotOwnPack($request, $tasks);
         $order->loadMissing('jobOrder');
-        $items = $data['items'];
+        // Old open approval pages called the artist's specification rows the
+        // officer half/job order. They now belong to the artist, so either old
+        // value means the Tech Pack itself needs revision.
+        $items = collect($data['items'])
+            ->map(fn ($item) => in_array($item, ['officer_half', 'job_order'], true) ? 'template' : $item)
+            ->unique()
+            ->all();
         $fixed = [];
 
         // Design fixes — only the flagged item(s) go back, so the artist knows
@@ -1162,25 +1358,16 @@ class TaskController extends Controller
                     : $tasks->firstWhere('department', $dept);
                 if ($t && $t->canRequestRevision()) {
                     $t->requestRevision($data['revision_note']);
+                    if ($t->isTechPackStep()) {
+                        $t->update([
+                            'approver_role' => 'sales',
+                            'officer_approved_by' => null,
+                            'officer_approved_at' => null,
+                        ]);
+                    }
                     $fixed[] = $dept;
                 }
             }
-        }
-
-        // The officer's half of the TECH PACK — the spec rows they fill in.
-        // There is no job order sheet any more, so the note goes back to the
-        // person who wrote those rows and the package waits off the leader's
-        // queue until they have corrected it. The artist isn't pulled in.
-        //
-        // 'job_order' is still accepted so a form opened before this still
-        // posts something the leader meant.
-        if (array_intersect(['officer_half', 'job_order'], $items)) {
-            $order->jobOrder?->update(['leader_note' => $data['revision_note']]);
-            \App\Models\AppNotification::toUser($order->created_by,
-                '↩ Leader wants the tech pack fixed',
-                $order->order_number.' — '.\Illuminate\Support\Str::limit($data['revision_note'], 90),
-                route('orders.show', $order));
-            $fixed[] = "the officer's half of the tech pack";
         }
 
         return back()->with('success', 'Sent back for revision on '.$order->order_number.': '.implode(', ', $fixed).'.');
@@ -1199,13 +1386,17 @@ class TaskController extends Controller
         );
     }
 
-    /** The stage-2 leader-check tasks (mockup + template) awaiting checking. */
+    /** Tech Packs awaiting the leader after account-officer approval. */
     private function packageTasks(\App\Models\ProductionOrder $order)
     {
         return $order->tasks()
             ->where('stage', \App\Models\ProductionOrder::STAGE_MOCKUP)
             ->where('status', 'for_checking')
             ->where('approver_role', 'leader')
+            ->where(function ($query) {
+                $query->where('department', 'like', 'Tech pack%')
+                    ->orWhere('department', 'like', 'Production template%');
+            })
             ->get();
     }
 

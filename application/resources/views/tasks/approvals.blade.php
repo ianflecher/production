@@ -39,7 +39,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {{-- Design packages: mockup + template + job order, one row per order. --}}
+                    {{-- Tech Packs already checked by their account officers. --}}
                     @foreach ($packages as $orderId => $group)
                         @php $order = $group->first()->order; @endphp
                         <tr>
@@ -48,8 +48,8 @@
                                 <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $order->clientName() }}</div>
                             </td>
                             <td>
-                                <strong>Job package</strong>
-                                <div style="font-size: 0.74rem; color: var(--ink-3);">tech pack + production details</div>
+                                <strong>Tech Pack</strong>
+                                <div style="font-size: 0.74rem; color: var(--ink-3);">completed by artist · approved by account officer</div>
                             </td>
                             <td>{{ $group->first()->assignee?->name ?? '—' }}</td>
                             <td style="font-size: 0.84rem;">{{ $group->min('submitted_at')?->diffForHumans() ?? '—' }}</td>
@@ -84,30 +84,17 @@
                             <td>
                                 <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
                                     <form method="POST" action="{{ route('tasks.approve-package', $order) }}"
-                                          onsubmit="return confirm('Approve the whole package (mockup + template)?');">
+                                          onsubmit="return confirm('Give this Tech Pack final approval and release production?');">
                                         @csrf
-                                        <button class="btn btn-success btn-sm">Approve package ✓</button>
+                                        <button class="btn btn-success btn-sm">Approve Tech Pack ✓</button>
                                     </form>
                                     <details class="inline-form">
                                         <summary class="btn btn-danger btn-sm">Request revision</summary>
                                         <div class="pop">
                                             <form method="POST" action="{{ route('tasks.revise-package', $order) }}">
                                                 @csrf
-                                                <label style="font-weight:600;">What needs fixing? (tick all that apply)</label>
-                                                <div style="display:flex; flex-direction:column; gap:0.3rem; margin:0.3rem 0 0.6rem; font-weight:400;">
-                                                    <label style="display:flex; gap:0.4rem; align-items:flex-start;">
-                                                        <input type="checkbox" name="items[]" value="mockup" style="width:auto; margin-top:0.2rem;">
-                                                        <span><strong>Final mockup</strong> — artist redoes the mockup.</span>
-                                                    </label>
-                                                    <label style="display:flex; gap:0.4rem; align-items:flex-start;">
-                                                        <input type="checkbox" name="items[]" value="template" style="width:auto; margin-top:0.2rem;">
-                                                        <span><strong>Tech pack</strong> — artist redoes the tech pack.</span>
-                                                    </label>
-                                                    <label style="display:flex; gap:0.4rem; align-items:flex-start;">
-                                                        <input type="checkbox" name="items[]" value="officer_half" style="width:auto; margin-top:0.2rem;">
-                                                        <span><strong>The officer's half</strong> — the spec rows on the tech pack. The account officer fixes it, then it comes back to you.</span>
-                                                    </label>
-                                                </div>
+                                                <input type="hidden" name="items[]" value="template">
+                                                <p class="muted" style="font-size:0.82rem; margin-bottom:0.6rem;">The artist will correct the Tech Pack, then it returns through the account officer before coming back to you.</p>
                                                 <label>What needs to be fixed?</label>
                                                 <textarea name="revision_note" rows="3" required maxlength="2000" placeholder="Explain the problem…"></textarea>
                                                 <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;">Send back for revision</button>
@@ -223,8 +210,8 @@
                                 <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $order->clientName() }}</div>
                             </td>
                             <td>
-                                <strong>Job package</strong>
-                                <div style="font-size: 0.74rem; color: var(--ink-3);">tech pack + production details</div>
+                                <strong>Tech Pack</strong>
+                                <div style="font-size: 0.74rem; color: var(--ink-3);">artist → account officer → leader</div>
                             </td>
                             <td>{{ $group->first(fn ($t) => $t->assignee)?->assignee?->name ?? '—' }}</td>
                             <td style="font-size: 0.84rem;">

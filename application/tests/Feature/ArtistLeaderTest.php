@@ -115,11 +115,18 @@ class ArtistLeaderTest extends TestCase
 
         $pack = $order->tasks()
             ->where('stage', ProductionOrder::STAGE_MOCKUP)
-            ->where('approver_role', 'leader')
+            ->where('department', 'Tech pack')
             ->get();
 
         foreach ($pack as $t) {
-            $t->update(['assigned_to' => $lead->id, 'status' => 'for_checking', 'submitted_at' => now()]);
+            $t->update([
+                'assigned_to' => $lead->id,
+                'status' => 'for_checking',
+                'submitted_at' => now(),
+                'approver_role' => 'leader',
+                'officer_approved_by' => $sales->id,
+                'officer_approved_at' => now(),
+            ]);
         }
 
         $this->actingAs($lead)->get(route('approvals'))

@@ -20,9 +20,9 @@ use Tests\TestCase;
  *
  * WholePipelineTest already proves the steps close in the right order. This one
  * asks a different question: does the TECH PACK carry a job from the account
- * officer's desk to the floor and out the door — the officer's half, the
- * artist's half, the leader's sign-off, the materials it asks for, and what
- * every station downstream reads off it.
+ * officer's desk to the floor and out the door — the artist's complete pack,
+ * the officer and leader sign-offs, the materials it asks for, and what every
+ * station downstream reads off it.
  */
 class FullShopWalkthroughTest extends TestCase
 {
@@ -170,12 +170,12 @@ class FullShopWalkthroughTest extends TestCase
             'the money is confirmed and the artist has not been asked for the mockup'
         );
 
-        // The Tech Pack is NOT released with it: the officer fills their half
-        // first and sends it, which is a different event entirely.
+        // The Tech Pack is NOT released with it. It becomes available only
+        // after the final mockup has been approved and the officer sends it.
         $this->assertSame(
             'todo',
             $this->order->fresh()->tasks()->where('department', 'Tech pack')->value('status'),
-            'the pack reached the artist before the officer had written anything on it'
+            'the pack reached the artist before mockup approval'
         );
 
         // ---- 4. The artist draws the mockup, and the client approves it ------
@@ -184,43 +184,16 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertTrue($this->order->fresh()->mockupApproved(),
             'the pack must not open before the client has approved the design');
 
-        // ---- 5. The officer fills their half of the PACK --------------------
+        // ---- 5. The officer sends a blank pack to the assigned artist -------
 
         $this->actingAs($this->staff['sales'])
-            ->get(route('job-orders.edit', $this->order))
+            ->get(route('orders.job-order', $this->order))
             ->assertOk()
-            ->assertSee('name="design_name"', false)
-            ->assertSee('name="printer"', false)
-            // The artist's half is not theirs to fill.
+            ->assertDontSee('name="design_name"', false)
+            ->assertDontSee('name="printer"', false)
             ->assertDontSee('name="tech_pack_images[front_mockup]"', false);
 
-        $this->actingAs($this->staff['sales'])
-            ->post(route('job-orders.update', $this->order), [
-                'design_name' => 'Walkthrough Tee',
-                'fitting' => 'Original fit',
-                'item_style' => 'Cotton shirt',
-                'quality' => 'Premium',
-                'print_type' => 'DTF',
-                'printer' => 'dtf_printer',
-                'fabric' => 'Cotton blend',
-                'neck' => 'Round neck',
-                'packaging' => 'Polybag',
-                'free_logo_sticker' => 'IC sticker',
-                'tshirt_color' => 'Black',
-                'size_range' => 'S-XL',
-                'raw_materials' => ['Cotton shirt blank'],
-                'raw_material_qty' => [55],
-            ])->assertRedirect()->assertSessionHasNoErrors();
-
-        $pack = $this->order->fresh()->techPack;
-        $this->assertSame('Walkthrough Tee', $pack->design_name);
-        $this->assertSame('Premium', $pack->quality);
-        $this->assertSame('Cotton blend', $this->order->fresh()->jobOrder->fabric);
-        $this->assertSame(55.0, $this->order->fresh()->jobOrder->rawMaterialQuantity('Cotton shirt blank'),
-            'the amount the desk is allowed to issue rides with the material');
-
-        // ---- 4. Off to the artist -------------------------------------------
-        // The money is in and the spec is on the sheet, so it can go.
+        // The money is in and the mockup is approved, so it can go.
         $sent = $this->actingAs($this->staff['sales'])
             ->post(route('job-orders.send', $this->order));
 
@@ -233,11 +206,31 @@ class FullShopWalkthroughTest extends TestCase
         $this->actingAs($this->staff['artist'])
             ->get(route('tasks.job-order', $packTask->id))
             ->assertOk()
-            ->assertSee('name="tech_pack_images[front_mockup]"', false)
-            ->assertSee('Walkthrough Tee');
+            ->assertSee('name="tech_pack_images[front_mockup]"', false);
 
         $this->actingAs($this->staff['artist'])
             ->post(route('tasks.tech-pack', $packTask->id), [
+                'design_name' => 'Walkthrough Tee',
+                'fitting' => 'Original fit',
+                'item_style' => 'Cotton shirt',
+                'quality' => 'Premium',
+                'print_type' => 'dtf',
+                'printer' => 'dtf_printer',
+                'fabric' => 'Cotton blend',
+                'neck' => 'Round neck',
+                'cuff_arm_sleeves' => 'Tupi',
+                'print_label' => 'IC DTF original fit',
+                'neck_label' => 'IC woven label',
+                'tshirt_color' => 'Black',
+                'thread_color' => 'Black',
+                'stitch_thread' => 'Polyester 120',
+                'cutting_method' => 'Straight cut',
+                'packaging' => 'Polybag',
+                'zipper_type' => 'N/A',
+                'bottom_hem' => 'Straight hem',
+                'lip_pocket_color' => 'N/A',
+                'size_range' => 'S-XL',
+                'free_logo_sticker' => 'IC sticker',
                 'tech_pack_images' => [
                     'front_mockup' => UploadedFile::fake()->image('mockup.png'),
                     'front_artwork' => UploadedFile::fake()->image('art.png'),
@@ -261,8 +254,32 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertSame(['x' => 45.0, 'y' => 35.0], $pack->callouts()['front_artwork']['to']);
         $this->assertCount(1, $pack->extraNotes());
 
-        // ---- 5. The leader signs off the pack -------------------------------
-        $packTask->update(['status' => 'for_checking', 'submitted_at' => now()]);
+        $this->assertSame('Walkthrough Tee', $pack->design_name);
+        $this->assertSame('Premium', $pack->quality);
+        $this->assertSame('Cotton blend', $this->order->fresh()->jobOrder->fabric);
+
+        // Raw-material quantities and machine routing remain production-detail
+        // work; they are not manual boxes on the printed Tech Pack.
+        $this->actingAs($this->staff['sales'])
+            ->post(route('job-orders.production.update', $this->order), [
+                'raw_materials' => ['Cotton shirt blank'],
+                'raw_material_qty' => [55],
+                'cutting_type' => 'manual',
+                'fabric_press' => 'heat_press',
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(55.0, $this->order->fresh()->jobOrder->rawMaterialQuantity('Cotton shirt blank'),
+            'the amount the desk is allowed to issue rides with the material');
+
+        // ---- 6. Artist → account officer → leader ---------------------------
+        $this->actingAs($this->staff['artist'])
+            ->post(route('tasks.submit', $packTask))->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($this->staff['sales'])
+            ->post(route('tasks.approve', $packTask))->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('leader', $packTask->fresh()->approver_role);
+        $this->assertSame('for_checking', $packTask->fresh()->status);
 
         $this->actingAs($this->staff['leader'])
             ->post(route('tasks.approve-package', $this->order))->assertRedirect();
@@ -403,12 +420,15 @@ class FullShopWalkthroughTest extends TestCase
         foreach ([
             'the read-only pack' => route('orders.job-order', $this->order),
             'the full document' => route('orders.package', $this->order),
-            "the officer's copy" => route('job-orders.edit', $this->order),
         ] as $what => $url) {
             $this->actingAs($this->staff['sales'])->get($url)
                 ->assertOk("$what should open")
                 ->assertSee('Walkthrough Tee');
         }
+
+        $this->actingAs($this->staff['sales'])
+            ->get(route('job-orders.edit', $this->order))
+            ->assertRedirect(route('orders.job-order', $this->order));
 
         // A box taken off stays off, and the note stays on.
         $this->actingAs($this->staff['sales'])->get(route('orders.job-order', $this->order))

@@ -185,19 +185,26 @@ class StationFillsTheSheetTest extends TestCase
         );
     }
 
-    public function test_the_office_form_no_longer_asks_for_what_the_floor_records(): void
+    public function test_the_artist_form_never_asks_for_what_the_floor_records(): void
     {
         // The pack only opens once the client has approved the mockup, so the
         // fixture has to get that far before the page can be read.
         [$sewer, $order] = $this->orderAtSewing();
-        $sales = User::find($order->created_by);
+        $artist = User::factory()->create(['job_role' => User::JOB_ARTIST, 'is_active' => true]);
 
         Task::create([
             'production_order_id' => $order->id, 'department' => 'Final mockup',
             'sequence' => 2, 'stage' => 2, 'status' => 'complete', 'approved_at' => now(),
+            'assigned_to' => $artist->id,
         ]);
+        $pack = Task::create([
+            'production_order_id' => $order->id, 'department' => 'Tech pack',
+            'sequence' => 3, 'stage' => 2, 'status' => 'in_progress',
+            'approver_role' => 'sales', 'assigned_to' => $artist->id,
+        ]);
+        $order->jobOrder->update(['status' => 'sent_to_artist']);
 
-        $form = $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")->assertOk();
+        $form = $this->actingAs($artist)->get(route('tasks.job-order', $pack))->assertOk();
 
         foreach (JobOrder::SEWING_STATION_FIELDS as $field) {
             $form->assertDontSee('name="'.$field.'"', false);

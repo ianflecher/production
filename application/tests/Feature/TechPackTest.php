@@ -19,8 +19,8 @@ use Tests\TestCase;
  * printed the thing production actually asks for — where the artwork goes and
  * how big it comes out.
  *
- * The artist fills their half in the pack itself, the way the floor fills the
- * seam record: you read the spec and answer it in the same place.
+ * The artist completes the pack itself, the way the floor fills the seam
+ * record: every manual answer and image has one owner and one place.
  */
 class TechPackTest extends TestCase
 {
@@ -45,10 +45,17 @@ class TechPackTest extends TestCase
             'free_logo_sticker' => 'IC sticker',
         ]);
 
-        $task = Task::create([
+        Task::create([
             'production_order_id' => $order->id, 'department' => 'Final mockup',
             'sequence' => 2, 'stage' => 2, 'status' => 'complete', 'approved_at' => now(),
             'team' => User::JOB_ARTIST, 'assigned_to' => $artist->id,
+        ]);
+
+        $task = Task::create([
+            'production_order_id' => $order->id, 'department' => 'Tech pack',
+            'sequence' => 3, 'stage' => 2, 'status' => 'in_progress',
+            'team' => User::JOB_ARTIST, 'assigned_to' => $artist->id,
+            'approver_role' => 'sales',
         ]);
 
         return [$sales, $artist, $order->fresh(), $task];
@@ -130,54 +137,51 @@ class TechPackTest extends TestCase
             ->assertSee('tp-sheet', false);
     }
 
-    public function test_the_spec_rows_are_the_officers_and_the_artist_only_reads_them(): void
+    public function test_the_artist_can_fill_every_manual_spec_row(): void
     {
-        // The spec is the client's order written down. An artist quietly
-        // changing what was ordered is the thing this prevents; they still see
-        // every row, in the same boxes, so the sheet keeps its shape.
+        // Client/order facts remain automatic, but every manual production
+        // answer on the sheet belongs to the assigned artist.
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertDontSee('name="design_name"', false)
-            ->assertDontSee('name="cutting_method"', false)
-            ->assertDontSee('name="zipper_type"', false)
-            ->assertDontSee('name="bottom_hem"', false)
-            ->assertDontSee('name="lip_pocket_color"', false)
-            // Read-only boxes, not missing rows.
-            ->assertSee('is-printed', false);
+            ->assertSee('name="design_name"', false)
+            ->assertSee('name="cutting_method"', false)
+            ->assertSee('name="zipper_type"', false)
+            ->assertSee('name="bottom_hem"', false)
+            ->assertSee('name="lip_pocket_color"', false);
     }
 
-    public function test_the_artists_boxes_are_theirs_and_the_officer_only_reads_them(): void
+    public function test_the_account_officer_only_reads_the_completed_pack(): void
     {
-        // The other way round: the officer has no business rewriting the tag
-        // captions or the size the print came out at.
         [$sales, , $order] = $this->shop();
 
         $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
+            ->assertRedirect(route('orders.job-order', $order));
+
+        $this->actingAs($sales)->get(route('orders.job-order', $order))
             ->assertOk()
-            ->assertSee('name="design_name"', false)
+            ->assertDontSee('name="design_name"', false)
             ->assertDontSee('name="tag_1_details"', false)
-            ->assertDontSee('name="artist_name"', false);
+            ->assertDontSee('name="tech_pack_images[front_mockup]"', false);
     }
 
-    public function test_the_spec_rows_ignore_an_artist_who_posts_them_anyway(): void
+    public function test_the_artist_saves_the_complete_spec(): void
     {
-        // The lock on the sheet is a lock in the save as well: a box somebody
-        // cannot click into is no protection on its own.
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'cutting_method' => 'Whatever the artist fancied',
-            'zipper_type' => 'Also not theirs',
+            'cutting_method' => 'Straight cut',
+            'zipper_type' => 'Nylon zipper',
+            'bottom_hem' => 'Elastic hem',
             'tag_1_details' => 'Woven label, centre back',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $pack = $order->fresh()->techPack;
 
-        $this->assertNull($pack->cutting_method, 'the artist wrote into the officer\'s row');
-        $this->assertNull($pack->zipper_type, 'the artist wrote into the officer\'s row');
-        // …while their own box saved as normal.
+        $this->assertSame('Straight cut', $pack->cutting_method);
+        $this->assertSame('Nylon zipper', $pack->zipper_type);
+        $this->assertSame('Elastic hem', $order->fresh()->jobOrder->bottom_hem);
         $this->assertSame('Woven label, centre back', $pack->tag_1_details);
     }
 
@@ -203,17 +207,17 @@ class TechPackTest extends TestCase
         $this->actingAs($artist)->get(route('tasks.show', $task->id))
             ->assertOk()
             ->assertSee('id="task-action-'.$task->id.'"', false)
-            ->assertSee('Submit Tech Pack for checking', false);
+            ->assertSee('Send Tech Pack to account officer', false);
     }
 
-    public function test_the_account_officer_can_fill_text_but_does_not_get_image_uploads(): void
+    public function test_the_account_officer_cannot_edit_text_or_upload_images(): void
     {
         [$sales, , $order] = $this->shop();
 
-        $this->actingAs($sales)->get(route('job-orders.edit', $order))
+        $this->actingAs($sales)->get(route('orders.job-order', $order))
             ->assertOk()
-            ->assertSee('name="design_name"', false)
-            ->assertSee('name="printer"', false)
+            ->assertDontSee('name="design_name"', false)
+            ->assertDontSee('name="printer"', false)
             ->assertDontSee('name="tech_pack_images[front_mockup]"', false);
     }
 
@@ -221,7 +225,7 @@ class TechPackTest extends TestCase
     {
         [$sales, $artist, $order] = $this->shop();
 
-        $this->actingAs($sales)->get(route('job-orders.edit', $order))
+        $this->actingAs($sales)->get(route('orders.job-order', $order))
             ->assertOk()
             ->assertSee($artist->name)
             ->assertDontSee('name="artist_name"', false);
@@ -837,13 +841,8 @@ class TechPackTest extends TestCase
     {
         // The flats the floor cuts and prints to — a different thing from the
         // mockup, which is what the client approved.
-        [$sales, $artist, $order] = $this->shop();
-
-        $template = Task::create([
-            'production_order_id' => $order->id, 'department' => 'Tech pack',
-            'sequence' => 3, 'stage' => 2, 'status' => 'complete',
-            'team' => User::JOB_ARTIST, 'assigned_to' => $artist->id,
-        ]);
+        [$sales, $artist, $order, $template] = $this->shop();
+        $template->update(['status' => 'complete']);
 
         $file = TaskFile::create([
             'task_id' => $template->id,

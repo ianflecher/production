@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Sample Review — Imprint Production')
-@section('page-title', 'Sample Review')
+@section('title', 'Account Officer Review — Imprint Production')
+@section('page-title', 'Account Officer Review')
 
 @section('content')
 <div class="page-head">
@@ -12,7 +12,7 @@
 
 @if ($tasks->isEmpty())
     <div class="card panel" style="text-align: center; padding: 2.5rem;">
-        <p class="muted">No samples waiting.</p>
+        <p class="muted">Nothing is waiting for your approval.</p>
     </div>
 @else
     <div style="display: grid; gap: 1.1rem;">
@@ -24,6 +24,7 @@
                 // one is not news — it just printed a red warning under every
                 // sample the shop has ever sewn.
                 $isPhysicalSample = $task->department === 'Produce sample for client';
+                $isTechPack = $task->isTechPackStep();
             @endphp
             <div class="card panel">
                 <div style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:flex-start;">
@@ -61,7 +62,11 @@
                             <a href="{{ route('tasks.file.view', $f) }}" target="_blank" class="btn btn-primary btn-sm">👁 View {{ $f->label ?? 'file' }}</a>
                         @endif
                     @empty
-                        @if ($isPhysicalSample)
+                        @if ($isTechPack)
+                            <span style="font-size:0.85rem; color: var(--ink-2);">
+                                📋 The artist completed the interactive Tech Pack. Open it below to review every field and image.
+                            </span>
+                        @elseif ($isPhysicalSample)
                             {{-- Nothing to look at on screen, so say where the thing
                                  actually is. Without this the card reads as broken:
                                  a review page with nothing to review on it. --}}
@@ -81,7 +86,7 @@
                          reviewing the LAYOUT (no downpayment, job order still a
                          draft) — only show it for later sample reviews. --}}
                     @if ($task->order->jobOrder && $task->order->mockupApproved())
-                        <a href="{{ route('orders.job-order', $task->order) }}" class="btn btn-ghost btn-sm">📋 View tech pack</a>
+                        <a href="{{ route('orders.job-order', $task->order) }}" class="btn {{ $isTechPack ? 'btn-primary' : 'btn-ghost' }} btn-sm">📋 {{ $isTechPack ? 'Open completed Tech Pack' : 'View Tech Pack' }}</a>
                     @endif
                 </div>
 
@@ -107,9 +112,11 @@
                     @endif
 
                     <form method="POST" action="{{ route('tasks.approve', $task) }}"
-                          onsubmit="return confirm('{{ $isPhysicalSample ? 'Client approved the sample? Mass production will start.' : 'Client approved this sample?' }}');" style="margin-bottom: 1rem;">
+                          onsubmit="return confirm('{{ $isTechPack ? 'Approve this Tech Pack and send it to the leader?' : ($isPhysicalSample ? 'Client approved the sample? Mass production will start.' : 'Client approved this sample?') }}');" style="margin-bottom: 1rem;">
                         @csrf
-                        <button class="btn btn-success btn-sm" @disabled($heldForPayment)>✓ Client approved</button>
+                        <button class="btn btn-success btn-sm" @disabled($heldForPayment)>
+                            {{ $isTechPack ? '✓ Approve Tech Pack → send to leader' : '✓ Client approved' }}
+                        </button>
                     </form>
 
                     @if ($isPhysicalSample)
@@ -140,7 +147,7 @@
                             @csrf
                             <label style="font-weight: 600; font-size: 0.9rem;">Revision note ({{ $task->revisionsLeft() }} left)</label>
                             <textarea name="revision_note" rows="3" required maxlength="2000" placeholder="What needs fixing?" style="margin-top: 0.35rem;"></textarea>
-                            <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;">↩ Send back to artist</button>
+                            <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;">↩ Send {{ $isTechPack ? 'Tech Pack' : 'back' }} to artist</button>
                         </form>
                     @else
                         <span style="font-size:0.82rem; color: var(--danger-ink);">

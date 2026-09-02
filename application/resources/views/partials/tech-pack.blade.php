@@ -4,8 +4,10 @@
     $tp = $order->techPackOrNew();
     $editable = $editable ?? false;
     $mode = $mode ?? null;
-    $textEditable = $editable || $mode === 'officer';
-    $imageEditable = $editable && $mode !== 'officer';
+    // The artist owns the complete Tech Pack. Office and leader copies are
+    // review-only; system facts (client, agent, dates, sizes) stay automatic.
+    $textEditable = $editable;
+    $imageEditable = $editable;
     $mockupTask = $order->tasks->firstWhere('department', 'Final mockup');
     $assignedArtist = $mockupTask?->assignee
         ?? $order->tasks->first(fn ($task) => $task->assignee?->isArtist())?->assignee;
@@ -30,30 +32,7 @@
     // note dragged beside a picture, the end of a leader line — landed
     // somewhere else on the sheet the floor reads. No name on the read-only
     // one: there is no form under it to post to.
-    /* The account officer's rows: the client's order, written down.
-
-       Everybody READS the whole sheet. Only the officer types in these, and
-       only the artist types in the rest — the placements, the sizes the print
-       comes out at, the tag captions, the file path, their own name. Each half
-       is the answer of somebody who was there; the other one is guessing. */
-    $officerRows = [
-        'design_name', 'fitting', 'item_style', 'quality', 'print_tech',
-        'tshirt_color', 'print_label', 'thread_color', 'stitch_thread',
-        'cutting_method', 'size_range', 'zipper_type', 'lip_pocket_color',
-        // Rows the job order record still carries.
-        'fabric', 'neck', 'cuff_arm_sleeves', 'neck_label', 'bottom_hem',
-        'packaging', 'free_logo_sticker', 'print_type',
-    ];
-
-    $canType = function (string $field) use ($textEditable, $mode, $officerRows) {
-        if (! $textEditable) {
-            return false;
-        }
-
-        $theirs = in_array($field, $officerRows, true);
-
-        return $mode === 'officer' ? $theirs : ! $theirs;
-    };
+    $canType = fn (string $field) => $textEditable;
 
     /* What the shop typed into these boxes before, so the same answer is
        picked rather than spelled four ways across four sheets. Only where the
@@ -172,7 +151,7 @@
             <tr><th>Client</th><td>{{ $val($order->clientName()) }}</td><th>Design name</th><td>{!! $fill('design_name','Design name') !!}</td></tr>
             <tr><th>Agent</th><td>{{ $val($order->creator?->name) }}</td><th>Fitting</th><td>{!! $fill('fitting','Original fit',60) !!}</td></tr>
             <tr><th>Type / style</th><td>{!! $textEditable?$fill('item_style','Cotton shirt',100):e($val($tp->item_style?:$order->productLabel())) !!}</td><th>Print type</th><td>{!! $textEditable?$fill('print_type','DTF',60,$jo):e($val($jo?->printTypeLabel())) !!}</td></tr>
-            <tr><th>Printer</th><td>@if($mode === 'officer')<select class="tp-in" name="printer" required><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{{ $order->created_at?->format('F j, Y')??'—' }}</td></tr>
+            <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{{ $order->created_at?->format('F j, Y')??'—' }}</td></tr>
             <tr><th>Fabric</th><td>{!! $fill('fabric','Cotton blend',255,$jo) !!}</td><th>Delivery date</th><td>{{ $order->due_date?->format('F j, Y')??'—' }}</td></tr>
         </table>
     </header>
@@ -1153,7 +1132,143 @@ document.querySelectorAll('.tp-ref-clear').forEach(function(button){
         if(form.requestSubmit)form.requestSubmit();else form.submit();
     });
 });
-document.querySelectorAll('.tp-image-input').forEach(function(input){input.addEventListener('change',()=>preview(input));const box=input.closest('.tp-ref-image');if(!box)return;box.classList.add('is-uploadable');box.addEventListener('click',function(e){if(e.target===input||e.target.closest('.tp-ref-clear,.tp-ref-line-btn,.tp-ref-grip,button,input,textarea,select'))return;const edge=box.getBoundingClientRect();if(box.classList.contains('is-resizable')&&e.clientX>edge.right-22&&e.clientY>edge.bottom-22)return;input.click();});if(!window.DataTransfer)return;box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('is-dragover')});box.addEventListener('dragleave',()=>box.classList.remove('is-dragover'));box.addEventListener('drop',function(e){e.preventDefault();box.classList.remove('is-dragover');const file=e.dataTransfer?.files?.[0];if(!file||!/^image\//.test(file.type))return;const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;preview(input);});});})();</script>
+document.querySelectorAll('.tp-image-input').forEach(function(input){input.addEventListener('change',()=>preview(input));const box=input.closest('.tp-ref-image');if(!box)return;box.classList.add('is-uploadable');box.addEventListener('click',function(e){if(e.target===input||e.target.closest('.tp-ref-clear,.tp-ref-line-btn,.tp-ref-grip,button,input,textarea,select'))return;const edge=box.getBoundingClientRect();if(box.classList.contains('is-resizable')&&e.clientX>edge.right-22&&e.clientY>edge.bottom-22)return;input.click();});if(!window.DataTransfer)return;box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('is-dragover')});box.addEventListener('dragleave',()=>box.classList.remove('is-dragover'));box.addEventListener('drop',function(e){e.preventDefault();box.classList.remove('is-dragover');const file=e.dataTransfer?.files?.[0];if(!file||!/^image\//.test(file.type))return;const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;preview(input);});});
+
+/* ------------------------------------------------------------------
+   Paste a picture straight into a box, and drag it to another one.
+
+   The artist has the mockup on their screen already. Saving it to disk
+   first, then hunting for it in a file dialog, is three steps for
+   something they are holding in the clipboard. Ctrl+V over the box puts
+   it there.
+
+   And a picture pasted into the wrong box is the normal mistake, so
+   dragging it to the right one moves it - swapping if that box is
+   already taken. A picture already SAVED cannot be moved in the browser
+   (there is no file to hand over), so the sheet tells the server which
+   box it belongs in and the server re-points it. Nothing is uploaded
+   twice either way.
+   ------------------------------------------------------------------ */
+(function(){
+    if(!window.DataTransfer)return;
+
+    var sheet=document.querySelector('.tp-reference-sheet.is-editing');
+    if(!sheet)return;
+
+    /* Which box the paste lands in: the one under the pointer. Clicking a
+       box opens the file dialog, so "the box you clicked" is not available
+       as a way to choose - hovering is. */
+    var hovered=null;
+    document.querySelectorAll('.tp-ref-image').forEach(function(box){
+        box.addEventListener('mouseenter',function(){hovered=box;});
+        box.addEventListener('mouseleave',function(){if(hovered===box)hovered=null;});
+    });
+
+    function inputFor(box){return box?box.querySelector('.tp-image-input'):null;}
+
+    function putFile(box,file){
+        var input=inputFor(box);
+        if(!input||!file)return false;
+        var t=new DataTransfer();
+        t.items.add(file);
+        input.files=t.files;
+        input.dispatchEvent(new Event('change',{bubbles:true}));
+        box.classList.add('tp-just-pasted');
+        setTimeout(function(){box.classList.remove('tp-just-pasted');},900);
+        return true;
+    }
+
+    document.addEventListener('paste',function(e){
+        /* Typing into a text field means the paste is theirs, not ours. */
+        var el=document.activeElement;
+        if(el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)&&el.type!=='file')return;
+
+        var items=(e.clipboardData||{}).items||[];
+        var file=null;
+        for(var i=0;i<items.length;i++){
+            if(items[i].kind==='file'&&/^image\//.test(items[i].type)){file=items[i].getAsFile();break;}
+        }
+        if(!file)return;
+
+        /* Hovering nothing: the first empty box, so a paste is never lost. */
+        var target=hovered;
+        if(!target){
+            target=Array.prototype.find.call(
+                document.querySelectorAll('.tp-ref-image'),
+                function(b){var img=b.querySelector('img');return img&&(!img.getAttribute('src')||img.classList.contains('is-empty'));}
+            );
+        }
+        if(!target)return;
+
+        if(putFile(target,file)){
+            e.preventDefault();
+            target.scrollIntoView({block:'nearest'});
+        }
+    });
+
+    /* ---- moving a picture from one box to another ---- */
+
+    document.querySelectorAll('.tp-ref-image').forEach(function(box){
+        var img=box.querySelector('img');
+        var slot=box.getAttribute('data-move-slot');
+        if(!img||!slot)return;
+
+        img.setAttribute('draggable','true');
+
+        img.addEventListener('dragstart',function(e){
+            if(img.classList.contains('is-empty')||!img.getAttribute('src'))return;
+            e.dataTransfer.setData('text/x-tp-slot',slot);
+            e.dataTransfer.effectAllowed='move';
+            sheet.classList.add('tp-moving');
+        });
+
+        img.addEventListener('dragend',function(){sheet.classList.remove('tp-moving');});
+
+        box.addEventListener('drop',function(e){
+            var from=e.dataTransfer?e.dataTransfer.getData('text/x-tp-slot'):'';
+            if(!from||from===slot)return;
+
+            /* A file dropped in from outside is handled by the other listener. */
+            if(e.dataTransfer.files&&e.dataTransfer.files.length)return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            sheet.classList.remove('tp-moving');
+
+            var fromBox=document.querySelector('.tp-ref-image[data-move-slot="'+from+'"]');
+            var fromInput=inputFor(fromBox);
+
+            /* Pasted but not yet saved: the browser owns the file, so move it. */
+            if(fromInput&&fromInput.files&&fromInput.files.length){
+                var moving=fromInput.files[0];
+                var toInput=inputFor(box);
+                var displaced=(toInput&&toInput.files&&toInput.files.length)?toInput.files[0]:null;
+
+                putFile(box,moving);
+
+                var empty=new DataTransfer();
+                if(displaced){empty.items.add(displaced);}
+                fromInput.files=empty.files;
+                fromInput.dispatchEvent(new Event('change',{bubbles:true}));
+
+                return;
+            }
+
+            /* Already saved: only the server can re-point it. Say so, and save. */
+            var form=box.closest('form');
+            if(!form)return;
+
+            var field=document.createElement('input');
+            field.type='hidden';
+            field.name='move_image';
+            field.value=from+'>'+slot;
+            form.appendChild(field);
+
+            if(form.requestSubmit)form.requestSubmit();else form.submit();
+        });
+    });
+})();
+</script>
 @endif
 
 @unless ($imageEditable)

@@ -88,8 +88,8 @@ class BackLinkTest extends TestCase
         $artist = User::factory()->create(['job_role' => User::JOB_ARTIST, 'is_active' => true]);
 
         $task = $order->tasks()->create([
-            'sequence' => 2, 'stage' => 1, 'department' => 'Layout',
-            'status' => 'in_progress', 'approver_role' => 'leader', 'assigned_to' => $artist->id,
+            'sequence' => 2, 'stage' => 2, 'department' => 'Tech pack',
+            'status' => 'in_progress', 'approver_role' => 'sales', 'assigned_to' => $artist->id,
         ]);
 
         // The sheet only opens to an artist once the officer has sent it.

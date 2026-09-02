@@ -49,12 +49,15 @@ class ArtistLeaderOwnPackTest extends TestCase
 
         $order->tasks()
             ->where('stage', ProductionOrder::STAGE_MOCKUP)
-            ->where('approver_role', 'leader')
+            ->where('department', 'Tech pack')
             ->get()
             ->each(fn ($t) => $t->forceFill([
                 'assigned_to' => $drawnBy->id,
                 'status' => 'for_checking',
                 'submitted_at' => now(),
+                'approver_role' => 'leader',
+                'officer_approved_by' => $order->created_by,
+                'officer_approved_at' => now(),
             ])->save());
 
         return $order;

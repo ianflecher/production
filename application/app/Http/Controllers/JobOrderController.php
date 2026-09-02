@@ -30,7 +30,7 @@ class JobOrderController extends Controller
             ]);
         }
 
-        return redirect()->route('job-orders.edit', $order);
+        return redirect()->route('orders.job-order', $order);
     }
 
     /** Backup manual-create endpoint (job orders are normally auto-created on downpayment). */
@@ -49,14 +49,11 @@ class JobOrderController extends Controller
                 ->withErrors(['tech_pack' => 'Approve the final mockup before opening the Tech Pack.']);
         }
 
-        return view('job-orders.edit', [
-            'order' => $order,
-            'jobOrder' => $order->jobOrder,
-            'suggest' => JobOrder::fieldSuggestions(),
-        ]);
+        return redirect()->route('orders.job-order', $order)
+            ->with('success', 'The artist fills the Tech Pack. After mockup approval, it opens to the artist automatically.');
     }
 
-    /** The account officer's half of the tech pack, posted from the pack itself. */
+    /** Compatibility endpoint: account officers now review rather than edit. */
     public function updateJobOrder(\Illuminate\Http\Request $request, ProductionOrder $order): \Illuminate\Http\RedirectResponse
     {
         $this->assertOrderVisible($order);
@@ -67,167 +64,11 @@ class JobOrderController extends Controller
                 ->withErrors(['tech_pack' => 'Approve the final mockup before saving the Tech Pack.']);
         }
 
-        $data = $request->validate([
-            // Header
-            'fb_viber_gc' => ['nullable', 'string', 'max:255'],
-            // Production (yellow) — print type is free text (with suggestions).
-            'print_type' => ['required', 'string', 'max:255'],
-            'printer' => ['required', 'in:'.implode(',', array_keys(JobOrder::PRINTERS))],
-            'fabric' => ['required', 'string', 'max:255'],
-            'free_logo_sticker' => ['nullable', 'string', 'max:255'],
-            // Sewing — only the SPEC. Who sewed each seam, with what thread, and what
-            // the checker found are recorded at the station by the person doing
-            // the work — see JobOrder::SEWING_STATION_FIELDS.
-            ...array_fill_keys([
-                'neck',
-                'cuff_arm_sleeves',
-                'neck_label',
-                'bottom_hem',
-                'extra_seam_label',
-            ], ['nullable', 'string', 'max:255']),
-            // Quality check (yellow)
-            'packaging' => ['nullable', 'string', 'max:255'],
-            // Agent notes
-            'special_instructions' => ['nullable', 'string', 'max:5000'],
-            // Per-line description: one per size row (keyed by order item id).
-            'item_desc' => ['nullable', 'array'],
-            'item_desc.*' => ['nullable', 'string', 'max:255'],
-
-            // The officer fills these on the TECH PACK itself now, so they are
-            // posted from the same sheet and saved onto the pack.
-            'design_name' => ['nullable', 'string', 'max:120'],
-            'fitting' => ['nullable', 'string', 'max:60'],
-            'item_style' => ['nullable', 'string', 'max:100'],
-            'quality' => ['nullable', 'string', 'max:60'],
-            'tshirt_color' => ['nullable', 'string', 'max:60'],
-            'print_label' => ['nullable', 'string', 'max:120'],
-            'thread_color' => ['nullable', 'string', 'max:60'],
-            'size_range' => ['nullable', 'string', 'max:60'],
-            'zipper_type' => ['nullable', 'string', 'max:60'],
-            'lip_pocket_color' => ['nullable', 'string', 'max:60'],
-            'placing_title' => ['nullable', 'string', 'max:160'],
-            'stitch_thread' => ['nullable', 'string', 'max:60'],
-            'cutting_method' => ['nullable', 'string', 'max:60'],
-            'tag_1_details' => ['nullable', 'string', 'max:120'],
-            'tag_2_details' => ['nullable', 'string', 'max:120'],
-            'file_location_notes' => ['nullable', 'string', 'max:200'],
-            'artist_name' => ['nullable', 'string', 'max:100'],
-
-            // What the job is made of, and how much of each. Asked for on the
-            // pack now: the production-details page it used to live on is not
-            // in the officer's way any more, and a job with no materials list
-            // raises no request — the desk issues nothing and nobody is told.
-            'raw_materials' => ['nullable', 'array'],
-            'raw_materials.*' => ['nullable', 'string', 'max:255'],
-            'raw_material_qty' => ['nullable', 'array'],
-            'raw_material_qty.*' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
-        ]);
-
-        // The pack's own fields go to the pack; everything else stays on the
-        // job order, so no answer ends up with two homes.
-        $packFields = collect($data)->only([
-            // The officer's half only. The placements, the sizes the print
-            // comes out at, the tag captions and the notes are the artist's —
-            // they are on this sheet to be read, not overwritten from here.
-            'design_name', 'fitting', 'item_style', 'quality', 'tshirt_color',
-            'print_label', 'thread_color',
-            'size_range', 'zipper_type', 'lip_pocket_color', 'stitch_thread',
-            'cutting_method',
-        ])->all();
-
-        // Was this a fix requested by the leader? Clearing the note sends the
-        // (already-made) package straight back to the leader's queue.
-        $wasLeaderFix = filled($order->jobOrder->leader_note);
-
-        $order->jobOrder->update(
-            collect($data)->except(array_merge(['item_desc'], array_keys($packFields)))->all()
-            + ['leader_note' => null]
-        );
-
-        $pack = $order->techPack()->firstOrNew([]);
-        $pack->fill($packFields);
-        $order->techPack()->save($pack);
-
-        // The materials list, with the amount beside each name. Only touched
-        // when the form actually carried it, so a save from a page without
-        // those boxes does not wipe what is already there.
-        if ($request->has('raw_materials')) {
-            $names = [];
-            $amounts = [];
-
-            foreach ($data['raw_materials'] as $i => $name) {
-                if (blank($name)) {
-                    continue;
-                }
-
-                $names[] = $name;
-                $amount = $data['raw_material_qty'][$i] ?? null;
-
-                if (is_numeric($amount) && (float) $amount > 0) {
-                    $amounts[$name] = round((float) $amount, 2);
-                }
-            }
-
-            $order->jobOrder->update([
-                'raw_materials' => $names,
-                'raw_material_quantities' => $amounts ?: null,
-            ]);
-
-            // A list that changed changes what the desk is asked for.
-            $order->refresh()->syncMaterialRequests();
-        }
-
-        // Save each line's description, then mirror the distinct lines into the
-        // order-level brief so the artist/summary views still read sensibly.
-        $order->load('items');
-        foreach ($order->items as $item) {
-            $item->update(['description' => $data['item_desc'][$item->id] ?? null]);
-        }
-        $brief = $order->items->pluck('description')->filter()->unique()->implode(', ');
-        $order->update(['description' => $brief !== '' ? $brief : null]);
-
-        // A named free-logo sticker means the sticker production step is needed.
-        // A blank field — or a "no sticker" placeholder like n/a / none / - —
-        // must NOT create a sticker step, so only a real name turns it on.
-        $newSticker = ProductionOrder::namesASticker($data['free_logo_sticker'] ?? null);
-        if ($newSticker !== (bool) $order->needs_sticker) {
-            $order->update(['needs_sticker' => $newSticker]);
-        }
-
-        // Choosing a print type already implies a press and a cutting method, so
-        // put them straight into the pipeline instead of leaving the order with
-        // no decoration/cutting until someone opens the production-details page.
-        $order->refresh()->load('jobOrder');
-
-        if ($order->canEditRouting()) {
-            $config = \App\Models\JobOrder::printTypeConfig($order->jobOrder->print_type);
-
-            if (! $order->cutting_type && ($config['cutting'] ?? null)) {
-                $order->update(['cutting_type' => $config['cutting']]);
-            }
-
-            // Fabric press auto-matches the print type (embroidery print type =>
-            // embroidery). Set it now so its step is in the pipeline from the start;
-            // it stays overridable on the production-details page.
-            if (! $order->jobOrder->fabric_press) {
-                $fp = $order->jobOrder->defaultFabricPress();
-                $order->jobOrder->update([
-                    'fabric_press' => $fp,
-                    'needs_embroidery' => $fp === 'embroidery' ? true : (bool) $order->jobOrder->needs_embroidery,
-                ]);
-            }
-
-            $order->refresh()->rebuildPipeline($order->decoration_methods ?? [], $order->cutting_type);
-        }
-
-        // A leader fix goes straight back to them; a first fill continues the flow.
-        if ($wasLeaderFix) {
-            return redirect()->route('orders.show', $order)
-                ->with('success', 'Tech pack corrected — sent back to the leader for checking.');
-        }
-
-        return redirect()->route('job-orders.production', $order)
-            ->with('success', 'Tech pack saved. Now the production details — press, cutting and raw materials.');
+        // Kept as a compatibility endpoint for old bookmarks/forms. The Tech
+        // Pack is no longer split: account officers review it but do not edit
+        // the artist's manual fields.
+        return redirect()->route('orders.job-order', $order)
+            ->withErrors(['tech_pack' => 'The assigned artist fills the complete Tech Pack.']);
     }
 
     /** The whole job package as ONE document: mockup, template, job order,
@@ -442,8 +283,8 @@ class JobOrderController extends Controller
         // Still to send? Then the pack is where they need to be, and the send
         // button is on it — rather than telling them to go and open it again.
         if ($order->jobOrder->status === 'draft') {
-            return redirect()->route('job-orders.edit', $order)
-                ->with('success', $note.' Send it to the artist when you are ready.');
+            return redirect()->route('orders.job-order', $order)
+                ->with('success', $note.' The Tech Pack opens to the artist automatically after mockup approval.');
         }
 
         return redirect()->route('orders.show', $order)->with('success', $note);
@@ -454,6 +295,15 @@ class JobOrderController extends Controller
         $this->assertOrderVisible($order);
         $order->load(['jobOrder', 'tasks']);
         abort_unless($order->jobOrder, 404);
+
+        // A stale page can still post the old Send button after mockup approval
+        // has already opened the pack automatically. Treat that as success,
+        // not a forbidden action.
+        if ($order->jobOrder->status === 'sent_to_artist') {
+            return redirect()->route('orders.show', $order)
+                ->with('success', 'The Tech Pack is already open to the artist.');
+        }
+
         abort_unless($order->jobOrder->status === 'draft', 403);
 
         // The Tech Pack is completed only after the client approves the final
@@ -464,11 +314,6 @@ class JobOrderController extends Controller
 
         if (! $order->hasDownpayment()) {
             return back()->withErrors(['job_order' => 'Record the downpayment before sending the Tech Pack to the artist.']);
-        }
-
-        // Production specs must be filled before the artist can use the job order.
-        if (! $order->jobOrder->isReadyToSend()) {
-            return back()->withErrors(['job_order' => 'Fill in at least Print Type, Printer and Fabric before sending.']);
         }
 
         // The artist needs the client reference to make the mockup.
@@ -491,9 +336,7 @@ class JobOrderController extends Controller
         // leader approves the design package, i.e. when the Raw materials stage
         // opens — see ProductionOrder::unlockStage().
 
-        // Straight to production details so raw materials & cutting always get
-        // filled in — it's the next required step, not an optional side trip.
-        return redirect()->route('job-orders.production', $order)
-            ->with('success', 'Tech pack sent to the artist. Now fill in the production details (raw materials & cutting) to finish.');
+        return redirect()->route('orders.show', $order)
+            ->with('success', 'Tech Pack sent to the artist. When finished, it will return to the account officer for approval before going to the leader.');
     }
 }

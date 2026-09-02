@@ -83,7 +83,7 @@ class SheetZoomBelongsToTheReadingCopiesTest extends TestCase
 
         $pack = Task::create([
             'production_order_id' => $order->id, 'department' => 'Tech pack',
-            'sequence' => 3, 'stage' => 2, 'status' => 'ready',
+            'sequence' => 3, 'stage' => 2, 'status' => 'in_progress',
             'team' => User::JOB_ARTIST, 'assigned_to' => $artist->id,
         ]);
 
@@ -92,13 +92,16 @@ class SheetZoomBelongsToTheReadingCopiesTest extends TestCase
             ->assertDontSee('data-tp-scale', false);
     }
 
-    public function test_the_officer_filling_their_half_does_not_get_it_either(): void
+    public function test_the_officer_reviewing_the_pack_can_zoom_the_read_only_copy(): void
     {
         [$sales, , $order] = $this->shop();
 
         $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
+            ->assertRedirect(route('orders.job-order', $order));
+
+        $this->actingAs($sales)->get(route('orders.job-order', $order))
             ->assertOk()
-            ->assertDontSee('data-tp-scale', false);
+            ->assertSee('data-tp-scale', false);
     }
 
     public function test_the_control_never_reaches_paper(): void

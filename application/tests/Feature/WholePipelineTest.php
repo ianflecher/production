@@ -140,6 +140,33 @@ class WholePipelineTest extends TestCase
         $task->refresh();
 
         if (in_array($task->status, ['in_progress', 'revision_required'], true)) {
+            if ($task->isTechPackStep()) {
+                $this->actingAs($worker)->post(route('tasks.tech-pack', $task), [
+                    'design_name' => 'Whole Pipeline Pack',
+                    'fitting' => 'Original fit',
+                    'item_style' => 'Round-neck shirt',
+                    'print_type' => 'full_sublimation',
+                    'printer' => 'atexco',
+                    'fabric' => 'Dri-fit micro mesh',
+                    'neck' => 'Ribbed collar',
+                    'cuff_arm_sleeves' => 'Tupi',
+                    'print_label' => 'Sublimation print label',
+                    'neck_label' => 'IC woven label',
+                    'tshirt_color' => 'Blue',
+                    'thread_color' => 'Blue',
+                    'stitch_thread' => 'Polyester 120',
+                    'cutting_method' => 'Laser cut',
+                    'packaging' => 'One piece per plastic',
+                    'zipper_type' => 'N/A',
+                    'bottom_hem' => 'Straight hem',
+                    'lip_pocket_color' => 'N/A',
+                    'size_range' => 'S-2XL',
+                    'free_logo_sticker' => 'N/A',
+                    'file_location_host' => 'IC-SERVER',
+                    'file_location_tail' => 'FOR PRINT\\'.$this->order->order_number,
+                ])->assertRedirect()->assertSessionHasNoErrors();
+            }
+
             $payload = [];
 
             if ($task->usesFilePath()) {
@@ -280,21 +307,14 @@ class WholePipelineTest extends TestCase
         }
 
         $this->actingAs($this->staff['sales'])
-            ->post("/job-orders/{$this->order->id}/update", [
-                'print_type' => 'full_sublimation',
-                'printer' => 'atexco',
-                'fabric' => 'Dri-fit micro mesh',
-                'neck' => 'Ribbed collar',
-                'packaging' => 'One piece per plastic',
-            ])->assertRedirect();
-
-        $this->actingAs($this->staff['sales'])
             ->post("/job-orders/{$this->order->id}/send")->assertRedirect();
 
         $this->assertSame('sent_to_artist', $this->order->fresh()->jobOrder->status);
 
         foreach ($this->tasksAt('Tech pack') as $task) {
             $this->workStep($task->fresh(), approve: false);
+            $this->actingAs($this->staff['sales'])
+                ->post(route('tasks.approve', $task))->assertRedirect();
         }
 
         $this->actingAs($this->staff['leader'])

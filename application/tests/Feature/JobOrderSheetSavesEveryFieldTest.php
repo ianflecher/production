@@ -8,8 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Every account-officer specification on the Tech Pack, filled in, saved,
- * and read back.
+ * Every artist-owned specification on the Tech Pack, filled in, saved, and
+ * read back.
  *
  * The sewing block alone is twenty-odd fields wired through a migration, the
  * model's $fillable, the controller's validation, the form and the printed
@@ -64,7 +64,11 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         ]);
 
         $order = ProductionOrder::where('order_number', 'IC2026-07777')->firstOrFail();
-        $order->jobOrder()->create(['status' => 'draft', 'created_by' => $sales->id]);
+        $artist = User::factory()->create(['job_role' => User::JOB_ARTIST, 'is_active' => true]);
+        $order->jobOrder()->updateOrCreate(
+            ['production_order_id' => $order->id],
+            ['status' => 'sent_to_artist', 'created_by' => $sales->id],
+        );
 
         // The officer may fill the Tech Pack only after the client approves
         // the final mockup. Reproduce that real workflow instead of bypassing
@@ -72,6 +76,12 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         $order->tasks()->where('department', 'Final mockup')->update([
             'status' => 'complete',
             'approved_at' => now(),
+            'assigned_to' => $artist->id,
+        ]);
+        $order->tasks()->where('department', 'Tech pack')->update([
+            'status' => 'in_progress',
+            'assigned_to' => $artist->id,
+            'approver_role' => 'sales',
         ]);
 
         return $order->fresh();
@@ -80,9 +90,11 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
     /** Fill in every box and save. */
     private function fillIn(ProductionOrder $order): \Illuminate\Testing\TestResponse
     {
-        return $this->actingAs(User::find($order->created_by))
-            ->post("/job-orders/{$order->id}/update", self::SHEET_FIELDS + [
-                'print_type' => 'Full Sublimation',
+        $task = $order->tasks()->where('department', 'Tech pack')->firstOrFail();
+
+        return $this->actingAs($task->assignee)
+            ->post(route('tasks.tech-pack', $task), self::SHEET_FIELDS + [
+                'print_type' => 'full_sublimation',
                 'printer' => 'atexco',
             ]);
     }
@@ -124,8 +136,9 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
     {
         $order = $this->order();
 
-        $form = $this->actingAs(User::find($order->created_by))
-            ->get("/job-orders/{$order->id}/edit")
+        $task = $order->tasks()->where('department', 'Tech pack')->firstOrFail();
+        $form = $this->actingAs($task->assignee)
+            ->get(route('tasks.job-order', $task))
             ->assertOk();
 
         foreach (array_keys(self::SHEET_FIELDS) as $field) {
@@ -138,8 +151,9 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         $order = $this->order();
         $this->fillIn($order);
 
-        $form = $this->actingAs(User::find($order->created_by))
-            ->get("/job-orders/{$order->id}/edit")
+        $task = $order->tasks()->where('department', 'Tech pack')->firstOrFail();
+        $form = $this->actingAs($task->assignee)
+            ->get(route('tasks.job-order', $task))
             ->assertOk();
 
         // A field that saves but doesn't reload is just as broken: the next
