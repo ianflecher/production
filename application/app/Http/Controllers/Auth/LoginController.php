@@ -107,7 +107,58 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard'));
+        // Where they were headed before the login form stopped them - but only
+        // if their job can open it. Handing somebody back a page their role
+        // forbids means signing in successfully and landing on Forbidden, then
+        // "page expired" when they go back and resubmit a stale form.
+        $intended = $request->session()->pull('url.intended');
+        $home = route($user->homeRoute());
+
+        return redirect()->to(
+            $intended && $this->mayOpen($user, $intended) ? $intended : $home
+        );
+    }
+
+    /**
+     * Would this person get past the door on that URL?
+     *
+     * Asked of the route's own `role:` middleware, so the answer is whatever
+     * the route itself would decide rather than a second list to keep in step
+     * with it. Anything unroutable, or on another host, is not followed.
+     */
+    private function mayOpen(\App\Models\User $user, string $url): bool
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (! $path || ($host && $host !== request()->getHost())) {
+            return false;
+        }
+
+        try {
+            $route = app('router')->getRoutes()->match(
+                \Illuminate\Http\Request::create($path, 'GET')
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+
+        foreach ($route->gatherMiddleware() as $middleware) {
+            if (! is_string($middleware) || ! str_starts_with($middleware, 'role:')) {
+                continue;
+            }
+
+            $allowed = explode(',', substr($middleware, 5));
+
+            $ok = in_array($user->role, $allowed, true)
+                || (in_array('artist_lead', $allowed, true) && $user->isArtistLead());
+
+            if (! $ok) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function logout(Request $request): RedirectResponse

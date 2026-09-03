@@ -402,6 +402,33 @@ class User extends Authenticatable
      * Super admins and supervisors can do everything a leader can in the UI
      * (see all orders, the pipeline, and approvals).
      */
+    /**
+     * The page to land on when there is nowhere better to go.
+     *
+     * Signing in used to hand people back whatever page bounced them to the
+     * login form - Laravel's "intended" URL. For anyone whose bookmark was a
+     * page their job cannot open, that meant logging in successfully and
+     * arriving at Forbidden, going back, and resubmitting a form whose token
+     * had gone stale: "page expired". The raw materials desk hit it every time
+     * they opened an old link to Orders.
+     */
+    public function homeRoute(): string
+    {
+        return match (true) {
+            // A leader can open the inventory, the finance desk and the
+            // stations, so those checks would all claim them. They run the
+            // shop from the dashboard - asked first, before the desks.
+            $this->isLeader(), $this->isSales() => 'dashboard',
+            $this->isArtist() => 'inquiries.layouts',
+            $this->canManageInventory() => 'inventory.index',
+            $this->canManageProducts() => 'products.index',
+            $this->canManageFinance() => 'finance.index',
+            $this->canUseStations() => 'stations.index',
+            $this->isAgent() => 'tasks.mine',
+            default => 'dashboard',
+        };
+    }
+
     public function isLeader(): bool
     {
         return $this->role === self::ROLE_LEADER || $this->isSuperAdmin() || $this->isSupervisor();
