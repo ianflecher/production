@@ -326,7 +326,11 @@ class InventoryController extends Controller
 
         $imported = 0;
         $skipped = 0;
-        DB::transaction(function () use ($rows, &$imported, &$skipped) {
+        // Every material already on the books, by the name they would be
+        // matched under. Read once: a lookup per row would be a query per row.
+        $existing = $this->materialsByKey();
+
+        DB::transaction(function () use ($rows, &$imported, &$skipped, &$existing) {
             foreach ($rows as $row) {
                 $name = trim((string) ($row[0] ?? ''));
                 $unit = trim((string) ($row[1] ?? '')) ?: 'pcs';
@@ -336,7 +340,17 @@ class InventoryController extends Controller
 
                     continue;
                 }
-                $item = InventoryItem::firstOrCreate(['name' => $name], ['unit' => $unit, 'quantity' => 0]);
+                $key = \App\Services\MaterialName::key($name);
+                $item = $existing[$key] ?? null;
+
+                if (! $item) {
+                    $item = InventoryItem::create(['name' => $name, 'unit' => $unit, 'quantity' => 0]);
+                    $existing[$key] = $item;   // a file naming it twice updates it twice, not two rows
+                }
+
+                // The name already on the books is left alone. The shop may
+                // have tidied it since the sheet was written, and re-importing
+                // should not undo that.
                 $item->update(['unit' => $unit]);
 
                 // Log the difference so an import is attributable like any other change.
@@ -349,6 +363,30 @@ class InventoryController extends Controller
         $note = $skipped > 0 ? " ({$skipped} row(s) skipped — missing name or quantity)" : '';
 
         return back()->with('success', "Imported {$imported} item(s) from the file.{$note}");
+    }
+
+    /**
+     * Every material on the books, keyed by the name it would be matched under.
+     *
+     * Soft-deleted ones are included on purpose: a material that was removed
+     * and then turns up on a sheet again should come back, not arrive a second
+     * time beside the row that is still there under a deleted flag.
+     *
+     * @return array<string, InventoryItem>
+     */
+    private function materialsByKey(): array
+    {
+        $map = [];
+
+        foreach (InventoryItem::withTrashed()->get() as $item) {
+            $key = \App\Services\MaterialName::key($item->name);
+
+            // First one wins, so an import can never be steered onto a
+            // different row by the order rows happen to come back in.
+            $map[$key] ??= $item;
+        }
+
+        return $map;
     }
 
     /**
@@ -443,7 +481,9 @@ class InventoryController extends Controller
         $group = '';
         $operator = auth()->user()?->name;
 
-        DB::transaction(function () use ($rows, $map, $cell, $number, &$imported, &$skipped, &$group, $operator) {
+        $existing = $this->materialsByKey();
+
+        DB::transaction(function () use ($rows, $map, $cell, $number, &$imported, &$skipped, &$group, $operator, &$existing) {
             foreach (array_slice($rows, $map['header'] + 1) as $row) {
                 // The group is written once per block and inherited below it.
                 if (($g = $cell($row, $map['group'])) !== '') {
@@ -461,8 +501,10 @@ class InventoryController extends Controller
                 $received = $number($cell($row, $map['received']));
                 $less = $number($cell($row, $map['less']));
 
-                $item = InventoryItem::withTrashed()->firstOrNew(['name' => $name]);
-                if ($item->trashed()) {
+                $key = \App\Services\MaterialName::key($name);
+                $item = $existing[$key] ?? new InventoryItem(['name' => $name]);
+
+                if ($item->exists && $item->trashed()) {
                     $item->restore();
                 }
 
@@ -486,6 +528,10 @@ class InventoryController extends Controller
                 $item->recordMovement($beginning, 'added', 'Opening balance (stock sheet import)', null, $operator);
                 $item->recordMovement($received, 'restock', 'Received (stock sheet import)', null, $operator);
                 $item->recordMovement(-$less, 'used', 'Issued out (stock sheet import)', null, $operator);
+
+                // So a sheet listing the same material on two lines lands on
+                // one row, rather than the second line making a second row.
+                $existing[$key] = $item;
 
                 $imported++;
             }

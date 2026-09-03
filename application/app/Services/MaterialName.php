@@ -43,6 +43,28 @@ class MaterialName
     ];
 
     /** The size at the end of a description, or null when there isn't one. */
+    /**
+     * The form of a material's name used to decide whether two rows are the
+     * same material.
+     *
+     * A stock sheet is typed by hand and re-exported, so the same fabric comes
+     * back as "Cotton White XL", "cotton white  xl" and "COTTON-WHITE-XL" on
+     * three different days. Matched literally, each of those is a NEW material
+     * and the shop ends up with three rows for one bolt of cloth, none of them
+     * holding the true quantity.
+     *
+     * Case, punctuation and runs of spaces are noise for that decision. What
+     * is left is compared; the name the shop typed is what gets stored and
+     * shown.
+     */
+    public static function key(?string $name): string
+    {
+        $key = strtolower(trim((string) $name));
+        $key = preg_replace('/[^a-z0-9]+/', ' ', $key) ?? '';
+
+        return trim(preg_replace('/\s+/', ' ', $key) ?? '');
+    }
+
     public static function size(string $name): ?string
     {
         // Sizes are written after the final dash: "… BLACK - 2XL".
