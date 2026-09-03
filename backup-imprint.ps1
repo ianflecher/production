@@ -1,14 +1,20 @@
 <#
-    backup-imprint.ps1  —  Automated offsite backup for the Imprint production system.
+    backup-imprint.ps1  ?  Automated offsite backup for the Imprint production system.
 
     Produces ONE self-contained restore kit per run:
         imprint-backup-<timestamp>.zip
-            ├── database.sql     full mysqldump of imprint_production
-            ├── code.zip         snapshot of all tracked source at HEAD (just unzip)
-            └── RESTORE.txt      step-by-step restore instructions
+            ??? database.sql     full mysqldump of imprint_production
+            ??? code.zip         snapshot of all tracked source at HEAD (just unzip)
+            ??? RESTORE.txt      step-by-step restore instructions
 
     The zip is copied to OneDrive (offsite / cloud) and old backups are pruned.
-    Safe to run anytime — it only READS the database and the git repo.
+
+    Uploaded files - every layout, mockup, tech pack picture and payment proof -
+    are mirrored SEPARATELY, not put in the zip. The zip is taken six times a
+    day and 180 are kept; 400+ MB of pictures in each would be some 70 GB of
+    OneDrive holding the same images over and over. The mirror is one current
+    copy, and each run only carries what is new.
+    Safe to run anytime ? it only READS the database and the git repo.
 
     Manual run:   powershell -ExecutionPolicy Bypass -File C:\ImprintProduction\backup-imprint.ps1
 #>
@@ -24,6 +30,8 @@ $EnvFile    = Join-Path $AppDir '.env'
 $MysqlDump  = 'C:\xampp\mysql\bin\mysqldump.exe'
 if (-not (Test-Path $MysqlDump)) { $MysqlDump = 'C:\xampp1\mysql\bin\mysqldump.exe' }
 $OneDrive   = Join-Path $env:USERPROFILE 'OneDrive\ImprintBackups'
+# The uploaded files, kept as a plain folder rather than inside the zips.
+$UploadMirror = Join-Path $env:USERPROFILE 'OneDrive\ImprintUploads'
 $LogDir     = Join-Path $RepoDir 'logs'
 $LogFile    = Join-Path $LogDir 'backup.log'
 # Backups run every 4 hours (6 a day), so 180 keeps roughly 30 days of history.
@@ -102,7 +110,7 @@ try {
     Write-Log ("Database dumped: {0:N0} bytes" -f $dumpSize)
 
     # ---- 2. Code snapshot (current tracked files at HEAD) -----------------
-    # A git archive of HEAD — every tracked source file, minus gitignored bulk
+    # A git archive of HEAD ? every tracked source file, minus gitignored bulk
     # like the 52MB cloudflared.exe. Self-contained: just unzip to restore.
     $codeZip = Join-Path $work 'code.zip'
     & git -C $RepoDir archive --format=zip -o $codeZip HEAD 2>&1 | Out-Null
@@ -111,21 +119,27 @@ try {
 
     # ---- 3. Restore instructions ------------------------------------------
     $restore = @"
-IMPRINT PRODUCTION — RESTORE INSTRUCTIONS
+IMPRINT PRODUCTION ? RESTORE INSTRUCTIONS
 Backup taken: $Stamp
 
 This kit fully restores the app + data onto a fresh machine.
 
 1. RESTORE THE CODE
-   Unzip code.zip — it contains every tracked source file at HEAD.
+   Unzip code.zip ? it contains every tracked source file at HEAD.
    (The 52MB cloudflared.exe is intentionally excluded; re-download it if needed.)
 
 2. RESTORE THE DATABASE
    - Create an empty MySQL database, e.g.:  CREATE DATABASE imprint_production;
    - Import:  mysql -u <user> -p imprint_production < database.sql
 
-3. CONFIG
-   - Recreate application/.env (it is intentionally NOT in the backup — it holds
+3. RESTORE THE UPLOADED FILES
+   Copy OneDrive\ImprintUploads back to application/storage/app.
+   These are the layouts, mockups, tech pack pictures and payment proofs.
+   They are NOT in this zip - they are mirrored beside it, because they are
+   hundreds of megabytes and do not change from one backup to the next.
+
+4. CONFIG
+   - Recreate application/.env (it is intentionally NOT in the backup ? it holds
      secrets). Copy application/.env.example and fill in DB + APP_KEY.
    - composer install, then the app is ready.
 
@@ -147,7 +161,48 @@ Database: $dbName   Host: ${dbHost}:$dbPort
     Write-Log "Copied offsite -> $OneDrive"
     Remove-Item $zipTmp -Force
 
-    # ---- 6. Prune old backups (only after a successful new one) ------------
+    # ---- 6. Mirror the uploaded files -------------------------------------
+    #
+    # These are the one thing here that cannot be recreated: a client's artwork,
+    # the artist's mockups, the proof of a payment. Until today they were in no
+    # backup at all - the code snapshot is `git archive HEAD`, which is TRACKED
+    # files, and everything under storage/app is gitignored.
+    #
+    # Additive on purpose: robocopy /E copies what is new or changed and never
+    # deletes. A mirror that deletes would faithfully carry a mistake - or a
+    # ransomware run - straight into the only copy that survives it.
+    #
+    # storage\app is a junction to D: since the disk move, so the real path is
+    # resolved rather than assumed: if the junction is ever undone this keeps
+    # backing up the right folder instead of quietly backing up nothing.
+    $uploadSource = Join-Path $AppDir 'storage\app'
+    $sourceItem = Get-Item $uploadSource -ErrorAction SilentlyContinue
+
+    if ($sourceItem -and $sourceItem.LinkType -eq 'Junction' -and $sourceItem.Target) {
+        $uploadSource = @($sourceItem.Target)[0]
+    }
+
+    if (Test-Path $uploadSource) {
+        if (-not (Test-Path $UploadMirror)) { New-Item -ItemType Directory -Path $UploadMirror -Force | Out-Null }
+
+        $rc = Start-Process robocopy -ArgumentList @(
+            $uploadSource, $UploadMirror, '/E', '/R:1', '/W:1', '/NFL', '/NDL', '/NP', '/NJH', '/NJS'
+        ) -Wait -PassThru -NoNewWindow
+
+        # robocopy says 0 = nothing to do, 1 = files copied, up to 7 = odd but
+        # done. 8 and over is a real failure.
+        if ($rc.ExitCode -ge 8) {
+            Write-Log "!!! Upload mirror FAILED (robocopy $($rc.ExitCode)) - the zip is still good"
+        } else {
+            $mirrored = Get-ChildItem $UploadMirror -Recurse -File -Force -ErrorAction SilentlyContinue
+            Write-Log ("Uploads mirrored: {0} files, {1:N0} MB -> {2}" -f `
+                $mirrored.Count, (($mirrored | Measure-Object Length -Sum).Sum / 1MB), $UploadMirror)
+        }
+    } else {
+        Write-Log "!!! Uploads folder not found at $uploadSource - nothing mirrored"
+    }
+
+    # ---- 7. Prune old backups (only after a successful new one) ------------
     $old = Get-ChildItem -Path $OneDrive -Filter 'imprint-backup-*.zip' |
            Sort-Object Name -Descending | Select-Object -Skip $Keep
     foreach ($f in $old) { Remove-Item $f.FullName -Force; Write-Log "Pruned old backup: $($f.Name)" }
