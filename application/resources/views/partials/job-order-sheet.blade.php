@@ -400,7 +400,7 @@
     @unless ($recordOnly)
     {{-- SPECIAL INSTRUCTIONS --}}
     <table class="jo">
-        <tr><td class="sec red" style="background: #fff; text-align: left; border-bottom: none;">Special Instructions / Notes from Agent</td></tr>
+        <tr><td class="sec red" style="background: #fff; text-align: left; border-bottom: none;">Special Instructions / Notes from the Account Officer</td></tr>
         <tr>
             <td style="min-height: 120px; white-space: pre-line; text-align: center; padding: 1.2rem; font-weight: 600;">{{ $jo?->special_instructions ?? $order->description }}</td>
         </tr>

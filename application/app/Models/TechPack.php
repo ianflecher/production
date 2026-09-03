@@ -337,10 +337,19 @@ class TechPack extends Model
      * Not the ones that are unique to a job (design name), and not the ones
      * that are already a list somewhere else.
      */
+    /*
+     * print_label, stitch_thread, cutting_method and size_range were taken off
+     * the sheet: the shop does not fill them in, and a row nobody answers is a
+     * row everybody's eye learns to skip - which is how the rows that DO
+     * matter start getting skipped too.
+     *
+     * Their columns are left on the table. Packs already written have those
+     * answers in them, and dropping the columns would throw away what the
+     * floor was told on jobs that have already run.
+     */
     public const SUGGEST_FIELDS = [
         'fitting', 'item_style', 'quality', 'print_tech',
-        'tshirt_color', 'print_label', 'thread_color', 'stitch_thread',
-        'cutting_method', 'size_range', 'zipper_type', 'lip_pocket_color',
+        'tshirt_color', 'thread_color', 'zipper_type', 'lip_pocket_color',
         'tag_1_details', 'tag_2_details',
     ];
 

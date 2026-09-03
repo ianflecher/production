@@ -32,7 +32,12 @@
                     <tr>
                         <th>Order</th>
                         <th>What</th>
-                        <th>Agent</th>
+                        {{-- Who did the work. The artist leader's list is
+                             scoped to the artists, so for them it is always an
+                             artist and says so. A full leader's list also holds
+                             printing, sewing and QC, where "Artist" would be a
+                             lie about the person named in the row. --}}
+                        <th>{{ auth()->user()->isArtistLead() ? 'Artist' : 'Done by' }}</th>
                         <th>Submitted</th>
                         <th>Submitted work</th>
                         <th>Actions</th>

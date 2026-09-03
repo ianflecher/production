@@ -2,7 +2,7 @@
    Tech pack
 
    Printed and pinned up, so it is laid out for paper first: two columns that
-   hold their shape at A4 landscape, black rules, and no colour that only works
+   hold their shape on 8.5 x 11 landscape, black rules, and no colour that only works
    on a screen. The shop reads this next to a garment, not on a phone.
    ========================================================================= */
 
@@ -220,7 +220,11 @@ table.tp-tbl td { font-weight: 600; }
    The reason this page exists. Everything the app wraps around the sheet is
    screen furniture and must not appear on the paper. */
 @media print {
-    @page { size: A4 landscape; margin: 8mm; }
+    /* 8.5 x 11 - short bond, which is the paper the shop actually has. A4 is
+       8.3 x 11.7, so a sheet laid out for it came out either shrunk to fit or
+       clipped down the long edge on every print. Landscape is kept: the sheet
+       is wider than it is tall and always has been. */
+    @page { size: 11in 8.5in; margin: 8mm; }
 
     .sidebar, .topbar, .tp-actions, .alert-success, .alert-error { display: none !important; }
     .shell, .main, .content, body { display: block !important; background: #fff !important; }
@@ -1379,8 +1383,8 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     /* Landscape paper. Named as well as default: on its own the pack IS the
        document, and inside the leader's package it is one landscape page among
        portrait ones — that document sets its own default @page after this. */
-    @page { size:A4 landscape; margin:6mm; }
-    @page tech-pack-page { size:A4 landscape; margin:6mm; }
+    @page { size:11in 8.5in; margin:6mm; }
+    @page tech-pack-page { size:11in 8.5in; margin:6mm; }
     .tp-reference-sheet { page:tech-pack-page; }
 
     /* Printing this page means printing the Tech Pack only. The production
@@ -1427,7 +1431,7 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     /* Do not use cqw for the main mockup on paper. Chromium recalculates
        container-query units while paginating and could resolve the old 78cqw
        box outside the printable fragment, so its border printed but its image
-       did not. This height fits below the title on A4 landscape. */
+       did not. This height fits below the title on 8.5 x 11 landscape. */
     .tp-ref-image-mockup {
         display:block !important;
         width:100% !important;

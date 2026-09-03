@@ -149,7 +149,7 @@
         <div class="tp-ref-wordmark"><span>IMPRINT</span><span>CUSTOMS</span></div>
         <table class="tp-ref-table tp-ref-head-table">
             <tr><th>Client</th><td>{{ $val($order->clientName()) }}</td><th>Design name</th><td>{!! $fill('design_name','Design name') !!}</td></tr>
-            <tr><th>Agent</th><td>{{ $val($order->creator?->name) }}</td><th>Fitting</th><td>{!! $fill('fitting','Original fit',60) !!}</td></tr>
+            <tr><th>Account officer</th><td>{{ $val($order->creator?->name) }}</td><th>Fitting</th><td>{!! $fill('fitting','Original fit',60) !!}</td></tr>
             <tr><th>Type / style</th><td>{!! $textEditable?$fill('item_style','Cotton shirt',100):e($val($tp->item_style?:$order->productLabel())) !!}</td><th>Print type</th><td>{!! $textEditable?$fill('print_type','DTF',60,$jo):e($val($jo?->printTypeLabel())) !!}</td></tr>
             <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{{ $order->created_at?->format('F j, Y')??'—' }}</td></tr>
             <tr><th>Fabric</th><td>{!! $fill('fabric','Cotton blend',255,$jo) !!}</td><th>Delivery date</th><td>{{ $order->due_date?->format('F j, Y')??'—' }}</td></tr>
@@ -191,16 +191,14 @@
              or thread colour — so a garment that wants both could only say one,
              and the sheet could not tell the floor that a black shirt is sewn
              with white thread. --}}
-        <tr><th>Print label</th><td>{!! $fill('print_label','IC DTF - original fit',120) !!}</td></tr>
         <tr><th>Neck label</th><td>{!! $fill('neck_label','IC DTF - original fit',120,$jo) !!}</td></tr>
         <tr><th>T-shirt color</th><td>{!! $fill('tshirt_color','Black',60) !!}</td></tr>
         <tr><th>Thread color</th><td>{!! $fill('thread_color','White',60) !!}</td></tr>
-        <tr><th>Stitch thread</th><td>{!! $fill('stitch_thread','N/A',60) !!}</td></tr>
-        <tr><th>Cutting method</th><td>{!! $fill('cutting_method','Straight cut',60) !!}</td></tr><tr><th>Packaging</th><td>{!! $fill('packaging','Polybag',120,$jo) !!}</td></tr>
+        <tr><th>Packaging</th><td>{!! $fill('packaging','Polybag',120,$jo) !!}</td></tr>
         <tr><th>Zipper type</th><td>{!! $fill('zipper_type','e.g. Metal, nylon, none',60) !!}</td></tr>
         <tr><th>Bottom hem</th><td>{!! $fill('bottom_hem','e.g. Straight',100,$jo) !!}</td></tr>
         <tr><th>Lip pocket color</th><td>{!! $fill('lip_pocket_color','Pocket color',60) !!}</td></tr>
-        <tr><th>Size range</th><td>{!! $fill('size_range','M-2XL',60) !!}</td></tr><tr class="tp-ref-sticker"><th>Sticker / extra</th><td>{!! $fill('free_logo_sticker','IC sticker',120,$jo) !!}</td></tr>
+        <tr class="tp-ref-sticker"><th>Sticker / extra</th><td>{!! $fill('free_logo_sticker','IC sticker',120,$jo) !!}</td></tr>
 
         {{-- Raw materials are not here.
 

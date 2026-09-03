@@ -74,9 +74,14 @@ class TechPackTest extends TestCase
             ->assertSee('Ordinary')
             ->assertSee('IC sticker')
             // The template's own row names, not the job order's.
-            ->assertSee('Cutting method')
-            ->assertSee('Stitch thread')
-            ->assertSee('Size range')
+            // Print label, stitch thread, cutting method and size range were
+            // taken off the sheet - the shop never filled them in.
+            ->assertDontSee('Stitch thread')
+            ->assertDontSee('Cutting method')
+            ->assertDontSee('Size range')
+            ->assertDontSee('Print label')
+            ->assertSee('Thread color')
+            ->assertSee('Zipper type')
             ->assertSee('Type')
             // Named on the sheet the shop asked for.
             ->assertSee('Printer')
@@ -146,7 +151,7 @@ class TechPackTest extends TestCase
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
             ->assertSee('name="design_name"', false)
-            ->assertSee('name="cutting_method"', false)
+            ->assertDontSee('name="cutting_method"', false)
             ->assertSee('name="zipper_type"', false)
             ->assertSee('name="bottom_hem"', false)
             ->assertSee('name="lip_pocket_color"', false);
@@ -171,7 +176,8 @@ class TechPackTest extends TestCase
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'cutting_method' => 'Straight cut',
+            // cutting_method is deliberately absent: the row was removed, so
+            // there is no box to type it into any more.
             'zipper_type' => 'Nylon zipper',
             'bottom_hem' => 'Elastic hem',
             'tag_1_details' => 'Woven label, centre back',
@@ -179,7 +185,6 @@ class TechPackTest extends TestCase
 
         $pack = $order->fresh()->techPack;
 
-        $this->assertSame('Straight cut', $pack->cutting_method);
         $this->assertSame('Nylon zipper', $pack->zipper_type);
         $this->assertSame('Elastic hem', $order->fresh()->jobOrder->bottom_hem);
         $this->assertSame('Woven label, centre back', $pack->tag_1_details);
