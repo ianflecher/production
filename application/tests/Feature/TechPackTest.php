@@ -133,7 +133,7 @@ class TechPackTest extends TestCase
 
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertSee('name="file_location_tail"', false)
+            ->assertSee('name="file_location_notes"', false)
             ->assertSee('name="tag_1_details"', false)
             ->assertSee('name="placing_title"', false)
             // The pictures are theirs too.
@@ -276,36 +276,29 @@ class TechPackTest extends TestCase
             ->assertSee($url, false);
     }
 
-    public function test_the_path_is_built_from_the_machine_name(): void
+    public function test_the_artist_types_the_file_location_without_an_automatic_host(): void
     {
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'file_location_host' => 'IC-PRINT-01',
-            'file_location_tail' => 'FOR PRINT\IC2026-04001',
+            'file_location_notes' => 'FOR PRINT\IC2026-04001',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(
-            '\\\\IC-PRINT-01\FOR PRINT\IC2026-04001',
+            'FOR PRINT\IC2026-04001',
             $order->fresh()->techPack->file_location_notes
         );
     }
 
-    public function test_a_path_with_no_machine_named_falls_back_to_this_one(): void
+    public function test_a_blank_file_location_stays_blank_instead_of_guessing_a_machine(): void
     {
         [, $artist, $order, $task] = $this->shop();
 
-        // The name box cannot be left empty on the sheet, but a stale tab or a
-        // post without it must not save a path with nothing on the front.
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'file_location_host' => '',
-            'file_location_tail' => 'FOR PRINT',
+            'file_location_notes' => '',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        $saved = (string) $order->fresh()->techPack->file_location_notes;
-
-        $this->assertStringStartsWith('\\', $saved);
-        $this->assertStringEndsWith('\FOR PRINT', $saved);
+        $this->assertNull($order->fresh()->techPack->file_location_notes);
     }
 
     public function test_a_reader_can_click_a_picture_to_see_it_big(): void
@@ -778,13 +771,9 @@ class TechPackTest extends TestCase
             ->assertDontSee('name="folder_shot"', false)
             ->assertDontSee('Export folder image')
             ->assertSee('File location')
-            // The machine's address is printed beside the box, and only the
-            // folder and file name after it are typed — so the artist cannot
-            // delete the part that says which PC the files are on.
-            // The machine NAME leads and the address is the alternative below
-            // it: a name survives the router moving that PC to a new address.
-            ->assertSee('name="file_location_tail"', false)
-            ->assertSee('name="file_location_host"', false)
+            ->assertSee('name="file_location_notes"', false)
+            ->assertDontSee('name="file_location_tail"', false)
+            ->assertDontSee('name="file_location_host"', false)
             ->assertDontSee('id="tp_image_bottom_image"', false);
     }
 

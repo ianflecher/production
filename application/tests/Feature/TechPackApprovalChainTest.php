@@ -108,8 +108,7 @@ class TechPackApprovalChainTest extends TestCase
             'lip_pocket_color' => 'N/A',
             'size_range' => 'S-2XL',
             'free_logo_sticker' => 'N/A',
-            'file_location_host' => 'IC-SERVER',
-            'file_location_tail' => 'FOR PRINT\\IC2026-CHAIN',
+            'file_location_notes' => 'FOR PRINT\\IC2026-CHAIN',
         ])->assertRedirect()->assertSessionHasNoErrors();
     }
 
@@ -276,6 +275,42 @@ class TechPackApprovalChainTest extends TestCase
 
         $this->assertSame('for_checking', $pack->fresh()->status);
         $this->assertSame('sales', $pack->fresh()->approver_role);
+        $this->actingAs($leader)->post(route('tasks.approve', $pack))->assertForbidden();
+    }
+
+    public function test_artist_can_correct_a_pack_while_it_is_waiting_for_either_reviewer(): void
+    {
+        [$officer, , $artist, $leader, $order, $pack] = $this->shop();
+        $this->completePack($artist, $pack);
+        $this->actingAs($artist)->post(route('tasks.submit', $pack))->assertRedirect();
+
+        // It stays editable while the account officer is checking it.
+        $this->actingAs($artist)->get(route('tasks.job-order', $pack))
+            ->assertOk()
+            ->assertSee('name="design_name"', false);
+        $this->actingAs($artist)->post(route('tasks.tech-pack', $pack), [
+            'design_name' => 'Corrected by Artist',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('in_progress', $pack->fresh()->status);
+        $this->assertSame('sales', $pack->fresh()->approver_role);
+
+        $this->completePack($artist, $pack);
+        $this->actingAs($artist)->post(route('tasks.submit', $pack))->assertRedirect();
+        $this->actingAs($officer)->post(route('tasks.approve', $pack))->assertRedirect();
+
+        // It also stays editable while the leader is checking it. Saving it
+        // recalls the pack and requires the officer's review again.
+        $this->actingAs($artist)->get(route('tasks.job-order', $pack))
+            ->assertOk()
+            ->assertSee('name="design_name"', false);
+        $this->actingAs($artist)->post(route('tasks.tech-pack', $pack), [
+            'design_name' => 'Corrected again',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('in_progress', $pack->fresh()->status);
+        $this->assertSame('sales', $pack->fresh()->approver_role);
+        $this->assertNull($pack->fresh()->officer_approved_by);
+        $this->assertSame('Corrected again', $order->fresh()->techPack->design_name);
         $this->actingAs($leader)->post(route('tasks.approve', $pack))->assertForbidden();
     }
 }

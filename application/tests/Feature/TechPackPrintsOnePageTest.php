@@ -156,4 +156,15 @@ class TechPackPrintsOnePageTest extends TestCase
             ->assertOk()
             ->assertSee('tp-reference-sheet', false);
     }
+
+    public function test_printed_tags_are_large_enough_to_read(): void
+    {
+        $css = file_get_contents(public_path('css/tech-pack.css'));
+        $print = mb_substr($css, mb_strrpos($css, '@media print'));
+
+        $this->assertMatchesRegularExpression(
+            '/\.tp-ref-image-tag\s*\{\s*width:\s*30mm\s*!important;\s*height:\s*20mm\s*!important;/s',
+            $print
+        );
+    }
 }

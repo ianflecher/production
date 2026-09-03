@@ -114,12 +114,12 @@ class TaskController extends Controller
         // the artist once the account officer has filled and sent it.
         abort_unless($order->jobOrder?->status === 'sent_to_artist', 403);
 
-        // A submitted pack remains visible to the artist, but becomes read-only
-        // while either reviewer has it. Revision work becomes editable again
-        // only after the artist starts the returned task.
+        // The assigned artist owns the pack until it is finally approved. They
+        // can correct it even while an account officer or leader is reviewing
+        // it; saving a correction recalls it to the artist for a fresh review.
         return view('orders.job-order', [
             'order' => $order,
-            'techPackTask' => $task->status === 'in_progress' ? $task : null,
+            'techPackTask' => ! in_array($task->status, ['todo', 'complete', 'cancelled'], true) ? $task : null,
         ]);
     }
 
@@ -194,9 +194,9 @@ class TaskController extends Controller
         $jobOrder = $order->jobOrder;
         abort_unless($jobOrder, 404);
 
-        if (! $task->isTechPackStep() || $task->status !== 'in_progress') {
+        if (! $task->isTechPackStep() || in_array($task->status, ['todo', 'complete', 'cancelled'], true)) {
             return redirect()->route('tasks.show', $task)
-                ->withErrors(['tech_pack' => 'Open the active Tech Pack task before changing the sheet.']);
+                ->withErrors(['tech_pack' => 'This Tech Pack is no longer available for editing.']);
         }
 
         if ($jobOrder->status !== 'sent_to_artist' || ! $order->mockupApproved()) {
@@ -220,8 +220,6 @@ class TaskController extends Controller
             'tag_1_details' => ['nullable', 'string', 'max:120'],
             'tag_2_details' => ['nullable', 'string', 'max:120'],
             'file_location_notes' => ['nullable', 'string', 'max:200'],
-            'file_location_tail' => ['nullable', 'string', 'max:200'],
-            'file_location_host' => ['nullable', 'string', 'max:63'],
             'artist_name' => ['nullable', 'string', 'max:100'],
             'bottom_text' => ['nullable', 'string', 'max:1000'],
             'bottom_image_width' => ['nullable', 'integer', 'min:120', 'max:900'],
@@ -286,6 +284,19 @@ class TaskController extends Controller
             'print_type' => ['nullable', 'string', 'max:60'],
             'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINTERS))],
         ]);
+
+        // The artist remains the author until the leader's final approval. A
+        // save while the pack is with either reviewer recalls it and restarts
+        // the approval chain, so nobody can approve an older version.
+        if ($task->status !== 'in_progress') {
+            $task->update([
+                'status' => 'in_progress',
+                'approver_role' => 'sales',
+                'submitted_at' => null,
+                'officer_approved_by' => null,
+                'officer_approved_at' => null,
+            ]);
+        }
 
         // The artist owns every manual field on the Tech Pack. System facts
         // such as client, agent, dates, sizes and quantity are still automatic.
@@ -463,27 +474,6 @@ class TaskController extends Controller
             $packFields['image_sizes'] = array_intersect_key($kept, array_flip(
                 array_merge($boxes, \App\Models\TechPack::imageSlots())
             )) ?: null;
-        }
-
-        // The machine and the folder are two boxes on the sheet, so the path is
-        // put back together here.
-        if ($request->has('file_location_tail') || $request->has('file_location_host')) {
-            // The machine NAME leads: \\IC-SERVER\FOR PRINT survives the router
-            // handing that PC a different address, which an IP path does not.
-            // What was typed wins, then this machine's name, and an address only
-            // if there is no name to be had — a path is no use with nothing on
-            // the front of it.
-            $host = trim((string) ($data['file_location_host'] ?? ''))
-                ?: (string) (\App\Services\ServerIp::deviceName()
-                    ?: (\App\Services\ServerIp::isPrivate((string) $request->ip())
-                        ? $request->ip()
-                        : (string) \App\Services\ServerIp::current()));
-
-            $tail = ltrim((string) ($data['file_location_tail'] ?? ''), '\\');
-
-            $packFields['file_location_notes'] = (filled($host) && filled($tail))
-                ? '\\\\'.$host.'\\'.$tail
-                : (filled($tail) ? $tail : null);
         }
 
         // A picture dragged into another box. Sent as "from>to".

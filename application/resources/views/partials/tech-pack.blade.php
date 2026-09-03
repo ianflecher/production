@@ -275,71 +275,19 @@
             </div>
             @endunless
             @php
-                // The path starts at the machine the artist is sitting at. Same
-                // address the value is packed against when it saves, so the two
-                // agree and the path keeps following them between PCs.
-                // Where the request is actually coming from wins: that address
-                // is a fact about right now. Only when it tells us nothing —
-                // over the tunnel, or from the server's own browser, both of
-                // which arrive as 127.0.0.1 — do we fall back to this machine,
-                // which is where the shared drive lives. The artist's last
-                // login address is the last resort: it is the one that goes
-                // stale, and it is what was offering a PC nobody was sitting at.
-                $ip = \App\Services\ServerIp::isPrivate((string) request()->ip())
-                    ? request()->ip()
-                    : (\App\Services\ServerIp::current() ?: \App\Services\ServerIp::ipForUser(auth()->user()));
-                $ipPrefix = ($ip && \App\Services\ServerIp::isPrivate($ip)) ? '\\\\'.$ip.'\\' : '';
-            @endphp
-            @php
-                // The address gets its own box, apart from the folder and file
-                // name. It cannot be emptied — a path with no machine on the
-                // front is a path nothing on the floor can open — but it CAN be
-                // corrected, because the detection is only a good guess: reached
-                // over the tunnel every request looks like 127.0.0.1, so the
-                // server offers its own address rather than the artist's PC.
-                //
-                // What was saved wins over the guess: that address was typed by
-                // somebody who could see the machine.
+                // This is deliberately a plain field. The artist decides what
+                // location production should use; the app never inserts an IP
+                // address or machine hostname into their Tech Pack.
                 $savedPath = (string) $tp->file_location_notes;
-                $savedParts = preg_match('/^\\\\\\\\([^\\\\]+)\\\\?(.*)$/', $savedPath, $m) ? $m : null;
-                $pathTail = $savedParts[2] ?? $savedPath;
-
-                // The MACHINE NAME leads. \\IC-SERVER\FOR PRINT keeps working
-                // when the router hands that PC a different address; an IP path
-                // stops the day DHCP moves. The address stays underneath as the
-                // alternative, for a PC that cannot resolve the name.
-                $deviceName = \App\Services\ServerIp::deviceName();
-                $savedHost = $savedParts[1] ?? null;
-                $savedHostIsIp = $savedHost && filter_var($savedHost, FILTER_VALIDATE_IP);
-                $pathHost = ($savedHost && ! $savedHostIsIp) ? $savedHost : ($deviceName ?: '');
-                $altIp = $savedHostIsIp ? $savedHost : $ip;
             @endphp
              {{-- The artist's path, so only the artist types it. An officer
                   editing the sheet was able to overwrite where the files
                   actually are, from a desk that cannot see that machine. --}}
             @if($imageEditable)
-                @php
-                    // The machines this path could point at: this PC by name,
-                    // by address, and whatever was already saved if it was
-                    // neither. A list rather than a box, because there is
-                    // nothing to type — it is this machine or it is not.
-                    $hostOptions = collect([$deviceName, $altIp, $pathHost])
-                        ->filter()
-                        ->unique(fn ($h) => mb_strtolower($h))
-                        ->values();
-                @endphp
                 <div class="tp-ref-path-line">
-                    <span class="tp-ref-path-slashes">\\</span>
-                    <select class="tp-ref-path-host" name="file_location_host"
-                            title="The PC these files are on" aria-label="Machine">
-                        @foreach ($hostOptions as $option)
-                            <option value="{{ $option }}" @selected($pathHost === $option)>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                    <span class="tp-ref-path-slashes">\</span>
-                    <input class="tp-ref-file-path" type="text" name="file_location_tail" maxlength="200"
-                           value="{{ $pathTail }}"
-                           placeholder="FolderName">
+                    <input class="tp-ref-file-path" type="text" name="file_location_notes" maxlength="200"
+                           value="{{ $savedPath }}"
+                           placeholder="Type the file location or folder path">
                 </div>
             @else
                 <div class="tp-ref-note-value">{{ $savedPath }}</div>

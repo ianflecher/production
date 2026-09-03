@@ -235,8 +235,7 @@ class FullShopWalkthroughTest extends TestCase
                     'front_mockup' => UploadedFile::fake()->image('mockup.png'),
                     'front_artwork' => UploadedFile::fake()->image('art.png'),
                 ],
-                'file_location_host' => 'IC-SERVER',
-                'file_location_tail' => 'FOR PRINT\\IC2026-WALK',
+                'file_location_notes' => 'FOR PRINT\\IC2026-WALK',
                 // The things built in this session: a note, a moved box, a line.
                 'add_note_box' => 1,
                 'box_positions' => ['front_artwork' => ['x' => 8, 'y' => -3]],
@@ -248,7 +247,7 @@ class FullShopWalkthroughTest extends TestCase
 
         $this->assertArrayHasKey('front_mockup', $pack->image_uploads);
         Storage::disk('local')->assertExists($pack->image_uploads['front_mockup']['path']);
-        $this->assertSame('\\\\IC-SERVER\FOR PRINT\IC2026-WALK', $pack->file_location_notes);
+        $this->assertSame('FOR PRINT\IC2026-WALK', $pack->file_location_notes);
         $this->assertSame(['x' => 8.0, 'y' => -3.0], $pack->boxPosition('front_artwork'));
         $this->assertSame(['w' => 20.0, 'h' => 12.0], $pack->imageSize('front_artwork'));
         $this->assertSame(['x' => 45.0, 'y' => 35.0], $pack->callouts()['front_artwork']['to']);
@@ -309,7 +308,7 @@ class FullShopWalkthroughTest extends TestCase
             ->get(route('orders.package', [$this->order, 'for' => 'printer']))
             ->assertOk()
             ->assertSee('PRINT FILES')
-            ->assertSee('IC-SERVER')
+            ->assertSee('FOR PRINT\\IC2026-WALK')
             ->assertSee('Walkthrough Tee');
 
         // A station that does not open files is not handed a network path.

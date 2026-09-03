@@ -162,8 +162,7 @@ class WholePipelineTest extends TestCase
                     'lip_pocket_color' => 'N/A',
                     'size_range' => 'S-2XL',
                     'free_logo_sticker' => 'N/A',
-                    'file_location_host' => 'IC-SERVER',
-                    'file_location_tail' => 'FOR PRINT\\'.$this->order->order_number,
+                    'file_location_notes' => 'FOR PRINT\\'.$this->order->order_number,
                 ])->assertRedirect()->assertSessionHasNoErrors();
             }
 

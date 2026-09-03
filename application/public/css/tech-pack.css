@@ -1506,11 +1506,17 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-image-small  { height: 19mm !important; }
     .tp-ref-flat-grid > .tp-ref-image:first-child { height: 58mm !important; }
     .tp-ref-image-artwork{ height: 19mm !important; }
-    /* A tag is a picture of a label with writing on it. At 15 x 10mm the
-       writing was there but not readable, which is the one thing a tag is
-       printed for. 8.5 x 11 is 6mm taller than the A4 this budget was written
-       for, and the tags get that room. */
-    .tp-ref-image-tag    { width: 22mm !important; height: 14mm !important; }
+    /* A tag is a picture of a label with writing on it. It needs to be large
+       enough to read in the printed pack, not merely recognisable as a label.
+       The two trims sit in the materials column, where this 30 x 20mm size
+       still fits inside the single landscape page. */
+    /* Only when the artist has NOT sized it themselves.
+       A box the artist dragged carries its size inline, in cqw - a share of
+       the sheet's width, which is what makes it look the same on paper as it
+       does on screen. This rule used to carry !important and beat that inline
+       size, so a tag enlarged on screen still printed at the fixed size, and
+       raising the fixed size just made every tag equally wrong. */
+    .tp-ref-image-tag:not([style*="width"]) { width: 30mm !important; height: 20mm !important; }
     .tp-ref-file-image   { flex:0 0 auto !important; height: 22mm !important; min-height: 22mm !important; }
 
     .tp-ref-title        { padding: 1.2mm 2mm !important; font-size: 1.3em; }
