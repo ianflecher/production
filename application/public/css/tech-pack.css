@@ -224,7 +224,14 @@ table.tp-tbl td { font-weight: 600; }
        8.3 x 11.7, so a sheet laid out for it came out either shrunk to fit or
        clipped down the long edge on every print. Landscape is kept: the sheet
        is wider than it is tall and always has been. */
-    @page { size: 11in 8.5in; margin: 8mm; }
+    /* No page margin.
+       The margin is the strip a browser draws its OWN header and footer in -
+       the URL, the date, "1/1". There is no CSS that hides those; taking the
+       strip away is what stops them, and the sheet gets the whole sheet of
+       paper rather than the middle of it.
+       The breathing room comes back as padding INSIDE the sheet, below, which
+       also keeps the ink off the edge a printer cannot reach. */
+    @page { size: 11in 8.5in; margin: 0; }
 
     .sidebar, .topbar, .tp-actions, .alert-success, .alert-error { display: none !important; }
     .shell, .main, .content, body { display: block !important; background: #fff !important; }
@@ -1383,8 +1390,8 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     /* Landscape paper. Named as well as default: on its own the pack IS the
        document, and inside the leader's package it is one landscape page among
        portrait ones — that document sets its own default @page after this. */
-    @page { size:11in 8.5in; margin:6mm; }
-    @page tech-pack-page { size:11in 8.5in; margin:6mm; }
+    @page { size:11in 8.5in; margin:0; }
+    @page tech-pack-page { size:11in 8.5in; margin:0; }
     .tp-reference-sheet { page:tech-pack-page; }
 
     /* Printing this page means printing the Tech Pack only. The production
@@ -1395,6 +1402,10 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
        a fixed height and fixed millimetre bands. The two fought each other, and
        the sheet came out half a portrait page wide. */
     .tp-reference-sheet {
+        /* What the page margin used to hold off the edge. Inside the sheet it
+           does the same job without handing the browser a strip to write the
+           page number into. */
+        padding:5mm;
         width:100%; max-width:none; height:auto; min-height:0; margin:0;
         grid-template-rows:auto auto auto auto auto auto;
         transform:none;

@@ -162,9 +162,31 @@ class TechPackPrintsOnePageTest extends TestCase
         $css = file_get_contents(public_path('css/tech-pack.css'));
         $print = mb_substr($css, mb_strrpos($css, '@media print'));
 
+        // The default a tag prints at, when the artist has not sized it.
         $this->assertMatchesRegularExpression(
-            '/\.tp-ref-image-tag\s*\{\s*width:\s*30mm\s*!important;\s*height:\s*20mm\s*!important;/s',
+            '/\.tp-ref-image-tag[^{]*\{\s*width:\s*30mm\s*!important;\s*height:\s*20mm\s*!important;/s',
             $print
+        );
+    }
+
+    /**
+     * A tag the artist dragged bigger has to print at the size they made it.
+     *
+     * The size is stored on the element itself, in cqw - a share of the
+     * sheet's width, which is what makes a box look the same on paper as on
+     * screen. A print rule carrying !important beat that inline size, so every
+     * tag came out identical no matter what the artist had done, and raising
+     * the fixed size only made them all equally wrong.
+     */
+    public function test_a_tag_the_artist_sized_keeps_that_size_on_paper(): void
+    {
+        $css = file_get_contents(public_path('css/tech-pack.css'));
+        $print = mb_substr($css, mb_strrpos($css, '@media print'));
+
+        $this->assertMatchesRegularExpression(
+            '/\.tp-ref-image-tag:not\(\[style\*="width"\]\)/',
+            $print,
+            'the fixed print size must stand aside for a size the artist set'
         );
     }
 }
