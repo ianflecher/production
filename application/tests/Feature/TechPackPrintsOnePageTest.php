@@ -157,6 +157,34 @@ class TechPackPrintsOnePageTest extends TestCase
             ->assertSee('tp-reference-sheet', false);
     }
 
+    /**
+     * The height the sheet is held to has to be the height of the paper.
+     *
+     * It was capped at 186mm, which was A4 landscape inside a 6mm margin. The
+     * paper became 8.5 x 11 and the margin went to nothing, and the cap stayed
+     * - so every print put the sheet in the top of the page with a white strip
+     * along the bottom, and raising the bands inside it did nothing because
+     * the cap simply clipped them.
+     */
+    public function test_the_sheet_is_held_to_the_height_of_the_paper(): void
+    {
+        $css = file_get_contents(public_path('css/tech-pack.css'));
+        $print = mb_substr($css, mb_strrpos($css, '@media print'));
+
+        preg_match('/@page[^{]*\{[^}]*size:\s*11in\s+8\.5in/', $print, $page);
+        $this->assertNotEmpty($page, 'the pack should print on 8.5 x 11 landscape');
+
+        preg_match('/\.tp-reference-sheet\s*\{\s*max-height:\s*([\d.]+)mm/', $print, $cap);
+        $this->assertNotEmpty($cap, 'the sheet should still be held to one page');
+
+        $capMm = (float) $cap[1];
+        $paperMm = 8.5 * 25.4;   // the short side of the sheet, landscape
+
+        $this->assertLessThanOrEqual($paperMm, $capMm, 'the cap must not exceed the paper');
+        $this->assertGreaterThan($paperMm - 5, $capMm,
+            'the cap is more than 5mm short of the paper, which prints as a white strip');
+    }
+
     public function test_printed_tags_are_large_enough_to_read(): void
     {
         $css = file_get_contents(public_path('css/tech-pack.css'));

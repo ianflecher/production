@@ -1406,6 +1406,12 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
            does the same job without handing the browser a strip to write the
            page number into. Kept tight: every millimetre here is one the
            sheet's own bands do not get. */
+        /* border-box, or the padding is added OUTSIDE the 100% width and the
+           sheet comes out wider than the paper - at which point the browser
+           scales the whole page down to fit and every band shrinks with it.
+           That is what put the sheet in the top corner with white below it.
+           `.tp-reference-sheet *` sets this for the children, not the sheet. */
+        box-sizing:border-box;
         padding:3mm;
         width:100%; max-width:none; height:auto; min-height:0; margin:0;
         grid-template-rows:auto auto auto auto auto auto;
@@ -1447,9 +1453,9 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-image-mockup {
         display:block !important;
         width:100% !important;
-        height:190mm !important;
-        min-height:190mm !important;
-        max-height:190mm !important;
+        height:202mm !important;
+        min-height:202mm !important;
+        max-height:202mm !important;
         overflow:hidden !important;
     }
     .tp-ref-image-mockup>label {
@@ -1568,8 +1574,13 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-tag-text { width: auto !important; max-width: none !important; flex: 1 1 auto; }
     .tp-ref-tag-row { grid-template-columns: auto 1fr !important; }
 
-    /* Nothing may push the sheet onto a second page. */
-    .tp-reference-sheet { max-height: 186mm; overflow: hidden; }
+    /* Nothing may push the sheet onto a second page.
+       186mm was the printable height of A4 landscape inside a margin. The
+       paper is 8.5 x 11 now and the margin is gone, so the sheet may have
+       215.9mm - and holding it to the old number was what left a white strip
+       along the bottom of every print. One millimetre is kept back for the
+       rounding a printer does at the edge. */
+    .tp-reference-sheet { max-height: 214.9mm; overflow: hidden; }
 
     /* A mark may sit anywhere on the sheet and nowhere off it.
 
