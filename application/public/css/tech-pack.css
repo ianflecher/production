@@ -1412,8 +1412,14 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
            That is what put the sheet in the top corner with white below it.
            `.tp-reference-sheet *` sets this for the children, not the sheet. */
         box-sizing:border-box;
-        padding:3mm;
-        width:100%; max-width:none; height:auto; min-height:0; margin:0;
+        /* A printer cannot put ink at the very edge of the paper - it grips
+           the sheet there - so the last few millimetres of any side are
+           trimmed off whatever is drawn in them. The page margin stays at
+           nothing, because that strip is where a browser writes its own "1/1";
+           the room is taken as the sheet's OWN margin instead, which keeps the
+           black frame off the edge as well as what is inside it. */
+        padding:0;
+        width:auto; max-width:none; height:auto; min-height:0; margin:8mm 6mm;
         grid-template-rows:auto auto auto auto auto auto;
         transform:none;
         page-break-inside:avoid; break-inside:avoid-page;
@@ -1453,9 +1459,9 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-image-mockup {
         display:block !important;
         width:100% !important;
-        height:202mm !important;
-        min-height:202mm !important;
-        max-height:202mm !important;
+        height:190mm !important;
+        min-height:190mm !important;
+        max-height:190mm !important;
         overflow:hidden !important;
     }
     .tp-ref-image-mockup>label {
@@ -1580,7 +1586,7 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
        215.9mm - and holding it to the old number was what left a white strip
        along the bottom of every print. One millimetre is kept back for the
        rounding a printer does at the edge. */
-    .tp-reference-sheet { max-height: 214.9mm; overflow: hidden; }
+    .tp-reference-sheet { max-height: 199.9mm; overflow: hidden; }
 
     /* A mark may sit anywhere on the sheet and nowhere off it.
 

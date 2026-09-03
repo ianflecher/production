@@ -180,9 +180,19 @@ class TechPackPrintsOnePageTest extends TestCase
         $capMm = (float) $cap[1];
         $paperMm = 8.5 * 25.4;   // the short side of the sheet, landscape
 
-        $this->assertLessThanOrEqual($paperMm, $capMm, 'the cap must not exceed the paper');
-        $this->assertGreaterThan($paperMm - 5, $capMm,
-            'the cap is more than 5mm short of the paper, which prints as a white strip');
+        // The sheet holds itself off the paper's edge, because a printer grips
+        // the sheet there and trims whatever is drawn in it. So the height to
+        // check against is the paper less that inset, not the paper.
+        preg_match('/\.tp-reference-sheet\s*\{[^}]*margin:\s*([\d.]+)mm\s+([\d.]+)mm/', $print, $edge);
+        $this->assertNotEmpty($edge, 'the sheet should hold itself off the edge of the paper');
+
+        // Rounded: 215.9 - 16 lands on 199.89999999999998 in binary, and a cap
+        // of exactly 199.9 is not "less than" that by 2e-14.
+        $usableMm = round($paperMm - (2 * (float) $edge[1]), 1);
+
+        $this->assertLessThanOrEqual($usableMm, $capMm, 'the cap must not exceed what the paper can print');
+        $this->assertGreaterThan($usableMm - 5, $capMm,
+            'the cap is more than 5mm short of the printable height, which shows as a white strip');
     }
 
     public function test_printed_tags_are_large_enough_to_read(): void
