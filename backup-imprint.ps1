@@ -7,7 +7,8 @@
             ??? code.zip         snapshot of all tracked source at HEAD (just unzip)
             ??? RESTORE.txt      step-by-step restore instructions
 
-    The zip is copied to OneDrive (offsite / cloud) and old backups are pruned.
+    The zip is copied to OneDrive (offsite / cloud). Anything older than a month
+    is pruned, except the first backup of each month, which is kept for good.
 
     Uploaded files - every layout, mockup, tech pack picture and payment proof -
     are mirrored SEPARATELY, not put in the zip. The zip is taken six times a
@@ -34,9 +35,16 @@ $OneDrive   = Join-Path $env:USERPROFILE 'OneDrive\ImprintBackups'
 $UploadMirror = Join-Path $env:USERPROFILE 'OneDrive\ImprintUploads'
 $LogDir     = Join-Path $RepoDir 'logs'
 $LogFile    = Join-Path $LogDir 'backup.log'
-# Backups run every 4 hours (6 a day), so 180 keeps roughly 30 days of history.
-# Each one is ~3.3 MB, i.e. about 600 MB held in OneDrive at steady state.
-$Keep       = 180         # how many most-recent backups to retain offsite
+# A backup older than a month goes. Counted in DAYS rather than in files:
+# "keep the newest 180" only meant a month while the schedule stayed at six a
+# day, and would quietly mean four days or four months if that ever changed.
+#
+# One backup a month is kept for good - the first of each month. Thirty days of
+# history answers "undo what we did this morning"; the monthly ones answer
+# "what did this order look like in March", which is the question that turns up
+# long after every four-hourly copy is gone. They cost about 6 MB a year.
+$KeepDays   = 30          # how long ordinary backups are held offsite
+$KeepMonthly = $true      # ...and keep the first of each month for good
 $Stamp      = Get-Date -Format 'yyyyMMdd-HHmmss'
 
 function Write-Log($msg) {
@@ -203,9 +211,32 @@ Database: $dbName   Host: ${dbHost}:$dbPort
     }
 
     # ---- 7. Prune old backups (only after a successful new one) ------------
-    $old = Get-ChildItem -Path $OneDrive -Filter 'imprint-backup-*.zip' |
-           Sort-Object Name -Descending | Select-Object -Skip $Keep
-    foreach ($f in $old) { Remove-Item $f.FullName -Force; Write-Log "Pruned old backup: $($f.Name)" }
+    $cutoff = (Get-Date).AddDays(-$KeepDays)
+    $all = Get-ChildItem -Path $OneDrive -Filter 'imprint-backup-*.zip'
+
+    # The first backup of each month is the one that is kept, so "the monthly
+    # one" is always the same file and never a different copy each run.
+    $monthlyKeepers = @()
+    if ($KeepMonthly) {
+        $monthlyKeepers = $all |
+            Group-Object { $_.Name -replace '^imprint-backup-(\d{6}).*$', '$1' } |   # YYYYMM
+            ForEach-Object { ($_.Group | Sort-Object Name | Select-Object -First 1).Name }
+    }
+
+    $pruned = 0
+    foreach ($f in $all) {
+        if ($f.LastWriteTime -ge $cutoff) { continue }
+        if ($monthlyKeepers -contains $f.Name) { continue }
+
+        Remove-Item $f.FullName -Force
+        Write-Log "Pruned old backup: $($f.Name)"
+        $pruned++
+    }
+
+    $left = Get-ChildItem -Path $OneDrive -Filter 'imprint-backup-*.zip'
+    Write-Log ("Retention: {0} pruned, {1} kept ({2:N0} MB){3}" -f `
+        $pruned, $left.Count, (($left | Measure-Object Length -Sum).Sum / 1MB),
+        $(if ($KeepMonthly) { ", including $($monthlyKeepers.Count) monthly" } else { '' }))
 
     Write-Log "=== Backup OK ==="
 }
