@@ -1404,8 +1404,9 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-reference-sheet {
         /* What the page margin used to hold off the edge. Inside the sheet it
            does the same job without handing the browser a strip to write the
-           page number into. */
-        padding:5mm;
+           page number into. Kept tight: every millimetre here is one the
+           sheet's own bands do not get. */
+        padding:3mm;
         width:100%; max-width:none; height:auto; min-height:0; margin:0;
         grid-template-rows:auto auto auto auto auto auto;
         transform:none;
@@ -1446,9 +1447,9 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-image-mockup {
         display:block !important;
         width:100% !important;
-        height:168mm !important;
-        min-height:168mm !important;
-        max-height:168mm !important;
+        height:190mm !important;
+        min-height:190mm !important;
+        max-height:190mm !important;
         overflow:hidden !important;
     }
     .tp-ref-image-mockup>label {
