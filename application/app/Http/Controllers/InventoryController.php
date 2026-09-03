@@ -599,9 +599,24 @@ class InventoryController extends Controller
             'operator_name' => ['required', 'string', 'max:100'],
         ], ['operator_name.required' => 'Enter the name of the person issuing the materials.']);
 
-        $data['quantity'] = $needs ?? $data['quantity'];
+        // What the desk actually hands over.
+        //
+        // LESS than the job asked for is allowed: a shelf holding eight of a
+        // job's thirty-nine could not give the eight, and the desk had to
+        // choose between issuing nothing and issuing a number that was not on
+        // the shelf. It gives the eight, and the rest stays owed.
+        //
+        // MORE is not, and never was - a hundred went out against an order for
+        // fifty-five when the amount was a free box with only the shelf to
+        // argue with it. Anything above what is still owed is trimmed to it.
+        $alreadyOut = (float) ($materialRequest->issued_quantity ?? 0);
+        $owed = $needs === null ? null : max(0, $needs - $alreadyOut);
 
-        return DB::transaction(function () use ($data, $materialRequest, $request) {
+        $data['quantity'] = $owed === null
+            ? (float) $data['quantity']
+            : min((float) ($data['quantity'] ?? $owed), $owed);
+
+        return DB::transaction(function () use ($data, $materialRequest, $request, $needs, $alreadyOut) {
             $item = InventoryItem::lockForUpdate()->find($data['inventory_item_id']);
 
             if ((float) $item->quantity < (float) $data['quantity']) {
@@ -609,6 +624,11 @@ class InventoryController extends Controller
                     'quantity' => "Not enough stock of {$item->name} — requested ".(float) $data['quantity'].", only {$item->qtyForHumans()} {$item->unit} left. Restock or reject.",
                 ]);
             }
+
+            // What the job is still owed once this handover is counted.
+            $stillOwed = $needs === null
+                ? 0.0
+                : round($needs - ($alreadyOut + (float) $data['quantity']), 4);
 
             // Taken out for a job — logged against the order and whoever issued it.
             $item->recordMovement(
@@ -625,15 +645,31 @@ class InventoryController extends Controller
                 'inventory_item_id' => $item->id,
                 // What went out, kept apart from what was asked for. The one
                 // column used to hold both, so issuing erased the request.
-                'issued_quantity' => $data['quantity'],
-                'quantity' => $data['quantity'],
+                //
+                // It ADDS. A job needing thirty-nine takes what the shelf has
+                // today and the rest when it is restocked, and each handover
+                // is added to what has already gone. Overwriting meant the
+                // second delivery erased the first, and the request closed on
+                // the first one whatever it was for.
+                'issued_quantity' => $alreadyOut + (float) $data['quantity'],
+                'quantity' => $alreadyOut + (float) $data['quantity'],
+                'status' => $stillOwed > 0 ? 'pending' : 'approved',
                 'decided_by' => $request->user()->id,
                 'decided_at' => now(),
             ]);
 
-            $this->closeRawMaterialsStep($materialRequest->order);
+            // A job is only off the raw-materials desk when it has everything
+            // it asked for.
+            if ($stillOwed <= 0) {
+                $this->closeRawMaterialsStep($materialRequest->order);
+            }
 
-            return back()->with('success', "Approved — issued {$data['quantity']} {$item->unit} of {$item->name}. Stock left: {$item->fresh()->qtyForHumans()}.");
+            $left = $item->fresh()->qtyForHumans();
+
+            return back()->with('success', $stillOwed > 0
+                ? "Issued {$data['quantity']} {$item->unit} of {$item->name}. Still owed: "
+                    .rtrim(rtrim(number_format($stillOwed, 2), '0'), '.')." {$item->unit}. Stock left: {$left}."
+                : "Approved — issued {$data['quantity']} {$item->unit} of {$item->name}. Stock left: {$left}.");
         });
     }
 

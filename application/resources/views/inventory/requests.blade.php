@@ -65,19 +65,36 @@
                         </div>
                         <div>
                             <label style="font-size: 0.75rem;">Quantity</label>
+                            @php
+                                $out = (float) ($req->issued_quantity ?? 0);
+                                $owed = $req->requested_quantity !== null
+                                    ? max(0, (float) $req->requested_quantity - $out)
+                                    : null;
+                                $tidy = fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.');
+                            @endphp
+
+                            {{-- The job's number is what the box starts at, not
+                                 what it is stuck at.
+                                 It used to be a fixed figure with no box at all,
+                                 so a shelf holding eight of a job's thirty-nine
+                                 could not give the eight: the desk could issue
+                                 the whole amount it did not have, or nothing.
+                                 Now it hands over what it has, the rest stays
+                                 owed, and the request waits for the restock. --}}
+                            <input type="number" name="quantity" step="0.01" min="0.01"
+                                   @if ($owed !== null) value="{{ $tidy($owed) }}" max="{{ $tidy($owed) }}" @endif
+                                   required placeholder="0"
+                                   style="width: 110px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
+
                             @if ($req->requested_quantity !== null)
-                                {{-- The job said how much it needs, so the desk
-                                     issues that. Nothing to retype and nothing
-                                     to get wrong: a hundred used to go out
-                                     against an order for fifty-five because the
-                                     amount was a free box with only the shelf
-                                     to argue with it. --}}
-                                <div class="mr-fixed-qty" title="The amount this job asked for">
-                                    {{ rtrim(rtrim(number_format((float) $req->requested_quantity, 2), '0'), '.') }}
-                                    <span>{{ $match?->unit }}</span>
+                                <div style="font-size: 0.7rem; color: var(--ink-3); margin-top: 0.2rem;">
+                                    @if ($out > 0)
+                                        {{ $tidy($out) }} of {{ $tidy($req->requested_quantity) }} already out —
+                                        <strong>{{ $tidy($owed) }} still owed</strong>
+                                    @else
+                                        the job asked for {{ $tidy($req->requested_quantity) }}
+                                    @endif
                                 </div>
-                            @else
-                                <input type="number" name="quantity" step="0.01" min="0.01" required placeholder="0" style="width: 110px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
                             @endif
                         </div>
                         {{-- Who physically hands the materials out. --}}

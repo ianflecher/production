@@ -50,6 +50,76 @@ class MaterialRequestAmountTest extends TestCase
         return [$desk, $item, $req];
     }
 
+    /**
+     * The shelf gives what it has, and the job keeps waiting for the rest.
+     *
+     * A job wanting thirty-nine and a shelf holding eight used to be a choice
+     * between issuing nothing and closing the request on the first handover -
+     * so eight went out and the job was marked supplied, still needing
+     * thirty-one that nobody was now asking for.
+     */
+    public function test_a_part_of_what_is_owed_can_go_out_and_the_rest_stays_owed(): void
+    {
+        [$desk, $item, $req] = $this->shop(39);
+
+        $this->actingAs($desk)->post("/material-requests/{$req->id}/approve", [
+            'inventory_item_id' => $item->id,
+            'quantity' => 8,
+            'operator_name' => 'Ian',
+        ])->assertRedirect();
+
+        $req = $req->fresh();
+
+        $this->assertSame(8.0, (float) $req->issued_quantity, 'eight went out');
+        $this->assertSame('pending', $req->status, 'the job is still owed thirty-one');
+        $this->assertSame(492.0, (float) $item->fresh()->quantity, 'only eight left the shelf');
+    }
+
+    public function test_the_handovers_add_up_until_the_job_has_it_all(): void
+    {
+        [$desk, $item, $req] = $this->shop(39);
+
+        foreach ([8, 20] as $handover) {
+            $this->actingAs($desk)->post("/material-requests/{$req->id}/approve", [
+                'inventory_item_id' => $item->id,
+                'quantity' => $handover,
+                'operator_name' => 'Ian',
+            ])->assertRedirect();
+        }
+
+        $this->assertSame(28.0, (float) $req->fresh()->issued_quantity, 'the second did not erase the first');
+        $this->assertSame('pending', $req->fresh()->status);
+
+        // The last of it.
+        $this->actingAs($desk)->post("/material-requests/{$req->id}/approve", [
+            'inventory_item_id' => $item->id,
+            'quantity' => 11,
+            'operator_name' => 'Ian',
+        ])->assertRedirect();
+
+        $this->assertSame(39.0, (float) $req->fresh()->issued_quantity);
+        $this->assertSame('approved', $req->fresh()->status, 'the job has everything it asked for');
+        $this->assertSame(461.0, (float) $item->fresh()->quantity, '39 of 500 gone in three handovers');
+    }
+
+    public function test_a_last_handover_cannot_overshoot_what_is_left_owed(): void
+    {
+        [$desk, $item, $req] = $this->shop(39);
+
+        $this->actingAs($desk)->post("/material-requests/{$req->id}/approve", [
+            'inventory_item_id' => $item->id, 'quantity' => 30, 'operator_name' => 'Ian',
+        ])->assertRedirect();
+
+        // Nine are owed; somebody types fifty.
+        $this->actingAs($desk)->post("/material-requests/{$req->id}/approve", [
+            'inventory_item_id' => $item->id, 'quantity' => 50, 'operator_name' => 'Ian',
+        ])->assertRedirect();
+
+        $this->assertSame(39.0, (float) $req->fresh()->issued_quantity, 'trimmed to what was owed');
+        $this->assertSame('approved', $req->fresh()->status);
+        $this->assertSame(461.0, (float) $item->fresh()->quantity, 'the shelf did not lose fifty');
+    }
+
     public function test_the_job_says_how_much_and_that_is_what_goes_out(): void
     {
         [$desk, $item, $req] = $this->shop(55);
