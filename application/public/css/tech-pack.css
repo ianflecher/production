@@ -1506,7 +1506,11 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-image-small  { height: 19mm !important; }
     .tp-ref-flat-grid > .tp-ref-image:first-child { height: 58mm !important; }
     .tp-ref-image-artwork{ height: 19mm !important; }
-    .tp-ref-image-tag    { width: 15mm !important; height: 10mm !important; }
+    /* A tag is a picture of a label with writing on it. At 15 x 10mm the
+       writing was there but not readable, which is the one thing a tag is
+       printed for. 8.5 x 11 is 6mm taller than the A4 this budget was written
+       for, and the tags get that room. */
+    .tp-ref-image-tag    { width: 22mm !important; height: 14mm !important; }
     .tp-ref-file-image   { flex:0 0 auto !important; height: 22mm !important; min-height: 22mm !important; }
 
     .tp-ref-title        { padding: 1.2mm 2mm !important; font-size: 1.3em; }
