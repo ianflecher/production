@@ -40,7 +40,7 @@ class Stations
         // Add-on stations. Each press has 2 stations so two jobs can run at once.
         // (The fabric-merge press runs on these same press stations, by its type.)
         $stations['embroidery'] = ['label' => 'Embroidery', 'group' => 'Add-ons', 'departments' => ['Embroidery']];
-        foreach (['cap_press' => 'Cap press', 'heat_press' => 'Heat press', 'small_press' => 'Small press', 'roller_press' => 'Roller press'] as $key => $label) {
+        foreach (['small_press' => 'Small press', 'roller_press' => 'Roller press'] as $key => $label) {
             for ($i = 1; $i <= 2; $i++) {
                 $stations[$key.'_'.$i] = ['label' => "$label #$i", 'group' => 'Add-ons', 'departments' => [$label]];
             }
@@ -130,8 +130,6 @@ class Stations
         $pairings = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'pairing_')));
         $sewings = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'sewing_')));
         $qcs = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'qc_')));
-        $capPresses = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'cap_press_')));
-        $heatPresses = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'heat_press_')));
         $smallPresses = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'small_press_')));
         $rollerPresses = array_values(array_filter(self::keys(), fn ($k) => str_starts_with($k, 'roller_press_')));
 
@@ -142,8 +140,6 @@ class Stations
             'raw materials' => ['raw_materials'],
             'sticker' => ['sticker'],
             'embroidery' => ['embroidery'],
-            'cap press' => $capPresses,
-            'heat press' => $heatPresses,
             'small press' => $smallPresses,
             'roller press' => $rollerPresses,
             'cutting' => $cuttings,

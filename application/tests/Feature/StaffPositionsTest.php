@@ -31,7 +31,7 @@ class StaffPositionsTest extends TestCase
         $page = $this->actingAs($this->admin())->get('/users')->assertOk();
 
         foreach (['Sewing', 'Pairing', 'Laser Cutting', 'Quality Control',
-            'Heat Press', 'Roller Press', 'Raw Materials', 'Printer', 'Embroidery'] as $position) {
+            'Small Press', 'Roller Press', 'Raw Materials', 'Printer', 'Embroidery'] as $position) {
             $page->assertSee($position);
         }
     }

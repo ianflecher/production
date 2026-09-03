@@ -39,7 +39,7 @@ class JobOrderAddonTest extends TestCase
         $sales = User::find($order->created_by);
 
         return $this->actingAs($sales)->post("/job-orders/{$order->id}/production", array_merge([
-            'fabric_press' => 'heat_press',   // Step 3, always required
+            'fabric_press' => 'small_press',   // Step 3, always required
             // A garment needs something to make it from; the page requires it.
             'raw_materials' => ['Cotton combed 24s'],
         ], $fields));
@@ -49,7 +49,9 @@ class JobOrderAddonTest extends TestCase
     {
         foreach ([
             'embroidery' => 'embroidery',
-            'sublimated' => 'heat_press',
+            // No press of its own now: the two that could do it are both in
+            // the shop and which one depends on the job, so somebody chooses.
+            'sublimated' => null,
             'reflectorized' => 'roller_press',
         ] as $addon => $expectedPress) {
             $order = $this->order();
@@ -74,10 +76,10 @@ class JobOrderAddonTest extends TestCase
             'decoration_on' => 1,
             'addon' => 'others',
             'addon_other' => 'Rubberized print',
-            'press' => 'cap_press',
+            'press' => 'small_press',
         ])->assertRedirect();
 
-        $this->assertSame('cap_press', $order->fresh()->jobOrder->press);
+        $this->assertSame('small_press', $order->fresh()->jobOrder->press);
     }
 
     public function test_others_requires_saying_what_it_is(): void
@@ -144,7 +146,7 @@ class JobOrderAddonTest extends TestCase
     public function test_the_addon_press_map_is_what_the_shop_expects(): void
     {
         $this->assertSame('embroidery', JobOrder::pressForAddon('embroidery'));
-        $this->assertSame('heat_press', JobOrder::pressForAddon('sublimated'));
+        $this->assertNull(JobOrder::pressForAddon('sublimated'));
         $this->assertSame('roller_press', JobOrder::pressForAddon('reflectorized'));
         $this->assertNull(JobOrder::pressForAddon('others'));
     }
@@ -213,7 +215,7 @@ class JobOrderAddonTest extends TestCase
             'decoration_on' => 1,
             'addon' => 'others',
             'addon_other' => 'Rubberized print',
-            'press' => 'heat_press',
+            'press' => 'small_press',
             'addon_price' => 900,
         ]);
 
@@ -327,7 +329,7 @@ class JobOrderAddonTest extends TestCase
         ]);
         $this->assertSame('Sleeves only', $order->fresh()->jobOrder->addon_note);
 
-        $this->save($order, ['fabric_press' => 'heat_press', 'raw_materials' => ['Cotton combed 24s']]);
+        $this->save($order, ['fabric_press' => 'small_press', 'raw_materials' => ['Cotton combed 24s']]);
 
         $jo = $order->fresh()->jobOrder;
         $this->assertNull($jo->addon, 'the add-on itself should be cleared');

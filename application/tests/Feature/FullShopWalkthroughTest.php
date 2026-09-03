@@ -264,7 +264,7 @@ class FullShopWalkthroughTest extends TestCase
                 'raw_materials' => ['Cotton shirt blank'],
                 'raw_material_qty' => [55],
                 'cutting_type' => 'manual',
-                'fabric_press' => 'heat_press',
+                'fabric_press' => 'small_press',
             ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(55.0, $this->order->fresh()->jobOrder->rawMaterialQuantity('Cotton shirt blank'),

@@ -86,10 +86,11 @@ class User extends Authenticatable
             ],
             'Add-ons' => [
                 'embroidery' => 'Embroidery',
-                'heat press' => 'Heat Press',
+                // Two presses, because the shop has two. Heat press and cap
+                // press were offered here and neither machine exists, so a
+                // person could be given a bench to stand at that is not there.
                 'roller press' => 'Roller Press',
                 'small press' => 'Small Press',
-                'cap press' => 'Cap Press',
             ],
             'Desks' => [
                 'inventory' => 'Inventory (finished products)',

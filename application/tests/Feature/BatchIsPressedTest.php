@@ -134,7 +134,7 @@ class BatchIsPressedTest extends TestCase
      */
     public function test_a_press_chosen_after_the_order_was_taken_reaches_the_batch(): void
     {
-        $tasks = $this->pipeline('heat_press');
+        $tasks = $this->pipeline('small_press');
         $order = $tasks->first()->order;
 
         // The job order is filled in later and the routing is swapped in.
@@ -147,7 +147,7 @@ class BatchIsPressedTest extends TestCase
             $after->where('stage', 10)->contains(fn ($t) => $t->department === 'Roller press'),
             'the press chosen on the job order must reach the batch, not just the sample'
         );
-        $this->assertEmpty($after->where('department', 'Heat press'),
+        $this->assertEmpty($after->where('department', 'Small press'),
             'the press that was replaced must not be left behind on either run');
     }
 

@@ -25,10 +25,13 @@ class ProductionOrder extends Model
         'cancelled' => 'CANCELLED',
     ];
 
+    /*
+     * The shop has two presses. Cap press and heat press were on this list and
+     * on the floor plan, and neither exists - so a job could be sent to a
+     * machine that is not there, and the board showed benches nobody stands at.
+     */
     public const DECORATION_METHODS = [
         'embroidery' => 'Embroidery',
-        'cap_press' => 'Cap press',
-        'heat_press' => 'Heat press',
         'small_press' => 'Small press',
         'roller_press' => 'Roller press',
     ];
@@ -992,8 +995,6 @@ class ProductionOrder extends Model
         'Sticker' => 'Printer',
         'Inventory' => 'Inventory',
         'Embroidery' => 'Embroidery',
-        'Cap press' => 'Cap Press',
-        'Heat press' => 'Heat Press',
         'Small press' => 'Small Press',
         'Roller press' => 'Roller Press',
         'Manual cutting' => 'Laser Cutting',
@@ -1028,8 +1029,6 @@ class ProductionOrder extends Model
         // and a missing one is treated as met, so each run only ever waits for
         // the steps it actually has: Printer + Raw materials on the sample,
         // Mass production on the batch.
-        'Cap press' => ['Printer', 'Raw materials', 'Mass production'],
-        'Heat press' => ['Printer', 'Raw materials', 'Mass production'],
         'Small press' => ['Printer', 'Raw materials', 'Mass production'],
         'Roller press' => ['Printer', 'Raw materials', 'Mass production'],
     ];

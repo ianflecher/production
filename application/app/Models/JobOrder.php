@@ -23,9 +23,9 @@ class JobOrder extends Model
      */
     public const PRINT_TYPES = [
         'full_sublimation' => ['label' => 'Full Sublimation', 'printer' => 'atexco',            'cutting' => 'laser',  'press' => 'roller_press'],
-        'dtf'              => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => 'heat_press'],
-        'eco_solvent'      => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => 'heat_press'],
-        'vinyl'            => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => 'heat_press'],
+        'dtf'              => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => null],
+        'eco_solvent'      => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
+        'vinyl'            => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
         'embroidery'       => ['label' => 'Embroidery',      'printer' => 'manual',            'cutting' => 'manual', 'press' => null],
         'silkscreen'       => ['label' => 'Silkscreen',      'printer' => 'epson',             'cutting' => 'manual', 'press' => 'small_press'],
     ];
@@ -228,8 +228,16 @@ class JobOrder extends Model
         return $config['press'] ?? null;
     }
 
-    /** The add-on press defaults to the heat press. */
-    public const DECORATION_PRESS_DEFAULT = 'heat_press';
+    /*
+     * No default press any more.
+     *
+     * These pointed at the heat press, which the shop does not have. Rather
+     * than send every DTF job to whichever of the two remaining presses was
+     * picked here, the press is left unset and the person writing the job
+     * order chooses - which is what they were doing anyway on the jobs where
+     * the default was wrong.
+     */
+    public const DECORATION_PRESS_DEFAULT = null;
 
     /**
      * Add-ons the client can order on top of the print, each matched to the
@@ -240,7 +248,7 @@ class JobOrder extends Model
      */
     public const ADDONS = [
         'embroidery'    => ['label' => 'Embroidery',    'press' => 'embroidery'],
-        'sublimated'    => ['label' => 'Sublimated',    'press' => 'heat_press'],
+        'sublimated'    => ['label' => 'Sublimated',    'press' => null],
         'reflectorized' => ['label' => 'Reflectorized', 'press' => 'roller_press'],
         // Free text — the shop says what it is, and picks the press.
         'others'        => ['label' => 'Others',        'press' => null],
@@ -276,13 +284,26 @@ class JobOrder extends Model
     {
         $options = self::pressOptions();
 
-        if (self::orderHasCap($order) || $selected === 'cap_press') {
-            return $options;
+        // A job saved against a press the shop no longer has still shows it,
+        // named as gone. Dropping it from the list would silently change the
+        // job the next time somebody opened it and pressed save - and the
+        // floor would be told something nobody decided.
+        if (filled($selected) && ! isset($options[$selected])) {
+            $options[$selected] = self::retiredPressLabel($selected);
         }
 
-        unset($options['cap_press']);
-
         return $options;
+    }
+
+    /** What to call a press that has been taken off the floor. */
+    private static function retiredPressLabel(string $key): string
+    {
+        $was = [
+            'cap_press' => 'Cap press',
+            'heat_press' => 'Heat press',
+        ][$key] ?? ucfirst(str_replace('_', ' ', $key));
+
+        return $was.' (no longer in the shop)';
     }
 
     /** Display label for the chosen add-on ("Others" shows what was typed). */
@@ -309,8 +330,6 @@ class JobOrder extends Model
     public static function pressOptions(): array
     {
         return [
-            'cap_press' => 'Cap press',
-            'heat_press' => 'Heat press',
             'small_press' => 'Small press',
             'roller_press' => 'Roller press',
             'embroidery' => 'Embroidery',

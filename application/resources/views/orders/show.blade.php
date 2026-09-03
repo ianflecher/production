@@ -358,9 +358,15 @@
             @elseif ($bal <= 0)
                 <p style="margin-top:0.4rem; color: var(--success-ink); font-weight:600;">✓ Fully paid.</p>
             @else
+                {{-- Whether anything has been RECORDED, not whether Finance has
+                     confirmed it. The button read "Record downpayment" in red
+                     after the officer had already recorded one - which says
+                     nothing was taken, while the line above says it is with
+                     Finance. One of them had to be wrong, and it was this. --}}
+                @php $anyRecorded = $order->hasDownpayment() || $order->hasPaymentAwaitingFinance(); @endphp
                 <details class="inline-form" style="margin-top: 0.4rem;">
-                    <summary class="btn {{ $order->hasDownpayment() ? 'btn-ghost' : 'btn-primary' }} btn-sm">
-                        {{ $order->hasDownpayment() ? 'Record another payment' : 'Record downpayment' }}
+                    <summary class="btn {{ $anyRecorded ? 'btn-ghost' : 'btn-primary' }} btn-sm">
+                        {{ $anyRecorded ? 'Record another payment' : 'Record downpayment' }}
                     </summary>
                     <div class="pop">
                         <form method="POST" action="{{ route('orders.payment', $order) }}" enctype="multipart/form-data">
