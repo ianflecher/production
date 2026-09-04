@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\NoStoreHtmlPages;
 use App\Http\Middleware\SecureCookiesOverHttps;
 use App\Support\TrustedProxies;
 use Illuminate\Foundation\Application;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(prepend: [
             SecureCookiesOverHttps::class,
+            NoStoreHtmlPages::class,
         ]);
 
         $middleware->alias([

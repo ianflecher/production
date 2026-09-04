@@ -511,5 +511,62 @@
     })();
 </script>
 
+<script>
+    /* Keeping "Page expired" off the floor.
+       -------------------------------------
+       A form's token is only good while the session behind it lives. A tab left
+       open overnight - or restored by the browser next morning - carries a dead
+       one, and the first save of the day is refused after everything has been
+       typed.
+
+       So the token is refreshed while the page sits there: when the tab is
+       looked at again, and slowly in the background. Asking also postpones the
+       session's expiry, so a tab in use does not go stale in the first place. */
+    (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta) { return; }
+
+        var url = '{{ route('session.keep-alive') }}';
+        var busy = false;
+        var last = Date.now();
+
+        function refresh() {
+            if (busy) { return; }
+            busy = true;
+
+            fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data || !data.token) { return; }
+
+                    meta.setAttribute('content', data.token);
+
+                    // Every form already rendered is carrying the old one.
+                    document.querySelectorAll('input[name="_token"]').forEach(function (i) {
+                        i.value = data.token;
+                    });
+
+                    last = Date.now();
+                })
+                .catch(function () { /* offline or the server is down - the
+                                        page still works, this is a top-up */ })
+                .finally(function () { busy = false; });
+        }
+
+        // Coming back to a tab that has been sitting: the moment that matters.
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && Date.now() - last > 60000) { refresh(); }
+        });
+
+        window.addEventListener('focus', function () {
+            if (Date.now() - last > 60000) { refresh(); }
+        });
+
+        // And a slow top-up for a screen nobody is touching but is still open,
+        // like a station display.
+        setInterval(function () { if (!document.hidden) { refresh(); } }, 15 * 60 * 1000);
+    })();
+</script>
+
 </body>
 </html>

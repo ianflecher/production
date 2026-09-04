@@ -19,6 +19,20 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\AccountController;
 use Illuminate\Support\Facades\Route;
 
+/*
+ * A page that has been open a while asks for a fresh token.
+ *
+ * "Page expired" is the session behind an open tab having timed out - a browser
+ * that restored yesterday's tabs in the morning, or a form left open over
+ * lunch. The staff member fills the whole thing in, presses save, and is told
+ * to start again with nothing kept.
+ *
+ * Touching the session here also postpones its expiry, so a tab someone is
+ * actually using stays signed in.
+ *
+ * Deliberately open to guests: the login page is where this bites hardest.
+ */
+
 
 Route::redirect('/', '/dashboard');
 
@@ -524,3 +538,9 @@ Route::get('/db-test', function () {
         $verdict
     ), 200, ['Content-Type' => 'text/plain']);
 })->middleware(['auth']);
+
+Route::get('/session/keep-alive', function () {
+    return response()
+        ->json(['token' => csrf_token()])
+        ->header('Cache-Control', 'no-store');
+})->name('session.keep-alive');
