@@ -125,6 +125,16 @@ class LoginController extends Controller
      * Asked of the route's own `role:` middleware, so the answer is whatever
      * the route itself would decide rather than a second list to keep in step
      * with it. Anything unroutable, or on another host, is not followed.
+     *
+     * The desks are the exception: raw materials, finished products and the
+     * station board carry no `role:` middleware at all - each controller asks
+     * the question itself, on the first line of every method. Reading only the
+     * middleware therefore waved those through, and the raw-materials desk
+     * signing in against a left-over link to the products page landed on
+     * Forbidden. Refreshing then said "page expired", and the refresh after
+     * that worked - because the stored address is pulled out of the session on
+     * first use, so the second attempt had none left to go wrong with. Three
+     * screens to explain a link nobody remembered clicking.
      */
     private function mayOpen(\App\Models\User $user, string $url): bool
     {
@@ -158,7 +168,19 @@ class LoginController extends Controller
             }
         }
 
-        return true;
+        // The desks that check themselves rather than at the door. Keyed on the
+        // route's name, so a new page under a desk is covered the moment it is
+        // named after it.
+        $name = (string) $route->getName();
+
+        $desk = match (true) {
+            str_starts_with($name, 'inventory.') => $user->canManageInventory(),
+            str_starts_with($name, 'products.') => $user->canManageProducts(),
+            str_starts_with($name, 'stations.') => $user->canUseStations(),
+            default => true,
+        };
+
+        return $desk;
     }
 
     public function logout(Request $request): RedirectResponse
