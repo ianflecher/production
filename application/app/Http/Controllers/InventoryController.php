@@ -557,21 +557,34 @@ class InventoryController extends Controller
                 ->where('order_number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%"))));
 
+        $pending = MaterialRequest::with('order')
+            ->where('status', 'pending')
+            ->tap($matching)
+            ->orderBy('id')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        $decided = MaterialRequest::with(['order', 'item', 'decider'])
+            ->where('status', '!=', 'pending')
+            ->tap($matching)
+            ->orderByDesc('decided_at')->limit(25)->get();
+
+        // How many pieces each size is for, so a request for the larges can say
+        // how many larges — looked up once for the orders actually on the page
+        // rather than per request.
+        $orders = $pending->getCollection()->concat($decided)
+            ->pluck('order')->filter()->unique('id');
+
+        $sizeCounts = $orders->mapWithKeys(fn ($o) => [$o->id => $o->sizeQuantities()])->all();
+
         return view('inventory.requests', [
             'search' => $search,
+            'sizeCounts' => $sizeCounts,
             // A queue that grows while nobody acts on it, so it is paged. The
             // $items list below stays whole on purpose — it fills the material
             // dropdown and matches names, so it is not a list being read.
-            'pending' => MaterialRequest::with('order')
-                ->where('status', 'pending')
-                ->tap($matching)
-                ->orderBy('id')
-                ->paginate(self::PER_PAGE)
-                ->withQueryString(),
-            'decided' => MaterialRequest::with(['order', 'item', 'decider'])
-                ->where('status', '!=', 'pending')
-                ->tap($matching)
-                ->orderByDesc('decided_at')->limit(25)->get(),
+            'pending' => $pending,
+            'decided' => $decided,
             'items' => InventoryItem::orderBy('name')->get(),
         ]);
     }
@@ -634,7 +647,7 @@ class InventoryController extends Controller
             $item->recordMovement(
                 -(float) $data['quantity'],
                 'issued',
-                'Issued for '.($materialRequest->order?->order_number ?? 'an order').' — '.$materialRequest->material,
+                'Issued for '.($materialRequest->order?->order_number ?? 'an order').' — '.$materialRequest->label(),
                 $materialRequest->production_order_id,
                 $data['operator_name'],
             );
@@ -736,7 +749,7 @@ class InventoryController extends Controller
                 $back,
                 'returned',
                 'Returned unused from '.($materialRequest->order?->order_number ?? 'an order')
-                    .' — '.$materialRequest->material
+                    .' — '.$materialRequest->label()
                     .(filled($data['note'] ?? null) ? ' ('.$data['note'].')' : ''),
                 $materialRequest->production_order_id,
                 $data['operator_name'],

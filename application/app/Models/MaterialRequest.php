@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MaterialRequest extends Model
 {
     protected $fillable = [
-        'production_order_id', 'material', 'status',
+        'production_order_id', 'material', 'size', 'status',
         'inventory_item_id', 'quantity', 'requested_quantity', 'issued_quantity', 'note', 'decided_by', 'decided_by_name', 'decided_at',
     ];
 
@@ -20,6 +20,19 @@ class MaterialRequest extends Model
             'requested_quantity' => 'decimal:2',
             'issued_quantity' => 'decimal:2',
         ];
+    }
+
+    /**
+     * The material and the size it is being asked for, as one phrase.
+     *
+     * An order with no size breakdown asks for the material plainly, which is
+     * what the desk saw before sizes were split out.
+     */
+    public function label(): string
+    {
+        return filled($this->size)
+            ? $this->material.' · size '.$this->size
+            : $this->material;
     }
 
     public function order(): BelongsTo

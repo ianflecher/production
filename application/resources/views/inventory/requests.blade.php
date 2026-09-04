@@ -32,10 +32,20 @@
             <div class="card panel">
                 <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: flex-start;">
                     <div>
-                        <h2 style="margin-bottom: 0.15rem;">{{ $req->material }}</h2>
+                        <h2 style="margin-bottom: 0.15rem;">
+                            {{ $req->material }}
+                            @if (filled($req->size))
+                                <span class="badge" style="background: var(--tint); color: var(--ink-2); vertical-align: middle; margin-left: 0.3rem;">size {{ $req->size }}</span>
+                            @endif
+                        </h2>
                         <p class="muted" style="font-size: 0.85rem;">
                             for <a href="{{ route('orders.show', $req->order) }}" style="font-weight: 600;">{{ $req->order->order_number }}</a>
-                            · {{ $req->order->clientName() }} · {{ number_format($req->order->quantity) }} pcs
+                            · {{ $req->order->clientName() }}
+                            {{-- The pieces this line covers, not the whole run: a
+                                 request for the larges is answered by how many
+                                 larges there are. --}}
+                            @php $forSize = filled($req->size) ? ($sizeCounts[$req->order->id][$req->size] ?? null) : null; @endphp
+                            · {{ number_format($forSize ?? $req->order->quantity) }} pcs
                             · requested {{ $req->created_at->diffForHumans() }}
                         </p>
                     </div>
@@ -51,6 +61,7 @@
                 <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: flex-end;">
                     <form method="POST" action="{{ route('inventory.requests.approve', $req) }}"
                           data-order="{{ $req->order?->order_number ?? 'this order' }}"
+                          data-size="{{ $req->size }}"
                           onsubmit="return confirmIssue(this);"
                           style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end;">
                         @csrf
@@ -153,7 +164,12 @@
                 <tbody>
                     @foreach ($decided as $d)
                         <tr>
-                            <td style="font-weight: 600;">{{ $d->material }}</td>
+                            <td style="font-weight: 600;">
+                                {{ $d->material }}
+                                @if (filled($d->size))
+                                    <div style="font-size: 0.72rem; font-weight: 500; color: var(--ink-3);">size {{ $d->size }}</div>
+                                @endif
+                            </td>
                             <td><a href="{{ route('orders.show', $d->order) }}">{{ $d->order->order_number }}</a></td>
                             <td>
                                 @if ($d->status === 'approved')
@@ -174,6 +190,7 @@
                                         <div class="pop" style="min-width: 260px;">
                                             <form method="POST" action="{{ route('inventory.requests.approve', $d) }}"
                                                   data-order="{{ $d->order?->order_number ?? 'this order' }}"
+                                                  data-size="{{ $d->size }}"
                                                   onsubmit="return confirmIssue(this);">
                                                 @csrf
                                                 <div class="field">
@@ -257,12 +274,17 @@
             ? select.options[select.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/, '')
             : '';
         var order = form.getAttribute('data-order') || 'this order';
+        // Two requests can now differ by size alone, so the size is part of
+        // naming which one is being issued.
+        var size = (form.getAttribute('data-size') || '').trim();
 
         if (material === '') {
             alert('Choose which material to issue.');
             select.focus();
             return false;
         }
+
+        if (size !== '') { material += ' (size ' + size + ')'; }
         if (qty === '' || isNaN(Number(qty)) || Number(qty) <= 0) {
             alert('Enter how much you are issuing.');
             if (form.quantity) { form.quantity.focus(); }

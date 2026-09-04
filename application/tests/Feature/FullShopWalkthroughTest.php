@@ -288,19 +288,31 @@ class FullShopWalkthroughTest extends TestCase
 
         // ---- 6. Materials: the desk issues what the job asked for -----------
         $item = InventoryItem::create(['name' => 'Cotton shirt blank', 'unit' => 'pcs', 'quantity' => 500]);
-        $request = MaterialRequest::where('production_order_id', $this->order->id)->firstOrFail();
 
-        $this->assertSame('55.00', $request->requested_quantity,
-            'the request carries the amount, so the desk is not typing it from memory');
+        // The material is asked for one size at a time, so the desk can issue
+        // the smalls while the larges are still on order.
+        $requests = MaterialRequest::where('production_order_id', $this->order->id)
+            ->orderBy('id')->get();
 
-        $this->actingAs($this->staff['supply'])
-            ->post(route('inventory.requests.approve', $request), [
-                'inventory_item_id' => $item->id,
-                'quantity' => 100,               // a stale tab, or a slip
-                'operator_name' => 'Ian',
-            ])->assertRedirect();
+        $this->assertSame(['S', 'M', 'L', 'XL'], $requests->pluck('size')->all(),
+            'one request per size the order is for');
 
-        $this->assertSame('55.00', $request->fresh()->issued_quantity, 'the job asked for 55');
+        $this->assertSame([10.0, 20.0, 15.0, 10.0],
+            $requests->map(fn ($r) => (float) $r->requested_quantity)->all(),
+            'the amount follows the pieces, and the sizes still add up to 55');
+
+        foreach ($requests as $request) {
+            $this->actingAs($this->staff['supply'])
+                ->post(route('inventory.requests.approve', $request), [
+                    'inventory_item_id' => $item->id,
+                    'quantity' => 100,               // a stale tab, or a slip
+                    'operator_name' => 'Ian',
+                ])->assertRedirect();
+
+            $this->assertSame((float) $request->requested_quantity, (float) $request->fresh()->issued_quantity,
+                'the size gets what it asked for, not what was typed');
+        }
+
         $this->assertSame(445.0, (float) $item->fresh()->quantity, 'so 55 left the shelf');
 
         // ---- 7. The floor reads the pack at its station ---------------------

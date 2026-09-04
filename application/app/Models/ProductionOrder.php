@@ -1550,6 +1550,71 @@ class ProductionOrder extends Model
     }
 
     /**
+     * The order's pieces per size, largest run first in the chart's own order.
+     *
+     * Sizes with nothing on them are left out — there is no point raising a
+     * request for a size the order does not include.
+     *
+     * @return array<string, int> size => pieces
+     */
+    public function sizeQuantities(): array
+    {
+        return $this->itemsInSizeOrder()
+            ->filter(fn ($i) => filled($i->size) && (int) $i->quantity > 0)
+            ->mapWithKeys(fn ($i) => [(string) $i->size => (int) $i->quantity])
+            ->all();
+    }
+
+    /**
+     * Divide one material's amount between the sizes that need it.
+     *
+     * The job order says how much of a material the whole run takes, not how
+     * much each size takes — nobody is going to type that twelve times. So the
+     * amount follows the pieces: a size that is a third of the run carries a
+     * third of the fabric.
+     *
+     * The last size absorbs the rounding, so the parts still add up to exactly
+     * what was asked for rather than drifting a few centavos short.
+     *
+     * When nobody said how much, every size inherits that silence — the desk
+     * types the amount, as it did before.
+     *
+     * @param  array<string, int>  $sizes
+     * @return array<string, float|null> size => amount
+     */
+    public static function splitAcrossSizes(?float $needs, array $sizes): array
+    {
+        if ($sizes === []) {
+            return ['' => $needs];
+        }
+
+        if ($needs === null) {
+            return array_map(fn () => null, $sizes);
+        }
+
+        $pieces = array_sum($sizes);
+
+        if ($pieces <= 0) {
+            return ['' => $needs];
+        }
+
+        $split = [];
+        $given = 0.0;
+        $last = array_key_last($sizes);
+
+        foreach ($sizes as $size => $qty) {
+            $share = $size === $last
+                ? round($needs - $given, 2)
+                : round($needs * $qty / $pieces, 2);
+
+            $split[$size] = $share;
+            $given += $share;
+        }
+
+        return $split;
+    }
+
+    /**
      * Turn the job order's raw-materials list into stock requests for the
      * raw-materials desk to issue or reject.
      *
@@ -1564,29 +1629,45 @@ class ProductionOrder extends Model
         $materials = $this->jobOrder?->rawMaterialsList() ?? [];
         $materials = array_values(array_filter($materials, fn ($m) => filled($m)));
 
+        // One line per size the order actually asks for. An order with no size
+        // breakdown keeps the single unsized line it always raised.
+        $sizes = $this->sizeQuantities();
+
         $new = 0;
+        $wanted = [];
+
         foreach ($materials as $material) {
             $needs = $this->jobOrder?->rawMaterialQuantity($material);
 
-            $mr = MaterialRequest::firstOrCreate(
-                ['production_order_id' => $this->id, 'material' => $material],
-                ['status' => 'pending', 'requested_quantity' => $needs]
-            );
+            foreach (self::splitAcrossSizes($needs, $sizes) as $size => $share) {
+                $wanted[] = $material.'|'.$size;
 
-            if ($mr->wasRecentlyCreated) {
-                $new++;
-            } elseif ($mr->status === 'pending' && (float) $mr->requested_quantity !== (float) $needs) {
-                // The job order was corrected before the desk got to it.
-                $mr->update(['requested_quantity' => $needs]);
+                $mr = MaterialRequest::firstOrCreate(
+                    ['production_order_id' => $this->id, 'material' => $material, 'size' => $size],
+                    ['status' => 'pending', 'requested_quantity' => $share]
+                );
+
+                if ($mr->wasRecentlyCreated) {
+                    $new++;
+                } elseif ($mr->status === 'pending' && (float) $mr->requested_quantity !== (float) $share) {
+                    // The job order was corrected before the desk got to it.
+                    $mr->update(['requested_quantity' => $share]);
+                }
             }
         }
 
-        // Drop still-pending requests for materials that were removed from the
-        // list. Anything already issued or rejected is history and stays.
+        // Drop still-pending requests for material/size pairs that are no longer
+        // asked for — a material struck off the list, or a size dropped from the
+        // order. Anything already issued or rejected is history and stays.
+        //
+        // Matched in PHP rather than SQL because the pair is what identifies a
+        // request now, and there is no portable way to say "not in this set of
+        // pairs" across MySQL and SQLite.
         $this->materialRequests()
             ->where('status', 'pending')
-            ->when($materials !== [], fn ($q) => $q->whereNotIn('material', $materials))
-            ->delete();
+            ->get()
+            ->reject(fn ($mr) => in_array($mr->material.'|'.$mr->size, $wanted, true))
+            ->each(fn ($mr) => $mr->delete());
 
         if ($new > 0) {
             AppNotification::toRole(
