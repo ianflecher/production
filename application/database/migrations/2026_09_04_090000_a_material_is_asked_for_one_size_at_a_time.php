@@ -20,6 +20,10 @@ use Illuminate\Support\Facades\Schema;
  * line it always did. It is a blank string rather than NULL so the unique index
  * keeps holding — MySQL counts two NULLs as different and would let a duplicate
  * through.
+ *
+ * The order's foreign key leans on the old unique index for support, being its
+ * leftmost column, so dropping that index straight off is refused with errno
+ * 1553. The key gets an index of its own first, and then the swap is allowed.
  */
 return new class extends Migration
 {
@@ -32,6 +36,10 @@ return new class extends Migration
         }
 
         Schema::table('material_requests', function (Blueprint $table) {
+            $table->index('production_order_id', 'material_requests_production_order_id_index');
+        });
+
+        Schema::table('material_requests', function (Blueprint $table) {
             $table->dropUnique('material_requests_production_order_id_material_unique');
             $table->unique(['production_order_id', 'material', 'size']);
         });
@@ -42,6 +50,10 @@ return new class extends Migration
         Schema::table('material_requests', function (Blueprint $table) {
             $table->dropUnique('material_requests_production_order_id_material_size_unique');
             $table->unique(['production_order_id', 'material']);
+        });
+
+        Schema::table('material_requests', function (Blueprint $table) {
+            $table->dropIndex('material_requests_production_order_id_index');
         });
 
         Schema::table('material_requests', fn (Blueprint $t) => $t->dropColumn('size'));
