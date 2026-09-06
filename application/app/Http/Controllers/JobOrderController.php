@@ -44,13 +44,18 @@ class JobOrderController extends Controller
         $this->assertOrderVisible($order);
         $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee']);
         abort_unless($order->jobOrder, 404);
-        if (! $order->mockupApproved()) {
-            return redirect()->route('orders.show', $order)
-                ->withErrors(['tech_pack' => 'Approve the final mockup before opening the Tech Pack.']);
-        }
-
-        return redirect()->route('orders.job-order', $order)
-            ->with('success', 'The artist fills the Tech Pack. After mockup approval, it opens to the artist automatically.');
+        // This used to redirect to the artist's sheet and never render its own
+        // view at all, so job-orders/edit.blade.php - the officer's copy, the
+        // one carrying the form - was unreachable. The page's own comment had
+        // described the officer filling the header the whole time.
+        //
+        // No mockup gate: the officer fills the header when the job is taken,
+        // which is before a mockup exists. The gate protected the artist's half
+        // of the sheet, and their half is not offered here.
+        return view('job-orders.edit', [
+            'order' => $order,
+            'jobOrder' => $order->jobOrder,
+        ]);
     }
 
     /** Compatibility endpoint: account officers now review rather than edit. */

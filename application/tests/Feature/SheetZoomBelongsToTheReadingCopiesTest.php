@@ -96,8 +96,7 @@ class SheetZoomBelongsToTheReadingCopiesTest extends TestCase
     {
         [$sales, , $order] = $this->shop();
 
-        $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
-            ->assertRedirect(route('orders.job-order', $order));
+        $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")->assertOk();
 
         $this->actingAs($sales)->get(route('orders.job-order', $order))
             ->assertOk()

@@ -161,8 +161,10 @@ class TechPackTest extends TestCase
     {
         [$sales, , $order] = $this->shop();
 
+        // Their own copy carries the header boxes.
         $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
-            ->assertRedirect(route('orders.job-order', $order));
+            ->assertOk()
+            ->assertSee('name="design_name"', false);
 
         $this->actingAs($sales)->get(route('orders.job-order', $order))
             ->assertOk()

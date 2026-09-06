@@ -439,7 +439,7 @@ class FullShopWalkthroughTest extends TestCase
 
         $this->actingAs($this->staff['sales'])
             ->get(route('job-orders.edit', $this->order))
-            ->assertRedirect(route('orders.job-order', $this->order));
+            ->assertOk();
 
         // A box taken off stays off, and the note stays on.
         $this->actingAs($this->staff['sales'])->get(route('orders.job-order', $this->order))

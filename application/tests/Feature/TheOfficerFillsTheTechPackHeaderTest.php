@@ -55,6 +55,23 @@ class TheOfficerFillsTheTechPackHeaderTest extends TestCase
         ];
     }
 
+    public function test_the_officers_page_actually_offers_the_boxes(): void
+    {
+        // Saving worked while the page still printed the header as read-only
+        // text - there was nowhere to type. Assert the FORM, not just the post.
+        $officer = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
+        $order = $this->order($officer);
+
+        $this->actingAs($officer)->get(route('job-orders.edit', $order))
+            ->assertOk()
+            ->assertSee('name="design_name"', false)
+            ->assertSee('name="fitting"', false)
+            ->assertSee('name="item_style"', false)
+            ->assertSee('name="print_type"', false)
+            ->assertSee('name="printer"', false)
+            ->assertSee('name="fabric"', false);
+    }
+
     public function test_the_account_officer_fills_the_header(): void
     {
         $officer = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
