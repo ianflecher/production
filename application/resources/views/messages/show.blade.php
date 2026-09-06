@@ -88,9 +88,30 @@
     {{-- The job order SHEET, not the order admin page — that one opens on
          payments and pricing, which is the account officer's business, not the
          floor's. --}}
-    @if($order->mockupApproved())
-        <a href="{{ route('orders.job-order', $order) }}" class="btn btn-primary">Open tech pack</a>
+    @php
+        /* The sheet lives on two roads. orders.job-order is the office one, and
+           the floor is not allowed down it: an artist is an agent, and that
+           route admits sales, leader, super_admin, mover and the artist leader
+           only. The artist's own road is their task.
+
+           Sent here from a message, every artist was pointed at the office road
+           and turned away at it with a 403 - the sheet was theirs to read, on a
+           job they were working, reached by the one link that could not open it. */
+        $viewer = auth()->user();
+        $ownPackTask = $order->tasks->first(
+            fn ($t) => $t->assigned_to === $viewer?->id && $t->isTechPackStep()
+        );
+        $packUrl = match (true) {
+            (bool) $ownPackTask => route('tasks.job-order', $ownPackTask),
+            in_array($viewer?->role, ['sales', 'leader', 'super_admin', 'mover'], true),
+            (bool) $viewer?->isArtistLead() => route('orders.job-order', $order),
+            default => null,
+        };
+    @endphp
+    @if($order->mockupApproved() && $packUrl)
+        <a href="{{ $packUrl }}" class="btn btn-primary">Open tech pack</a>
     @endif
+
 </div>
 
 @include('partials.delay-alert', ['order' => $order])
