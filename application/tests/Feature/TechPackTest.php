@@ -150,7 +150,7 @@ class TechPackTest extends TestCase
 
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertSee('name="design_name"', false)
+            ->assertDontSee('name="design_name"', false)  // the header is the officer's now
             ->assertDontSee('name="cutting_method"', false)
             ->assertSee('name="zipper_type"', false)
             ->assertSee('name="bottom_hem"', false)

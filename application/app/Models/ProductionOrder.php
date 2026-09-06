@@ -688,6 +688,44 @@ class ProductionOrder extends Model
         return $steps->count();
     }
 
+    /**
+     * Print type decides the default press and the cutting route.
+     *
+     * This used to sit in the artist's save, because the artist was the only
+     * one who could set a print type. The account officer sets it on the tech
+     * pack header now, so the routing has to follow from either desk - set
+     * from the header and left here, the job would run the wrong press.
+     *
+     * Does nothing once production has started: canEditRouting() is the guard
+     * that stops a late print type reshuffling steps people are stood at.
+     */
+    public function applyPrintTypeRouting(): void
+    {
+        $jobOrder = $this->jobOrder;
+
+        if (! $jobOrder || ! $this->canEditRouting()) {
+            return;
+        }
+
+        $config = JobOrder::printTypeConfig($jobOrder->fresh()->print_type);
+
+        if (! $this->cutting_type && ($config['cutting'] ?? null)) {
+            $this->update(['cutting_type' => $config['cutting']]);
+        }
+
+        if (! $jobOrder->fresh()->fabric_press) {
+            $fabricPress = $jobOrder->fresh()->defaultFabricPress();
+            $jobOrder->update([
+                'fabric_press' => $fabricPress,
+                'needs_embroidery' => $fabricPress === 'embroidery'
+                    ? true
+                    : (bool) $jobOrder->needs_embroidery,
+            ]);
+        }
+
+        $this->refresh()->rebuildPipeline($this->decoration_methods ?? [], $this->cutting_type);
+    }
+
     /** When the first payment was confirmed — the moment the job starts. */
     public function firstConfirmedPaymentAt(): ?\Carbon\CarbonInterface
     {

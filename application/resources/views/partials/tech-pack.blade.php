@@ -32,14 +32,24 @@
     // note dragged beside a picture, the end of a leader line — landed
     // somewhere else on the sheet the floor reads. No name on the read-only
     // one: there is no form under it to post to.
-    $canType = fn (string $field) => $textEditable;
+    /* The header is the account officer's part of the sheet - who the job is
+       for, what garment, which print and printer, what fabric. Sales knows
+       all of that when the job is taken; the artist was retyping it from the
+       order form and guessing where it disagreed. Everything BELOW the
+       header - pictures, print sizes, placements - is still the artist's.
+       This is why $canType asks about one field rather than the sheet. */
+    $officerMode = ($mode === 'officer');
+    $officerFields = ['design_name', 'fitting', 'item_style', 'print_type', 'printer', 'fabric'];
+    $canType = fn (string $field) => in_array($field, $officerFields, true)
+        ? $officerMode
+        : $textEditable;
 
     /* What the shop typed into these boxes before, so the same answer is
        picked rather than spelled four ways across four sheets. Only where the
        sheet can be typed in — a read-only copy has no boxes to offer them to.
        $canType is a closure asking about ONE field; whether the sheet is
        typeable at all is $textEditable. */
-    $suggest = $textEditable
+    $suggest = ($textEditable || $officerMode)
         ? \App\Models\TechPack::fieldSuggestions() + \App\Models\JobOrder::fieldSuggestions()
         : [];
 
@@ -150,7 +160,7 @@
         <table class="tp-ref-table tp-ref-head-table">
             <tr><th>Client</th><td>{{ $val($order->clientName()) }}</td><th>Design name</th><td>{!! $fill('design_name','Design name') !!}</td></tr>
             <tr><th>Account officer</th><td>{{ $val($order->creator?->name) }}</td><th>Fitting</th><td>{!! $fill('fitting','Original fit',60) !!}</td></tr>
-            <tr><th>Type / style</th><td>{!! $textEditable?$fill('item_style','Cotton shirt',100):e($val($tp->item_style?:$order->productLabel())) !!}</td><th>Print type</th><td>{!! $textEditable?$fill('print_type','DTF',60,$jo):e($val($jo?->printTypeLabel())) !!}</td></tr>
+            <tr><th>Type / style</th><td>{!! $canType('item_style')?$fill('item_style','Cotton shirt',100):e($val($tp->item_style?:$order->productLabel())) !!}</td><th>Print type</th><td>{!! $canType('print_type')?$fill('print_type','DTF',60,$jo):e($val($jo?->printTypeLabel())) !!}</td></tr>
             <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{{ $order->created_at?->format('F j, Y')??'—' }}</td></tr>
             <tr><th>Fabric</th><td>{!! $fill('fabric','Cotton blend',255,$jo) !!}</td><th>Delivery date</th><td>{{ $order->due_date?->format('F j, Y')??'—' }}</td></tr>
         </table>

@@ -550,26 +550,10 @@ class TaskController extends Controller
         }
 
         // Print type determines the default press and cutting route. Apply it
-        // while production has not started, exactly when the artist completes
-        // the Tech Pack.
-        if (array_key_exists('print_type', $jobOrderFields) && $order->canEditRouting()) {
-            $config = \App\Models\JobOrder::printTypeConfig($jobOrder->fresh()->print_type);
-
-            if (! $order->cutting_type && ($config['cutting'] ?? null)) {
-                $order->update(['cutting_type' => $config['cutting']]);
-            }
-
-            if (! $jobOrder->fresh()->fabric_press) {
-                $fabricPress = $jobOrder->fresh()->defaultFabricPress();
-                $jobOrder->update([
-                    'fabric_press' => $fabricPress,
-                    'needs_embroidery' => $fabricPress === 'embroidery'
-                        ? true
-                        : (bool) $jobOrder->needs_embroidery,
-                ]);
-            }
-
-            $order->refresh()->rebuildPipeline($order->decoration_methods ?? [], $order->cutting_type);
+        // The account officer sets the print type on the header now, so the same
+        // routing runs from their save too — see applyPrintTypeRouting().
+        if (array_key_exists('print_type', $jobOrderFields)) {
+            $order->applyPrintTypeRouting();
         }
 
         // Clicking the explicit Save button means the Artist is finished with

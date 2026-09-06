@@ -59,16 +59,47 @@ class JobOrderController extends Controller
         $this->assertOrderVisible($order);
         $order->load(['jobOrder', 'tasks']);
         abort_unless($order->jobOrder, 404);
-        if (! $order->mockupApproved()) {
-            return redirect()->route('orders.show', $order)
-                ->withErrors(['tech_pack' => 'Approve the final mockup before saving the Tech Pack.']);
+        // The header of the sheet belongs to the account officer: who the job
+        // is for, what garment, which print and printer, what fabric. The
+        // office knows all of it when the job is taken, and the artist was
+        // retyping it off the order form - guessing wherever the two disagreed.
+        //
+        // It is filled when the job is taken, which is BEFORE the mockup is
+        // approved, so this no longer waits on that approval. The gate was
+        // there to protect the artist's half of the sheet, and the artist's
+        // half is not accepted here however the form is posted: only the six
+        // header fields below are read, and everything else is dropped.
+        abort_unless($request->user()->isSales() || $request->user()->isLeader(), 403);
+
+        $data = $request->validate([
+            'design_name' => ['nullable', 'string', 'max:120'],
+            'fitting' => ['nullable', 'string', 'max:60'],
+            'item_style' => ['nullable', 'string', 'max:100'],
+            'print_type' => ['nullable', 'string', 'max:60'],
+            'printer' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(JobOrder::PRINTERS))],
+            'fabric' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        // There may be no pack yet - the officer reaches this sheet before any
+        // artist has drawn on it, which is the whole point of the change.
+        $pack = $order->techPack ?: $order->techPack()->make();
+        $pack->fill(\Illuminate\Support\Arr::only($data, ['design_name', 'fitting', 'item_style']));
+        $pack->production_order_id = $order->id;
+        $pack->save();
+
+        $order->jobOrder->update(
+            \Illuminate\Support\Arr::only($data, ['print_type', 'printer', 'fabric'])
+        );
+
+        // The print type decides the press and the cutting route, and it is
+        // the officer who sets it now. Without this the job kept whatever
+        // route it was given when it was taken.
+        if (array_key_exists('print_type', $data)) {
+            $order->applyPrintTypeRouting();
         }
 
-        // Kept as a compatibility endpoint for old bookmarks/forms. The Tech
-        // Pack is no longer split: account officers review it but do not edit
-        // the artist's manual fields.
-        return redirect()->route('orders.job-order', $order)
-            ->withErrors(['tech_pack' => 'The assigned artist fills the complete Tech Pack.']);
+        return redirect()->route('job-orders.edit', $order)
+            ->with('success', 'Tech Pack header saved.');
     }
 
     /** The whole job package as ONE document: mockup, template, job order,

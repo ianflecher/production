@@ -48,6 +48,11 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         'packaging' => 'One piece per plastic',
     ];
 
+    /* Boxes on the sheet that belong to the account officer, not the artist.
+       They are still saved and still printed - the artist's copy just shows
+       the answer instead of offering somewhere to type it. */
+    private const OFFICER_FIELDS = ['fabric'];
+
     private function order(): ProductionOrder
     {
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
@@ -142,6 +147,12 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
             ->assertOk();
 
         foreach (array_keys(self::SHEET_FIELDS) as $field) {
+            if (in_array($field, self::OFFICER_FIELDS, true)) {
+                $form->assertDontSee('name="'.$field.'"', false);
+
+                continue;
+            }
+
             $form->assertSee('name="'.$field.'"', false);
         }
     }
