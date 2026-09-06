@@ -39,10 +39,10 @@ class JobOrderController extends Controller
         return $this->createJobOrder($request, $order);
     }
 
-    public function editJobOrder(ProductionOrder $order): View|RedirectResponse
+    public function editJobOrder(\Illuminate\Http\Request $request, ProductionOrder $order): View|RedirectResponse
     {
         $this->assertOrderVisible($order);
-        $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee']);
+        $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee', 'techPacks']);
         abort_unless($order->jobOrder, 404);
         // This used to redirect to the artist's sheet and never render its own
         // view at all, so job-orders/edit.blade.php - the officer's copy, the
@@ -52,10 +52,31 @@ class JobOrderController extends Controller
         // No mockup gate: the officer fills the header when the job is taken,
         // which is before a mockup exists. The gate protected the artist's half
         // of the sheet, and their half is not offered here.
+        // Two sheets, two sets of boxes. The batch sheet is only offered once
+        // it has been opened from the approved sample - before that there is
+        // one garment and one sheet to fill in.
         return view('job-orders.edit', [
             'order' => $order,
             'jobOrder' => $order->jobOrder,
+            'phase' => $this->phaseAsked($request, $order),
         ]);
+    }
+
+    /**
+     * Which sheet the officer asked for, refusing one that does not exist yet.
+     *
+     * A link to the batch sheet before the sample has been approved would
+     * quietly open a second sheet nobody drew, so an unopened phase falls back
+     * to the sample rather than creating anything.
+     */
+    private function phaseAsked(\Illuminate\Http\Request $request, ProductionOrder $order): string
+    {
+        $asked = (string) $request->query('phase', \App\Models\TechPack::PHASE_SAMPLE);
+
+        return $asked === \App\Models\TechPack::PHASE_MASSPROD
+            && $order->techPackFor(\App\Models\TechPack::PHASE_MASSPROD)
+                ? \App\Models\TechPack::PHASE_MASSPROD
+                : \App\Models\TechPack::PHASE_SAMPLE;
     }
 
     /** Compatibility endpoint: account officers now review rather than edit. */
@@ -100,12 +121,18 @@ class JobOrderController extends Controller
 
         // There may be no pack yet - the officer reaches this sheet before any
         // artist has drawn on it, which is the whole point of the change.
-        $pack = $order->techPack ?: $order->techPack()->make();
+        //
+        // Which sheet: the batch one when they are on it, else the sample.
+        // Saving the batch sheet never touches the sample - that sheet is the
+        // record of what the client held and approved.
+        $phase = $this->phaseAsked($request, $order);
+        $pack = $order->openTechPack($phase);
         $pack->fill(\Illuminate\Support\Arr::only($data, [
             'design_name', 'fitting', 'item_style', 'tshirt_color', 'thread_color',
             'zipper_type', 'lip_pocket_color', 'placing_title',
         ]));
         $pack->production_order_id = $order->id;
+        $pack->phase = $phase;
         $pack->save();
 
         $order->jobOrder->update(
@@ -131,8 +158,8 @@ class JobOrderController extends Controller
             $order->applyPrintTypeRouting();
         }
 
-        return redirect()->route('job-orders.edit', $order)
-            ->with('success', 'Tech Pack header saved.');
+        return redirect()->route('job-orders.edit', ['order' => $order] + ($phase === \App\Models\TechPack::PHASE_MASSPROD ? ['phase' => $phase] : []))
+            ->with('success', $pack->phaseLabel().' Tech Pack saved.');
     }
 
     /** The whole job package as ONE document: mockup, template, job order,

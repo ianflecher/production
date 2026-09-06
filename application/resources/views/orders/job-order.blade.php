@@ -60,7 +60,7 @@
 @isset($techPackTask)
     <form method="POST" action="{{ route('tasks.tech-pack', $techPackTask->id) }}" enctype="multipart/form-data">
         @csrf
-        @include('partials.tech-pack', ['order' => $order, 'editable' => true])
+        @include('partials.tech-pack', ['order' => $order, 'editable' => true, 'phase' => $phase ?? \App\Models\TechPack::PHASE_SAMPLE])
 
         <div class="tp-save no-print">
             <button class="btn btn-primary" name="finish_editing" value="1">Save Tech Pack and continue</button>
@@ -70,7 +70,7 @@
         </div>
     </form>
 @else
-    @include('partials.tech-pack', ['order' => $order])
+    @include('partials.tech-pack', ['order' => $order, 'phase' => $phase ?? \App\Models\TechPack::PHASE_SAMPLE])
 @endisset
 
 @endsection

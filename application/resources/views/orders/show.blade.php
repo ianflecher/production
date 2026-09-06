@@ -45,6 +45,19 @@
             @if ($order->due_date) · due {{ $order->due_date->format('M j, Y') }} @endif
             · created by {{ $order->creator->name }}
         </p>
+        {{-- Two dates, two promises. The due date above is what the client was
+             told about the finished batch; this is the shop's own promise about
+             the sample, and a sample quietly sitting for a week used to surface
+             only when the batch behind it ran short. --}}
+        @if ($order->sample_due_date)
+            <p class="muted" style="margin-top:0.2rem;">
+                Sample due {{ $order->sample_due_date->format('M j, Y') }}
+                ({{ $order->sampleLeadDays() }} days from the confirmed payment)
+                @if ($order->sampleOverdue())
+                    <strong style="color: var(--danger-ink, #b91c1c);">— overdue</strong>
+                @endif
+            </p>
+        @endif
         @if ($order->completed_at)
             <p style="margin-top: 0.35rem; font-size: 0.85rem; color: var(--success-ink); font-weight: 600;">
                 ✓ Finished {{ $order->completed_at->format('M j, Y \a\t g:i A') }}

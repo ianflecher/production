@@ -18,8 +18,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class TechPack extends Model
 {
+    /** The two sheets an order carries: the one the client holds and asks to
+     *  change, and the one the batch is made from. Everything the shop drew
+     *  before the split is a sample - that is the sheet it was filling in. */
+    public const PHASE_SAMPLE = 'sample';
+
+    public const PHASE_MASSPROD = 'massprod';
+
+    public const PHASES = [
+        self::PHASE_SAMPLE => 'Sample',
+        self::PHASE_MASSPROD => 'Mass production',
+    ];
+
     protected $fillable = [
-        'production_order_id',
+        'production_order_id', 'phase',
         // Header
         'design_name', 'fitting', 'item_style', 'quality', 'print_tech', 'placing_title',
         // The three colourway swatches
@@ -384,6 +396,42 @@ class TechPack extends Model
         }
 
         return $out;
+    }
+
+    public function isSample(): bool
+    {
+        return $this->phase !== self::PHASE_MASSPROD;
+    }
+
+    /** "Sample" / "Mass production", for the heading on the sheet. */
+    public function phaseLabel(): string
+    {
+        return self::PHASES[$this->phase] ?? self::PHASES[self::PHASE_SAMPLE];
+    }
+
+    /**
+     * The batch sheet, opened from the approved sample.
+     *
+     * Copied rather than started blank: the batch is the sample with the
+     * client's corrections on it, and retyping twenty rows to change two is
+     * how the two sheets came to disagree. The pictures are copied by
+     * REFERENCE - the same stored file is shown on both sheets, so opening
+     * the batch sheet does not duplicate every upload on the disk. Replacing
+     * one on the batch sheet stores a new file and leaves the sample's alone.
+     *
+     * Nothing is copied back. Once the batch sheet exists it is the batch's,
+     * and the sample stays as the record of what the client approved.
+     */
+    public static function openMassprodFrom(self $sample): self
+    {
+        $batch = $sample->replicate([
+            'created_at', 'updated_at',
+        ]);
+
+        $batch->phase = self::PHASE_MASSPROD;
+        $batch->save();
+
+        return $batch;
     }
 
     public function order(): BelongsTo

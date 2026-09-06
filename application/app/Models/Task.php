@@ -117,6 +117,22 @@ class Task extends Model
     }
 
     /**
+     * Which of the order's two sheets this step draws.
+     *
+     * The batch step is a stage-10 step of its own, so the answer is its
+     * department rather than anything the caller has to remember to pass. A
+     * step that is not a tech pack step at all still answers "sample": the
+     * sheet a reader opens beside any other step is the one the shop has
+     * always meant by "the tech pack".
+     */
+    public function techPackPhase(): string
+    {
+        return $this->department === ProductionOrder::STEP_TECH_PACK_MASSPROD
+            ? TechPack::PHASE_MASSPROD
+            : TechPack::PHASE_SAMPLE;
+    }
+
+    /**
      * Files this step must hand over when submitted, as slot => label.
      *
      * @return array<string, string>
@@ -229,10 +245,37 @@ class Task extends Model
             return false;
         }
 
-        return ! \App\Models\User::where('is_active', true)
-            ->where('job_role', $this->team)
+        return ! self::someoneIsInToday($this->team);
+    }
+
+    /**
+     * Is anybody on this desk in today?
+     *
+     * Asked once per ROW on the orders list, and the answer is the same for
+     * every row naming the same desk - who is in today does not change while
+     * one page is being drawn. Held for the life of the request, so a list of
+     * twenty jobs waiting on the artists asks once instead of twenty times.
+     * Attendance is read fresh on the next request.
+     */
+    private static function someoneIsInToday(string $team): bool
+    {
+        // On the CONTAINER, not a static: the container is rebuilt for each
+        // request (and for each test), so the answer cannot outlive the page
+        // that asked it.
+        $key = 'imprint.attendance.'.$team;
+
+        if (app()->bound($key)) {
+            return app($key);
+        }
+
+        $answer = \App\Models\User::where('is_active', true)
+            ->where('job_role', $team)
             ->get()
             ->contains(fn ($u) => $u->isPresentToday());
+
+        app()->instance($key, $answer);
+
+        return $answer;
     }
 
     public function revisionsLeft(): int

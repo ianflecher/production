@@ -225,6 +225,13 @@ class FinanceController extends Controller
             // The clock starts here too: every step gets its share of the time
             // between now and the due date.
             $order->scheduleStepDeadlines();
+
+            // And the sample gets a date of its own - three days from this
+            // payment, four for a jersey. The order's due date is the promise
+            // to the client about the finished batch; this is the shop's
+            // promise about the sample, and a sample that quietly sat for a
+            // week used to surface only when the batch behind it ran short.
+            $order->applySampleDueDate();
         }
 
         return back()->with('success', sprintf(

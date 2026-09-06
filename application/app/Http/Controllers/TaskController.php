@@ -139,6 +139,9 @@ class TaskController extends Controller
         return view('orders.job-order', [
             'order' => $order,
             'techPackTask' => ($isTheirs && $stillOpen) ? $task : null,
+            // Which sheet this step draws. The stage-10 step draws the batch;
+            // everything else is the sample.
+            'phase' => $task->techPackPhase(),
         ]);
     }
 
@@ -182,8 +185,8 @@ class TaskController extends Controller
      */
     private function missingTechPackFields(Task $task): array
     {
-        $order = $task->order->loadMissing(['jobOrder', 'techPack']);
-        $pack = $order->techPack;
+        $order = $task->order->loadMissing(['jobOrder', 'techPacks']);
+        $pack = $order->techPackFor($task->techPackPhase());
         $jobOrder = $order->jobOrder;
 
         $required = [
@@ -349,7 +352,9 @@ class TaskController extends Controller
         ])->all();
 
 
-        $pack = $order->techPack()->firstOrNew([]);
+        // The sheet this step draws, opened from the approved sample the first
+        // time the batch sheet is asked for - see openTechPack().
+        $pack = $order->openTechPack($task->techPackPhase());
 
         $imageUploads = $pack->image_uploads ?? [];
 
@@ -568,7 +573,7 @@ class TaskController extends Controller
         }
 
         $pack->fill($packFields);
-        $order->techPack()->save($pack);
+        $order->techPacks()->save($pack);
 
         // Nothing of the JOB ORDER is written here any more. The rows this
         // sheet shows off it — fabric, neck, packaging, print type — are the

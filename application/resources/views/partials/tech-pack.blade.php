@@ -1,7 +1,11 @@
 {{-- Imprint Customs tech pack - matched to the supplied fillable PDF. --}}
 @php
     $jo = $order->jobOrder;
-    $tp = $order->techPackOrNew();
+    // Which of the order's two sheets this is. The sample is what the client
+    // holds and asks to change; the batch is what those changes turned into.
+    // Anything drawn before the split is a sample, so that is the default.
+    $phase = $phase ?? \App\Models\TechPack::PHASE_SAMPLE;
+    $tp = $order->techPackOrNew($phase);
     $editable = $editable ?? false;
     $mode = $mode ?? null;
     // The artist owns the complete Tech Pack. Office and leader copies are
@@ -124,7 +128,7 @@
     $banner = filled($tp->placing_title) ? strtoupper($tp->placing_title) : '';
 @endphp
 
-<div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}">
+<div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}" data-phase="{{ $phase }}">
     {{-- The leader lines, drawn over the sheet. A pack in the trade points from
          the woven-label box to the collar and from the front-print box to the
          chest; without that the floor matches pictures to places by eye. Each

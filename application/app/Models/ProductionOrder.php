@@ -18,6 +18,19 @@ class ProductionOrder extends Model
 
     public const STAGE_MOCKUP = 2;
 
+    /**
+     * The two tech pack steps, spelled once.
+     *
+     * The sample sheet is drawn in stage 2 off the approved mockup. The batch
+     * sheet is a stage-10 step, so it does not exist until the client has held
+     * the sample and approved it: what the client asked to change is written on
+     * the batch sheet, and the sample sheet stays as the record of what they
+     * approved. isTechPackStep() matches both by their shared prefix.
+     */
+    public const STEP_TECH_PACK = 'Tech pack';
+
+    public const STEP_TECH_PACK_MASSPROD = 'Tech pack (mass production)';
+
     public const STATUS_LABELS = [
         'active' => 'ACTIVE',
         'on_hold' => 'ON HOLD',
@@ -73,13 +86,30 @@ class ProductionOrder extends Model
      */
     public const RUSH_NOTICE_DAYS = 10;
 
+    /**
+     * How long the shop has to put a sample in front of the client.
+     *
+     * Three days from the confirmed payment. The order's own due date is the
+     * promise to the client about the finished batch; this is the shop's
+     * promise to itself about the sample, and a sample that quietly sits for a
+     * week used to surface only when the batch behind it ran short.
+     */
+    public const SAMPLE_LEAD_DAYS = 3;
+
+    /** A riding jersey is panelled and takes a longer press, so it gets a
+     *  fourth day rather than being late by design on every order. */
+    public const SAMPLE_LEAD_DAYS_JERSEY = 4;
+
+    /** Both jersey lines on the price list take the longer sample. */
+    public const JERSEY_PRODUCT_TYPES = ['riding_jersey', 'regular_riding_jersey'];
+
     protected $fillable = [
         'order_number', 'brief_token', 'brief_expires_at', 'client_id', 'customer_name', 'product_type', 'price_list', 'description',
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
         'rush', 'rush_fee',
         'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
-        'quantity', 'due_date', 'layout_approved_at', 'status', 'completed_at', 'created_by',
+        'quantity', 'due_date', 'sample_due_date', 'layout_approved_at', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
         'replaces_order_id', 'replacement_reason',
     ];
@@ -88,6 +118,7 @@ class ProductionOrder extends Model
     {
         return [
             'due_date' => 'date',
+            'sample_due_date' => 'date',
             'layout_approved_at' => 'datetime',
             'completed_at' => 'datetime',
             'decoration_methods' => 'array',
@@ -448,14 +479,70 @@ class ProductionOrder extends Model
      * Made on demand: an order has one from the moment anybody types into it,
      * and asking for it should not depend on remembering to create it first.
      */
-    public function techPack(): \Illuminate\Database\Eloquent\Relations\HasOne
+    /** Every sheet the order carries, sample and batch both. */
+    public function techPacks(): HasMany
     {
-        return $this->hasOne(TechPack::class);
+        return $this->hasMany(TechPack::class);
     }
 
-    public function techPackOrNew(): TechPack
+    /**
+     * The sample sheet.
+     *
+     * Still called techPack() with no phase because that is what the shop has
+     * always meant by "the tech pack", and every pack drawn before the split
+     * is a sample. Callers that want the batch sheet ask for it by name.
+     */
+    public function techPack(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
-        return $this->techPack ?? $this->techPack()->make();
+        return $this->hasOne(TechPack::class)->where('phase', TechPack::PHASE_SAMPLE);
+    }
+
+    /** The sheet the batch is made from, copied from the sample once the
+     *  client has approved it. */
+    public function techPackMassprod(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TechPack::class)->where('phase', TechPack::PHASE_MASSPROD);
+    }
+
+    public function techPackOrNew(string $phase = TechPack::PHASE_SAMPLE): TechPack
+    {
+        return $this->techPackFor($phase) ?? $this->techPacks()->make(['phase' => $phase]);
+    }
+
+    /** The saved sheet for one phase, or null when it has not been drawn. */
+    public function techPackFor(string $phase): ?TechPack
+    {
+        return $this->relationLoaded('techPacks')
+            ? $this->techPacks->firstWhere('phase', $phase)
+            : $this->techPacks()->where('phase', $phase)->first();
+    }
+
+    /**
+     * The sheet for one phase, ready to be written to.
+     *
+     * The batch sheet is opened from the approved sample the first time
+     * anybody asks for it, rather than at the moment the stage releases. Two
+     * reasons: the copy is then taken from the sample as the client finally
+     * approved it, corrections and all; and an order whose batch step is
+     * cancelled or never reached never grows a second sheet nobody drew.
+     *
+     * Copying forward is a one-off. Once the batch sheet exists it is the
+     * batch's own, and later edits to the sample do not follow it - the sample
+     * stays as the record of what the client held and approved.
+     */
+    public function openTechPack(string $phase = TechPack::PHASE_SAMPLE): TechPack
+    {
+        if ($existing = $this->techPackFor($phase)) {
+            return $existing;
+        }
+
+        if ($phase === TechPack::PHASE_MASSPROD && ($sample = $this->techPackFor(TechPack::PHASE_SAMPLE))) {
+            $this->unsetRelation('techPacks');
+
+            return TechPack::openMassprodFrom($sample);
+        }
+
+        return $this->techPacks()->make(['phase' => $phase]);
     }
 
     public function client(): BelongsTo
@@ -724,6 +811,54 @@ class ProductionOrder extends Model
         }
 
         $this->refresh()->rebuildPipeline($this->decoration_methods ?? [], $this->cutting_type);
+    }
+
+    /** Three days, or four for a jersey. */
+    public function sampleLeadDays(): int
+    {
+        return in_array($this->product_type, self::JERSEY_PRODUCT_TYPES, true)
+            ? self::SAMPLE_LEAD_DAYS_JERSEY
+            : self::SAMPLE_LEAD_DAYS;
+    }
+
+    /**
+     * When the sample is wanted, or null when it is not wanted at all.
+     *
+     * The clock starts at the confirmed payment, the same moment the step
+     * deadlines start from: an order sitting unpaid has not used any of its
+     * time. An order set to skip the sample has no sample to be late for.
+     */
+    public function computeSampleDueDate(): ?\Carbon\CarbonInterface
+    {
+        if ($this->skip_sample) {
+            return null;
+        }
+
+        $start = $this->firstConfirmedPaymentAt();
+
+        return $start
+            ? $start->copy()->startOfDay()->addDays($this->sampleLeadDays())
+            : null;
+    }
+
+    /** Works out the sample date and writes it down, when it has changed. */
+    public function applySampleDueDate(): ?\Carbon\CarbonInterface
+    {
+        $due = $this->computeSampleDueDate();
+
+        if (optional($due)->toDateString() !== optional($this->sample_due_date)->toDateString()) {
+            $this->forceFill(['sample_due_date' => $due])->save();
+        }
+
+        return $due;
+    }
+
+    /** True when the sample is wanted and the day has passed. */
+    public function sampleOverdue(): bool
+    {
+        return $this->sample_due_date !== null
+            && $this->status === 'active'
+            && $this->sample_due_date->copy()->endOfDay()->isPast();
     }
 
     /** When the first payment was confirmed — the moment the job starts. */
@@ -1058,6 +1193,9 @@ class ProductionOrder extends Model
         // the leader has approved the tech pack, and the pack carries the file
         // location the printer opens.
         'Tech pack' => 'Final mockup',
+        // The batch is printed from the batch sheet, so the sheet is drawn and
+        // signed off first. Both are stage 10.
+        'Mass production' => self::STEP_TECH_PACK_MASSPROD,
         'Embroidery' => 'Sewing',
         // The press can't run until the print is ready (Printer) AND the fabric
         // has been issued (Raw materials) — you press the transfer onto the cloth.
@@ -1232,6 +1370,7 @@ class ProductionOrder extends Model
 
         $supply = User::JOB_SUPPLY_CHAIN;
         $prod = User::JOB_PRODUCTION;
+        $artist = User::JOB_ARTIST;
 
         // 3-11 — the production line. These ARE tasks: the station board only
         // offers an order once its matching task is released (see
@@ -1295,8 +1434,26 @@ class ProductionOrder extends Model
             $add(9, 'Produce sample for client', $prod, 'sales', true);
         }
 
-        // 10 — mass production (prints the whole batch; the entire order when the
-        // sample was skipped).
+        // 10 — the batch sheet, then mass production.
+        //
+        // The batch is a different garment from the sample: it is what the
+        // client's corrections turned the sample into. Drawn on the sample's
+        // own sheet, approving the batch overwrote the only record of what the
+        // client actually approved — and the floor pressing the batch was
+        // reading a sheet that had been edited after they last looked at it.
+        //
+        // So the batch gets a sheet of its own, opened here, copied forward
+        // from the approved sample and corrected rather than retyped. It
+        // travels the same road as the sample sheet: artist, then account
+        // officer, then leader.
+        //
+        // An order that skips the sample never had two garments — its one
+        // sheet is the one it has been filling in all along.
+        if (! $this->skip_sample) {
+            $add(10, self::STEP_TECH_PACK_MASSPROD, $artist, 'sales');
+        }
+
+        // Prints the whole batch; the entire order when the sample was skipped.
         $add(10, 'Mass production', $prod);
 
         // The batch has to be PRESSED too. Printing it is only half of it — the

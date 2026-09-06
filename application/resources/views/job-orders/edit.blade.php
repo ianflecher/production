@@ -11,8 +11,8 @@
      the file location belong to the artist and do not exist yet — see
      $officerFields in partials/tech-pack.blade.php. --}}
 
-@section('title', 'Tech pack — '.$order->order_number)
-@section('page-title', 'Tech pack — '.$order->order_number)
+@section('title', \App\Models\TechPack::PHASES[$phase].' tech pack — '.$order->order_number)
+@section('page-title', \App\Models\TechPack::PHASES[$phase].' tech pack — '.$order->order_number)
 
 @section('content')
 <link rel="stylesheet" href="{{ asset('css/tech-pack.css') }}?v={{ filemtime(public_path('css/tech-pack.css')) }}">
@@ -22,6 +22,15 @@
          they finish rather than one they have to go back to. It sits ABOVE the
          form: a form inside a form is not a form the browser will post. --}}
     @include('partials.tech-pack-send', ['order' => $order, 'jo' => $jobOrder])
+    {{-- The order's two sheets. The batch one appears only once it has been
+         opened from the approved sample: before that there is one garment. --}}
+    @php $batchSheet = $order->techPackFor(\App\Models\TechPack::PHASE_MASSPROD); @endphp
+    @if ($batchSheet)
+        <a href="{{ route('job-orders.edit', $order) }}"
+           class="btn btn-sm {{ $phase === \App\Models\TechPack::PHASE_SAMPLE ? 'btn-primary' : 'btn-ghost' }}">Sample sheet</a>
+        <a href="{{ route('job-orders.edit', ['order' => $order, 'phase' => \App\Models\TechPack::PHASE_MASSPROD]) }}"
+           class="btn btn-sm {{ $phase === \App\Models\TechPack::PHASE_MASSPROD ? 'btn-primary' : 'btn-ghost' }}">Mass production sheet</a>
+    @endif
     <a href="{{ route('job-orders.production', $order) }}" class="btn btn-primary btn-sm">⚙ Production details</a>
     <a href="{{ route('orders.show', $order) }}" class="btn btn-ghost btn-sm">← Back to the order</a>
 </div>
@@ -41,7 +50,7 @@
 <form method="POST" action="{{ route('job-orders.update', $order) }}">
     @csrf
 
-    @include('partials.tech-pack', ['order' => $order, 'mode' => 'officer'])
+    @include('partials.tech-pack', ['order' => $order, 'mode' => 'officer', 'phase' => $phase])
 
     <div class="tp-save no-print">
         <button type="submit" class="btn btn-primary">Save &amp; next: production details →</button>

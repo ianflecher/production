@@ -358,10 +358,29 @@ class FullShopWalkthroughTest extends TestCase
         // answers for the client.
         $this->close('Produce sample for client');
 
+        // What the client approved opens the BATCH SHEET, not the press. The
+        // batch is the sample plus whatever they asked to change, and the
+        // floor prints it from a sheet of its own.
+        $this->assertSame(
+            'ready',
+            $this->order->fresh()->tasks()
+                ->where('department', ProductionOrder::STEP_TECH_PACK_MASSPROD)
+                ->value('status'),
+            'the client said yes and the batch sheet was never opened'
+        );
+
+        $this->assertSame(
+            'todo',
+            $this->order->fresh()->tasks()->where('department', 'Mass production')->value('status'),
+            'the batch would be printed off a sheet nobody drew'
+        );
+
+        $this->close(ProductionOrder::STEP_TECH_PACK_MASSPROD);
+
         $this->assertSame(
             'ready',
             $this->order->fresh()->tasks()->where('department', 'Mass production')->value('status'),
-            'the client said yes and nothing was released to make the rest'
+            'the batch sheet is signed off and nothing was released to make the rest'
         );
 
         // 10 — the whole batch printed, then pressed onto the cloth.
