@@ -307,6 +307,10 @@ class TaskController extends Controller
             'image_sizes.*.h' => ['nullable', 'numeric', 'min:1', 'max:100'],
             'tech_pack_images' => ['nullable', 'array'],
             'tech_pack_images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
+            // Several designs at once on the batch sheet: a team kit is
+            // uploaded as a set, not one file per visit to this page.
+            'tech_pack_mockups' => ['nullable', 'array', 'max:'.count(\App\Models\TechPack::MOCKUP_SLOTS)],
+            'tech_pack_mockups.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
 
             // These belong to the JOB ORDER and keep living there — the pack
             // shows them so they can be corrected on the sheet the floor reads,
@@ -558,6 +562,27 @@ class TaskController extends Controller
                 'name' => $file->getClientOriginalName(),
             ];
         }
+        // The extra designs, dropped into the mockup boxes that are still free.
+        // Filling from the front means a pack that had two designs and gains a
+        // third puts it third, rather than in whatever box happens to be empty.
+        foreach ((array) $request->file('tech_pack_mockups', []) as $design) {
+            if (! $design) {
+                continue;
+            }
+
+            $free = collect(\App\Models\TechPack::MOCKUP_SLOTS)
+                ->first(fn ($slot) => blank($imageUploads[$slot]['path'] ?? null));
+
+            if (! $free) {
+                break;  // the sheet is full; the rest are not silently dropped on the floor
+            }
+
+            $imageUploads[$free] = [
+                'path' => $design->store('tech-pack-images', 'local'),
+                'name' => $design->getClientOriginalName(),
+            ];
+        }
+
         $packFields['image_uploads'] = $imageUploads ?: null;
 
         if ($request->hasFile('folder_shot')) {

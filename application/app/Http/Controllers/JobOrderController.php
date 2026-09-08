@@ -185,13 +185,29 @@ class JobOrderController extends Controller
         );
     }
 
-    /** Serve a saved tech-pack picture from private storage. */
-    public function techPackImage(ProductionOrder $order, string $slot)
+    /**
+     * Serve a saved tech-pack picture from private storage.
+     *
+     * WHICH sheet is asked for by name. An order carries two now, and both
+     * have a front_mockup - the sample the client approved and the batch drawn
+     * from it - so a request that only names the slot cannot say which picture
+     * it means. Read off the sample by default, which is every pack drawn
+     * before the split and every link written before this parameter existed.
+     */
+    public function techPackImage(\Illuminate\Http\Request $request, ProductionOrder $order, string $slot)
     {
         $this->assertOrderVisible($order);
-        abort_unless(in_array($slot, \App\Models\TechPack::IMAGE_SLOTS, true), 404);
+        // imageSlots(), not IMAGE_SLOTS: the spare sample boxes and the extra
+        // mockups are real slots, and served from the same private disk. Asked
+        // against the short list, a picture in one of them 404'd on a sheet
+        // that was showing it.
+        abort_unless(in_array($slot, \App\Models\TechPack::imageSlots(), true), 404);
 
-        $image = $order->techPack?->image_uploads[$slot] ?? null;
+        $phase = $request->query('phase') === \App\Models\TechPack::PHASE_MASSPROD
+            ? \App\Models\TechPack::PHASE_MASSPROD
+            : \App\Models\TechPack::PHASE_SAMPLE;
+
+        $image = $order->techPackFor($phase)?->image_uploads[$slot] ?? null;
         $path = $image['path'] ?? null;
         abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
 

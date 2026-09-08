@@ -1502,6 +1502,10 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-ref-label-select { border:0; padding:0; font-size:7px; -webkit-appearance:none; appearance:none; }
     .tp-reference-sheet section,.tp-ref-header { overflow:hidden; }
     .tp-ref-image { break-inside:avoid; overflow:hidden !important; background:#fff !important; }
+    /* The design being looked at is the one that prints: the pack is one
+       page, and four designs shrunk to share it are four nobody can read. */
+    .tp-carousel-slide { display:none !important; }
+    .tp-carousel-slide.is-current { display:block !important; }
     .tp-ref-image>label { position:absolute !important; inset:0 !important; display:block !important; }
     .tp-ref-image img:not(.is-empty) { display:block !important; visibility:visible !important; opacity:1 !important; width:100% !important; height:100% !important; object-fit:contain !important; }
     .tp-ref-placeholder small { display:none; }
@@ -1823,3 +1827,58 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-save,
     .tp-build { border-radius: 8px; }
 }
+
+/* ---------------------------------------------------------------------------
+   The batch sheet's mockup carousel.
+
+   One order can carry several designs, and the sheet the floor reads has room
+   for one picture at a time. The designs are stacked in the same box and turned
+   through with the arrows, so the sheet keeps its shape however many there are.
+
+   What is on screen is what prints: the printed pack is one page, and four
+   designs shrunk to fit it are four pictures nobody can read.
+--------------------------------------------------------------------------- */
+.tp-carousel { position: relative; }
+.tp-carousel-slide { position: absolute; inset: 0; display: none; }
+.tp-carousel-slide.is-current { display: block; }
+.tp-carousel-slide > label { position: absolute; inset: 0; display: block; }
+
+.tp-carousel-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    z-index: 4; width: 2rem; height: 2.6rem; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; line-height: 1; cursor: pointer;
+    color: #fff; background: rgba(17, 24, 39, 0.55);
+    border: 0; border-radius: 0.25rem;
+}
+.tp-carousel-arrow:hover { background: rgba(17, 24, 39, 0.85); }
+.tp-carousel-prev { left: 0.35rem; }
+.tp-carousel-next { right: 0.35rem; }
+
+.tp-carousel-dots {
+    position: absolute; left: 0; right: 0; bottom: 0.45rem; z-index: 4;
+    display: flex; gap: 0.3rem; justify-content: center;
+}
+.tp-carousel-dot {
+    width: 0.5rem; height: 0.5rem; padding: 0; cursor: pointer;
+    border: 1px solid rgba(17, 24, 39, 0.55); border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+}
+.tp-carousel-dot.is-current { background: rgba(17, 24, 39, 0.85); }
+
+.tp-carousel-count {
+    margin-left: 0.4rem; padding: 0 0.35rem;
+    font-size: 0.7rem; font-weight: 600; border-radius: 0.6rem;
+    color: #111827; background: rgba(255, 255, 255, 0.85);
+}
+
+.tp-carousel-add {
+    display: block; margin-top: 0.4rem; padding: 0.45rem 0.6rem;
+    text-align: center; cursor: pointer;
+    border: 1px dashed #9ca3af; border-radius: 0.3rem; background: #f9fafb;
+}
+.tp-carousel-add:hover { border-color: #2563eb; background: #eff6ff; }
+.tp-carousel-add input { display: none; }
+.tp-carousel-add span { display: block; font-size: 0.8rem; font-weight: 600; color: #374151; }
+.tp-carousel-add small { display: block; font-size: 0.7rem; color: #6b7280; }
+

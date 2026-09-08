@@ -220,6 +220,25 @@ class TechPack extends Model
      */
     public const DEFAULT_SAMPLE_BOXES = ['front_flat'];
 
+    /**
+     * The mockup boxes on the BATCH sheet.
+     *
+     * One order can carry several designs - a team kit is a jersey, a jacket
+     * and a pair of shorts, all on one job - and the batch sheet is where the
+     * floor reads them. It used to hold one picture, so the second and third
+     * design were either left off the sheet or pasted into one flattened
+     * image nobody could read.
+     *
+     * The first slot is the one every pack has always had, so nothing that
+     * reads a mockup has to know about this list: a pack with one design is
+     * the same pack it was. The rest are the extra designs, in the order they
+     * were added, and the sheet turns through them.
+     */
+    public const MOCKUP_SLOTS = [
+        'front_mockup', 'mockup_2', 'mockup_3', 'mockup_4',
+        'mockup_5', 'mockup_6', 'mockup_7', 'mockup_8',
+    ];
+
     /** Room to grow. Boxes past the first are named in this range. */
     public const SPARE_SAMPLE_SLOTS = [
         'back_flat', 'flat_3', 'flat_4', 'flat_5', 'flat_6', 'flat_7', 'flat_8',
@@ -293,7 +312,52 @@ class TechPack extends Model
     /** Every slot that may hold a picture, standard boxes and spares alike. */
     public static function imageSlots(): array
     {
-        return array_values(array_unique(array_merge(self::IMAGE_SLOTS, self::SPARE_SAMPLE_SLOTS)));
+        return array_values(array_unique(array_merge(
+            self::IMAGE_SLOTS, self::SPARE_SAMPLE_SLOTS, self::MOCKUP_SLOTS
+        )));
+    }
+
+    /**
+     * The mockups this pack actually holds, in order, as slot => picture.
+     *
+     * The first slot leads whether or not it is filled by itself, so a pack
+     * with one design answers exactly as it always did.
+     *
+     * @return array<string, array{path?: string, name?: string}>
+     */
+    public function mockups(): array
+    {
+        $uploads = $this->image_uploads ?? [];
+
+        $held = [];
+
+        foreach (self::MOCKUP_SLOTS as $slot) {
+            if (filled($uploads[$slot]['path'] ?? null)) {
+                $held[$slot] = $uploads[$slot];
+            }
+        }
+
+        return $held;
+    }
+
+    /** The next mockup box with nothing in it, or null when all are used. */
+    public function nextFreeMockupSlot(): ?string
+    {
+        $uploads = $this->image_uploads ?? [];
+
+        foreach (self::MOCKUP_SLOTS as $slot) {
+            if (blank($uploads[$slot]['path'] ?? null)) {
+                return $slot;
+            }
+        }
+
+        return null;
+    }
+
+    /** How many more designs this sheet has room for. */
+    public function mockupRoomLeft(): int
+    {
+        return max(0, count(self::MOCKUP_SLOTS) - count($this->mockups()));
     }
 
     /**

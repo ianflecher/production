@@ -23,8 +23,11 @@
     $templateTask = $order->tasks->first(fn ($t) => str_starts_with((string) $t->department, 'Production template') || $t->department === 'Tech pack');
     $templates = $templateTask?->files->filter(fn ($f) => $f->isImage())->values() ?? collect();
     $uploadedImages = $tp->image_uploads ?? [];
-    $slotSrc = function (string $slot, $fallback = null) use ($uploadedImages, $order) {
-        if (filled($uploadedImages[$slot]['path'] ?? null)) return route('job-orders.tech-pack-image', ['order' => $order, 'slot' => $slot]);
+    $slotSrc = function (string $slot, $fallback = null) use ($uploadedImages, $order, $phase) {
+        // Named with the phase: both sheets have a front_mockup, and the batch
+        // sheet showing the sample's picture is the one mistake this whole
+        // split exists to prevent.
+        if (filled($uploadedImages[$slot]['path'] ?? null)) return route('job-orders.tech-pack-image', ['order' => $order, 'slot' => $slot, 'phase' => $phase]);
         return $fallback ? route('tasks.file.view', $fallback) : null;
     };
     $val = fn ($value) => filled($value) ? $value : '—';
@@ -157,17 +160,76 @@
               title="{{ $imageEditable ? 'Drag onto the garment' : '' }}"></span>
     @endforeach
 
-    @php $mockupSrc=$slotSrc('front_mockup'); @endphp
+    @php
+        // One order can carry several designs - a team kit is a jersey, a
+        // jacket and shorts on one job - and the BATCH sheet is where the floor
+        // reads them. The sample sheet keeps its single approved mockup: there
+        // is one garment in front of the client at that point.
+        $manyMockups = ($phase === \App\Models\TechPack::PHASE_MASSPROD);
+        $mockupSlots = $manyMockups ? array_keys($tp->mockups()) : [];
+        // Always something to look at: an empty sheet still shows its first box
+        // so there is somewhere to drop a picture.
+        $mockupSlots = $mockupSlots ?: ['front_mockup'];
+        $mockupSrc = $slotSrc('front_mockup');
+    @endphp
     <section class="tp-ref-mockups">
-        <div class="tp-ref-title">Approved mockup</div>
+        <div class="tp-ref-title">
+            Approved mockup{{ $manyMockups && count($mockupSlots) > 1 ? 's' : '' }}
+            @if ($manyMockups && count($mockupSlots) > 1)
+                <span class="tp-carousel-count no-print">1 / {{ count($mockupSlots) }}</span>
+            @endif
+        </div>
         <div class="tp-ref-mockup-block">
             @unless ($tp->boxIsHidden('front_mockup'))
-            <div class="tp-ref-image tp-ref-image-mockup">
-                @if($imageEditable)<label for="tp_image_front_mockup">@endif
-                <img id="tp_preview_front_mockup" src="{{ $mockupSrc ?: '' }}" alt="Approved mockup" class="{{ $mockupSrc ? '' : 'is-empty' }}">{!! $clearBtn('front_mockup', $mockupSrc) !!}
-                <span class="tp-ref-placeholder" @if($mockupSrc) hidden @endif><strong>Approved mockup image</strong><small>{{ $imageEditable ? 'Click or drop one combined image' : 'No image yet' }}</small></span>
-                @if($imageEditable)<input id="tp_image_front_mockup" type="file" name="tech_pack_images[front_mockup]" accept=".jpg,.jpeg,.png,.webp" class="tp-image-input" data-preview="tp_preview_front_mockup"></label>@endif
-            </div>
+            @if ($manyMockups)
+                {{-- The designs, one on top of the other; only the one being
+                     looked at is shown. Turning through them is the arrows, and
+                     what is on screen is what prints. --}}
+                <div class="tp-ref-image tp-ref-image-mockup tp-carousel"
+                     data-carousel data-count="{{ count($mockupSlots) }}">
+                    @foreach ($mockupSlots as $i => $slot)
+                        @php $src = $slotSrc($slot); @endphp
+                        <div class="tp-carousel-slide{{ $i === 0 ? ' is-current' : '' }}" data-slide="{{ $i }}">
+                            @if($imageEditable)<label for="tp_image_{{ $slot }}">@endif
+                            <img id="tp_preview_{{ $slot }}" src="{{ $src ?: '' }}"
+                                 alt="Approved mockup {{ $i + 1 }}" class="{{ $src ? '' : 'is-empty' }}">{!! $clearBtn($slot, $src) !!}
+                            <span class="tp-ref-placeholder" @if($src) hidden @endif><strong>Approved mockup image</strong><small>{{ $imageEditable ? 'Click or drop one combined image' : 'No image yet' }}</small></span>
+                            @if($imageEditable)<input id="tp_image_{{ $slot }}" type="file" name="tech_pack_images[{{ $slot }}]" accept=".jpg,.jpeg,.png,.webp" class="tp-image-input" data-preview="tp_preview_{{ $slot }}"></label>@endif
+                        </div>
+                    @endforeach
+
+                    @if (count($mockupSlots) > 1)
+                        <button type="button" class="tp-carousel-arrow tp-carousel-prev no-print"
+                                data-carousel-step="-1" aria-label="Previous design">&#8249;</button>
+                        <button type="button" class="tp-carousel-arrow tp-carousel-next no-print"
+                                data-carousel-step="1" aria-label="Next design">&#8250;</button>
+                        <div class="tp-carousel-dots no-print">
+                            @foreach ($mockupSlots as $i => $slot)
+                                <button type="button" class="tp-carousel-dot{{ $i === 0 ? ' is-current' : '' }}"
+                                        data-carousel-go="{{ $i }}" aria-label="Design {{ $i + 1 }}"></button>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+
+                @if ($imageEditable && $tp->mockupRoomLeft() > 0)
+                    {{-- Several at once: a kit is uploaded as a set, not one
+                         file per visit to this page. --}}
+                    <label class="tp-carousel-add no-print">
+                        <input type="file" name="tech_pack_mockups[]" multiple
+                               accept=".jpg,.jpeg,.png,.webp" class="tp-image-input">
+                        <span>+ Add design{{ $tp->mockupRoomLeft() > 1 ? 's' : '' }}</span>
+                        <small>{{ $tp->mockupRoomLeft() }} more can be added</small>
+                    </label>
+                @endif
+            @else
+                <div class="tp-ref-image tp-ref-image-mockup">
+                    @if($imageEditable)<label for="tp_image_front_mockup">@endif
+                    <img id="tp_preview_front_mockup" src="{{ $mockupSrc ?: '' }}" alt="Approved mockup" class="{{ $mockupSrc ? '' : 'is-empty' }}">{!! $clearBtn('front_mockup', $mockupSrc) !!}
+                    <span class="tp-ref-placeholder" @if($mockupSrc) hidden @endif><strong>Approved mockup image</strong><small>{{ $imageEditable ? 'Click or drop one combined image' : 'No image yet' }}</small></span>
+                    @if($imageEditable)<input id="tp_image_front_mockup" type="file" name="tech_pack_images[front_mockup]" accept=".jpg,.jpeg,.png,.webp" class="tp-image-input" data-preview="tp_preview_front_mockup"></label>@endif
+                </div>
+            @endif
             @endunless
         </div>
     </section>
@@ -1398,4 +1460,58 @@ window.printTechPack = async function () {
         requestAnimationFrame(function () { window.print(); });
     });
 };
+
+/* Turning through the designs on the batch sheet.
+
+   The pictures are all in the box already, stacked; this only moves which one
+   is shown. No animation and no timer - a sheet that changed on its own while
+   somebody was reading it would be worse than one that does not turn at all. */
+(function () {
+    var box = document.querySelector('[data-carousel]');
+    if (!box) return;
+
+    var slides = Array.prototype.slice.call(box.querySelectorAll('.tp-carousel-slide'));
+    if (slides.length < 2) return;
+
+    var dots = Array.prototype.slice.call(box.querySelectorAll('.tp-carousel-dot'));
+    var counter = document.querySelector('.tp-carousel-count');
+    var at = 0;
+
+    function show(next) {
+        /* Wraps both ways: the last design's "next" is the first one, which is
+           what a row of pictures does when you keep clicking. */
+        at = (next + slides.length) % slides.length;
+
+        slides.forEach(function (slide, i) { slide.classList.toggle('is-current', i === at); });
+        dots.forEach(function (dot, i) { dot.classList.toggle('is-current', i === at); });
+
+        if (counter) counter.textContent = (at + 1) + ' / ' + slides.length;
+    }
+
+    box.addEventListener('click', function (event) {
+        var step = event.target.closest('[data-carousel-step]');
+        if (step) {
+            /* The arrows sit over the picture, and on the artist's copy the
+               picture is a file-picker label. */
+            event.preventDefault();
+            event.stopPropagation();
+            show(at + parseInt(step.getAttribute('data-carousel-step'), 10));
+            return;
+        }
+
+        var go = event.target.closest('[data-carousel-go]');
+        if (go) {
+            event.preventDefault();
+            event.stopPropagation();
+            show(parseInt(go.getAttribute('data-carousel-go'), 10));
+        }
+    });
+
+    /* Arrow keys once the box has been clicked into, for a long kit. */
+    box.setAttribute('tabindex', '0');
+    box.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowLeft') { event.preventDefault(); show(at - 1); }
+        if (event.key === 'ArrowRight') { event.preventDefault(); show(at + 1); }
+    });
+})();
 </script>
