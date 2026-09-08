@@ -51,7 +51,7 @@ class OrderReferenceFileController extends Controller
 
         $data = $request->validate([
             'reference_files' => ['required', 'array'],
-            'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
             // "output" = the design saved from ChatGPT (what the artist works from).
             'kind' => ['nullable', 'in:peg,logo,output'],
         ], [

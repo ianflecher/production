@@ -124,22 +124,34 @@
                         </div>
                     @endif
 
-                    {{-- The box is here whether the design is still being drawn
-                         or has already been handed back: a revision is the same
-                         act, and hiding it left the artist holding a finished
-                         one with nowhere to put it. --}}
-                    <form method="POST" action="{{ route('inquiries.designs.submit', $design) }}" enctype="multipart/form-data"
-                          class="artist-layout-upload" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                        @csrf
-                        <input id="artistDesignFiles_{{ $design->id }}" type="file" name="files[]" multiple required
-                               class="artist-layout-files"
-                               accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
-                        <div class="artist-layout-picked" aria-live="polite"
-                             style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            {{ $design->submitted() ? 'Upload the revised design' : 'Hand back '.$design->name() }}
-                        </button>
-                    </form>
+                    {{-- Somewhere to put the work, but only while there IS work.
+
+                         A design sitting with the client is not waiting on the
+                         artist, and an upload box there invited a revision
+                         nobody had asked for - and quietly took the design off
+                         the client's desk when one was sent. The box comes back
+                         the moment the client asks for a change, which is when
+                         the design returns to the artist carrying the note. --}}
+                    @if (! $design->submitted())
+                        <form method="POST" action="{{ route('inquiries.designs.submit', $design) }}" enctype="multipart/form-data"
+                              class="artist-layout-upload" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                            @csrf
+                            <input id="artistDesignFiles_{{ $design->id }}" type="file" name="files[]" multiple required
+                                   class="artist-layout-files"
+                                   accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+                            <div class="artist-layout-picked" aria-live="polite"
+                                 style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                {{ filled($design->revision_note) || $design->revision_count > 0
+                                    ? 'Upload the revised design'
+                                    : 'Hand back '.$design->name() }}
+                            </button>
+                        </form>
+                    @else
+                        <p class="sub" style="margin:.5rem 0 0;">
+                            Handed back &mdash; waiting on the client. It comes back here if they ask for a change.
+                        </p>
+                    @endif
                 </div>
             @endforeach
         </div>

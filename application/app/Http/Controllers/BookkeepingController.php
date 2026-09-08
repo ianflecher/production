@@ -84,7 +84,7 @@ class BookkeepingController extends Controller
             'note' => ['nullable', 'string', 'max:2000'],
             // Receipts are optional here — unlike a client payment, not every
             // shop expense comes with one.
-            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:65536'],
+            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:512000'],
         ]);
 
         $receiptPath = null;

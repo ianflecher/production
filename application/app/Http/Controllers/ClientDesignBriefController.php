@@ -72,7 +72,7 @@ class ClientDesignBriefController extends Controller
         $data = $request->validate([
             'brief' => ['nullable', 'array'], 'brief.*' => ['nullable', 'string', 'max:2000'],
             'files' => ['nullable', 'array'], 'files.*' => ['nullable', 'array'],
-            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
         $answers = collect($data['brief'] ?? [])->only(array_keys($questions))
             ->filter(fn ($value) => filled($value))->map(fn ($value) => trim($value))->all();
@@ -131,7 +131,7 @@ class ClientDesignBriefController extends Controller
             // Reference files (peg / logo) — same rules as the internal form.
             'files' => ['nullable', 'array'],
             'files.*' => ['nullable', 'array'],
-            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
 
         // Keep only questions we actually asked, and drop blanks — identical to

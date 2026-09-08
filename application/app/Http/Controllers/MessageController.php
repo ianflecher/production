@@ -190,7 +190,7 @@ class MessageController extends Controller
             // Either is enough — a photo on its own is a perfectly good message.
             'body' => ['nullable', 'string', 'max:5000'],
             'files' => ['nullable', 'array', 'max:10'],
-            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf', 'max:65536'],
+            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf', 'max:512000'],
             // Shared accounts say who is actually typing.
             'sender_name' => [$me->sharesAccount() ? 'required' : 'nullable', 'string', 'max:100'],
         ], [

@@ -163,7 +163,7 @@ class OrderDocumentController extends Controller
 
         $request->validate([
             'attachments' => ['required', 'array'],
-            'attachments.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf', 'max:65536'],
+            'attachments.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf', 'max:512000'],
         ], ['attachments.required' => 'Choose at least one file.']);
 
         $files = $doc->attachmentList();
@@ -236,7 +236,7 @@ class OrderDocumentController extends Controller
         abort_unless(array_key_exists($type, \App\Models\OrderDocument::TYPES), 404);
 
         $request->validate([
-            'flatlay' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:65536'],
+            'flatlay' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:512000'],
         ], ['flatlay.required' => 'Please choose a flatlay image.']);
 
         $doc = $order->documents()->where('type', $type)->firstOrFail();

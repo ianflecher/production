@@ -151,15 +151,34 @@ class RevisionAttachmentTest extends TestCase
         $this->assertSame('markup.png', $files[1]['original_name']);
     }
 
-    public function test_the_artist_can_upload_a_revision_while_it_waits_on_the_client(): void
+    public function test_no_upload_box_while_the_design_sits_with_the_client(): void
     {
+        // It used to be offered here, so an artist holding a revised drawing
+        // had somewhere to put it. In the shop that read as an instruction:
+        // the box invited a revision nobody had asked for, and sending one
+        // quietly took the design off the client's desk.
         Storage::fake('local');
-        [, $artist, $inquiry] = $this->submittedLayout();
+        [, $artist] = $this->submittedLayout();
 
-        // The card says "handed back, waiting on the client" — the artist has
-        // a revised drawing and needs somewhere to put it.
         $this->actingAs($artist)->get(route('inquiries.layouts'))
             ->assertOk()
+            ->assertSee('waiting on the client')
+            ->assertDontSee('Upload the revised design')
+            ->assertDontSee('name="files[]"', false);
+    }
+
+    public function test_the_box_comes_back_when_the_client_asks_for_a_change(): void
+    {
+        Storage::fake('local');
+        [$officer, $artist, $inquiry] = $this->submittedLayout();
+
+        $this->sendBack($officer, $inquiry, 'Make the logo bigger.')->assertRedirect();
+
+        // Back on the artist's desk, carrying what the client said - and now
+        // there is somewhere to put the redraw.
+        $this->actingAs($artist)->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertSee('Make the logo bigger.')
             ->assertSee('Upload the revised design');
 
         $this->actingAs($artist)->post(route('inquiries.layout.submit', $inquiry), [

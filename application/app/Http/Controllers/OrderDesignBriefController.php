@@ -84,7 +84,7 @@ class OrderDesignBriefController extends Controller
             // Files attached under the peg / logo questions.
             'files' => ['nullable', 'array'],
             'files.*' => ['nullable', 'array'],
-            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
 
         // Keep only questions we actually asked, and drop blanks.

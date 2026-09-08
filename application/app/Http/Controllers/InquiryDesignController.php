@@ -178,7 +178,7 @@ class InquiryDesignController extends Controller
 
         $request->validate([
             'files' => ['required', 'array'],
-            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ], ['files.required' => 'Attach the design before handing it back.']);
 
         $files = $design->files ?? [];

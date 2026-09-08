@@ -144,7 +144,7 @@ class InquiryController extends Controller
 
         $request->validate([
             'reference_files' => ['required', 'array'],
-            'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
 
         $files = $inquiry->layout_files ?? [];
@@ -234,7 +234,7 @@ class InquiryController extends Controller
             'brief.*' => ['nullable', 'string', 'max:2000'],
             'files' => ['nullable', 'array'],
             'files.*' => ['nullable', 'array'],
-            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'files.*.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
 
         $answers = collect($data['brief'] ?? [])->only(array_keys($questions))
@@ -515,7 +515,7 @@ class InquiryController extends Controller
 
         $request->validate([
             'layout_files' => ['required', 'array'],
-            'layout_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'layout_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ], ['layout_files.required' => 'Attach the layout before handing it back.']);
 
         // The drawing belongs to a DESIGN. This endpoint is the whole-brief
@@ -623,7 +623,7 @@ class InquiryController extends Controller
             // a marked-up screenshot, a photo, the reference they meant. The
             // note stays required; the files are the optional half.
             'revision_files' => ['nullable', 'array'],
-            'revision_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'revision_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ], [
             'layout_revision_note.required' => 'Say what the client wants changed.',
         ]);

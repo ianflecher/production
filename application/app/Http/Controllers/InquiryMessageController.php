@@ -29,7 +29,7 @@ class InquiryMessageController extends Controller
             // and asks nothing, and that is the whole point of sending it.
             'body' => ['nullable', 'string', 'max:5000'],
             'files' => ['nullable', 'array'],
-            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:65536'],
+            'files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
 
         $body = trim((string) ($data['body'] ?? ''));
