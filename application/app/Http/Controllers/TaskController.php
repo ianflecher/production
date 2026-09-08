@@ -102,24 +102,43 @@ class TaskController extends Controller
     }
 
     /** The artist opens the job order for a task assigned to them. */
-    public function jobOrder(Request $request, int $taskId): View
+    public function jobOrder(Request $request, int $taskId): View|RedirectResponse
     {
-        $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
+        // Looked up by id alone, NOT by "assigned to me".
+        //
+        // Scoped to the assignee, this page answered 404 to three different
+        // questions - a step nobody has been given yet, somebody else's step,
+        // and the artist's own finished pack - and a bare 404 tells the person
+        // reading it that the page does not exist. It does exist: they drew it.
+        // Who may EDIT it is still the assignee, and that is decided below.
+        $task = Task::findOrFail($taskId);
 
         abort_unless($task->isTechPackStep(), 404);
 
         $order = $task->order->load(['jobOrder.referenceFiles', 'items', 'client', 'creator', 'tasks.assignee', 'tasks.files']);
 
         // Not shared during the layout step — the job order is only released to
-        // the artist once the account officer has filled and sent it.
-        abort_unless($order->jobOrder?->status === 'sent_to_artist', 403);
+        // the artist once the account officer has filled and sent it. Said in
+        // words rather than as a status code: from where the artist sits this
+        // is not an error, it is a job still sitting on somebody else's desk.
+        if ($order->jobOrder?->status !== 'sent_to_artist') {
+            return redirect()->route('tasks.mine')->withErrors([
+                'tech_pack' => 'The Tech Pack for '.$order->order_number.' is not open yet — '
+                    .'it is waiting for the account officer to collect the downpayment and send the job order.',
+            ]);
+        }
 
         // The assigned artist owns the pack until it is finally approved. They
         // can correct it even while an account officer or leader is reviewing
         // it; saving a correction recalls it to the artist for a fresh review.
+        //
+        // Everybody else - and the same artist once it is finished - reads it.
+        $isTheirs = $task->assigned_to === $request->user()->id;
+        $stillOpen = ! in_array($task->status, ['todo', 'complete', 'cancelled'], true);
+
         return view('orders.job-order', [
             'order' => $order,
-            'techPackTask' => ! in_array($task->status, ['todo', 'complete', 'cancelled'], true) ? $task : null,
+            'techPackTask' => ($isTheirs && $stillOpen) ? $task : null,
         ]);
     }
 
@@ -152,7 +171,15 @@ class TaskController extends Controller
         return $field !== null && filled($pack->$field);
     }
 
-    /** Manual fields that must be answered before a Tech Pack can be reviewed. */
+    /**
+     * Manual fields that must be answered before a Tech Pack can be reviewed.
+     *
+     * Most of them are the account officer's boxes now, so the list is split:
+     * the artist is held to their own half, and told to chase the office for
+     * the rest rather than being blamed for boxes they cannot type in.
+     *
+     * @return array{artist: string[], officer: string[]}
+     */
     private function missingTechPackFields(Task $task): array
     {
         $order = $task->order->loadMissing(['jobOrder', 'techPack']);
@@ -179,10 +206,17 @@ class TaskController extends Controller
             [$pack, 'file_location_notes', 'File location'],
         ];
 
-        return collect($required)
-            ->filter(fn ($row) => ! $row[0] || blank($row[0]->{$row[1]}))
-            ->pluck(2)
-            ->all();
+        // The artist's own half of the sheet. Everything else on the list is
+        // the account officer's - see $officerFields in partials/tech-pack.
+        $artistFields = ['file_location_notes'];
+
+        $missing = collect($required)
+            ->filter(fn ($row) => ! $row[0] || blank($row[0]->{$row[1]}));
+
+        return [
+            'artist' => $missing->filter(fn ($row) => in_array($row[1], $artistFields, true))->pluck(2)->all(),
+            'officer' => $missing->reject(fn ($row) => in_array($row[1], $artistFields, true))->pluck(2)->all(),
+        ];
     }
 
     /** Save the complete Tech Pack filled by its assigned artist. */
@@ -298,22 +332,22 @@ class TaskController extends Controller
             ]);
         }
 
-        // The artist owns every manual field on the Tech Pack. System facts
-        // such as client, agent, dates, sizes and quantity are still automatic.
+        // The artist owns the pictures, where they sit on the sheet, their own
+        // notes and the file location. Every typed spec box is the account
+        // officer's and is not read here however this form is posted - the
+        // artist's copy prints them as boxes they cannot type in, and a pack
+        // recalled for a correction must not quietly overwrite the office's
+        // answers. System facts (client, agent, dates, sizes) stay automatic.
         $packFields = collect($data)->only([
-            'design_name', 'fitting', 'item_style', 'quality', 'print_tech',
-            'placing_title', 'tshirt_color', 'thread_color', 'zipper_type',
-            'lip_pocket_color',
+            'quality', 'print_tech',
+            // The tag notes belong to the layout, not the spec: each one is
+            // read against the picture it sits beside.
             'tag_1_details', 'tag_2_details',
             'file_location_notes', 'artist_name',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
             'bottom_text_width', 'bottom_text_height',
         ])->all();
 
-        $jobOrderFields = collect($data)->only([
-            'print_type', 'printer', 'fabric', 'neck', 'cuff_arm_sleeves',
-            'neck_label', 'bottom_hem', 'packaging', 'free_logo_sticker',
-        ])->all();
 
         $pack = $order->techPack()->firstOrNew([]);
 
@@ -536,25 +570,10 @@ class TaskController extends Controller
         $pack->fill($packFields);
         $order->techPack()->save($pack);
 
-        // Some displayed rows retain their legacy JobOrder columns so old packs
-        // and production routing keep working. They are nevertheless completed
-        // here, by the artist, from the one Tech Pack form.
-        if ($jobOrderFields !== []) {
-            $jobOrder->update($jobOrderFields);
-        }
-
-        if (array_key_exists('free_logo_sticker', $jobOrderFields)) {
-            $order->update([
-                'needs_sticker' => \App\Models\ProductionOrder::namesASticker($jobOrderFields['free_logo_sticker']),
-            ]);
-        }
-
-        // Print type determines the default press and cutting route. Apply it
-        // The account officer sets the print type on the header now, so the same
-        // routing runs from their save too — see applyPrintTypeRouting().
-        if (array_key_exists('print_type', $jobOrderFields)) {
-            $order->applyPrintTypeRouting();
-        }
+        // Nothing of the JOB ORDER is written here any more. The rows this
+        // sheet shows off it — fabric, neck, packaging, print type — are the
+        // account officer's boxes, saved from their copy, which is also where
+        // the sticker flag and the print-type routing are applied.
 
         // Clicking the explicit Save button means the Artist is finished with
         // the sheet and is ready for its next action. Image uploads use this
@@ -665,11 +684,22 @@ class TaskController extends Controller
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
 
-        if ($task->isTechPackStep() && ($missing = $this->missingTechPackFields($task)) !== []) {
-            return redirect()->route('tasks.job-order', $task->id)
-                ->withErrors([
-                    'tech_pack' => 'Complete the missing Tech Pack details before submitting: '.implode(', ', $missing).'. Use N/A when a row does not apply.',
-                ]);
+        if ($task->isTechPackStep()) {
+            $missing = $this->missingTechPackFields($task);
+
+            if ($missing['artist'] !== []) {
+                return redirect()->route('tasks.job-order', $task->id)
+                    ->withErrors([
+                        'tech_pack' => 'Complete the missing Tech Pack details before submitting: '.implode(', ', $missing['artist']).'. Use N/A when a row does not apply.',
+                    ]);
+            }
+
+            if ($missing['officer'] !== []) {
+                return redirect()->route('tasks.job-order', $task->id)
+                    ->withErrors([
+                        'tech_pack' => 'Your account officer has not filled these Tech Pack boxes yet: '.implode(', ', $missing['officer']).'. Ask them to complete the sheet, then submit.',
+                    ]);
+            }
         }
 
         // Each step declares the files it must hand over (mockup = 2 files).

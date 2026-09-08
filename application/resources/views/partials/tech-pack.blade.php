@@ -36,10 +36,23 @@
        for, what garment, which print and printer, what fabric. Sales knows
        all of that when the job is taken; the artist was retyping it from the
        order form and guessing where it disagreed. Everything BELOW the
-       header - pictures, print sizes, placements - is still the artist's.
+       header - the pictures, where they sit, the print sizes and the file
+       location - is still the artist's.
        This is why $canType asks about one field rather than the sheet. */
     $officerMode = ($mode === 'officer');
-    $officerFields = ['design_name', 'fitting', 'item_style', 'print_type', 'printer', 'fabric'];
+    /* Every typed box on the sheet is the account officer's. The artist's half
+       is the pictures, where they sit on the sheet, and the file location. */
+    $officerFields = [
+        'design_name', 'fitting', 'item_style', 'print_type', 'printer', 'fabric',
+        'neck', 'cuff_arm_sleeves', 'neck_label', 'tshirt_color', 'thread_color',
+        'packaging', 'zipper_type', 'bottom_hem', 'lip_pocket_color',
+        'free_logo_sticker', 'placing_title',
+    ];
+    /* The two tag notes are NOT here. They are not spec: they sit beside the
+       tag pictures with a leader line drawn to the collar or the side seam,
+       and what they say depends on where the artist put the picture. Typed
+       from a desk that cannot see the layout, they described a placement that
+       was not there. */
     $canType = fn (string $field) => in_array($field, $officerFields, true)
         ? $officerMode
         : $textEditable;
@@ -194,7 +207,7 @@
             </table>
         </div><div class="tp-ref-black-title">Materials and components</div>
         <table class="tp-ref-table">
-        <tr><th>Neck type</th><td>{!! $textEditable?$fill('neck','Round neck / 1 x 1 ribbings',100,$jo):e($val(trim(($jo?->neck??'').($jo?->neck_size?' / '.$jo->neck_size:'')))) !!}</td></tr>
+        <tr><th>Neck type</th><td>{!! $canType('neck')?$fill('neck','Round neck / 1 x 1 ribbings',100,$jo):e($val(trim(($jo?->neck??'').($jo?->neck_size?' / '.$jo->neck_size:'')))) !!}</td></tr>
         <tr><th>Cuff / arm slv</th><td>{!! $fill('cuff_arm_sleeves','Tupi',100,$jo) !!}</td></tr>
         {{-- Four rows where there were two dropdowns. Each of those changed
              what its row was CALLED — print label or neck label, t-shirt colour

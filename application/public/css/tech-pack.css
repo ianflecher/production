@@ -799,7 +799,9 @@ select.tp-in { padding: 0.18rem 0.3rem; }
 /* Every picture fills its box edge to edge. Fitting one inside left the panel
    half empty, and cropping one to fill cut the edges off — the shop wants the
    whole picture, taking up the whole box it was given. */
-.tp-ref-image img { width:100%; height:100%; display:block; object-fit:fill; background:#fff; }
+/* contain, not fill: the box is dragged to whatever shape the artist wants,
+   and a garment stretched to fit it is not the garment the floor sews. */
+.tp-ref-image img { width:100%; height:100%; display:block; object-fit:contain; background:#fff; }
 .tp-ref-image img.is-empty { display:none; }
 /* A height of its own, not a share of whatever is left over. The sheet's rows
    size to their content now, so there IS nothing left over: flex:1 collapsed
@@ -1501,7 +1503,7 @@ select.tp-ref-path-host { -webkit-appearance:none; appearance:none; padding-righ
     .tp-reference-sheet section,.tp-ref-header { overflow:hidden; }
     .tp-ref-image { break-inside:avoid; overflow:hidden !important; background:#fff !important; }
     .tp-ref-image>label { position:absolute !important; inset:0 !important; display:block !important; }
-    .tp-ref-image img:not(.is-empty) { display:block !important; visibility:visible !important; opacity:1 !important; width:100% !important; height:100% !important; object-fit:fill !important; }
+    .tp-ref-image img:not(.is-empty) { display:block !important; visibility:visible !important; opacity:1 !important; width:100% !important; height:100% !important; object-fit:contain !important; }
     .tp-ref-placeholder small { display:none; }
     .tp-ref-artist,.tp-ref-footer-brand { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .tp-reference-sheet .tp-in,.tp-ref-banner input,

@@ -83,18 +83,46 @@ class JobOrderController extends Controller
             'print_type' => ['nullable', 'string', 'max:60'],
             'printer' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(JobOrder::PRINTERS))],
             'fabric' => ['nullable', 'string', 'max:255'],
+            // The rest of the spec. The officer takes all of it from the
+            // client; the artist was retyping it under a picture.
+            'neck' => ['nullable', 'string', 'max:100'],
+            'cuff_arm_sleeves' => ['nullable', 'string', 'max:100'],
+            'neck_label' => ['nullable', 'string', 'max:120'],
+            'packaging' => ['nullable', 'string', 'max:120'],
+            'bottom_hem' => ['nullable', 'string', 'max:255'],
+            'free_logo_sticker' => ['nullable', 'string', 'max:120'],
+            'tshirt_color' => ['nullable', 'string', 'max:60'],
+            'thread_color' => ['nullable', 'string', 'max:60'],
+            'zipper_type' => ['nullable', 'string', 'max:60'],
+            'lip_pocket_color' => ['nullable', 'string', 'max:60'],
+            'placing_title' => ['nullable', 'string', 'max:160'],
         ]);
 
         // There may be no pack yet - the officer reaches this sheet before any
         // artist has drawn on it, which is the whole point of the change.
         $pack = $order->techPack ?: $order->techPack()->make();
-        $pack->fill(\Illuminate\Support\Arr::only($data, ['design_name', 'fitting', 'item_style']));
+        $pack->fill(\Illuminate\Support\Arr::only($data, [
+            'design_name', 'fitting', 'item_style', 'tshirt_color', 'thread_color',
+            'zipper_type', 'lip_pocket_color', 'placing_title',
+        ]));
         $pack->production_order_id = $order->id;
         $pack->save();
 
         $order->jobOrder->update(
-            \Illuminate\Support\Arr::only($data, ['print_type', 'printer', 'fabric'])
+            \Illuminate\Support\Arr::only($data, [
+                'print_type', 'printer', 'fabric', 'neck', 'cuff_arm_sleeves',
+                'neck_label', 'packaging', 'bottom_hem', 'free_logo_sticker',
+            ])
         );
+
+        // Naming a sticker on the sheet puts the sticker step on the floor, and
+        // clearing the row takes it away again. It moved here with the box:
+        // the artist no longer types this row.
+        if (array_key_exists('free_logo_sticker', $data)) {
+            $order->update([
+                'needs_sticker' => ProductionOrder::namesASticker($data['free_logo_sticker']),
+            ]);
+        }
 
         // The print type decides the press and the cutting route, and it is
         // the officer who sets it now. Without this the job kept whatever

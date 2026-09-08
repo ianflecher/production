@@ -27,6 +27,13 @@
     @if (auth()->user()->canCreateOrders() && $jo)
         @include('partials.tech-pack-send', ['order' => $order, 'jo' => $jo])
 
+        {{-- The typed boxes are the account officer's, and they are typed on
+             their OWN copy of the sheet. This page is the read-only one that
+             everybody reads, so without this button the officer arrived at
+             their own tech pack, found every row locked, and had no way from
+             here to the page where they could fill it in. --}}
+        <a href="{{ route('job-orders.edit', $order) }}" class="btn btn-primary btn-sm">✎ Fill in the tech pack</a>
+
         {{-- Production details — press, cutting and the raw materials — stay
              reachable before and after sending. --}}
         <a href="{{ route('job-orders.production', $order) }}" class="btn btn-primary btn-sm">⚙ Production details</a>

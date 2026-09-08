@@ -221,7 +221,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     });
 
     // -------- Sales: samples waiting for the client's decision --------
-    Route::middleware('role:sales,super_admin')->group(function () {
+    // The job-order desk: the sheet behind an order the same person took.
+    // "order_desk" is not a role - it is the permission itself, so one named
+    // leader holds it without the whole leader role being let in. See
+    // User::canCreateOrders().
+    Route::middleware('role:sales,super_admin,order_desk')->group(function () {
         Route::get('/sample-review', [TaskController::class, 'sampleReview'])->name('sample.review');
         Route::get('/job-orders/{order}/create', [JobOrderController::class, 'createJobOrder'])->name('job-orders.create');
         Route::post('/job-orders/{order}', [JobOrderController::class, 'storeJobOrder'])->name('job-orders.store');
@@ -272,7 +276,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     });
 
     // -------- Order intake: Sales (and Super Admin) create orders --------
-    Route::middleware('role:sales,super_admin')->group(function () {
+    // Taking the job itself - enquiries, the order form, the client brief. Open
+    // to the account officers by role, and to anyone holding the order desk by
+    // name. See User::canCreateOrders().
+    Route::middleware('role:sales,super_admin,order_desk')->group(function () {
         // Page one of taking an order: who is asking. Saved on its own so a
         // person who does not order today is still a name that can be called.
         Route::get('/inquiries/create', [\App\Http\Controllers\InquiryController::class, 'create'])->name('inquiries.create');

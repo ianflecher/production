@@ -158,6 +158,7 @@ class User extends Authenticatable
         'price_list',
         'is_team_leader',
         'is_active',
+        'can_create_orders',
         'last_login_at',
         'last_login_ip',
         'last_auto_assigned_at',
@@ -185,6 +186,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'is_team_leader' => 'boolean',
+            'can_create_orders' => 'boolean',
             'last_login_at' => 'datetime',
             'last_auto_assigned_at' => 'datetime',
         ];
@@ -514,9 +516,18 @@ class User extends Authenticatable
     /**
      * Order intake is a sales job; the super admin can always do it too.
      */
+    /**
+     * May this person take a job: enquiries, the order form, the client brief.
+     *
+     * The account officers, by role - it is their desk. Plus anyone granted it
+     * by name: Carla runs the floor AND takes jobs, and neither moving her to
+     * the account officer role (she would lose the approvals) nor opening the
+     * desk to every leader (the supervisors have no business in it) says what
+     * is actually true about her.
+     */
     public function canCreateOrders(): bool
     {
-        return $this->isSales() || $this->isSuperAdmin();
+        return $this->isSales() || $this->isSuperAdmin() || (bool) $this->can_create_orders;
     }
 
     public function roleLabel(): string

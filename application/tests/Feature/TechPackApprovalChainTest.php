@@ -85,9 +85,16 @@ class TechPackApprovalChainTest extends TestCase
         return [$officer, $otherOfficer, $artist, $leader, $order, $pack, $next];
     }
 
-    private function completePack(User $artist, Task $pack): void
+    /**
+     * A pack ready to submit: the officer's spec boxes, then the artist's half.
+     *
+     * The two halves have two owners and two forms — the officer fills the
+     * typed boxes from their copy of the sheet, the artist adds the pictures
+     * and the file location from theirs.
+     */
+    private function fillSpec(User $officer, ProductionOrder $order): void
     {
-        $this->actingAs($artist)->post(route('tasks.tech-pack', $pack), [
+        $this->actingAs($officer)->post(route('job-orders.update', $order), [
             'design_name' => 'Complete Artist Pack',
             'fitting' => 'Original fit',
             'item_style' => 'Round-neck shirt',
@@ -96,19 +103,21 @@ class TechPackApprovalChainTest extends TestCase
             'fabric' => 'Cotton blend',
             'neck' => 'Round neck',
             'cuff_arm_sleeves' => 'Tupi',
-            'print_label' => 'IC DTF original fit',
             'neck_label' => 'IC woven label',
             'tshirt_color' => 'Black',
             'thread_color' => 'Black',
-            'stitch_thread' => 'Polyester 120',
-            'cutting_method' => 'Straight cut',
             'packaging' => 'One piece per plastic',
             'zipper_type' => 'N/A',
             'bottom_hem' => 'Straight hem',
             'lip_pocket_color' => 'N/A',
-            'size_range' => 'S-2XL',
             'free_logo_sticker' => 'N/A',
-            'file_location_notes' => 'FOR PRINT\\IC2026-CHAIN',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+    }
+
+    private function completePack(User $artist, Task $pack): void
+    {
+        $this->actingAs($artist)->post(route('tasks.tech-pack', $pack), [
+            'file_location_notes' => 'FOR PRINT\IC2026-CHAIN',
         ])->assertRedirect()->assertSessionHasNoErrors();
     }
 
@@ -177,9 +186,13 @@ class TechPackApprovalChainTest extends TestCase
         $this->actingAs($artist)->post(route('tasks.start', $pack))->assertRedirect();
         $this->actingAs($artist)->get(route('tasks.job-order', $pack))
             ->assertOk()
-            ->assertSee('name="tshirt_color"', false)
-            ->assertDontSee('name="printer"', false);  // the printer is the officer's box now
+            ->assertSee('name="file_location_notes"', false)
+            // Every typed spec box is the officer's now — theirs is the
+            // pictures and the file location.
+            ->assertDontSee('name="tshirt_color"', false)
+            ->assertDontSee('name="printer"', false);
 
+        $this->fillSpec($officer, $order);
         $this->completePack($artist, $pack);
         $this->actingAs($artist)->post(route('tasks.submit', $pack))->assertRedirect();
 
@@ -200,6 +213,7 @@ class TechPackApprovalChainTest extends TestCase
     {
         [$officer, $otherOfficer, $artist, $leader, $order, $pack, $next] = $this->shop();
 
+        $this->fillSpec($officer, $order);
         $this->completePack($artist, $pack);
 
         $this->assertSame('Complete Artist Pack', $order->fresh()->techPack->design_name);
@@ -255,7 +269,8 @@ class TechPackApprovalChainTest extends TestCase
 
     public function test_leader_revision_returns_to_artist_then_account_officer_again(): void
     {
-        [$officer, , $artist, $leader, , $pack] = $this->shop();
+        [$officer, , $artist, $leader, $order, $pack] = $this->shop();
+        $this->fillSpec($officer, $order);
         $this->completePack($artist, $pack);
         $this->actingAs($artist)->post(route('tasks.submit', $pack))->assertRedirect();
         $this->actingAs($officer)->post(route('tasks.approve', $pack))->assertRedirect();
@@ -281,19 +296,21 @@ class TechPackApprovalChainTest extends TestCase
     public function test_artist_can_correct_a_pack_while_it_is_waiting_for_either_reviewer(): void
     {
         [$officer, , $artist, $leader, $order, $pack] = $this->shop();
+        $this->fillSpec($officer, $order);
         $this->completePack($artist, $pack);
         $this->actingAs($artist)->post(route('tasks.submit', $pack))->assertRedirect();
 
         // It stays editable while the account officer is checking it.
         $this->actingAs($artist)->get(route('tasks.job-order', $pack))
             ->assertOk()
-            ->assertSee('name="tshirt_color"', false);
+            ->assertSee('name="file_location_notes"', false);
         $this->actingAs($artist)->post(route('tasks.tech-pack', $pack), [
-            'tshirt_color' => 'Corrected by Artist',
+            'file_location_notes' => 'Corrected by Artist',
         ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('in_progress', $pack->fresh()->status);
         $this->assertSame('sales', $pack->fresh()->approver_role);
 
+        $this->fillSpec($officer, $order);
         $this->completePack($artist, $pack);
         $this->actingAs($artist)->post(route('tasks.submit', $pack))->assertRedirect();
         $this->actingAs($officer)->post(route('tasks.approve', $pack))->assertRedirect();
@@ -302,15 +319,15 @@ class TechPackApprovalChainTest extends TestCase
         // recalls the pack and requires the officer's review again.
         $this->actingAs($artist)->get(route('tasks.job-order', $pack))
             ->assertOk()
-            ->assertSee('name="tshirt_color"', false);
+            ->assertSee('name="file_location_notes"', false);
         $this->actingAs($artist)->post(route('tasks.tech-pack', $pack), [
-            'tshirt_color' => 'Corrected again',
+            'file_location_notes' => 'Corrected again',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame('in_progress', $pack->fresh()->status);
         $this->assertSame('sales', $pack->fresh()->approver_role);
         $this->assertNull($pack->fresh()->officer_approved_by);
-        $this->assertSame('Corrected again', $order->fresh()->techPack->tshirt_color);
+        $this->assertSame('Corrected again', $order->fresh()->techPack->file_location_notes);
         $this->actingAs($leader)->post(route('tasks.approve', $pack))->assertForbidden();
     }
 }

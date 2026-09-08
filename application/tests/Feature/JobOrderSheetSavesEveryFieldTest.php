@@ -8,8 +8,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Every artist-owned specification on the Tech Pack, filled in, saved, and
- * read back.
+ * Every typed specification on the Tech Pack, filled in, saved, and read back.
+ *
+ * The boxes are the account officer's; the artist's copy prints the answers.
  *
  * The sewing block alone is twenty-odd fields wired through a migration, the
  * model's $fillable, the controller's validation, the form and the printed
@@ -47,11 +48,6 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         // Packing instruction chosen up front.
         'packaging' => 'One piece per plastic',
     ];
-
-    /* Boxes on the sheet that belong to the account officer, not the artist.
-       They are still saved and still printed - the artist's copy just shows
-       the answer instead of offering somewhere to type it. */
-    private const OFFICER_FIELDS = ['fabric'];
 
     private function order(): ProductionOrder
     {
@@ -92,13 +88,11 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         return $order->fresh();
     }
 
-    /** Fill in every box and save. */
+    /** Fill in every box and save, from the officer's copy of the sheet. */
     private function fillIn(ProductionOrder $order): \Illuminate\Testing\TestResponse
     {
-        $task = $order->tasks()->where('department', 'Tech pack')->firstOrFail();
-
-        return $this->actingAs($task->assignee)
-            ->post(route('tasks.tech-pack', $task), self::SHEET_FIELDS + [
+        return $this->actingAs(User::find($order->created_by))
+            ->post(route('job-orders.update', $order), self::SHEET_FIELDS + [
                 'print_type' => 'full_sublimation',
                 'printer' => 'atexco',
             ]);
@@ -137,23 +131,23 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         }
     }
 
-    public function test_the_form_offers_a_box_for_every_field(): void
+    public function test_the_officers_form_offers_a_box_for_every_field(): void
     {
         $order = $this->order();
 
+        $form = $this->actingAs(User::find($order->created_by))
+            ->get(route('job-orders.edit', $order))
+            ->assertOk();
+
         $task = $order->tasks()->where('department', 'Tech pack')->firstOrFail();
-        $form = $this->actingAs($task->assignee)
+        $artistCopy = $this->actingAs($task->assignee)
             ->get(route('tasks.job-order', $task))
             ->assertOk();
 
         foreach (array_keys(self::SHEET_FIELDS) as $field) {
-            if (in_array($field, self::OFFICER_FIELDS, true)) {
-                $form->assertDontSee('name="'.$field.'"', false);
-
-                continue;
-            }
-
             $form->assertSee('name="'.$field.'"', false);
+            // The artist reads the same rows; there is nothing to type into.
+            $artistCopy->assertDontSee('name="'.$field.'"', false);
         }
     }
 
@@ -162,9 +156,8 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
         $order = $this->order();
         $this->fillIn($order);
 
-        $task = $order->tasks()->where('department', 'Tech pack')->firstOrFail();
-        $form = $this->actingAs($task->assignee)
-            ->get(route('tasks.job-order', $task))
+        $form = $this->actingAs(User::find($order->created_by))
+            ->get(route('job-orders.edit', $order))
             ->assertOk();
 
         // A field that saves but doesn't reload is just as broken: the next

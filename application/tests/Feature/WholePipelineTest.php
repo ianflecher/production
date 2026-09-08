@@ -141,7 +141,11 @@ class WholePipelineTest extends TestCase
 
         if (in_array($task->status, ['in_progress', 'revision_required'], true)) {
             if ($task->isTechPackStep()) {
-                $this->actingAs($worker)->post(route('tasks.tech-pack', $task), [
+                // The typed boxes are the account officer's, filled from
+                // their own copy of the sheet; the artist adds the file
+                // location.
+                $this->actingAs(\App\Models\User::find($this->order->created_by))
+                    ->post(route('job-orders.update', $this->order), [
                     'design_name' => 'Whole Pipeline Pack',
                     'fitting' => 'Original fit',
                     'item_style' => 'Round-neck shirt',
@@ -162,6 +166,9 @@ class WholePipelineTest extends TestCase
                     'lip_pocket_color' => 'N/A',
                     'size_range' => 'S-2XL',
                     'free_logo_sticker' => 'N/A',
+                ])->assertRedirect()->assertSessionHasNoErrors();
+
+                $this->actingAs($worker)->post(route('tasks.tech-pack', $task), [
                     'file_location_notes' => 'FOR PRINT\\'.$this->order->order_number,
                 ])->assertRedirect()->assertSessionHasNoErrors();
             }

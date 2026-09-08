@@ -208,29 +208,30 @@ class FullShopWalkthroughTest extends TestCase
             ->assertOk()
             ->assertSee('name="tech_pack_images[front_mockup]"', false);
 
+        // The typed boxes are the account officer's - they fill them from
+        // their own copy of the sheet before the artist opens it.
+        $this->actingAs($this->staff['sales'])
+            ->post(route('job-orders.update', $this->order), [
+                    'design_name' => 'Walkthrough Tee',
+                    'fitting' => 'Original fit',
+                    'item_style' => 'Cotton shirt',
+                    'print_type' => 'dtf',
+                    'printer' => 'dtf_printer',
+                    'fabric' => 'Cotton blend',
+                    'neck' => 'Round neck',
+                    'cuff_arm_sleeves' => 'Tupi',
+                    'neck_label' => 'IC woven label',
+                    'tshirt_color' => 'Black',
+                    'thread_color' => 'Black',
+                    'packaging' => 'Polybag',
+                    'zipper_type' => 'N/A',
+                    'bottom_hem' => 'Straight hem',
+                    'lip_pocket_color' => 'N/A',
+                    'free_logo_sticker' => 'IC sticker',
+                ])->assertRedirect()->assertSessionHasNoErrors();
+
         $this->actingAs($this->staff['artist'])
             ->post(route('tasks.tech-pack', $packTask->id), [
-                'design_name' => 'Walkthrough Tee',
-                'fitting' => 'Original fit',
-                'item_style' => 'Cotton shirt',
-                'quality' => 'Premium',
-                'print_type' => 'dtf',
-                'printer' => 'dtf_printer',
-                'fabric' => 'Cotton blend',
-                'neck' => 'Round neck',
-                'cuff_arm_sleeves' => 'Tupi',
-                'print_label' => 'IC DTF original fit',
-                'neck_label' => 'IC woven label',
-                'tshirt_color' => 'Black',
-                'thread_color' => 'Black',
-                'stitch_thread' => 'Polyester 120',
-                'cutting_method' => 'Straight cut',
-                'packaging' => 'Polybag',
-                'zipper_type' => 'N/A',
-                'bottom_hem' => 'Straight hem',
-                'lip_pocket_color' => 'N/A',
-                'size_range' => 'S-XL',
-                'free_logo_sticker' => 'IC sticker',
                 'tech_pack_images' => [
                     'front_mockup' => UploadedFile::fake()->image('mockup.png'),
                     'front_artwork' => UploadedFile::fake()->image('art.png'),
@@ -254,7 +255,6 @@ class FullShopWalkthroughTest extends TestCase
         $this->assertCount(1, $pack->extraNotes());
 
         $this->assertSame('Walkthrough Tee', $pack->design_name);
-        $this->assertSame('Premium', $pack->quality);
         $this->assertSame('Cotton blend', $this->order->fresh()->jobOrder->fabric);
 
         // Raw-material quantities and machine routing remain production-detail

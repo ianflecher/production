@@ -7,9 +7,9 @@
      fills the pack itself, right after the downpayment: the client's spec goes
      straight onto the sheet the floor will pin up.
 
-     They get the spec boxes only. The pictures, the printed sizes and the file
-     paths belong to the artist and do not exist yet — see $officerFields in
-     partials/tech-pack.blade.php. --}}
+     They get every typed box on the sheet. The pictures, where they sit and
+     the file location belong to the artist and do not exist yet — see
+     $officerFields in partials/tech-pack.blade.php. --}}
 
 @section('title', 'Tech pack — '.$order->order_number)
 @section('page-title', 'Tech pack — '.$order->order_number)
@@ -45,7 +45,7 @@
 
     <div class="tp-save no-print">
         <button type="submit" class="btn btn-primary">Save &amp; next: production details →</button>
-        <span class="hint">The artist fills the pictures and the print sizes once the client approves the mockup.</span>
+        <span class="hint">The artist adds the pictures and the file location once the client approves the mockup.</span>
     </div>
 </form>
 @endsection

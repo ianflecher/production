@@ -210,11 +210,11 @@ class StationFillsTheSheetTest extends TestCase
             $form->assertDontSee('name="'.$field.'"', false);
         }
 
-        // The spec it DOES own is still there: what kind of collar, not what
-        // it measured out at.
-        $form->assertSee('name="neck"', false)
-            ->assertSee('name="cuff_arm_sleeves"', false)
-            ->assertSee('name="bottom_hem"', false);
+        // Nor the spec: what kind of collar is the account officer's box. The
+        // artist's copy prints those rows, it does not offer them.
+        $form->assertDontSee('name="neck"', false)
+            ->assertDontSee('name="cuff_arm_sleeves"', false)
+            ->assertDontSee('name="bottom_hem"', false);
     }
 
     public function test_sewers_typed_at_the_station_are_suggested_next_time(): void

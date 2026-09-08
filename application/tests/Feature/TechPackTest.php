@@ -98,63 +98,99 @@ class TechPackTest extends TestCase
         [$sales, $artist, $order, $task] = $this->shop();
 
         // Nobody has written one, so the sheet the floor reads says nothing.
-        $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
+        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
             ->assertDontSee('STANDARD DTF PLACING FOR ROUND NECK / V-NECK SHIRT');
 
-        // The artist is still offered it, as a hint in the empty box.
-        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
+        // The officer is offered it, as a hint in the empty box — the typed
+        // boxes are theirs.
+        $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
             ->assertOk()
             ->assertSee('STANDARD DTF PLACING FOR ROUND NECK / V-NECK SHIRT');
     }
 
-    public function test_the_artist_can_edit_the_placement_heading(): void
+    public function test_the_account_officer_edits_the_placement_heading(): void
     {
         [$sales, $artist, $order, $task] = $this->shop();
 
-        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
+        $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
             ->assertOk()
             ->assertSee('name="placing_title"', false);
 
-        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+        $this->actingAs($sales)->post("/job-orders/{$order->id}/update", [
             'placing_title' => 'Standard silkscreen placing for jacket / hoodie',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
+        // It prints on the sheet the floor reads, and on the artist's copy —
+        // where it is a box they cannot type in.
         $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
             ->assertOk()
             ->assertSee('STANDARD SILKSCREEN PLACING FOR JACKET / HOODIE');
+
+        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
+            ->assertOk()
+            ->assertDontSee('name="placing_title"', false);
     }
 
     public function test_the_artist_fills_their_half_in_the_pack_itself(): void
     {
-        // Their half is what the officer cannot know: where the print goes,
-        // how big it comes out, and where the files ended up.
+        // Their half is the pictures and where the files ended up. Every typed
+        // spec box is the account officer's — they have all of it from the
+        // client, and the artist was retyping it under a picture.
         [, $artist, $order, $task] = $this->shop();
 
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
             ->assertSee('name="file_location_notes"', false)
-            ->assertSee('name="tag_1_details"', false)
-            ->assertSee('name="placing_title"', false)
             // The pictures are theirs too.
             ->assertSee('name="tech_pack_images[front_mockup]"', false)
+            ->assertSee('name="tech_pack_images[file_location_image]"', false)
+            // The tag notes are laid out beside their pictures, so they are
+            // the artist's too.
+            ->assertSee('name="tag_1_details"', false)
+            // The spec is not.
+            ->assertDontSee('name="placing_title"', false)
             // …around the pack, not instead of it.
             ->assertSee('tp-sheet', false);
     }
 
-    public function test_the_artist_can_fill_every_manual_spec_row(): void
+    public function test_the_account_officer_fills_every_manual_spec_row(): void
     {
         // Client/order facts remain automatic, but every manual production
-        // answer on the sheet belongs to the assigned artist.
-        [, $artist, $order, $task] = $this->shop();
+        // answer on the sheet belongs to the account officer.
+        [$sales, $artist, $order, $task] = $this->shop();
 
-        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
+        $this->actingAs($sales)->get("/job-orders/{$order->id}/edit")
             ->assertOk()
-            ->assertDontSee('name="design_name"', false)  // the header is the officer's now
-            ->assertDontSee('name="cutting_method"', false)
+            ->assertSee('name="design_name"', false)
             ->assertSee('name="zipper_type"', false)
             ->assertSee('name="bottom_hem"', false)
-            ->assertSee('name="lip_pocket_color"', false);
+            ->assertSee('name="lip_pocket_color"', false)
+            ->assertDontSee('name="cutting_method"', false);
+
+        // The artist reads those same rows and cannot type in them.
+        $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
+            ->assertOk()
+            ->assertDontSee('name="design_name"', false)
+            ->assertDontSee('name="zipper_type"', false)
+            ->assertDontSee('name="bottom_hem"', false)
+            ->assertDontSee('name="lip_pocket_color"', false);
+    }
+
+    public function test_the_read_only_sheet_points_the_officer_at_their_own_copy(): void
+    {
+        // They arrive here from the order, find every row locked, and need a
+        // way through to the page where the boxes are theirs.
+        [$sales, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($sales)->get(route('orders.job-order', $order))
+            ->assertOk()
+            ->assertSee(route('job-orders.edit', $order), false);
+
+        // Not offered to the artist: it is not their page to fill.
+        $this->actingAs($artist)->get(route('tasks.job-order', $task))
+            ->assertOk()
+            ->assertDontSee(route('job-orders.edit', $order), false);
     }
 
     public function test_the_account_officer_only_reads_the_completed_pack(): void
@@ -173,15 +209,20 @@ class TechPackTest extends TestCase
             ->assertDontSee('name="tech_pack_images[front_mockup]"', false);
     }
 
-    public function test_the_artist_saves_the_complete_spec(): void
+    public function test_the_account_officer_saves_the_complete_spec(): void
     {
-        [, $artist, $order, $task] = $this->shop();
+        [$sales, $artist, $order, $task] = $this->shop();
 
-        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+        $this->actingAs($sales)->post("/job-orders/{$order->id}/update", [
             // cutting_method is deliberately absent: the row was removed, so
             // there is no box to type it into any more.
             'zipper_type' => 'Nylon zipper',
             'bottom_hem' => 'Elastic hem',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // The tag notes come from the artist, who can see where the picture
+        // they describe ended up.
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
             'tag_1_details' => 'Woven label, centre back',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -190,6 +231,26 @@ class TechPackTest extends TestCase
         $this->assertSame('Nylon zipper', $pack->zipper_type);
         $this->assertSame('Elastic hem', $order->fresh()->jobOrder->bottom_hem);
         $this->assertSame('Woven label, centre back', $pack->tag_1_details);
+    }
+
+    public function test_a_spec_box_posted_by_the_artist_is_ignored(): void
+    {
+        // The boxes are read-only on their copy; a pack recalled for a picture
+        // must not carry an old spec back over the office's answers.
+        [$sales, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($sales)->post("/job-orders/{$order->id}/update", [
+            'zipper_type' => 'Nylon zipper',
+        ])->assertRedirect();
+
+        $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
+            'zipper_type' => 'Painted by the artist',
+            'file_location_notes' => 'FOR PRINT\IC2026-04001',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pack = $order->fresh()->techPack;
+        $this->assertSame('Nylon zipper', $pack->zipper_type);
+        $this->assertSame('FOR PRINT\IC2026-04001', $pack->file_location_notes);
     }
 
     public function test_manual_save_takes_the_artist_to_submit_for_checking(): void
@@ -713,14 +774,17 @@ class TechPackTest extends TestCase
             ->assertDontSee('name="design_name"', false);
     }
 
-    public function test_what_the_artist_types_is_saved_and_printed(): void
+    public function test_what_the_officer_types_is_saved_and_printed(): void
     {
         [$sales, $artist, $order, $task] = $this->shop();
+
+        $this->actingAs($sales)->post("/job-orders/{$order->id}/update", [
+            'placing_title' => 'Standard DTF placing for jacket',
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
             'tag_1_details' => 'Woven label, centre back',
             'tag_2_details' => 'Size tag, side seam',
-            'placing_title' => 'Standard DTF placing for jacket',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         // And the sheet the shop reads carries what they wrote.

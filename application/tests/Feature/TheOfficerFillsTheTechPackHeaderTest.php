@@ -121,21 +121,39 @@ class TheOfficerFillsTheTechPackHeaderTest extends TestCase
         $this->assertNull($order->fresh()->techPack);
     }
 
-    public function test_the_artists_own_fields_are_not_accepted_here(): void
+    public function test_the_spec_boxes_are_the_officers_too(): void
     {
-        // Only the six header boxes are read. The pictures, print sizes and
-        // placements stay the artist's however this form is posted.
+        // Every typed box on the sheet is read here now, not only the header.
+        // The artist's own half — the pictures and the file location — is
+        // still not accepted however this form is posted.
         $officer = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
         $order = $this->order($officer);
 
         $this->actingAs($officer)->post(
             route('job-orders.update', $order),
-            $this->header() + ['tshirt_color' => 'PAINTED BY THE OFFICE', 'placing_title' => 'NOT THEIRS']
-        );
+            $this->header() + [
+                'tshirt_color' => 'Black',
+                'placing_title' => 'Standard DTF placing',
+                'zipper_type' => 'Metal',
+                'neck_label' => 'IC DTF - original fit',
+                'packaging' => 'Polybag',
+                'tag_1_details' => 'NOT THEIRS EITHER',
+                'file_location_notes' => 'NOT THEIRS',
+            ]
+        )->assertSessionHasNoErrors();
 
         $pack = $order->fresh()->techPack;
         $this->assertSame('SHIRT', $pack->item_style);
-        $this->assertNull($pack->tshirt_color);
-        $this->assertNull($pack->placing_title);
+        $this->assertSame('Black', $pack->tshirt_color);
+        $this->assertSame('Standard DTF placing', $pack->placing_title);
+        $this->assertSame('Metal', $pack->zipper_type);
+        // The tag notes stay the artist's: they are read against the picture
+        // they sit beside, not typed from a desk that cannot see the layout.
+        $this->assertNull($pack->tag_1_details);
+        $this->assertNull($pack->file_location_notes);
+
+        $jo = $order->fresh()->jobOrder;
+        $this->assertSame('IC DTF - original fit', $jo->neck_label);
+        $this->assertSame('Polybag', $jo->packaging);
     }
 }
