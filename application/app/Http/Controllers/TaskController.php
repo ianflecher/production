@@ -1098,12 +1098,20 @@ class TaskController extends Controller
             // Handing the goods over is the products desk's job — they are the
             // ones holding the stock and facing the client at the counter.
             'inventory' => $user->canManageProducts(),
-            // The artist leader signs off the tech pack only, and never the
-            // one he drew himself.
-            default => $user->isArtistLead()
-                ? $task->stage === \App\Models\ProductionOrder::STAGE_MOCKUP
-                    && $task->assigned_to !== $user->id
-                : $user->isLeader(),
+            // The tech pack's final sign-off is two named people - see
+            // User::canApproveTechPacks(). It used to be the leader ROLE,
+            // which in this app includes the supervisors: they run parts of
+            // the floor, and none of them is who the shop means when it says
+            // the pack has been checked. Never your own drawing, whoever you
+            // are.
+            default => $task->isTechPackStep()
+                ? $user->canApproveTechPacks() && $task->assigned_to !== $user->id
+                // Everything else is unchanged: the artist leader signs off
+                // the stage-2 artist work, and never his own.
+                : ($user->isArtistLead() && ! $user->isLeader()
+                    ? $task->stage === \App\Models\ProductionOrder::STAGE_MOCKUP
+                        && $task->assigned_to !== $user->id
+                    : $user->isLeader()),
         };
 
         abort_unless($ok, 403);

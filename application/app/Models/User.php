@@ -159,6 +159,7 @@ class User extends Authenticatable
         'is_team_leader',
         'is_active',
         'can_create_orders',
+        'can_approve_tech_packs',
         'last_login_at',
         'last_login_ip',
         'last_auto_assigned_at',
@@ -187,6 +188,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'is_team_leader' => 'boolean',
             'can_create_orders' => 'boolean',
+            'can_approve_tech_packs' => 'boolean',
             'last_login_at' => 'datetime',
             'last_auto_assigned_at' => 'datetime',
         ];
@@ -525,6 +527,19 @@ class User extends Authenticatable
      * desk to every leader (the supervisors have no business in it) says what
      * is actually true about her.
      */
+    /**
+     * May this person give the tech pack its final sign-off?
+     *
+     * Two named people, not a job title. The leader ROLE covers the
+     * supervisors too - they run parts of the floor, and none of them is who
+     * the shop means when it says the pack has been checked. Written down as
+     * people for the same reason the order desk is.
+     */
+    public function canApproveTechPacks(): bool
+    {
+        return (bool) $this->can_approve_tech_packs;
+    }
+
     public function canCreateOrders(): bool
     {
         return $this->isSales() || $this->isSuperAdmin() || (bool) $this->can_create_orders;

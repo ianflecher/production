@@ -39,7 +39,13 @@ class WholePipelineTest extends TestCase
             'artist' => User::JOB_ARTIST,
             'supply' => User::JOB_SUPPLY_CHAIN,
         ] as $key => $role) {
-            $this->staff[$key] = User::factory()->create(['job_role' => $role, 'is_active' => true]);
+            $this->staff[$key] = User::factory()->create([
+                'job_role' => $role,
+                'is_active' => true,
+                // The tech pack's final sign-off is two named people now, so
+                // this walkthrough's leader is one of them.
+                'can_approve_tech_packs' => $key === 'leader',
+            ]);
         }
 
         // Floor roles, one person per station family.

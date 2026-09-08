@@ -32,6 +32,9 @@ class TechPackApprovalChainTest extends TestCase
             'job_role' => User::ROLE_LEADER,
             'is_active' => true,
             'name' => 'Leader',
+            // The tech pack's final sign-off is two named people now, so the
+            // leader who checks one has to be one of them.
+            'can_approve_tech_packs' => true,
         ]);
 
         $order = ProductionOrder::create([
@@ -131,6 +134,9 @@ class TechPackApprovalChainTest extends TestCase
         ]);
         $leader = User::factory()->create([
             'job_role' => User::ROLE_LEADER, 'is_active' => true,
+            // The tech pack's final sign-off is two named people now, so the
+            // leader who checks one has to be one of them.
+            'can_approve_tech_packs' => true,
         ]);
 
         $order = ProductionOrder::create([
