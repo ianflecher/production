@@ -110,10 +110,12 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
             'reference_note' => 'Keep the team colours',
         ]);
 
+        // Said against the design rather than the brief: a brief can carry
+        // six of them, and "who has it" has six answers.
         $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
             ->assertOk()
             ->assertSee('Maru', false)
-            ->assertSee('has the layout', false);
+            ->assertSee('with Maru', false);
     }
 
     public function test_once_sent_you_wait_on_the_artist(): void
@@ -132,7 +134,8 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
 
         $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
             ->assertOk()
-            ->assertSee('Waiting on Maru', false)
+            ->assertSee('with Maru', false)
+            ->assertSee('still to be approved', false)
             ->assertDontSee('name="reference_files[]"', false)
             ->assertDontSee('Send to artist for layout', false)
             ->assertDontSee('Create the job order', false);

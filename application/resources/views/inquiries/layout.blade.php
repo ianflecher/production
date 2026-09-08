@@ -225,94 +225,105 @@
     <section class="layout-pane layout-status-pane">
         <div class="layout-section-head"><span>◎</span> Artist and next step</div>
 
-    {{-- Who has it. Named the moment it is sent, so the officer can answer
-         "who is drawing this?" without opening the job order. --}}
-    @if ($inquiry->layoutArtist)
-        <div class="layout-artist">
-            <span class="layout-artist-avatar">{{ mb_substr($inquiry->layoutArtist->name, 0, 1) }}</span>
-            <span>
-                <strong>{{ $inquiry->layoutArtist->name }}</strong> has the layout
-                <span class="layout-artist-when">
-                    @if ($inquiry->layout_sent_at)
-                        — sent {{ $inquiry->layout_sent_at->diffForHumans() }}
-                    @endif
-                </span>
-            </span>
-        </div>
-    @elseif (! $inquiry->layout_sent_at)
-        <div class="layout-note-card">
-            <strong>Artist assignment</strong>
-            <p style="color:var(--ink-3);">An available artist will be assigned when you send this brief.</p>
-        </div>
-    @endif
+    {{-- The designs on this brief.
 
-    {{-- A leader can move the layout to somebody else, and can do it here,
-         before the job order exists. An artist who goes home sick used to take
-         the layout with them until the order was written. --}}
-    @if (auth()->user()->isLeader() && $artists->isNotEmpty())
+         A client who wants six is ordinary, and they are not all one person's
+         work: five can be Cristal's and the sixth Mick's. Each is listed with
+         whose desk it is on and answered on its own, so approving five and
+         sending one back is something this page can actually say. --}}
+    @php $designs = $inquiry->designs; @endphp
+
+    @error('designs')<div class="error" style="margin-bottom:.6rem;">{{ $message }}</div>@enderror
+
+    {{-- Moving the whole brief at once. A leader watching an artist go home
+         sick does not want to move six designs one at a time; what the client
+         has already approved stays with whoever drew it. --}}
+    @if (auth()->user()->isLeader() && $artists->isNotEmpty() && $designs->isNotEmpty())
         <form method="POST" action="{{ route('inquiries.layout.artist', $inquiry) }}"
               style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap; margin:.6rem 0 1rem;">
             @csrf
             <div class="field" style="margin:0;">
-                <label for="layout_artist_id">
-                    {{ $inquiry->layoutArtist ? 'Hand it to someone else' : 'Give it to an artist' }}
-                </label>
+                <label for="layout_artist_id">Hand it to someone else</label>
                 <select id="layout_artist_id" name="layout_artist_id" required>
                     @foreach ($artists as $candidate)
                         <option value="{{ $candidate->id }}" @selected($inquiry->layout_artist_id === $candidate->id)>
-                            {{ $candidate->name }}@if (! $candidate->isPresentToday()) — not in today @endif
+                            {{ $candidate->name }}@if (! $candidate->isPresentToday()) - not in today @endif
                         </option>
                     @endforeach
                 </select>
             </div>
-            <button type="submit" class="btn btn-ghost btn-sm">Move the layout</button>
+            <button type="submit" class="btn btn-ghost btn-sm">Move every design</button>
         </form>
         @error('layout_artist_id')<div class="error" style="margin-bottom:.6rem;">{{ $message }}</div>@enderror
     @endif
 
-    @if ($inquiry->layout_sent_at)
-        {{-- Already sent. Sending twice would hand the same brief out again, so
-             what is left to do here is the job order — and that is the only
-             button. The notes stay on screen because the artist is working
-             from them and the officer may be asked what they said. --}}
+    @if ($designs->isEmpty())
         <div class="layout-note-card">
-            <strong>Notes for the artist</strong>
-            @if (filled($inquiry->layout_reference_note))
-                @include('partials.note-lines', ['note' => $inquiry->layout_reference_note])
-            @else
-                <p style="color: var(--ink-3);">None — the design speaks for itself.</p>
-            @endif
+            <strong>No designs listed yet</strong>
+            <p style="color:var(--ink-3);">Add one below for each design this client wants. Five for one artist and one for another is fine - each is drawn and approved on its own.</p>
         </div>
+    @else
+        <div class="layout-note-card" style="margin-bottom:1rem;">
+            <strong>{{ $designs->count() }} {{ \Illuminate\Support\Str::plural('design', $designs->count()) }} on this brief</strong>
+            <p style="color:var(--ink-3); margin:.2rem 0 0;">
+                {{ $designs->where('status', \App\Models\InquiryDesign::STATUS_APPROVED)->count() }} approved
+                &middot; {{ $designs->where('status', \App\Models\InquiryDesign::STATUS_SUBMITTED)->count() }} waiting on the client
+                &middot; {{ $designs->where('status', \App\Models\InquiryDesign::STATUS_WITH_ARTIST)->count() }} with the artists
+            </p>
+        </div>
+    @endif
 
-        {{-- The job order opens on approval and not before. An order written
-             against a design the client has not seen is a number on the books
-             for something nobody has agreed to. --}}
-        @if ($inquiry->layoutApproved())
-            <div class="alert alert-success layout-next" style="margin-bottom:0;">
-                <strong style="display:block; margin-bottom:.55rem;">The client approved this layout.</strong>
-                <a href="{{ route('orders.create', ['inquiry' => $inquiry->id]) }}" class="btn btn-primary btn-sm">
-                    Create the job order →
-                </a>
+    @foreach ($designs as $design)
+        <div style="border:1px solid var(--border); border-radius:10px; padding:.8rem; margin-bottom:.8rem;">
+            <div style="display:flex; justify-content:space-between; gap:.5rem; align-items:center; flex-wrap:wrap;">
+                <strong>{{ $design->name() }}</strong>
+                <span class="sub" style="margin:0;">
+                    @if ($design->approved())
+                        &#10003; approved
+                    @elseif ($design->submitted())
+                        waiting on the client
+                    @else
+                        with {{ $design->artist?->name ?? 'an artist' }}
+                        @if ($design->revision_count > 0)
+                            &middot; revision {{ $design->revision_count }} of {{ \App\Models\InquiryDesign::REVISION_LIMIT }}
+                        @endif
+                    @endif
+                </span>
             </div>
 
-        @elseif ($inquiry->layoutSubmitted())
-            @php $drawings = $inquiry->layoutDrawings(); @endphp
+            {{-- Whose desk it is on, and moving it. Per design: an artist who
+                 goes home sick takes only their share of the set with them.
 
-            <div class="alert alert-success layout-next" style="margin-bottom: 0.9rem;">
-                <strong>{{ $inquiry->layoutArtist?->name ?? 'The artist' }} has handed the layout back.</strong>
-                Show it to the client. Approve it once they say yes.
-            </div>
+                 Who may: the officer while the brief is still a draft, because
+                 they are arranging the set; a leader after it has gone out,
+                 because moving work somebody has started is their call. --}}
+            @if (! $design->approved() && $artists->isNotEmpty()
+                 && (auth()->user()->isLeader() || ! $inquiry->layout_sent_at))
+                <form method="POST" action="{{ route('inquiries.designs.artist', [$inquiry, $design]) }}"
+                      style="display:flex; gap:.4rem; align-items:flex-end; flex-wrap:wrap; margin:.5rem 0;">
+                    @csrf
+                    <div class="field" style="margin:0;">
+                        <select name="artist_id" required style="min-width:170px;">
+                            @foreach ($artists as $candidate)
+                                <option value="{{ $candidate->id }}" @selected($design->artist_id === $candidate->id)>
+                                    {{ $candidate->name }}@if (! $candidate->isPresentToday()) - not in today @endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-ghost btn-sm">Give it to them</button>
+                </form>
+            @endif
 
-            @if ($drawings->isNotEmpty())
-                <div class="layout-file-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,170px));">
-                    @foreach ($inquiry->layout_files as $index => $file)
-                        @continue(($file['kind'] ?? '') !== 'layout')
-                        <a href="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" target="_blank" class="layout-file-card">
+            @if ($design->drawings()->isNotEmpty())
+                <div class="layout-file-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,170px)); margin:.6rem 0;">
+                    @foreach ($design->drawings() as $index => $file)
+                        <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank" class="layout-file-card">
                             <span class="layout-file-preview" style="min-height:110px;">
                                 @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                                    <img src="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" style="height:130px;">
+                                    <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" style="height:130px;">
                                 @else
-                                    <span style="font-size:1.8rem;">📄</span>
+                                    <span style="font-size:1.8rem;">&#128196;</span>
                                 @endif
                             </span>
                             <span class="layout-file-name">{{ $file['original_name'] }}</span>
@@ -321,47 +332,97 @@
                 </div>
             @endif
 
-            <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-start;">
-                <form method="POST" action="{{ route('inquiries.layout.approve', $inquiry) }}">
-                    @csrf
-                    <button type="submit" class="btn btn-primary btn-sm">✓ Client approved — write the job order</button>
-                </form>
+            {{-- Answered one at a time. The job order still opens on the whole
+                 set: an order written against a design the client has not seen
+                 is a number on the books for something nobody agreed to. --}}
+            @if ($design->submitted())
+                @php $spent = $design->revisionsUsedUp() && ! auth()->user()->isLeader(); @endphp
+                <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-start; margin-top:.5rem;">
+                    <form method="POST" action="{{ route('inquiries.designs.approve', [$inquiry, $design]) }}">
+                        @csrf
+                        <button type="submit" class="btn btn-primary btn-sm">&#10003; Client approved</button>
+                    </form>
 
-                {{-- What the client wants changed is often easier shown than
-                     said — a marked-up screenshot, a photo, the reference they
-                     actually meant. The note stays required; a file is the
-                     optional half, and it lands with the artist's other refs. --}}
-                @php $spent = $inquiry->revisionsUsedUp() && ! auth()->user()->isLeader(); @endphp
-                <form method="POST" action="{{ route('inquiries.layout.revise', $inquiry) }}"
-                      enctype="multipart/form-data"
-                      style="display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap;">
-                    @csrf
-                    <input type="text" name="layout_revision_note" maxlength="2000" required
-                           placeholder="What the client wants changed" style="min-width: 260px;">
-                    <input type="file" name="revision_files[]" multiple
-                           accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip"
-                           style="max-width: 230px; font-size: 0.8rem;">
-                    <button type="submit" class="btn btn-ghost btn-sm" @disabled($spent)>
-                        ↩ Send back
-                        @if ($inquiry->layout_revision_count > 0)
-                            ({{ $inquiry->revisionsLeft() }} left)
-                        @endif
-                    </button>
-                </form>
-            </div>
-            @error('layout_revision_note')<div class="error" style="margin-top:.5rem;">{{ $message }}</div>@enderror
-            @error('revision_files.*')<div class="error" style="margin-top:.5rem;">{{ $message }}</div>@enderror
-            @if ($spent)
-                <div class="alert alert-error" style="margin-top:.6rem;">
-                    This layout has had its {{ \App\Models\Inquiry::LAYOUT_REVISION_LIMIT }} revisions.
-                    A leader can send it back again.
+                    <form method="POST" action="{{ route('inquiries.designs.revise', [$inquiry, $design]) }}"
+                          style="display:flex; gap:.4rem; align-items:flex-start; flex-wrap:wrap;">
+                        @csrf
+                        <input type="text" name="revision_note" maxlength="2000" required
+                               placeholder="What the client wants changed" style="min-width:230px;">
+                        <button type="submit" class="btn btn-ghost btn-sm" @disabled($spent)>
+                            &#8617; Send back
+                            @if ($design->revision_count > 0) ({{ $design->revisionsLeft() }} left) @endif
+                        </button>
+                    </form>
                 </div>
+                @if ($spent)
+                    <div class="alert alert-error" style="margin-top:.5rem;">
+                        {{ $design->name() }} has had its {{ \App\Models\InquiryDesign::REVISION_LIMIT }} revisions. A leader can send it back again.
+                    </div>
+                @endif
             @endif
 
+            {{-- Taken off the list only while nothing has been drawn on it. --}}
+            @if (! $design->approved() && $design->drawings()->isEmpty())
+                <form method="POST" action="{{ route('inquiries.designs.delete', [$inquiry, $design]) }}" style="margin-top:.5rem;">
+                    @csrf
+                    <button type="submit" class="btn btn-ghost btn-sm">Remove this design</button>
+                </form>
+            @endif
+        </div>
+    @endforeach
+
+    {{-- Adding them. Several at once, because a kit is listed in one go rather
+         than six visits to this form. --}}
+    <form method="POST" action="{{ route('inquiries.designs.store', $inquiry) }}"
+          style="display:flex; gap:.45rem; align-items:flex-end; flex-wrap:wrap; margin:.8rem 0 1rem;">
+        @csrf
+        <div class="field" style="margin:0;">
+            <label for="design_label" style="font-size:.78rem;">What to call it</label>
+            <input id="design_label" type="text" name="label" maxlength="120" placeholder="Jersey" style="min-width:150px;">
+        </div>
+        <div class="field" style="margin:0;">
+            <label for="design_how_many" style="font-size:.78rem;">How many</label>
+            <input id="design_how_many" type="number" name="how_many" value="1" min="1" max="20" style="width:80px;">
+        </div>
+        @if ($artists->isNotEmpty())
+            <div class="field" style="margin:0;">
+                <label for="design_artist" style="font-size:.78rem;">Who draws them</label>
+                <select id="design_artist" name="artist_id">
+                    <option value="">Whoever is in today</option>
+                    @foreach ($artists as $candidate)
+                        <option value="{{ $candidate->id }}">
+                            {{ $candidate->name }}@if (! $candidate->isPresentToday()) - not in today @endif
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
+        <button type="submit" class="btn btn-ghost btn-sm">+ Add design</button>
+    </form>
+
+    @if ($inquiry->layout_sent_at)
+        <div class="layout-note-card">
+            <strong>Notes for the artist</strong>
+            @if (filled($inquiry->layout_reference_note))
+                @include('partials.note-lines', ['note' => $inquiry->layout_reference_note])
+            @else
+                <p style="color: var(--ink-3);">None - the design speaks for itself.</p>
+            @endif
+        </div>
+
+        {{-- The job order opens on the whole set, never on a partial yes. --}}
+        @if ($inquiry->layoutApproved())
+            <div class="alert alert-success layout-next" style="margin-bottom:0;">
+                <strong style="display:block; margin-bottom:.55rem;">The client approved every design.</strong>
+                <a href="{{ route('orders.create', ['inquiry' => $inquiry->id]) }}" class="btn btn-primary btn-sm">
+                    Create the job order &rarr;
+                </a>
+            </div>
         @else
             <div class="alert alert-info layout-next" style="margin-bottom: 0;">
-                Waiting on {{ $inquiry->layoutArtist?->name ?? 'an artist' }} to draw the layout.
-                The job order opens once the client has approved it.
+                {{ $inquiry->designsOutstanding()->count() }} of {{ $designs->count() }}
+                {{ \Illuminate\Support\Str::plural('design', $designs->count()) }} still to be approved.
+                The job order opens once the client has said yes to all of them.
             </div>
         @endif
     @else

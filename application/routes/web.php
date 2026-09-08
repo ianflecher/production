@@ -262,6 +262,23 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'layout'])->name('inquiries.layout');
     });
 
+    // The designs under a brief. The officer lists them and answers the
+    // client; the leader moves them between artists once the brief has gone
+    // out. Which of those each person may do is decided in the controller -
+    // this only says who may reach the pages at all.
+    Route::middleware('role:sales,leader,super_admin,order_desk')->group(function () {
+        Route::post('/inquiries/{inquiry}/designs', [\App\Http\Controllers\InquiryDesignController::class, 'store'])
+            ->whereNumber('inquiry')->name('inquiries.designs.store');
+        Route::post('/inquiries/{inquiry}/designs/{design}/delete', [\App\Http\Controllers\InquiryDesignController::class, 'destroy'])
+            ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.delete');
+        Route::post('/inquiries/{inquiry}/designs/{design}/artist', [\App\Http\Controllers\InquiryDesignController::class, 'assign'])
+            ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.artist');
+        Route::post('/inquiries/{inquiry}/designs/{design}/approve', [\App\Http\Controllers\InquiryDesignController::class, 'approve'])
+            ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.approve');
+        Route::post('/inquiries/{inquiry}/designs/{design}/revise', [\App\Http\Controllers\InquiryDesignController::class, 'revise'])
+            ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.revise');
+    });
+
     // Moving a layout to another artist is the leader's, and it has to work
     // before there is a job order — see InquiryController::reassignLayoutArtist.
     Route::middleware('role:leader,super_admin')->group(function () {
@@ -292,6 +309,7 @@ Route::middleware(['auth', 'active'])->group(function () {
             ->whereNumber('index')->name('inquiries.layout.file.delete');
         Route::post('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'completeLayout'])->name('inquiries.layout.complete');
         Route::post('/inquiries/{inquiry}/layout/approve', [\App\Http\Controllers\InquiryController::class, 'approveLayout'])->name('inquiries.layout.approve');
+
         Route::post('/inquiries/{inquiry}/follow-up', [\App\Http\Controllers\InquiryController::class, 'followUp'])->name('inquiries.follow-up');
 
         // Page two: the job itself, reached from an enquiry.
@@ -400,6 +418,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         // to open the reference, and the controller decides who may.
         Route::get('/inquiries/{inquiry}/layout/file/{index}', [\App\Http\Controllers\InquiryController::class, 'layoutFile'])->whereNumber('index')->name('inquiries.layout.file');
         Route::post('/layouts/{inquiry}/submit', [\App\Http\Controllers\InquiryController::class, 'submitLayout'])->name('inquiries.layout.submit');
+        // The artist hands back ONE design; the others stay on their desk.
+        Route::post('/layouts/designs/{design}/submit', [\App\Http\Controllers\InquiryDesignController::class, 'submit'])
+            ->whereNumber('design')->name('inquiries.designs.submit');
+        Route::get('/layouts/designs/{design}/file/{index}', [\App\Http\Controllers\InquiryDesignController::class, 'file'])
+            ->whereNumber('design')->whereNumber('index')->name('inquiries.designs.file');
     });
 
     // -------- Giving a step to somebody --------

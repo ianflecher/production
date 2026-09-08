@@ -110,9 +110,71 @@ class Inquiry extends Model
         return $this->belongsTo(User::class, 'layout_artist_id');
     }
 
+    /** Every design under this brief, in the order the officer listed them. */
+    public function designs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(InquiryDesign::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * Where the brief as a whole stands, worked out from its designs.
+     *
+     * One design used to BE the layout, so its state was the enquiry's. With
+     * six of them the enquiry is only as finished as its least finished
+     * design: still with the artists until every one is handed back, and
+     * approved only when the client has said yes to all of them - which is
+     * what opens the job order, and must not open on a partial yes.
+     *
+     * An enquiry whose brief has not been sent yet has no designs, and answers
+     * with the state stored on itself.
+     */
     public function layoutStatus(): string
     {
-        return $this->layout_status ?: self::LAYOUT_BRIEF;
+        $designs = $this->relationLoaded('designs') ? $this->designs : $this->designs()->get();
+
+        if ($designs->isEmpty()) {
+            return $this->layout_status ?: self::LAYOUT_BRIEF;
+        }
+
+        if ($designs->every(fn ($d) => $d->approved())) {
+            return self::LAYOUT_APPROVED;
+        }
+
+        if ($designs->every(fn ($d) => $d->submitted() || $d->approved())) {
+            return self::LAYOUT_SUBMITTED;
+        }
+
+        return self::LAYOUT_WITH_ARTIST;
+    }
+
+    /**
+     * Write the worked-out state back onto the enquiry.
+     *
+     * The column is still read by the officer's lists and the artist queue's
+     * filters, which run in the database and cannot call the method above.
+     * Called whenever a design moves.
+     */
+    public function syncLayoutStatus(): void
+    {
+        $this->load('designs');
+
+        $status = $this->layoutStatus();
+
+        $this->forceFill([
+            'layout_status' => $status,
+            'layout_submitted_at' => $status === self::LAYOUT_SUBMITTED
+                ? ($this->layout_submitted_at ?: now())
+                : $this->layout_submitted_at,
+            'layout_approved_at' => $status === self::LAYOUT_APPROVED
+                ? ($this->layout_approved_at ?: now())
+                : null,
+        ])->save();
+    }
+
+    /** The designs still to be handed back or still to be answered. */
+    public function designsOutstanding(): \Illuminate\Support\Collection
+    {
+        return $this->designs->reject(fn ($d) => $d->approved());
     }
 
     public function layoutWithArtist(): bool

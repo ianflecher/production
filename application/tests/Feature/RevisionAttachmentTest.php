@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Inquiry;
+use App\Models\InquiryDesign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -39,6 +40,16 @@ class RevisionAttachmentTest extends TestCase
             'layout_artist_id' => $artist->id,
             'layout_sent_at' => now()->subDay(),
             'layout_submitted_at' => now()->subHour(),
+        ]);
+
+        // Handed back and waiting on the client - the design says so, because
+        // that is where the state lives now.
+        $inquiry->designs()->create([
+            'position' => 0,
+            'artist_id' => $artist->id,
+            'status' => InquiryDesign::STATUS_SUBMITTED,
+            'sent_at' => now()->subDay(),
+            'submitted_at' => now()->subHour(),
         ]);
 
         return [$officer, $artist, $inquiry];
@@ -149,7 +160,7 @@ class RevisionAttachmentTest extends TestCase
         // a revised drawing and needs somewhere to put it.
         $this->actingAs($artist)->get(route('inquiries.layouts'))
             ->assertOk()
-            ->assertSee('Upload the revised layout');
+            ->assertSee('Upload the revised design');
 
         $this->actingAs($artist)->post(route('inquiries.layout.submit', $inquiry), [
             'layout_files' => [UploadedFile::fake()->image('v2.png')],
@@ -200,7 +211,16 @@ class RevisionAttachmentTest extends TestCase
         // Refresh first: update() writes only what is dirty, so putting the
         // layout back with a stale model that still says "submitted" in memory
         // would save nothing and the next send-back would 403.
-        $inquiry->refresh()->update([
+        //
+        // The DESIGNS are what say "waiting on the client" now - the brief's
+        // own status is worked out from them - so they are what has to be put
+        // back for another round.
+        $inquiry->refresh()->designs()->update([
+            'status' => InquiryDesign::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        $inquiry->update([
             'layout_status' => Inquiry::LAYOUT_SUBMITTED,
             'layout_submitted_at' => now(),
         ]);
@@ -272,7 +292,12 @@ class RevisionAttachmentTest extends TestCase
 
         // Hand it back once more so the officer is looking at the page that
         // offers the button. refresh() first — see sendBack().
-        $inquiry->refresh()->update([
+        $inquiry->refresh()->designs()->update([
+            'status' => InquiryDesign::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        $inquiry->update([
             'layout_status' => Inquiry::LAYOUT_SUBMITTED,
             'layout_submitted_at' => now(),
         ]);

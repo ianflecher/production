@@ -30,34 +30,18 @@
         </p>
     </div>
 @else
-    @foreach ($queue as $inq)
+    @foreach ($queue as $designs)
+        @php $inq = $designs->first()->inquiry; @endphp
         <div class="card panel" style="margin-bottom: 1.1rem;">
-            <h2>{{ $inq->client->fullName() }}@if ($inq->client->company) — {{ $inq->client->company }}@endif</h2>
+            <h2>{{ $inq->client->fullName() }}@if ($inq->client->company) - {{ $inq->client->company }}@endif</h2>
             <p class="sub">
                 From {{ $inq->officer?->name ?? 'the office' }}
-                @if ($inq->layout_sent_at) · sent {{ $inq->layout_sent_at->diffForHumans() }} @endif
-                @if ($inq->layoutSubmitted()) · <strong>handed back, waiting on the client</strong> @endif
+                @if ($inq->layout_sent_at) &middot; sent {{ $inq->layout_sent_at->diffForHumans() }} @endif
+                &middot; <strong>{{ $designs->count() }} {{ \Illuminate\Support\Str::plural('design', $designs->count()) }} for you</strong>
             </p>
 
             @if ($inq->what_they_want)
                 <p style="margin-bottom: 0.8rem;"><strong>Asking for:</strong> {{ $inq->what_they_want }}</p>
-            @endif
-
-            {{-- What the client wants changed. Shown first: it is the reason
-                 this one is back. --}}
-            @if (filled($inq->layout_revision_note))
-                <div class="alert alert-error" style="margin-bottom: 0.9rem;">
-                    <strong>Changes asked for:</strong>
-                    @include('partials.note-lines', ['note' => $inq->layout_revision_note])
-                    @if ($inq->layout_revision_count > 0)
-                        {{-- Which round this is. The artist redrawing it should
-                             know whether the shop is near what it promised. --}}
-                        <div style="margin-top:.35rem; font-size:.78rem;">
-                            Revision {{ $inq->layout_revision_count }}
-                            of {{ \App\Models\Inquiry::LAYOUT_REVISION_LIMIT }}
-                        </div>
-                    @endif
-                </div>
             @endif
 
             @if (filled($inq->layout_reference_note))
@@ -70,6 +54,8 @@
                 </div>
             @endif
 
+            {{-- The brief material is the same for every design under it, so it
+                 is shown once here rather than repeated on each one. --}}
             @php $refs = collect($inq->layout_files ?? []); @endphp
 
             @if ($refs->isNotEmpty())
@@ -81,14 +67,10 @@
                                 <img src="{{ route('inquiries.layout.file', [$inq, 'index' => $index]) }}" alt="{{ $file['original_name'] }}"
                                      style="max-width: 100%; max-height: 110px; border-radius: 4px; display: block; margin: 0 auto;">
                             @else
-                                <div style="font-size: 1.8rem;">📄</div>
+                                <div style="font-size: 1.8rem;">&#128196;</div>
                             @endif
                             <div style="font-size: 0.7rem; color: var(--ink-3); margin-top: 0.3rem; word-break: break-all;">
                                 {{ $file['original_name'] }}
-                                @if (($file['kind'] ?? '') === 'layout') <em>(your layout)</em> @endif
-                                {{-- A file sent back with a revision is the thing
-                                     being complained about — say so, or it reads
-                                     as just another reference. --}}
                                 @if (($file['kind'] ?? '') === 'revision') <em>(sent back with the change)</em> @endif
                             </div>
                         </a>
@@ -96,24 +78,70 @@
                 </div>
             @endif
 
-            {{-- The box is here whether the layout is still being drawn or has
-                 already been handed back: a revision is the same act, and
-                 hiding it left the artist holding a finished revision. --}}
-            @if ($inq->layoutWithArtist() || $inq->layoutSubmitted())
-                <form method="POST" action="{{ route('inquiries.layout.submit', $inq) }}" enctype="multipart/form-data"
-                      class="artist-layout-upload" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
-                    @csrf
-                    <input id="artistLayoutFiles_{{ $inq->id }}" type="file" name="layout_files[]" multiple required
-                           class="artist-layout-files"
-                           accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
-                    <div class="artist-layout-picked" aria-live="polite"
-                         style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        {{ $inq->layoutSubmitted() ? 'Upload the revised layout' : 'Hand back the layout' }}
-                    </button>
-                    @error('layout_files')<span class="error">{{ $message }}</span>@enderror
-                </form>
-            @endif
+            {{-- Then the designs: each one drawn, handed back and answered on
+                 its own, so five of a six-piece kit can be finished while the
+                 sixth is still being redrawn. --}}
+            @foreach ($designs as $design)
+                <div style="border:1px solid var(--border); border-radius:10px; padding:0.85rem; margin-bottom:0.75rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                        <strong>{{ $design->name() }}</strong>
+                        <span class="sub" style="margin:0;">
+                            @if ($design->submitted())
+                                handed back, waiting on the client
+                            @elseif ($design->revision_count > 0)
+                                Revision {{ $design->revision_count }} of {{ \App\Models\InquiryDesign::REVISION_LIMIT }}
+                            @else
+                                to draw
+                            @endif
+                        </span>
+                    </div>
+
+                    {{-- What the client wants changed on THIS one, shown first:
+                         it is the reason this design came back. --}}
+                    @if (filled($design->revision_note))
+                        <div class="alert alert-error" style="margin:0.6rem 0;">
+                            <strong>Changes asked for:</strong>
+                            @include('partials.note-lines', ['note' => $design->revision_note])
+                        </div>
+                    @endif
+
+                    @if ($design->drawings()->isNotEmpty())
+                        <div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin:0.7rem 0;">
+                            @foreach ($design->drawings() as $index => $file)
+                                <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank"
+                                   style="border:1px solid var(--border); border-radius:8px; padding:0.5rem; width:150px; text-align:center; text-decoration:none;">
+                                    @if (str_starts_with($file['mime'] ?? '', 'image/'))
+                                        <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}"
+                                             style="max-width:100%; max-height:110px; border-radius:4px; display:block; margin:0 auto;">
+                                    @else
+                                        <div style="font-size:1.8rem;">&#128196;</div>
+                                    @endif
+                                    <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.3rem; word-break:break-all;">
+                                        {{ $file['original_name'] }} <em>(yours)</em>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    {{-- The box is here whether the design is still being drawn
+                         or has already been handed back: a revision is the same
+                         act, and hiding it left the artist holding a finished
+                         one with nowhere to put it. --}}
+                    <form method="POST" action="{{ route('inquiries.designs.submit', $design) }}" enctype="multipart/form-data"
+                          class="artist-layout-upload" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                        @csrf
+                        <input id="artistDesignFiles_{{ $design->id }}" type="file" name="files[]" multiple required
+                               class="artist-layout-files"
+                               accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+                        <div class="artist-layout-picked" aria-live="polite"
+                             style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            {{ $design->submitted() ? 'Upload the revised design' : 'Hand back '.$design->name() }}
+                        </button>
+                    </form>
+                </div>
+            @endforeach
         </div>
     @endforeach
 @endif

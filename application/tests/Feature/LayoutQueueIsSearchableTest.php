@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Inquiry;
+use App\Models\InquiryDesign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -33,7 +34,7 @@ class LayoutQueueIsSearchableTest extends TestCase
                 'contact_number' => '0917 555 0000', 'created_by' => $officer->id,
             ]);
 
-            return Inquiry::create([
+            $inquiry = Inquiry::create([
                 'client_id' => $client->id,
                 'created_by' => $officer->id,
                 'what_they_want' => $wants,
@@ -41,6 +42,17 @@ class LayoutQueueIsSearchableTest extends TestCase
                 'layout_artist_id' => $artist->id,
                 'layout_sent_at' => now(),
             ]);
+
+            // The queue is a list of DESIGNS now: a sent brief always carries
+            // at least one, and that is what lands on an artist's desk.
+            $inquiry->designs()->create([
+                'position' => 0,
+                'artist_id' => $artist->id,
+                'status' => InquiryDesign::STATUS_WITH_ARTIST,
+                'sent_at' => now(),
+            ]);
+
+            return $inquiry;
         };
 
         return [

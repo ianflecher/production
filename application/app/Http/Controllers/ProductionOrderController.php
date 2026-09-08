@@ -420,17 +420,32 @@ class ProductionOrderController extends Controller
             'reference_note' => $inquiry->layout_reference_note,
             'design_brief' => $inquiry->design_brief,
         ]);
-        foreach ($inquiry->layout_files ?? [] as $file) {
+        // The brief's own material, then every design drawn under it. A kit
+        // approved as six designs arrives on the job order as six drawings -
+        // named, so the floor can tell the jersey from the shorts rather than
+        // opening six files called layout.png.
+        $carry = collect($inquiry->layout_files ?? [])
+            ->map(fn ($file) => $file + ['design_name' => null]);
+
+        foreach ($inquiry->designs as $design) {
+            foreach ($design->drawings() as $file) {
+                $carry->push($file + ['design_name' => $design->name()]);
+            }
+        }
+
+        foreach ($carry as $file) {
             $jobOrder->referenceFiles()->create([
                 'path' => $file['path'],
-                'original_name' => $file['original_name'],
+                'original_name' => filled($file['design_name'] ?? null)
+                    ? $file['design_name'].' - '.$file['original_name']
+                    : $file['original_name'],
                 'kind' => $file['kind'] ?? 'output',
                 'mime' => $file['mime'] ?? null,
                 'size' => $file['size'] ?? null,
                 'uploaded_by' => $file['uploaded_by'] ?? $request->user()->id,
             ]);
         }
-        if (! empty($inquiry->layout_files) || filled($inquiry->layout_reference_note)) {
+        if (! empty($inquiry->layout_files) || filled($inquiry->layout_reference_note) || $inquiry->designs->isNotEmpty()) {
             // The artist was named back on step 2, and the officer has already
             // been told who it is. Set it before releasing the stage: unlockStage
             // only picks somebody when the task has nobody, so this keeps the

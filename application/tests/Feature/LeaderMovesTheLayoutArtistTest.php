@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Inquiry;
+use App\Models\InquiryDesign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,6 +37,15 @@ class LeaderMovesTheLayoutArtistTest extends TestCase
             'layout_status' => Inquiry::LAYOUT_WITH_ARTIST,
             'layout_artist_id' => $mick->id,
             'layout_sent_at' => now()->subDay(),
+        ]);
+
+        // A sent brief always carries at least one design, and that is what
+        // sits on an artist's queue.
+        $inquiry->designs()->create([
+            'position' => 0,
+            'artist_id' => $mick->id,
+            'status' => InquiryDesign::STATUS_WITH_ARTIST,
+            'sent_at' => now()->subDay(),
         ]);
 
         return [$officer, $mick, $rommel, $inquiry];
