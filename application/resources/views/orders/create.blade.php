@@ -93,6 +93,13 @@
          re-typing them is how two records of the same person get made. --}}
     <input type="hidden" name="inquiry_id" value="{{ $inquiry->id }}">
 
+    {{-- WHICH design of the brief this order is making. Five products on one
+         enquiry are five orders, and each has to know which one it is: the
+         floor reads the design name off the job order. --}}
+    @isset($design)
+        <input type="hidden" name="inquiry_design_id" value="{{ $design->id }}">
+    @endisset
+
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Client</h2>
         <p class="sub">Taken on step 1. Shown here rather than asked again — retyping a client is how two records of the same person get made.</p>

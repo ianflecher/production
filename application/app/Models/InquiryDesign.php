@@ -52,6 +52,12 @@ class InquiryDesign extends Model
         return $this->belongsTo(Inquiry::class);
     }
 
+    /** The job order written for this design, once somebody writes it. */
+    public function order(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ProductionOrder::class, 'inquiry_design_id');
+    }
+
     public function artist(): BelongsTo
     {
         return $this->belongsTo(User::class, 'artist_id');

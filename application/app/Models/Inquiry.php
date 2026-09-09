@@ -110,6 +110,35 @@ class Inquiry extends Model
         return $this->belongsTo(User::class, 'layout_artist_id');
     }
 
+    /**
+     * Every order written from this brief.
+     *
+     * A client who wants five products gets five orders off one enquiry - one
+     * per design - so the shop keeps quoting and chasing them as one job.
+     */
+    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ProductionOrder::class)->orderBy('id');
+    }
+
+    /**
+     * Approved designs that nobody has written an order for yet.
+     *
+     * This is what the follow-up list waits on: a brief is finished with when
+     * every design the client said yes to has become a job.
+     */
+    public function designsAwaitingAnOrder(): \Illuminate\Support\Collection
+    {
+        $designs = $this->relationLoaded('designs') ? $this->designs : $this->designs()->get();
+
+        $written = $this->orders()->pluck('inquiry_design_id')->filter()->all();
+
+        return $designs
+            ->filter(fn ($design) => $design->approved())
+            ->reject(fn ($design) => in_array($design->id, $written, true))
+            ->values();
+    }
+
     /** Every design under this brief, in the order the officer listed them. */
     public function designs(): \Illuminate\Database\Eloquent\Relations\HasMany
     {

@@ -105,6 +105,7 @@ class ProductionOrder extends Model
 
     protected $fillable = [
         'order_number', 'brief_token', 'brief_expires_at', 'client_id', 'customer_name', 'product_type', 'price_list', 'description',
+        'inquiry_id', 'inquiry_design_id',
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
         'rush', 'rush_fee',
@@ -544,6 +545,18 @@ class ProductionOrder extends Model
         }
 
         return $this->techPacks()->make(['phase' => $phase]);
+    }
+
+    /** The brief this order was written from, when there was one. */
+    public function inquiry(): BelongsTo
+    {
+        return $this->belongsTo(Inquiry::class);
+    }
+
+    /** Which design this order is making - one of the brief's, or none. */
+    public function inquiryDesign(): BelongsTo
+    {
+        return $this->belongsTo(InquiryDesign::class);
     }
 
     public function client(): BelongsTo

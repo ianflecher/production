@@ -135,6 +135,52 @@
 @endpush
 
 @section('content')
+
+@push('styles')
+<style>
+    /* The designs on a brief. A client can want six, and they are read down
+       the page one after another, so each needs a shape of its own rather
+       than being one more grey box in a stack. */
+    .design-card {
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--border);
+        border-radius: 10px;
+        padding: .85rem .9rem;
+        margin-bottom: .85rem;
+        background: var(--surface, #fff);
+    }
+    /* Approved is the state that means "something can happen now", so it is
+       the one the eye should find first. */
+    .design-card.is-approved { border-left-color: var(--success-ink, #16a34a); }
+
+    .design-card-head {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem;
+    }
+    .design-card-name { font-size: .98rem; letter-spacing: .01em; }
+
+    .design-pill {
+        font-size: .72rem; font-weight: 700; white-space: nowrap;
+        padding: .2rem .55rem; border-radius: 999px;
+        border: 1px solid transparent;
+    }
+    .design-pill.is-approved { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
+    .design-pill.is-waiting  { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+    .design-pill.is-drawing  { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
+
+    .design-card-actions {
+        display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+        margin-top: .7rem; padding-top: .7rem;
+        border-top: 1px dashed var(--border);
+    }
+    .design-card-hint { font-size: .76rem; color: var(--ink-3); }
+
+    @media (max-width: 640px) {
+        .design-card-actions .btn { width: 100%; }
+    }
+</style>
+@endpush
+
 <div class="layout-brief-page">
 @include('partials.intake-steps', ['on' => 2])
 
@@ -284,21 +330,24 @@
     @endif
 
     @foreach ($designs as $design)
-        <div style="border:1px solid var(--border); border-radius:10px; padding:.8rem; margin-bottom:.8rem;">
-            <div style="display:flex; justify-content:space-between; gap:.5rem; align-items:center; flex-wrap:wrap;">
-                <strong>{{ $design->name() }}</strong>
-                <span class="sub" style="margin:0;">
-                    @if ($design->approved())
-                        &#10003; approved
-                    @elseif ($design->submitted())
-                        waiting on the client
-                    @else
-                        with {{ $design->artist?->name ?? 'an artist' }}
+        {{-- One card per design. A brief can carry six, so each has to be
+             readable at a glance: what it is called, where it has got to, and
+             the one thing to do about it next. --}}
+        <div class="design-card{{ $design->approved() ? ' is-approved' : '' }}">
+            <div class="design-card-head">
+                <strong class="design-card-name">{{ $design->name() }}</strong>
+                @if ($design->approved())
+                    <span class="design-pill is-approved">&#10003; Approved</span>
+                @elseif ($design->submitted())
+                    <span class="design-pill is-waiting">With the client</span>
+                @else
+                    <span class="design-pill is-drawing">
+                        {{ $design->artist?->name ?? 'An artist' }} is drawing it
                         @if ($design->revision_count > 0)
-                            &middot; revision {{ $design->revision_count }} of {{ \App\Models\InquiryDesign::REVISION_LIMIT }}
+                            &middot; rev {{ $design->revision_count }}/{{ \App\Models\InquiryDesign::REVISION_LIMIT }}
                         @endif
-                    @endif
-                </span>
+                    </span>
+                @endif
             </div>
 
             {{-- Each design carries its own instruction. A jacket and a jersey
@@ -389,6 +438,28 @@
                 @endif
             @endif
 
+            {{-- Its own job order. Five products on one brief is five orders,
+                 written one design at a time, so the client is still quoted and
+                 chased as one job. --}}
+            {{-- Its own job order. Five products on one brief is five orders,
+                 written one design at a time, so the client is still quoted and
+                 chased as one job. --}}
+            @if ($design->approved())
+                <div class="design-card-actions">
+                    @if ($design->order)
+                        <a href="{{ route('orders.show', $design->order) }}" class="btn btn-primary btn-sm">
+                            Go to job order {{ $design->order->order_number }} &rarr;
+                        </a>
+                    @else
+                        <a href="{{ route('orders.create', ['inquiry' => $inquiry->id, 'design' => $design->id]) }}"
+                           class="btn btn-primary btn-sm">
+                            + Create the job order
+                        </a>
+                        <span class="design-card-hint">This design is approved and has no job order yet.</span>
+                    @endif
+                </div>
+            @endif
+
             {{-- Taken off the list only while nothing has been drawn on it. --}}
             @if (! $design->approved() && $design->drawings()->isEmpty())
                 <form method="POST" action="{{ route('inquiries.designs.delete', [$inquiry, $design]) }}" style="margin-top:.5rem;">
@@ -433,31 +504,25 @@
     </form>
 
     @if ($inquiry->layout_sent_at)
-        {{-- One approved design can open the paperwork; the unfinished ones
-             remain on the Layout board until the client approves them. --}}
-        @php $approvedCount = $designs->where('status', \App\Models\InquiryDesign::STATUS_APPROVED)->count(); @endphp
-        @if ($approvedCount > 0)
-            <div class="alert alert-success layout-next layout-order-ready" style="margin-bottom:0;">
-                <div class="layout-order-copy">
-                    <span class="layout-order-kicker">Ready for job order</span>
-                    <strong class="layout-order-title">
-                        {{ $approvedCount }} of {{ $designs->count() }} {{ \Illuminate\Support\Str::plural('design', $approvedCount) }} approved
-                    </strong>
-                    @if (! $inquiry->layoutApproved())
-                        <span class="layout-order-lock">The remaining designs stay in Layout. Sample and pre-production can continue; mass production waits for all approvals.</span>
-                    @endif
-                </div>
-                <a href="{{ route('orders.create', ['inquiry' => $inquiry->id]) }}" class="btn btn-primary btn-sm">
-                    Create job order &rarr;
-                </a>
-            </div>
-        @else
-            <div class="alert alert-info layout-next" style="margin-bottom: 0;">
+        {{-- No "create job order" button for the brief as a whole.
+
+             A brief becomes one order PER DESIGN, and a button up here could
+             not say which of the five it meant - it silently took whichever
+             approved design had not been written yet. Each design carries its
+             own button, next to the drawing it is for; this is only the count
+             of what is left. --}}
+        @php $awaiting = $inquiry->designsAwaitingAnOrder()->count(); @endphp
+        <div class="alert {{ $awaiting > 0 ? 'alert-success' : 'alert-info' }} layout-next" style="margin-bottom:0;">
+            @if ($awaiting > 0)
+                <strong>{{ $awaiting }} approved {{ \Illuminate\Support\Str::plural('design', $awaiting) }}
+                    {{ $awaiting === 1 ? 'is' : 'are' }} ready to be written up.</strong>
+                Use the button on each one above.
+            @else
                 {{ $inquiry->designsOutstanding()->count() }} of {{ $designs->count() }}
                 {{ \Illuminate\Support\Str::plural('design', $designs->count()) }} still to be approved.
-                The job order opens once the client has said yes to at least one design.
-            </div>
-        @endif
+                Each one gets its own job order once the client says yes to it.
+            @endif
+        </div>
     @else
         <form method="POST" action="{{ route('inquiries.layout.complete', $inquiry) }}" class="layout-pre-send">
             @csrf

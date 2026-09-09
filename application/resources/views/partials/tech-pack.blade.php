@@ -162,11 +162,19 @@
 
     @php
         // One order can carry several designs - a team kit is a jersey, a
-        // jacket and shorts on one job - and the BATCH sheet is where the floor
-        // reads them. The sample sheet keeps its single approved mockup: there
-        // is one garment in front of the client at that point.
-        $manyMockups = ($phase === \App\Models\TechPack::PHASE_MASSPROD);
-        $mockupSlots = $manyMockups ? array_keys($tp->mockups()) : [];
+        // jacket and shorts on one job, or five products and 830 pieces under
+        // one client. ANY tech pack can hold them.
+        //
+        // This was the batch sheet's alone, on the reasoning that the client
+        // only ever holds one garment at the sample stage. That was wrong twice
+        // over: a client approving a kit holds all of it, and an order that
+        // SKIPS the sample has no batch sheet at all - its one tech pack is the
+        // production sheet, and it was the only sheet without the carousel.
+        //
+        // A pack with one design is unchanged: no arrows, no counter, the same
+        // single box it has always been.
+        $manyMockups = true;
+        $mockupSlots = array_keys($tp->mockups());
         // Always something to look at: an empty sheet still shows its first box
         // so there is somewhere to drop a picture.
         $mockupSlots = $mockupSlots ?: ['front_mockup'];

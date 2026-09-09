@@ -129,9 +129,28 @@ class ProductionOrderController extends Controller
         // A partial approval may already have opened its job order. Keep the
         // remaining designs on the layout board, but never create a second
         // order for the same brief.
-        if ($inquiry->production_order_id) {
+        // A brief becomes ONE ORDER PER DESIGN. Five products on one enquiry is
+        // ordinary - Stephanie Moto asked for five, 830 pieces - and this used
+        // to bounce the officer back to the first order they wrote, so the
+        // other four had to be opened as four separate enquiries for the same
+        // client, losing the one thing the brief was keeping: that it is a
+        // single job for a single person.
+        //
+        // Which design this order is for comes in the URL. Without one, the
+        // first approved design still waiting for an order is assumed - which
+        // is what the officer means when there is only one.
+        $design = $request->query('design')
+            ? $inquiry->designs()->whereKey($request->query('design'))->first()
+            : $inquiry->designsAwaitingAnOrder()->first();
+
+        if ($design?->order) {
+            return redirect()->route('orders.show', $design->order->id)
+                ->with('success', $design->name().' already has a job order.');
+        }
+
+        if (! $design && $inquiry->production_order_id) {
             return redirect()->route('orders.show', $inquiry->production_order_id)
-                ->with('success', 'This brief already has a job order. The remaining designs are still in Layout.');
+                ->with('success', 'Every approved design on this brief already has a job order. The rest are still in Layout.');
         }
 
         // A layout that went to an artist has to come back approved before the
@@ -150,6 +169,9 @@ class ProductionOrderController extends Controller
         $list = \App\Services\PricingService::listFor(auth()->user());
 
         return view('orders.create', [
+            // The design being ordered, so the form can say which of the five
+            // this one is and carry it through to the order.
+            'design' => $design,
             'inquiry' => $inquiry,
             // Listed surname-first so the office can find a client by family name.
             'clients' => Client::bySurname()->get(),
@@ -237,6 +259,8 @@ class ProductionOrderController extends Controller
             // has to exist either way, and a job written straight in would
             // otherwise be a client the follow-up list never knew about.
             'inquiry_id' => ['nullable', 'integer', 'exists:inquiries,id'],
+            // Which design of the brief this order is making.
+            'inquiry_design_id' => ['nullable', 'integer', 'exists:inquiry_designs,id'],
             'client_id' => ['nullable', 'integer', 'exists:clients,id'],
             'client_name' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
             'client_last_name' => ['required_without_all:inquiry_id,client_id', 'nullable', 'string', 'max:255'],
@@ -372,8 +396,21 @@ class ProductionOrderController extends Controller
                 return back()->withErrors(['inquiry_id' => 'Approve at least one design with the client before creating the job order.']);
             }
 
+            // The design this order is for. Named by the form, else the first
+            // approved one still waiting to be written - which is what the
+            // officer means when the brief carries only one.
+            $orderedDesign = ! empty($data['inquiry_design_id'])
+                ? $inquiry->designs()->whereKey($data['inquiry_design_id'])->first()
+                : $inquiry->designsAwaitingAnOrder()->first();
+
+            if ($orderedDesign?->order) {
+                return back()->withErrors(['inquiry_id' =>
+                    $orderedDesign->name().' already has a job order.']);
+            }
+
             $client = $inquiry->client;
         } else {
+            $orderedDesign = null;
             $client = ! empty($data['client_id'])
                 ? Client::findOrFail($data['client_id'])
                 : Client::create($clientFields + [
@@ -449,7 +486,15 @@ class ProductionOrderController extends Controller
         $carry = collect($inquiry->layout_files ?? [])
             ->map(fn ($file) => $file + ['design_name' => null]);
 
-        foreach ($inquiry->designs->filter(fn ($design) => $design->approved()) as $design) {
+        // This order's own design, when it has one: a jacket order should not
+        // arrive carrying the shorts drawings. A brief written as a whole -
+        // one design, or an older order with none named - still carries every
+        // approved drawing.
+        $carryDesigns = $orderedDesign
+            ? collect([$orderedDesign])
+            : $inquiry->designs->filter(fn ($design) => $design->approved());
+
+        foreach ($carryDesigns as $design) {
             foreach ($design->drawings() as $file) {
                 $carry->push($file + ['design_name' => $design->name()]);
             }
@@ -498,6 +543,15 @@ class ProductionOrderController extends Controller
             }
         }
 
+        // Which brief and which design this order came from, so the enquiry can
+        // list its orders and each design can say whether it has one yet.
+        if ($inquiry) {
+            $order->forceFill([
+                'inquiry_id' => $inquiry->id,
+                'inquiry_design_id' => $orderedDesign?->id,
+            ])->save();
+        }
+
         // They asked, and now they have ordered. This is the only way a name
         // comes off the follow-up list — the inquiry keeps the job it became.
         // At least one approved design can open the job order, but the brief
@@ -510,7 +564,8 @@ class ProductionOrderController extends Controller
         // Asked that way, an order written for somebody with their own artwork
         // left them on the follow-up list forever, being chased for a job they
         // had already placed.
-        if ($inquiry->designsOutstanding()->isEmpty()) {
+        if ($inquiry->designsOutstanding()->isEmpty()
+            && $inquiry->fresh()->designsAwaitingAnOrder()->isEmpty()) {
             $inquiry->markOrdered($order);
         } else {
             $inquiry->update(['production_order_id' => $order->id]);

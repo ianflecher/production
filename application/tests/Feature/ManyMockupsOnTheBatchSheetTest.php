@@ -153,7 +153,7 @@ class ManyMockupsOnTheBatchSheetTest extends TestCase
         ]))->assertOk()->assertStreamedContent('SAMPLE-BYTES');
     }
 
-    public function test_the_sample_sheet_keeps_its_single_mockup(): void
+    public function test_the_sample_sheet_can_hold_several_too(): void
     {
         Storage::fake('local');
         [$artist, $order] = $this->jobReadyForTheBatchSheet();
@@ -163,9 +163,9 @@ class ManyMockupsOnTheBatchSheetTest extends TestCase
 
         $this->actingAs($artist)->get(route('tasks.job-order', $sample))
             ->assertOk()
-            // The script that turns the sheet is on every copy; what the sample
-            // sheet must not have is the markup - a stack of slides and arrows.
-            ->assertDontSee('data-carousel data-count', false)
-            ->assertDontSee('Next design', false);
+            // An order that skips the sample has no batch sheet at all, so the
+            // carousel cannot live only there - its one tech pack IS the
+            // production sheet. Every sheet can hold a kit now.
+            ->assertSee('data-carousel', false);
     }
 }

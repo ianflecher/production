@@ -270,13 +270,81 @@ class ManyDesignsOnOneBriefTest extends TestCase
             'sizes' => ['M' => 6, 'L' => 6],
         ])->assertSessionHasNoErrors();
 
-        $order = \App\Models\ProductionOrder::where('order_number', 'IC2026-MOTO1')->firstOrFail();
-        $names = $order->jobOrder->referenceFiles->pluck('original_name');
+        $first = \App\Models\ProductionOrder::where('order_number', 'IC2026-MOTO1')->firstOrFail();
 
-        // Named by their design, so the floor can tell them apart rather than
-        // opening six files all called drawing.png.
+        // ONE order per design. The first order is Rider 1's, and it does not
+        // arrive carrying Rider 2's drawing - a jacket order with the shorts
+        // artwork on it is how the wrong thing gets pressed.
+        $names = $first->jobOrder->referenceFiles->pluck('original_name');
         $this->assertTrue($names->contains('Rider 1 - drawing.png'));
-        $this->assertTrue($names->contains('Rider 2 - drawing.png'));
+        $this->assertFalse($names->contains('Rider 2 - drawing.png'));
+
+        $designs = $inquiry->fresh()->designs;
+        $this->assertSame($designs->first()->id, $first->inquiry_design_id);
+        $this->assertSame($inquiry->id, $first->inquiry_id);
+
+        // The brief is not finished with: Rider 2 is approved and still has no
+        // order, so the client stays on the follow-up list.
+        $this->assertSame(1, $inquiry->fresh()->designsAwaitingAnOrder()->count());
+
+        // And the second order is written from the same brief.
+        $this->actingAs($officer)->post(route('orders.store'), [
+            'inquiry_id' => $inquiry->id,
+            'inquiry_design_id' => $designs->last()->id,
+            'order_number' => 'IC2026-MOTO2',
+            'due_date' => now()->addWeeks(3)->toDateString(),
+            'product_type' => 'round_neck',
+            'sizes' => ['M' => 4],
+        ])->assertSessionHasNoErrors();
+
+        $second = \App\Models\ProductionOrder::where('order_number', 'IC2026-MOTO2')->firstOrFail();
+
+        $this->assertSame($designs->last()->id, $second->inquiry_design_id);
+        $this->assertTrue($second->jobOrder->referenceFiles->pluck('original_name')
+            ->contains('Rider 2 - drawing.png'));
+
+        // One brief, two orders, one client to chase.
+        $this->assertSame(2, $inquiry->fresh()->orders()->count());
+        $this->assertSame(0, $inquiry->fresh()->designsAwaitingAnOrder()->count());
+    }
+
+    public function test_a_design_that_already_has_an_order_is_not_written_twice(): void
+    {
+        Storage::fake('local');
+        [$officer, $cristal, , $inquiry] = $this->brief();
+
+        $this->actingAs($officer)->post(route('inquiries.designs.store', $inquiry),
+            ['label' => 'Rider', 'artist_id' => $cristal->id]);
+        $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry),
+            ['reference_note' => 'Keep the team colours']);
+
+        $design = $inquiry->fresh()->designs->first();
+
+        $this->actingAs($cristal)->post(route('inquiries.designs.submit', $design), [
+            'files' => [UploadedFile::fake()->image('drawing.png')],
+        ]);
+        $this->actingAs($officer)->post(route('inquiries.designs.approve', [$inquiry, $design]));
+
+        $this->actingAs($officer)->post(route('orders.store'), [
+            'inquiry_id' => $inquiry->id,
+            'inquiry_design_id' => $design->id,
+            'order_number' => 'IC2026-ONCE1',
+            'due_date' => now()->addWeeks(3)->toDateString(),
+            'product_type' => 'round_neck',
+            'sizes' => ['M' => 6],
+        ])->assertSessionHasNoErrors();
+
+        // A double-click, a stale tab, the back button.
+        $this->actingAs($officer)->post(route('orders.store'), [
+            'inquiry_id' => $inquiry->id,
+            'inquiry_design_id' => $design->id,
+            'order_number' => 'IC2026-ONCE2',
+            'due_date' => now()->addWeeks(3)->toDateString(),
+            'product_type' => 'round_neck',
+            'sizes' => ['M' => 6],
+        ])->assertSessionHasErrors('inquiry_id');
+
+        $this->assertSame(1, $inquiry->fresh()->orders()->count());
     }
 
     public function test_a_design_nobody_has_drawn_can_be_taken_off(): void
