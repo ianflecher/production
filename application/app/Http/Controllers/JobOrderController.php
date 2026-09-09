@@ -370,12 +370,27 @@ class JobOrderController extends Controller
         $note = 'Production details saved.';
 
         if ($newCut !== $order->cutting_type) {
-            if ($order->canEditRouting()) {
-                $order->update(['cutting_type' => $newCut]);
-                $order->rebuildPipeline($order->decoration_methods ?? [], $newCut);
-                $note .= ' Production steps updated.';
+            if ($order->canEditCutting()) {
+                // Only the cutting steps are swapped - see changeCuttingTo().
+                // The press and the decoration are left alone, so this works
+                // on an order whose press has already run.
+                $order->changeCuttingTo($newCut);
+                $note .= ' Cutting steps updated.';
             } else {
-                $note .= ' Cutting was NOT changed — cutting has already been done on this order.';
+                // Name what actually stopped it. It used to say cutting had
+                // been done whatever the reason, which on an order sitting AT
+                // cutting reads as the app being wrong about its own job.
+                $started = $order->tasks()
+                    ->whereIn('stage', [5, 11])
+                    ->whereIn('status', ['in_progress', 'for_checking', 'complete'])
+                    ->orderBy('stage')
+                    ->first();
+
+                $note .= ' Cutting was NOT changed — '
+                    .($started
+                        ? strtolower($started->department).' is already '
+                            .($started->status === 'complete' ? 'done' : 'under way').' on this order.'
+                        : 'cutting has already started on this order.');
             }
         }
 

@@ -1524,6 +1524,65 @@ class ProductionOrder extends Model
      * The design steps (layout/mockup/template, stages 1-2) finish early in the
      * flow — their completion must NOT lock the routing.
      */
+    /**
+     * May the CUTTING method still be changed?
+     *
+     * Asked separately from canEditRouting(), which answers for the decoration
+     * and the press as well. A finished press used to lock the cutting choice
+     * too, and the officer was told "cutting has already been done on this
+     * order" while the order sat AT cutting with nothing cut - the press runs
+     * before cutting and does not depend on it, which is the same reasoning
+     * that already excluded Raw materials and the printer.
+     *
+     * Only cutting itself locks cutting: once somebody has started cutting the
+     * cloth, how it is cut is settled.
+     */
+    public function canEditCutting(): bool
+    {
+        return ! $this->tasks()
+            ->whereIn('stage', [5, 11])
+            ->whereIn('status', ['in_progress', 'for_checking', 'complete'])
+            ->exists();
+    }
+
+    /**
+     * Swap the cutting steps for a different method.
+     *
+     * Narrower than rebuildPipeline(), on purpose: that one tears down stages
+     * 4, 5 and 11 and lays the decoration steps again, which cannot be done
+     * once a press has run. This touches the cutting steps and nothing else,
+     * and only the ones nobody has started.
+     */
+    public function changeCuttingTo(?string $cuttingType): void
+    {
+        if (! $this->canEditCutting()) {
+            return;
+        }
+
+        $this->tasks()
+            ->whereIn('stage', [5, 11])
+            ->whereIn('status', ['todo', 'ready'])
+            ->delete();
+
+        $this->update(['cutting_type' => $cuttingType]);
+
+        if ($cuttingType) {
+            $label = self::CUTTING_TYPES[$cuttingType] ?? 'Cutting';
+            $seq = (int) $this->tasks()->max('sequence');
+            $add = $this->taskAdder($seq);
+
+            // The sample run only exists when the order has one.
+            if (! $this->skip_sample) {
+                $add(5, $label, User::JOB_PRODUCTION);
+            }
+
+            $add(11, $label, User::JOB_PRODUCTION);
+        }
+
+        $this->resequenceTasks();
+        $this->refresh()->releaseNextReadyStage();
+    }
+
     public function canEditRouting(): bool
     {
         // Only the routing steps themselves lock the choice: decoration (4) and
