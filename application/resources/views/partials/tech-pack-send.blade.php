@@ -23,9 +23,13 @@
                     : null));
     @endphp
     @if ($canSend)
+        {{-- Not "blank" any more. It said that when the officer had nothing to
+             fill in and the pack went out empty for the artist to complete
+             from the order form. The officer fills the spec in first now, so
+             what they send is the sheet they have just written. --}}
         <form method="POST" action="{{ route('job-orders.send', $order) }}" onsubmit="return confirm('Send this Tech Pack to the artist?');" style="margin-right: auto;">
             @csrf
-            <button type="submit" class="btn btn-success btn-sm">📤 Send blank Tech Pack to Artist</button>
+            <button type="submit" class="btn btn-success btn-sm">📤 Send the Tech Pack to the artist</button>
         </form>
     @else
         <span style="margin-right: auto; color: var(--danger-ink); font-weight: 600; font-size: 0.85rem;">⚠ {{ $sendBlockReason }}</span>
