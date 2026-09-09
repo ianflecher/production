@@ -145,9 +145,10 @@ class JobOrderSheetSavesEveryFieldTest extends TestCase
             ->assertOk();
 
         foreach (array_keys(self::SHEET_FIELDS) as $field) {
+            // The same box on both copies: the officer fills it when the job
+            // is taken, the artist corrects it while drawing the garment.
             $form->assertSee('name="'.$field.'"', false);
-            // The artist reads the same rows; there is nothing to type into.
-            $artistCopy->assertDontSee('name="'.$field.'"', false);
+            $artistCopy->assertSee('name="'.$field.'"', false);
         }
     }
 

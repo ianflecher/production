@@ -345,14 +345,29 @@ class TaskController extends Controller
         // artist's copy prints them as boxes they cannot type in, and a pack
         // recalled for a correction must not quietly overwrite the office's
         // answers. System facts (client, agent, dates, sizes) stay automatic.
+        // The artist fills in the whole sheet: the pictures, where they sit,
+        // and every typed box too. The account officer fills the same boxes
+        // from their own copy when the job is taken - whoever is looking at
+        // the answer can correct it, and the sheet the floor reads is the one
+        // that has to be right. System facts (client, agent, dates, sizes)
+        // stay automatic.
         $packFields = collect($data)->only([
-            'quality', 'print_tech',
+            'design_name', 'fitting', 'item_style', 'quality', 'print_tech',
+            'placing_title', 'tshirt_color', 'thread_color', 'zipper_type',
+            'lip_pocket_color',
             // The tag notes belong to the layout, not the spec: each one is
             // read against the picture it sits beside.
             'tag_1_details', 'tag_2_details',
             'file_location_notes', 'artist_name',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
             'bottom_text_width', 'bottom_text_height',
+        ])->all();
+
+        // Rows that live on the JOB ORDER and are shown on this sheet so they
+        // can be corrected where the floor reads them.
+        $jobOrderFields = collect($data)->only([
+            'print_type', 'printer', 'fabric', 'neck', 'cuff_arm_sleeves',
+            'neck_label', 'bottom_hem', 'packaging', 'free_logo_sticker',
         ])->all();
 
 
@@ -600,10 +615,24 @@ class TaskController extends Controller
         $pack->fill($packFields);
         $order->techPacks()->save($pack);
 
-        // Nothing of the JOB ORDER is written here any more. The rows this
-        // sheet shows off it — fabric, neck, packaging, print type — are the
-        // account officer's boxes, saved from their copy, which is also where
-        // the sticker flag and the print-type routing are applied.
+        // The job-order rows this sheet shows, written back where they live.
+        if ($jobOrderFields !== []) {
+            $jobOrder->update($jobOrderFields);
+        }
+
+        // Naming a sticker puts the sticker step on the floor; clearing the row
+        // takes it away. Done from whichever desk typed it.
+        if (array_key_exists('free_logo_sticker', $jobOrderFields)) {
+            $order->update([
+                'needs_sticker' => \App\Models\ProductionOrder::namesASticker($jobOrderFields['free_logo_sticker']),
+            ]);
+        }
+
+        // Print type decides the press and the cutting route, so the routing
+        // follows from either desk - see applyPrintTypeRouting().
+        if (array_key_exists('print_type', $jobOrderFields)) {
+            $order->applyPrintTypeRouting();
+        }
 
         // Clicking the explicit Save button means the Artist is finished with
         // the sheet and is ready for its next action. Image uploads use this
@@ -717,17 +746,17 @@ class TaskController extends Controller
         if ($task->isTechPackStep()) {
             $missing = $this->missingTechPackFields($task);
 
-            if ($missing['artist'] !== []) {
-                return redirect()->route('tasks.job-order', $task->id)
-                    ->withErrors([
-                        'tech_pack' => 'Complete the missing Tech Pack details before submitting: '.implode(', ', $missing['artist']).'. Use N/A when a row does not apply.',
-                    ]);
-            }
+            // One message again. The list was split in two when the artist
+            // could not type in half the sheet - being told to chase the office
+            // for a box you can fill in yourself is worse than being told what
+            // is missing.
+            $blanks = array_merge($missing['artist'], $missing['officer']);
 
-            if ($missing['officer'] !== []) {
+            if ($blanks !== []) {
                 return redirect()->route('tasks.job-order', $task->id)
                     ->withErrors([
-                        'tech_pack' => 'Your account officer has not filled these Tech Pack boxes yet: '.implode(', ', $missing['officer']).'. Ask them to complete the sheet, then submit.',
+                        'tech_pack' => 'Complete the missing Tech Pack details before submitting: '
+                            .implode(', ', $blanks).'. Use N/A when a row does not apply.',
                     ]);
             }
         }

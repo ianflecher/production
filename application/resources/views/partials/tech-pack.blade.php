@@ -39,30 +39,23 @@
     // note dragged beside a picture, the end of a leader line — landed
     // somewhere else on the sheet the floor reads. No name on the read-only
     // one: there is no form under it to post to.
-    /* The header is the account officer's part of the sheet - who the job is
-       for, what garment, which print and printer, what fabric. Sales knows
-       all of that when the job is taken; the artist was retyping it from the
-       order form and guessing where it disagreed. Everything BELOW the
-       header - the pictures, where they sit, the print sizes and the file
-       location - is still the artist's.
-       This is why $canType asks about one field rather than the sheet. */
+    /* Who may type, and who may put pictures on the sheet.
+
+       The typed boxes are BOTH desks'. The account officer knows the spec when
+       the job is taken and fills it in then; the artist is looking at the
+       garment while they draw and finds what the order form got wrong. Giving
+       the boxes to one of them meant the other sat looking at an answer they
+       could see was wrong with no way to correct it - and the sheet the floor
+       reads is the one that has to be right.
+
+       The PICTURES are the artist's alone. They are drawn, sized, dragged into
+       place and pointed at the garment from this page; an officer has nothing
+       to add there and every accidental click is a lost layout.
+
+       So: $canType asks whether this copy of the sheet may be typed in at all,
+       and $imageEditable stays with the artist. */
     $officerMode = ($mode === 'officer');
-    /* Every typed box on the sheet is the account officer's. The artist's half
-       is the pictures, where they sit on the sheet, and the file location. */
-    $officerFields = [
-        'design_name', 'fitting', 'item_style', 'print_type', 'printer', 'fabric',
-        'neck', 'cuff_arm_sleeves', 'neck_label', 'tshirt_color', 'thread_color',
-        'packaging', 'zipper_type', 'bottom_hem', 'lip_pocket_color',
-        'free_logo_sticker', 'placing_title',
-    ];
-    /* The two tag notes are NOT here. They are not spec: they sit beside the
-       tag pictures with a leader line drawn to the collar or the side seam,
-       and what they say depends on where the artist put the picture. Typed
-       from a desk that cannot see the layout, they described a placement that
-       was not there. */
-    $canType = fn (string $field) => in_array($field, $officerFields, true)
-        ? $officerMode
-        : $textEditable;
+    $canType = fn (string $field) => $officerMode || $textEditable;
 
     /* What the shop typed into these boxes before, so the same answer is
        picked rather than spelled four ways across four sheets. Only where the

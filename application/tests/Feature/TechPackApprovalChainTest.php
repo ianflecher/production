@@ -193,10 +193,9 @@ class TechPackApprovalChainTest extends TestCase
         $this->actingAs($artist)->get(route('tasks.job-order', $pack))
             ->assertOk()
             ->assertSee('name="file_location_notes"', false)
-            // Every typed spec box is the officer's now — theirs is the
-            // pictures and the file location.
-            ->assertDontSee('name="tshirt_color"', false)
-            ->assertDontSee('name="printer"', false);
+            // The whole sheet is theirs to fill: the pictures AND the boxes.
+            ->assertSee('name="tshirt_color"', false)
+            ->assertSee('name="printer"', false);
 
         $this->fillSpec($officer, $order);
         $this->completePack($artist, $pack);

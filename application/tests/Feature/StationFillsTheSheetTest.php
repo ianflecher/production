@@ -210,11 +210,12 @@ class StationFillsTheSheetTest extends TestCase
             $form->assertDontSee('name="'.$field.'"', false);
         }
 
-        // Nor the spec: what kind of collar is the account officer's box. The
-        // artist's copy prints those rows, it does not offer them.
-        $form->assertDontSee('name="neck"', false)
-            ->assertDontSee('name="cuff_arm_sleeves"', false)
-            ->assertDontSee('name="bottom_hem"', false);
+        // The spec IS offered - what kind of collar is a box both desks fill.
+        // What the artist must never be asked for is the sewing record above:
+        // that is measured at the machine by the person who did the work.
+        $form->assertSee('name="neck"', false)
+            ->assertSee('name="cuff_arm_sleeves"', false)
+            ->assertSee('name="bottom_hem"', false);
     }
 
     public function test_sewers_typed_at_the_station_are_suggested_next_time(): void

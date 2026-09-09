@@ -97,10 +97,11 @@ class TechPackTest extends TestCase
         // which reads as a line somebody typed.
         [$sales, $artist, $order, $task] = $this->shop();
 
-        // Nobody has written one, so the sheet the floor reads says nothing.
+        // Nobody has written one, so the sheet the floor reads says nothing -
+        // but both desks are offered it as a hint in the empty box.
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertDontSee('STANDARD DTF PLACING FOR ROUND NECK / V-NECK SHIRT');
+            ->assertSee('STANDARD DTF PLACING FOR ROUND NECK / V-NECK SHIRT');
 
         // The officer is offered it, as a hint in the empty box — the typed
         // boxes are theirs.
@@ -127,9 +128,11 @@ class TechPackTest extends TestCase
             ->assertOk()
             ->assertSee('STANDARD SILKSCREEN PLACING FOR JACKET / HOODIE');
 
+        // The artist has the same box: whoever is looking at the sheet can
+        // correct what is on it.
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertDontSee('name="placing_title"', false);
+            ->assertSee('name="placing_title"', false);
     }
 
     public function test_the_artist_fills_their_half_in_the_pack_itself(): void
@@ -148,8 +151,8 @@ class TechPackTest extends TestCase
             // The tag notes are laid out beside their pictures, so they are
             // the artist's too.
             ->assertSee('name="tag_1_details"', false)
-            // The spec is not.
-            ->assertDontSee('name="placing_title"', false)
+            // And the spec too: the artist fills in the whole sheet.
+            ->assertSee('name="placing_title"', false)
             // …around the pack, not instead of it.
             ->assertSee('tp-sheet', false);
     }
@@ -171,10 +174,10 @@ class TechPackTest extends TestCase
         // The artist reads those same rows and cannot type in them.
         $this->actingAs($artist)->get("/my-tasks/{$task->id}/job-order")
             ->assertOk()
-            ->assertDontSee('name="design_name"', false)
-            ->assertDontSee('name="zipper_type"', false)
-            ->assertDontSee('name="bottom_hem"', false)
-            ->assertDontSee('name="lip_pocket_color"', false);
+            ->assertSee('name="design_name"', false)
+            ->assertSee('name="zipper_type"', false)
+            ->assertSee('name="bottom_hem"', false)
+            ->assertSee('name="lip_pocket_color"', false);
     }
 
     public function test_the_read_only_sheet_points_the_officer_at_their_own_copy(): void
@@ -244,12 +247,13 @@ class TechPackTest extends TestCase
         ])->assertRedirect();
 
         $this->actingAs($artist)->post("/my-tasks/{$task->id}/tech-pack", [
-            'zipper_type' => 'Painted by the artist',
+            'zipper_type' => 'Metal zipper',
             'file_location_notes' => 'FOR PRINT\IC2026-04001',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $pack = $order->fresh()->techPack;
-        $this->assertSame('Nylon zipper', $pack->zipper_type);
+        // The artist's correction stands: they are looking at the garment.
+        $this->assertSame('Metal zipper', $pack->zipper_type);
         $this->assertSame('FOR PRINT\IC2026-04001', $pack->file_location_notes);
     }
 
