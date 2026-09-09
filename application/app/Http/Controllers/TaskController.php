@@ -1198,7 +1198,15 @@ class TaskController extends Controller
         // Nothing goes out of the door on an unpaid balance. This is the last
         // step before the client has the goods, so it is the last chance to
         // catch it — after this the only leverage left is asking nicely.
-        if ($task->department === 'Release to client' && ! $task->order->isFullyPaid()) {
+        //
+        // Unless the job was taken on pay-upon-delivery terms, which is what
+        // the downpayment waiver means: the client pays as they receive. The
+        // shop was holding those goods at the counter over a balance nobody
+        // had ever intended to collect first, and the only way past it was a
+        // leader override written up as if something had gone wrong.
+        if ($task->department === 'Release to client'
+            && ! $task->order->isFullyPaid()
+            && ! $task->order->paysOnDelivery()) {
             $balance = $task->order->balance();
 
             return back()->with('error', $balance === null
@@ -1217,6 +1225,23 @@ class TaskController extends Controller
             );
 
             $task->update(['operator_name' => trim($data['operator_name'])]);
+
+            // Going out on delivery terms with money still owing. Written onto
+            // the order's conversation, not a log file: that is the thread the
+            // people who chase the money actually read, and the counter needs
+            // to know there is something to collect as they hand it over.
+            if (! $task->order->isFullyPaid() && $task->order->paysOnDelivery()) {
+                $owing = $task->order->balance();
+
+                $task->order->messages()->create([
+                    'sender_id' => $request->user()->id,
+                    'body' => sprintf(
+                        "RELEASED ON PAY-UPON-DELIVERY TERMS.\n%s to collect at handover.\nHanded over by %s.",
+                        $owing === null ? 'No total price set — amount unknown' : '₱'.number_format($owing, 2),
+                        trim($data['operator_name'])
+                    ),
+                ]);
+            }
         }
 
         // Every other step closed by an approval had the same hole: nobody

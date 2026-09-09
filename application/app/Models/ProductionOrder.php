@@ -706,6 +706,25 @@ class ProductionOrder extends Model
         return $this->total_price !== null && (float) $this->total_price <= 0.0;
     }
 
+    /**
+     * Does this client pay when they receive the goods?
+     *
+     * The same tick as the deposit waiver, read at the other end of the job.
+     * A client who is trusted to start without money down is the client who
+     * pays on delivery - there is no third arrangement in the shop, and asking
+     * the officer to say the same thing twice would only mean the second one
+     * gets forgotten and the goods are held at the counter over a balance
+     * nobody ever intended to collect first.
+     *
+     * It does NOT mean the money stops mattering: the balance is written onto
+     * the order's conversation as the goods go out, so the people who chase it
+     * know what to chase.
+     */
+    public function paysOnDelivery(): bool
+    {
+        return (bool) $this->downpayment_waived;
+    }
+
     public function hasDownpayment(): bool
     {
         // An account officer can explicitly waive the deposit for a sponsored
