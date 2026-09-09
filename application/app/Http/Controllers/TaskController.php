@@ -1235,23 +1235,22 @@ class TaskController extends Controller
 
         $task->approve();
 
-        // Final mockup approval immediately opens the blank Tech Pack to the
-        // artist. There is no account-officer editing/sending step between the
-        // approved design and the artist's Tech Pack work.
+        // Approving the mockup opens the Tech Pack step. It does NOT send the
+        // pack to the artist.
+        //
+        // It used to do both, silently: the officer approved a mockup and the
+        // pack went out stamped "sent to the artist" with their name on it,
+        // for something they had not done and had not been told about. The
+        // Send button vanished before they ever saw it, and the officer's own
+        // half of the sheet - the spec they fill in when the job is taken -
+        // was skipped over on the way past.
+        //
+        // The officer fills the pack in and sends it themselves, from the
+        // button under their copy of the sheet.
         if (str_starts_with((string) $task->department, 'Final mockup')
             && $task->order->fresh()->mockupApproved()) {
-            $order = $task->order->fresh(['jobOrder', 'tasks']);
-
-            if ($order->jobOrder?->status === 'draft') {
-                $order->jobOrder->update([
-                    'status' => 'sent_to_artist',
-                    'sent_to_artist_by' => $request->user()->id,
-                    'sent_to_artist_at' => now(),
-                    'leader_note' => null,
-                ]);
-            }
-
-            $order->refresh()->unlockStage(\App\Models\ProductionOrder::STAGE_MOCKUP);
+            $task->order->fresh(['jobOrder', 'tasks'])
+                ->unlockStage(\App\Models\ProductionOrder::STAGE_MOCKUP);
         }
 
         // The client approved the first physical sample — count that one piece

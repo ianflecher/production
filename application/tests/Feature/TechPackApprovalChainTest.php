@@ -186,6 +186,22 @@ class TechPackApprovalChainTest extends TestCase
         $this->actingAs($officer)->post(route('tasks.approve', $mockup))->assertRedirect();
 
         $this->assertSame('complete', $mockup->fresh()->status);
+
+        // Approving the mockup does NOT send the pack. It used to, silently,
+        // stamped with the approver's name - so the officer never saw their own
+        // Send button and never filled in their half of the sheet.
+        $this->assertSame('draft', $order->fresh()->jobOrder->status);
+
+        // Sending needs a downpayment and a client reference on file, which is
+        // the send flow's own business - this test is about the approval chain
+        // after the pack goes out, so it is sent the short way.
+        $order->jobOrder->update([
+            'status' => 'sent_to_artist',
+            'sent_to_artist_by' => $officer->id,
+            'sent_to_artist_at' => now(),
+        ]);
+        $order->fresh()->unlockStage(ProductionOrder::STAGE_MOCKUP);
+
         $this->assertSame('sent_to_artist', $order->fresh()->jobOrder->status);
         $this->assertSame('ready', $pack->fresh()->status);
 

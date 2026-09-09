@@ -54,7 +54,15 @@
 
     <div class="tp-save no-print">
         <button type="submit" class="btn btn-primary">Save &amp; next: production details →</button>
-        <span class="hint">The artist adds the pictures and the file location once the client approves the mockup.</span>
+        <span class="hint">The artist adds the pictures and the file location once you send this.</span>
     </div>
 </form>
+
+{{-- Sending is the LAST thing the officer does, and it is a decision: the
+     pack goes out when they say it is ready, not as a side effect of
+     approving the mockup. Outside the form above - a form inside a form is
+     not a form the browser will post. --}}
+<div class="tp-actions no-print" style="margin-top:1rem;">
+    @include('partials.tech-pack-send', ['order' => $order, 'jo' => $jobOrder])
+</div>
 @endsection
