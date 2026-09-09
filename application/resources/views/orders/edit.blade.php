@@ -175,6 +175,16 @@
                 <input id="discount_note" type="text" name="discount_note" maxlength="255" value="{{ old('discount_note', $order->discount_note) }}" placeholder="e.g. team sponsorship">
             </div>
         </div>
+        <label style="display:flex; align-items:flex-start; gap:0.5rem; font-weight:500; margin-top:0.8rem; max-width:620px;">
+            <input type="checkbox" id="downpayment_waived" name="downpayment_waived" value="1" style="width:auto; margin:0.2rem 0 0;" @checked(old('downpayment_waived', $order->downpayment_waived))>
+            <span>No downpayment required
+                <span style="display:block; font-weight:400; font-size:0.78rem; color:var(--ink-3);">Account officer approval: the artist can continue after layout approval without a payment record.</span>
+            </span>
+        </label>
+        <div class="field" style="max-width:620px; margin-top:0.55rem;">
+            <label for="downpayment_waiver_note">Waiver reason (optional)</label>
+            <input id="downpayment_waiver_note" type="text" name="downpayment_waiver_note" maxlength="500" value="{{ old('downpayment_waiver_note', $order->downpayment_waiver_note) }}" placeholder="e.g. sponsored client / no deposit agreed">
+        </div>
         <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400; margin-top:0.8rem;">
             <input type="checkbox" id="vat_inclusive" name="vat_inclusive" value="1" style="width:auto;margin:0;" @checked(old('vat_inclusive', $order->vat_inclusive)) onchange="updatePrice()">
             VAT inclusive — add 12% to the total
@@ -404,6 +414,11 @@
             .then(r => r.json())
             .then(d => {
                 const qty = parseInt(document.getElementById('quantity').value) || 0;
+                if (d.capacity === null) {
+                    out.textContent = 'No daily capacity limit for other apparel.';
+                    out.style.color = 'var(--success-ink)';
+                    return;
+                }
                 const over = d.booked + qty > d.capacity;
                 const what = d.product ? d.product : 'pcs';
                 out.textContent = d.booked + ' of ' + d.capacity + ' ' + what + ' already booked for this date'

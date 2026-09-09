@@ -540,6 +540,20 @@ class User extends Authenticatable
         return (bool) $this->can_approve_tech_packs;
     }
 
+    /**
+     * Does this person hold the order desk by name?
+     *
+     * Asked apart from canCreateOrders() because that one also answers yes for
+     * the whole sales role and for super admins. This is the named grant
+     * alone - the person who is not an account officer but does an account
+     * officer's job, and must therefore be able to ANSWER for the orders they
+     * take, not just write them.
+     */
+    public function holdsOrderDesk(): bool
+    {
+        return (bool) $this->can_create_orders;
+    }
+
     public function canCreateOrders(): bool
     {
         return $this->isSales() || $this->isSuperAdmin() || (bool) $this->can_create_orders;

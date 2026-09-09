@@ -64,6 +64,18 @@ class PricingService
         return $max === null ? null : (int) $max;
     }
 
+    /** Only the four standard apparel lines consume the daily production cap. */
+    public static function dailyCapacity(?string $type, ?string $list = null): ?int
+    {
+        $standardProducts = config('pricing.lists.standard.products', []);
+
+        if (! is_string($type) || ! array_key_exists($type, $standardProducts)) {
+            return null;
+        }
+
+        return self::maxQuantity($type, $list);
+    }
+
     public static function backPocketFee(): int
     {
         return (int) config('pricing.back_pocket_fee', 0);

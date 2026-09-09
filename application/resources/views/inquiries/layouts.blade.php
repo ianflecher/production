@@ -44,16 +44,6 @@
                 <p style="margin-bottom: 0.8rem;"><strong>Asking for:</strong> {{ $inq->what_they_want }}</p>
             @endif
 
-            @if (filled($inq->layout_reference_note))
-                {{-- Six changes typed into one box arrived here as one unbroken
-                     paragraph, and the fourth one got missed. Read them back as
-                     the list the officer meant. --}}
-                <div style="margin-bottom: 0.8rem;">
-                    <strong>Notes from the officer:</strong>
-                    @include('partials.note-lines', ['note' => $inq->layout_reference_note])
-                </div>
-            @endif
-
             {{-- The brief material is the same for every design under it, so it
                  is shown once here rather than repeated on each one. --}}
             @php $refs = collect($inq->layout_files ?? []); @endphp
@@ -95,6 +85,13 @@
                             @endif
                         </span>
                     </div>
+
+                    @if (filled($design->description))
+                        <div class="layout-note-card" style="margin:.6rem 0; padding:.6rem .7rem;">
+                            <strong style="font-size:.78rem;">Notes / description for this design</strong>
+                            @include('partials.note-lines', ['note' => $design->description])
+                        </div>
+                    @endif
 
                     {{-- What the client wants changed on THIS one, shown first:
                          it is the reason this design came back. --}}

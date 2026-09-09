@@ -300,11 +300,13 @@ class InquiryController extends Controller
             return redirect()->route('orders.create', ['inquiry' => $inquiry->id]);
         }
 
+        // Accepted only for old browser tabs and integrations. New briefs put
+        // the instruction on each design, where its artist can read it.
         $data = $request->validate(['reference_note' => ['nullable', 'string', 'max:2000']]);
 
         $hasOutput = collect($inquiry->layout_files ?? [])->contains(fn ($file) => ($file['kind'] ?? 'output') === 'output');
-        if (! $hasOutput && blank($data['reference_note'] ?? null)) {
-            return back()->withInput()->withErrors(['layout' => 'Upload the ChatGPT design output or add notes for the artist before continuing.']);
+        if ($inquiry->designs()->doesntExist() && ! $hasOutput && blank($data['reference_note'] ?? null)) {
+            return back()->withInput()->withErrors(['layout' => 'Add a design description or upload the ChatGPT design output before continuing.']);
         }
 
         // Pick the artist now, not when the order is written, so the officer
@@ -320,7 +322,25 @@ class InquiryController extends Controller
                 'position' => 0,
                 'artist_id' => $artist?->id,
                 'status' => \App\Models\InquiryDesign::STATUS_WITH_ARTIST,
+                'description' => $data['reference_note'] ?? null,
             ]);
+        }
+
+        // Preserve any old one-note submission by copying it only onto designs
+        // that have not yet been given their own instructions.
+        if (filled($data['reference_note'] ?? null)) {
+            $inquiry->designs()->whereNull('description')->update([
+                'description' => trim($data['reference_note']),
+            ]);
+        }
+
+        $hasDesignDescription = $inquiry->designs()
+            ->whereNotNull('description')
+            ->where('description', '!=', '')
+            ->exists();
+
+        if (! $hasOutput && ! $hasDesignDescription) {
+            return back()->withInput()->withErrors(['layout' => 'Upload the ChatGPT design output or add a description to at least one design before continuing.']);
         }
 
         // Every design goes out at this moment, whoever is drawing it. A design

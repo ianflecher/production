@@ -61,6 +61,7 @@ class InquiryDesignController extends Controller
 
         $data = $request->validate([
             'label' => ['nullable', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'artist_id' => ['nullable', 'integer', 'exists:users,id'],
             // Six at a time rather than six clicks: a kit is listed in one go.
             'how_many' => ['nullable', 'integer', 'min:1', 'max:20'],
@@ -83,6 +84,7 @@ class InquiryDesignController extends Controller
                 'position' => $next + $i,
                 'artist_id' => $artist?->id,
                 'status' => InquiryDesign::STATUS_WITH_ARTIST,
+                'description' => $data['description'] ?? null,
                 // Already sent? Then this one is on their desk from now.
                 'sent_at' => $inquiry->layout_sent_at ? now() : null,
             ]);
@@ -102,6 +104,25 @@ class InquiryDesignController extends Controller
         return back()->with('success', $howMany > 1
             ? $howMany.' designs added'.($artist ? ' for '.$artist->name : '').'.'
             : 'Design added'.($artist ? ' for '.$artist->name : '').'.');
+    }
+
+    /** Save instructions for one design while the officer is preparing the brief. */
+    public function updateDescription(Request $request, Inquiry $inquiry, int $design): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        abort_if($inquiry->layout_sent_at, 422, 'Design instructions are locked after the brief is sent to the artist.');
+
+        $data = $request->validate([
+            'description' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $this->designOf($inquiry, $design)->update([
+            'description' => filled($data['description'] ?? null) ? trim($data['description']) : null,
+        ]);
+
+        return back()->with('success', 'Design description saved.');
     }
 
     /** Take one off the list. Only while nothing has been drawn on it. */
@@ -231,7 +252,56 @@ class InquiryDesignController extends Controller
 
         $inquiry->syncLayoutStatus();
 
-        // The job order opens on the whole set, never on a partial yes.
+        // An early job order already has the designs approved at the time it
+        // was written. Add this newly approved drawing when the client says yes
+        // later, without duplicating files that were carried across already.
+        if ($inquiry->order && $inquiry->order->jobOrder) {
+            foreach ($design->drawings() as $file) {
+                $path = $file['path'] ?? null;
+                if (! $path || $inquiry->order->jobOrder->referenceFiles()->where('path', $path)->exists()) {
+                    continue;
+                }
+
+                $inquiry->order->jobOrder->referenceFiles()->create([
+                    'path' => $path,
+                    'original_name' => $design->name().' - '.($file['original_name'] ?? basename($path)),
+                    'kind' => $file['kind'] ?? 'layout',
+                    'mime' => $file['mime'] ?? null,
+                    'size' => $file['size'] ?? null,
+                    'uploaded_by' => $file['uploaded_by'] ?? $request->user()->id,
+                ]);
+            }
+        }
+
+        // A partial approval can open the job order, but floor work stays
+        // locked until every design is approved.
+        if ($inquiry->order && $inquiry->layoutApproved()) {
+            $order = $inquiry->order;
+            $order->unlockStage(\App\Models\ProductionOrder::STAGE_LAYOUT);
+            $order->tasks()->where('stage', \App\Models\ProductionOrder::STAGE_LAYOUT)
+                ->where('status', '!=', 'complete')->get()
+                ->each(fn ($task) => $task->forceFill([
+                    'status' => 'complete',
+                    'submitted_at' => $inquiry->layout_submitted_at ?? now(),
+                    'approved_at' => $inquiry->layout_approved_at ?? now(),
+                ])->save());
+            $order->forceFill(['layout_approved_at' => $inquiry->layout_approved_at ?? now()])->save();
+            $inquiry->markOrdered($order);
+
+            // If the sample/pre-production work finished while the last
+            // design was awaiting approval, retry the held batch stage now.
+            $earlierWorkOpen = $order->tasks()
+                ->where('stage', '<', 10)
+                ->where('status', '!=', 'complete')
+                ->exists();
+            if (! $earlierWorkOpen) {
+                $order->unlockStage(10);
+            }
+
+            return redirect()->route('orders.show', $order)
+                ->with('success', 'Every remaining design is now approved. Production can continue.');
+        }
+
         if ($inquiry->layoutStatus() === Inquiry::LAYOUT_APPROVED) {
             return redirect()->route('orders.create', ['inquiry' => $inquiry->id])
                 ->with('success', 'Every design approved. Write the job order.');

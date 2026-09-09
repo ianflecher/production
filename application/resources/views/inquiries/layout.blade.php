@@ -108,11 +108,21 @@
     .layout-note-card strong { display: block; margin-bottom: .32rem; font-size: .78rem; color: var(--ink-2); text-transform: uppercase; letter-spacing: .045em; }
     .layout-note-card p { margin: 0; color: var(--ink); font-size: .88rem; line-height: 1.55; }
     .layout-next { border-radius: 12px; }
+    .layout-order-ready {
+        display: flex; align-items: center; gap: .85rem; justify-content: space-between;
+        padding: .9rem 1rem;
+    }
+    .layout-order-copy { min-width: 0; }
+    .layout-order-kicker { display: block; margin-bottom: .14rem; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .layout-order-title { display: block; font-size: .92rem; line-height: 1.28; }
+    .layout-order-lock { display: block; margin-top: .3rem; font-size: .75rem; color: var(--ink-2); }
+    .layout-order-ready .btn { flex: 0 0 auto; white-space: nowrap; }
     .layout-pre-send textarea { min-height: 105px; resize: vertical; }
     @media (max-width: 820px) {
         .layout-page-head { align-items: flex-start; flex-direction: column; }
         .layout-workspace-body { grid-template-columns: 1fr; }
         .layout-status-pane { border-left: 0; border-top: 1px solid #e4eaf3; }
+        .layout-order-ready { align-items: flex-start; flex-direction: column; }
     }
     @media (max-width: 520px) {
         .layout-pane, .layout-workspace-head { padding: .9rem; }
@@ -291,6 +301,24 @@
                 </span>
             </div>
 
+            {{-- Each design carries its own instruction. A jacket and a jersey
+                 on the same brief often need different logos, colours, or
+                 placement notes, so one shared note was too easy to misread. --}}
+            @if (! $inquiry->layout_sent_at)
+                <form method="POST" action="{{ route('inquiries.designs.description', [$inquiry, $design]) }}" style="margin:.65rem 0;">
+                    @csrf
+                    <label for="design_description_{{ $design->id }}" style="display:block; font-size:.78rem; font-weight:700; margin-bottom:.25rem;">Notes / description for {{ $design->name() }}</label>
+                    <textarea id="design_description_{{ $design->id }}" name="description" rows="3" maxlength="2000"
+                              placeholder="What makes this design different — text, colours, logos, placement, sizes…" style="width:100%;">{{ old('description', $design->description) }}</textarea>
+                    <button type="submit" class="btn btn-ghost btn-sm" style="margin-top:.35rem;">Save description</button>
+                </form>
+            @elseif (filled($design->description))
+                <div class="layout-note-card" style="margin:.65rem 0; padding:.6rem .7rem;">
+                    <strong style="font-size:.78rem;">Notes / description</strong>
+                    @include('partials.note-lines', ['note' => $design->description])
+                </div>
+            @endif
+
             {{-- Whose desk it is on, and moving it. Per design: an artist who
                  goes home sick takes only their share of the set with them.
 
@@ -397,40 +425,44 @@
                 </select>
             </div>
         @endif
+        <div class="field" style="margin:0; flex-basis:100%;">
+            <label for="design_description" style="font-size:.78rem;">Initial notes / description</label>
+            <textarea id="design_description" name="description" rows="2" maxlength="2000" placeholder="Optional — you can give every new design its own description after adding it." style="width:100%;"></textarea>
+        </div>
         <button type="submit" class="btn btn-ghost btn-sm">+ Add design</button>
     </form>
 
     @if ($inquiry->layout_sent_at)
-        <div class="layout-note-card">
-            <strong>Notes for the artist</strong>
-            @if (filled($inquiry->layout_reference_note))
-                @include('partials.note-lines', ['note' => $inquiry->layout_reference_note])
-            @else
-                <p style="color: var(--ink-3);">None - the design speaks for itself.</p>
-            @endif
-        </div>
-
-        {{-- The job order opens on the whole set, never on a partial yes. --}}
-        @if ($inquiry->layoutApproved())
-            <div class="alert alert-success layout-next" style="margin-bottom:0;">
-                <strong style="display:block; margin-bottom:.55rem;">The client approved every design.</strong>
+        {{-- One approved design can open the paperwork; the unfinished ones
+             remain on the Layout board until the client approves them. --}}
+        @php $approvedCount = $designs->where('status', \App\Models\InquiryDesign::STATUS_APPROVED)->count(); @endphp
+        @if ($approvedCount > 0)
+            <div class="alert alert-success layout-next layout-order-ready" style="margin-bottom:0;">
+                <div class="layout-order-copy">
+                    <span class="layout-order-kicker">Ready for job order</span>
+                    <strong class="layout-order-title">
+                        {{ $approvedCount }} of {{ $designs->count() }} {{ \Illuminate\Support\Str::plural('design', $approvedCount) }} approved
+                    </strong>
+                    @if (! $inquiry->layoutApproved())
+                        <span class="layout-order-lock">The remaining designs stay in Layout. Sample and pre-production can continue; mass production waits for all approvals.</span>
+                    @endif
+                </div>
                 <a href="{{ route('orders.create', ['inquiry' => $inquiry->id]) }}" class="btn btn-primary btn-sm">
-                    Create the job order &rarr;
+                    Create job order &rarr;
                 </a>
             </div>
         @else
             <div class="alert alert-info layout-next" style="margin-bottom: 0;">
                 {{ $inquiry->designsOutstanding()->count() }} of {{ $designs->count() }}
                 {{ \Illuminate\Support\Str::plural('design', $designs->count()) }} still to be approved.
-                The job order opens once the client has said yes to all of them.
+                The job order opens once the client has said yes to at least one design.
             </div>
         @endif
     @else
         <form method="POST" action="{{ route('inquiries.layout.complete', $inquiry) }}" class="layout-pre-send">
             @csrf
-            <label for="reference_note" style="font-weight:700; font-size:.86rem;">Notes for the artist</label>
-            <span style="display:block; color:var(--ink-3); font-size:.76rem; margin:.18rem 0 .5rem;">Anything the design doesn't show — text, colours, sizes, or must-keep details.</span>
-            <textarea id="reference_note" name="reference_note" rows="4" maxlength="2000" placeholder="e.g. keep the team colors, make the logo bigger on the back" style="width:100%; margin:.4rem 0 .8rem;">{{ old('reference_note', $inquiry->layout_reference_note) }}</textarea>
+            <strong style="display:block; font-size:.86rem;">Ready to send?</strong>
+            <span style="display:block; color:var(--ink-3); font-size:.76rem; margin:.18rem 0 .7rem;">Each design's notes are saved on its own card above, so the artist sees only the instructions for that design.</span>
             @error('layout')<div class="error" style="margin-bottom:.7rem;">{{ $message }}</div>@enderror
             <button type="submit" class="btn btn-primary btn-sm">📤 Send to artist for layout</button>
             <span style="display:inline-block; color:var(--ink-3); font-size:.78rem; margin-left:.4rem;">The job order opens after client approval.</span>

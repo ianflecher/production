@@ -269,6 +269,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::middleware('role:sales,leader,super_admin,order_desk')->group(function () {
         Route::post('/inquiries/{inquiry}/designs', [\App\Http\Controllers\InquiryDesignController::class, 'store'])
             ->whereNumber('inquiry')->name('inquiries.designs.store');
+        Route::post('/inquiries/{inquiry}/designs/{design}/description', [\App\Http\Controllers\InquiryDesignController::class, 'updateDescription'])
+            ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.description');
         Route::post('/inquiries/{inquiry}/designs/{design}/delete', [\App\Http\Controllers\InquiryDesignController::class, 'destroy'])
             ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.delete');
         Route::post('/inquiries/{inquiry}/designs/{design}/artist', [\App\Http\Controllers\InquiryDesignController::class, 'assign'])

@@ -1094,7 +1094,15 @@ class TaskController extends Controller
         }
 
         $ok = match ($task->approver_role) {
-            'sales' => $user->isSales(),
+            // The account officers, and anyone holding the order desk by name.
+            //
+            // Carla takes orders but is not in the sales ROLE, so this asked a
+            // question she could never answer yes to: she could write an order
+            // and then nobody could approve its mockup - not her, because she
+            // is not sales, and not the officers, because the rule below says
+            // an officer only acts on their own orders and this one was hers.
+            // The job stopped dead at the first approval.
+            'sales' => $user->isSales() || $user->holdsOrderDesk(),
             // Handing the goods over is the products desk's job — they are the
             // ones holding the stock and facing the client at the counter.
             'inventory' => $user->canManageProducts(),
@@ -1119,7 +1127,9 @@ class TaskController extends Controller
         // An account officer may only act on samples for their own orders. This
         // is about whose client it is, so it does not apply to the products
         // desk, who release for the whole shop.
-        if ($task->approver_role === 'sales' && $user->isSales() && $task->order->created_by !== $user->id) {
+        if ($task->approver_role === 'sales'
+            && ($user->isSales() || $user->holdsOrderDesk())
+            && $task->order->created_by !== $user->id) {
             abort(403);
         }
     }

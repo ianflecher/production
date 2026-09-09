@@ -117,7 +117,7 @@ class ProductionOrderController extends Controller
             return redirect()->route('inquiries.create');
         }
 
-        $inquiry = \App\Models\Inquiry::with('client')->findOrFail($request->query('inquiry'));
+        $inquiry = \App\Models\Inquiry::with(['client', 'designs'])->findOrFail($request->query('inquiry'));
 
         abort_unless(
             $inquiry->created_by === $request->user()->id
@@ -126,14 +126,22 @@ class ProductionOrderController extends Controller
             403
         );
 
+        // A partial approval may already have opened its job order. Keep the
+        // remaining designs on the layout board, but never create a second
+        // order for the same brief.
+        if ($inquiry->production_order_id) {
+            return redirect()->route('orders.show', $inquiry->production_order_id)
+                ->with('success', 'This brief already has a job order. The remaining designs are still in Layout.');
+        }
+
         // A layout that went to an artist has to come back approved before the
         // job order opens. Nothing was sent — a walk-in with their own artwork,
         // say — and there is nothing to wait for.
-        if ($inquiry->layout_sent_at && ! $inquiry->layoutApproved()) {
+        if ($inquiry->layout_sent_at && ! $inquiry->hasApprovedDesign()) {
             return redirect()->route('inquiries.layout', $inquiry)
                 ->with('success', $inquiry->layoutSubmitted()
-                    ? 'The layout is back — approve it with the client before writing the job order.'
-                    : 'The layout is still with the artist. The job order opens once the client approves it.');
+                    ? 'The layout is back — approve at least one design with the client before writing the job order.'
+                    : 'The layout is still with the artist. The job order opens once the client approves at least one design.');
         }
 
         // The officer sells from their own price list — the merch line is a
@@ -185,11 +193,15 @@ class ProductionOrderController extends Controller
             return null;
         }
 
+        $cap = \App\Services\PricingService::dailyCapacity($productType);
+        if ($cap === null) {
+            return null;
+        }
+
         // Per PRODUCT. Five hundred shirts and five hundred riding jerseys are
         // not the same day's work and do not compete for the same bench, so a
         // date full of shirts must not refuse a jersey.
         $booked = ProductionOrder::bookedQtyForDate($dueDate, $exceptOrderId, $productType);
-        $cap = \App\Services\PricingService::maxQuantity($productType) ?? ProductionOrder::DAILY_CAPACITY;
 
         if ($booked + $qty <= $cap) {
             return null;
@@ -247,6 +259,8 @@ class ProductionOrderController extends Controller
             'vat_inclusive' => ['nullable', 'boolean'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
+            'downpayment_waived' => ['nullable', 'boolean'],
+            'downpayment_waiver_note' => ['nullable', 'string', 'max:500'],
 
             'product_type' => ['required', 'string', 'in:'.implode(',', [...array_keys(\App\Services\PricingService::products($list)), '__other__'])],
             'product_type_custom' => ['nullable', 'required_if:product_type,__other__', 'string', 'max:100'],
@@ -282,7 +296,9 @@ class ProductionOrderController extends Controller
 
         // The ceiling is on the ORDER, not on any one size: five hundred split
         // across S to XXL is still five hundred to make.
-        $max = \App\Services\PricingService::maxQuantity($data['product_type'] ?? null);
+        // The 500-piece ceiling applies only to the four standard apparel
+        // lines. Other/quoted apparel is sized by the officer's quotation.
+        $max = \App\Services\PricingService::dailyCapacity($data['product_type'] ?? null);
 
         if ($max !== null && $sizes->sum() > $max) {
             return back()->withInput()->withErrors(['sizes' => sprintf(
@@ -352,6 +368,10 @@ class ProductionOrderController extends Controller
                 403
             );
 
+            if ($inquiry->layout_sent_at && ! $inquiry->hasApprovedDesign()) {
+                return back()->withErrors(['inquiry_id' => 'Approve at least one design with the client before creating the job order.']);
+            }
+
             $client = $inquiry->client;
         } else {
             $client = ! empty($data['client_id'])
@@ -394,6 +414,8 @@ class ProductionOrderController extends Controller
             'vat_inclusive' => $vat,
             'discount_amount' => $discount,
             'discount_note' => $data['discount_note'] ?? null,
+            'downpayment_waived' => (bool) ($data['downpayment_waived'] ?? false),
+            'downpayment_waiver_note' => filled($data['downpayment_waiver_note'] ?? null) ? $data['downpayment_waiver_note'] : null,
             'created_by' => $request->user()->id,
             'status' => 'active',
         ], $data['decoration_methods'] ?? [], $data['cutting_type']);
@@ -427,7 +449,7 @@ class ProductionOrderController extends Controller
         $carry = collect($inquiry->layout_files ?? [])
             ->map(fn ($file) => $file + ['design_name' => null]);
 
-        foreach ($inquiry->designs as $design) {
+        foreach ($inquiry->designs->filter(fn ($design) => $design->approved()) as $design) {
             foreach ($design->drawings() as $file) {
                 $carry->push($file + ['design_name' => $design->name()]);
             }
@@ -459,28 +481,40 @@ class ProductionOrderController extends Controller
 
             $order->unlockStage(ProductionOrder::STAGE_LAYOUT);
 
-            // The layout was drawn and the client approved it before this order
-            // was written — that is what opened the job order at all. Leaving
-            // the step READY would put finished work back on the artist's board
-            // and stall the pipeline at its first line.
-            if ($inquiry->layoutApproved()) {
+            // One approved design is enough to begin the sample and
+            // pre-production work. Mass production has its own approval gate.
+            if ($inquiry->hasApprovedDesign()) {
                 $order->refresh()->tasks()
                     ->where('stage', ProductionOrder::STAGE_LAYOUT)
                     ->where('status', '!=', 'complete')
                     ->get()
                     ->each(fn ($task) => $task->forceFill([
                         'status' => 'complete',
-                        'submitted_at' => $inquiry->layout_submitted_at ?? $inquiry->layout_approved_at,
-                        'approved_at' => $inquiry->layout_approved_at,
+                        'submitted_at' => $inquiry->layout_submitted_at ?? now(),
+                        'approved_at' => $inquiry->layout_approved_at ?? now(),
                     ])->save());
 
-                $order->forceFill(['layout_approved_at' => $inquiry->layout_approved_at])->save();
+                $order->forceFill(['layout_approved_at' => $inquiry->layout_approved_at ?? now()])->save();
             }
         }
 
         // They asked, and now they have ordered. This is the only way a name
         // comes off the follow-up list — the inquiry keeps the job it became.
-        $inquiry->markOrdered($order);
+        // At least one approved design can open the job order, but the brief
+        // must stay open while other designs are still with the artists. That
+        // keeps them on the artists' Layout boards instead of making them
+        // disappear the moment the first design is approved.
+        // Nothing left waiting on an artist or a client is what takes a name
+        // off the follow-up list - not "the layout is approved", which is a
+        // question a walk-in who never had a layout can never answer yes to.
+        // Asked that way, an order written for somebody with their own artwork
+        // left them on the follow-up list forever, being chased for a job they
+        // had already placed.
+        if ($inquiry->designsOutstanding()->isEmpty()) {
+            $inquiry->markOrdered($order);
+        } else {
+            $inquiry->update(['production_order_id' => $order->id]);
+        }
 
         // Everything said while the layout was being drawn becomes this order's
         // thread. The conversation was already about this job; it only lacked
@@ -524,6 +558,8 @@ class ProductionOrderController extends Controller
 
     public function update(Request $request, ProductionOrder $order): RedirectResponse
     {
+        $hadDownpaymentClearance = $order->hasDownpayment();
+
         // An edit re-prices against the list the job was created on, never the
         // list of whoever happens to be editing it.
         $list = \App\Services\PricingService::resolve($order->price_list);
@@ -551,6 +587,8 @@ class ProductionOrderController extends Controller
             'vat_inclusive' => ['nullable', 'boolean'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
+            'downpayment_waived' => ['nullable', 'boolean'],
+            'downpayment_waiver_note' => ['nullable', 'string', 'max:500'],
 
             'product_type' => ['required', 'string', 'in:'.implode(',', [...array_keys(\App\Services\PricingService::products($list)), '__other__'])],
             'product_type_custom' => ['nullable', 'required_if:product_type,__other__', 'string', 'max:100'],
@@ -579,7 +617,8 @@ class ProductionOrderController extends Controller
 
         // The ceiling is on the ORDER, not on any one size: five hundred split
         // across S to XXL is still five hundred to make.
-        $max = \App\Services\PricingService::maxQuantity($data['product_type'] ?? null);
+        // Other/quoted apparel has no automatic quantity ceiling.
+        $max = \App\Services\PricingService::dailyCapacity($data['product_type'] ?? null);
 
         if ($max !== null && $sizes->sum() > $max) {
             return back()->withInput()->withErrors(['sizes' => sprintf(
@@ -658,6 +697,8 @@ class ProductionOrderController extends Controller
             'vat_inclusive' => $vat,
             'discount_amount' => $discount,
             'discount_note' => $data['discount_note'] ?? null,
+            'downpayment_waived' => (bool) ($data['downpayment_waived'] ?? false),
+            'downpayment_waiver_note' => filled($data['downpayment_waiver_note'] ?? null) ? $data['downpayment_waiver_note'] : null,
             'rush' => $rush,
             'rush_fee' => $rushFee,
         ]);
@@ -665,6 +706,18 @@ class ProductionOrderController extends Controller
         // The size mix may have changed, and the off-chart pieces are priced on
         // their own — so the total is settled from the saved breakdown.
         $order->refresh()->recomputeTotal();
+
+        // A waiver may be selected after the client already approved the
+        // layout. Payments normally release the final mockup through Finance;
+        // the waiver has no payment to confirm, so release that same next stage
+        // here instead.
+        $order->refresh();
+        if (! $hadDownpaymentClearance && $order->hasDownpayment() && $order->layoutApproved()) {
+            $order->unlockStage(ProductionOrder::STAGE_MOCKUP);
+            $order->scheduleStepDeadlines();
+            $order->applySampleDueDate();
+            $routingNote = ' Downpayment waived; the artist can now prepare the final mockup.';
+        }
 
         return redirect()->route('orders.show', $order)->with('success', "Order {$order->order_number} updated.".$routingNote);
     }
@@ -716,7 +769,7 @@ class ProductionOrderController extends Controller
         $date = $request->query('date');
 
         $product = $request->query('product_type');
-        $cap = \App\Services\PricingService::maxQuantity($product) ?? ProductionOrder::DAILY_CAPACITY;
+        $cap = \App\Services\PricingService::dailyCapacity($product);
 
         if (blank($date) || ! strtotime($date)) {
             return response()->json(['booked' => 0, 'capacity' => $cap, 'remaining' => $cap, 'product' => null]);
@@ -727,7 +780,7 @@ class ProductionOrderController extends Controller
         return response()->json([
             'booked' => $booked,
             'capacity' => $cap,
-            'remaining' => max(0, $cap - $booked),
+            'remaining' => $cap === null ? null : max(0, $cap - $booked),
             // So the hint can say 216 of 500 WHAT.
             'product' => $product ? (\App\Services\PricingService::label($product) ?? $product) : null,
         ]);

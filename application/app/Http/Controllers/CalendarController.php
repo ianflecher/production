@@ -140,16 +140,15 @@ class CalendarController extends Controller
                         // The ceiling this product is actually held to, read
                         // from the list the job was priced from — the same
                         // figure the order form refuses against.
-                        $cap = \App\Services\PricingService::maxQuantity($type ?: null, $first->price_list)
-                            ?? ProductionOrder::DAILY_CAPACITY;
+                        $cap = \App\Services\PricingService::dailyCapacity($type ?: null, $first->price_list);
 
                         return [
                             'type' => $type,
                             'label' => $first->productLabel() ?? 'Other work',
                             'qty' => $qty,
-                            'cap' => (int) $cap,
-                            'percent' => $cap > 0 ? min(100, (int) round($qty / $cap * 100)) : 0,
-                            'over' => $cap > 0 && $qty >= $cap,
+                            'cap' => $cap,
+                            'percent' => $cap !== null && $cap > 0 ? min(100, (int) round($qty / $cap * 100)) : 0,
+                            'over' => $cap !== null && $cap > 0 && $qty >= $cap,
                         ];
                     })
                     ->sortByDesc('percent')

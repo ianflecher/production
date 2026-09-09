@@ -108,7 +108,7 @@ class ProductionOrder extends Model
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
         'rush', 'rush_fee',
-        'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note',
+        'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note', 'downpayment_waived', 'downpayment_waiver_note',
         'quantity', 'due_date', 'sample_due_date', 'layout_approved_at', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
         'replaces_order_id', 'replacement_reason',
@@ -134,6 +134,7 @@ class ProductionOrder extends Model
             'total_price' => 'decimal:2',
             'vat_inclusive' => 'boolean',
             'discount_amount' => 'decimal:2',
+            'downpayment_waived' => 'boolean',
             'brief_expires_at' => 'datetime',
             'mockup_offset_x' => 'integer',
             'mockup_offset_y' => 'integer',
@@ -694,6 +695,13 @@ class ProductionOrder extends Model
 
     public function hasDownpayment(): bool
     {
+        // An account officer can explicitly waive the deposit for a sponsored
+        // or trusted-client order. This is an auditable workflow decision, not
+        // a made-up payment record.
+        if ($this->downpayment_waived) {
+            return true;
+        }
+
         // Nothing to wait for. Asked before anything else, because no payment
         // will ever arrive to answer it.
         if ($this->owesNothing()) {
@@ -1883,6 +1891,23 @@ class ProductionOrder extends Model
      */
     public function unlockStage(int $stage): void
     {
+        // A partial design approval can release the sample / pre-production
+        // work, but the full batch must never start while any design is still
+        // waiting on the client. Stage 10 is the mass-production stage.
+        //
+        // Asked as "is anything still outstanding?" rather than "is the layout
+        // approved?". The second question has no yes for an order whose
+        // enquiry never had a layout at all - a walk-in with their own artwork
+        // - so those orders reached the batch and silently stopped there, with
+        // nothing on any screen to say why.
+        if ($stage === 10) {
+            $inquiry = \App\Models\Inquiry::where('production_order_id', $this->id)->first();
+
+            if ($inquiry && $inquiry->designsOutstanding()->isNotEmpty()) {
+                return;
+            }
+        }
+
         // When the Raw materials step opens — which is the moment the leader
         // approves the design package — raise a stock request for each material
         // on the job order.

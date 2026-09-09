@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Inquiry;
+use App\Models\InquiryDesign;
 use App\Models\ProductionOrder;
 use App\Models\User;
 use App\Services\PublicUrl;
@@ -64,6 +65,14 @@ class InquiryLayoutStepTest extends TestCase
         $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry), [
             'reference_note' => 'Keep the team colours.',
         ])->assertRedirect(route('orders.create', ['inquiry' => $inquiry->id]));
+
+        // The job order only opens once the client has approved a design. That
+        // is not what this test is about, so it is done here rather than walked
+        // through the artist and the officer.
+        $inquiry->fresh()->designs->each->update([
+            'status' => InquiryDesign::STATUS_APPROVED,
+            'approved_at' => now(),
+        ]);
 
         $this->actingAs($officer)->post(route('orders.store'), [
             'inquiry_id' => $inquiry->id,

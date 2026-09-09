@@ -59,6 +59,21 @@ class NothingOwedNeedsNoDownpaymentTest extends TestCase
         $this->assertFalse($order->hasDownpayment(), 'no money has arrived yet');
     }
 
+    public function test_an_account_officer_can_waive_only_the_downpayment_gate(): void
+    {
+        $order = $this->order(5000);
+        $order->update([
+            'downpayment_waived' => true,
+            'downpayment_waiver_note' => 'Sponsored client',
+        ]);
+
+        $order = $order->fresh();
+
+        $this->assertTrue($order->hasDownpayment());
+        $this->assertSame(5000.0, (float) $order->balance(), 'the order is still chargeable later');
+        $this->assertSame(0, $order->payments()->count(), 'a waiver must not create a fake payment');
+    }
+
     public function test_an_unpriced_order_is_not_treated_as_paid(): void
     {
         // "For quotation" — no price agreed yet. This is the case the guard

@@ -145,7 +145,7 @@ class MessageController extends Controller
         Message::markInquiryRead($request->user(), $inquiry->id);
 
         return view('messages.layout', [
-            'inquiry' => $inquiry->load(['client', 'layoutArtist']),
+            'inquiry' => $inquiry->load(['client', 'layoutArtist', 'designs']),
             'messages' => $messages,
         ]);
     }

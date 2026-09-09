@@ -325,8 +325,15 @@
                 <span style="font-weight:600; {{ ($order->balance() ?? 0) > 0 ? 'color: var(--danger-ink);' : 'color: var(--success-ink);' }}">Balance ₱{{ number_format($order->balance() ?? 0, 2) }}</span>
             </div>
         @endif
-        @if ($order->hasDownpayment())
+        @if ($order->downpayment_waived)
+            <p style="color: var(--success-ink); font-weight: 600; margin-bottom: 0.35rem;">✓ No downpayment required — waived by the account officer.</p>
+            @if ($order->downpayment_waiver_note)
+                <p class="muted" style="margin: 0 0 0.6rem;">Reason: {{ $order->downpayment_waiver_note }}</p>
+            @endif
+        @elseif ($order->hasDownpayment())
             <p style="color: var(--success-ink); font-weight: 600; margin-bottom: 0.6rem;">✓ Downpayment recorded · total paid ₱{{ $order->totalPaid() }}</p>
+        @endif
+        @if ($order->hasDownpayment() && ! $order->downpayment_waived)
             <div class="tbl-wrap">
                 <table class="tbl">
                     <thead><tr><th>Amount</th><th>Method</th><th>Ref</th><th>Proof</th><th>When</th></tr></thead>

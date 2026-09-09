@@ -106,6 +106,36 @@ class ManyDesignsOnOneBriefTest extends TestCase
             ->assertDontSee('Rider 1');
     }
 
+    public function test_each_design_keeps_its_own_description_for_its_artist(): void
+    {
+        [$officer, $cristal, $mick, $inquiry] = $this->brief();
+
+        $this->actingAs($officer)->post(route('inquiries.designs.store', $inquiry), [
+            'label' => 'Jersey',
+            'artist_id' => $cristal->id,
+            'description' => 'Use the blue team colours and put number 12 on the back.',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($officer)->post(route('inquiries.designs.store', $inquiry), [
+            'label' => 'Jacket',
+            'artist_id' => $mick->id,
+            'description' => 'Use the black jacket logo on the left chest only.',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry))
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($cristal)->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertSee('Use the blue team colours and put number 12 on the back.')
+            ->assertDontSee('Use the black jacket logo on the left chest only.');
+
+        $this->actingAs($mick)->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertSee('Use the black jacket logo on the left chest only.')
+            ->assertDontSee('Use the blue team colours and put number 12 on the back.');
+    }
+
     public function test_one_design_is_handed_back_while_the_others_are_still_being_drawn(): void
     {
         Storage::fake('local');
@@ -193,6 +223,27 @@ class ManyDesignsOnOneBriefTest extends TestCase
             ->assertRedirect(route('orders.create', ['inquiry' => $inquiry->id]));
 
         $this->assertSame(Inquiry::LAYOUT_APPROVED, $inquiry->fresh()->layoutStatus());
+    }
+
+    public function test_a_job_order_can_be_prepared_after_one_of_many_designs_is_approved(): void
+    {
+        [$officer, $cristal, , $inquiry] = $this->brief();
+
+        $this->actingAs($officer)->post(route('inquiries.designs.store', $inquiry), [
+            'label' => 'Rider', 'how_many' => 2, 'artist_id' => $cristal->id,
+            'description' => 'Use the approved team artwork.',
+        ]);
+        $this->actingAs($officer)->post(route('inquiries.layout.complete', $inquiry));
+
+        $first = $inquiry->fresh()->designs->first();
+        $first->update(['status' => InquiryDesign::STATUS_SUBMITTED, 'submitted_at' => now()]);
+
+        $this->actingAs($officer)->post(route('inquiries.designs.approve', [$inquiry, $first]))
+            ->assertRedirect();
+
+        $this->actingAs($officer)->get(route('orders.create', ['inquiry' => $inquiry->id]))
+            ->assertOk()
+            ->assertSee('New Job Order');
     }
 
     public function test_every_approved_design_lands_on_the_job_order(): void

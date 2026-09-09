@@ -20,12 +20,17 @@
     <a href="{{ route('messages.index') }}" class="btn btn-ghost btn-sm">← All messages</a>
 </div>
 
-{{-- What the officer asked for, so the conversation has its subject in view
-     rather than in another tab. --}}
-@if (filled($inquiry->layout_reference_note))
+{{-- Each design now owns its own brief. Keeping them separate here prevents a
+     jacket note being mistaken for a jersey instruction in the conversation. --}}
+@if ($inquiry->designs->contains(fn ($design) => filled($design->description)))
     <div class="card panel" style="margin-bottom:1.1rem;">
-        <strong>Notes from the officer</strong>
-        @include('partials.note-lines', ['note' => $inquiry->layout_reference_note])
+        <strong>Design notes from the officer</strong>
+        @foreach ($inquiry->designs->filter(fn ($design) => filled($design->description)) as $design)
+            <div style="margin-top:.6rem;">
+                <strong style="font-size:.85rem;">{{ $design->name() }}</strong>
+                @include('partials.note-lines', ['note' => $design->description])
+            </div>
+        @endforeach
     </div>
 @endif
 

@@ -33,7 +33,7 @@ class InquiryDesign extends Model
     public const REVISION_LIMIT = Inquiry::LAYOUT_REVISION_LIMIT;
 
     protected $fillable = [
-        'inquiry_id', 'label', 'position', 'artist_id', 'status', 'files',
+        'inquiry_id', 'label', 'position', 'artist_id', 'status', 'files', 'description',
         'revision_note', 'revision_count', 'sent_at', 'submitted_at', 'approved_at',
     ];
 

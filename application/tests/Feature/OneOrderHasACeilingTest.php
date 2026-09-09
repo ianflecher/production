@@ -45,6 +45,8 @@ class OneOrderHasACeilingTest extends TestCase
     {
         $this->assertSame(500, PricingService::maxQuantity('riding_jersey'));
         $this->assertSame(500, PricingService::maxQuantity('round_neck'));
+        $this->assertSame(500, PricingService::dailyCapacity('round_neck'));
+        $this->assertNull(PricingService::dailyCapacity('Other Apparel'));
     }
 
     public function test_an_order_within_it_is_taken(): void

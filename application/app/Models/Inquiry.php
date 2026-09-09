@@ -193,6 +193,26 @@ class Inquiry extends Model
         return $this->layoutStatus() === self::LAYOUT_APPROVED;
     }
 
+    /**
+     * A job order may be prepared once the client has approved any design.
+     *
+     * A brief with no design list is its own single design, and answers with
+     * its own layout status - the same fallback layoutStatus() makes. Without
+     * that, a layout approved before the list existed could never become a job
+     * order: the guard asked for an approved design row, and there was none to
+     * find. Two of the shop's own briefs were in exactly that state.
+     */
+    public function hasApprovedDesign(): bool
+    {
+        $designs = $this->relationLoaded('designs') ? $this->designs : $this->designs()->get();
+
+        if ($designs->isEmpty()) {
+            return $this->layoutApproved();
+        }
+
+        return $designs->contains(fn ($design) => $design->approved());
+    }
+
     /** The finished drawing, as opposed to the officer's brief material. */
     public function layoutDrawings()
     {
