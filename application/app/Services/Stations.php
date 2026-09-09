@@ -37,11 +37,16 @@ class Stations
             ];
         }
 
-        // Add-on stations. Each press has 2 stations so two jobs can run at once.
-        // (The fabric-merge press runs on these same press stations, by its type.)
+        // Add-on stations, so more than one job can run at once. The counts are
+        // what the shop actually has on the floor: three small presses, two
+        // rollers. (The fabric-merge press runs on these same press stations,
+        // by its type.)
         $stations['embroidery'] = ['label' => 'Embroidery', 'group' => 'Add-ons', 'departments' => ['Embroidery']];
-        foreach (['small_press' => 'Small press', 'roller_press' => 'Roller press'] as $key => $label) {
-            for ($i = 1; $i <= 2; $i++) {
+        foreach ([
+            'small_press' => ['Small press', 3],
+            'roller_press' => ['Roller press', 2],
+        ] as $key => [$label, $howMany]) {
+            for ($i = 1; $i <= $howMany; $i++) {
                 $stations[$key.'_'.$i] = ['label' => "$label #$i", 'group' => 'Add-ons', 'departments' => [$label]];
             }
         }
