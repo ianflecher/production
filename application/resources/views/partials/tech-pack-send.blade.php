@@ -35,5 +35,52 @@
         <span style="margin-right: auto; color: var(--danger-ink); font-weight: 600; font-size: 0.85rem;">⚠ {{ $sendBlockReason }}</span>
     @endif
 @else
-    <span style="margin-right: auto; color: var(--success-ink); font-weight: 600; font-size: 0.85rem;">✓ Sent to the artist {{ $jo->sent_to_artist_at?->format('M j, g:i A') }}</span>
+    @php
+        /* WHO has it, and where it has got to.
+
+           This said "Sent to the artist" and the date, for good - the same line
+           on a pack sent an hour ago and one the leader signed off last week.
+           It answered "did it leave my desk?" when the question being asked is
+           "where is it now?", and it never said which artist had it, so the
+           officer had to open the pipeline to find out.
+
+           Read off the Tech Pack step, which is the thing that actually moves:
+           the one still open, or the last one once the job is past it. */
+        $packTask = $order->tasks->first(fn ($task) => $task->isTechPackStep()
+                && ! in_array($task->status, ['complete', 'cancelled'], true))
+            ?? $order->tasks->first(fn ($task) => $task->isTechPackStep());
+
+        $who = $packTask?->assignee?->name;
+
+        [$packState, $packTone] = match (true) {
+            ! $packTask => ['✓ Sent to the artist', 'var(--success-ink)'],
+            $packTask->status === 'complete' => ['✓ Tech pack approved', 'var(--success-ink)'],
+            $packTask->status === 'revision_required' => [
+                '↩ Sent back to '.($who ?? 'the artist'),
+                'var(--danger-ink)',
+            ],
+            $packTask->status === 'for_checking' && $packTask->approver_role === 'leader' => [
+                '⏳ With the leader for checking',
+                'var(--ink-2)',
+            ],
+            $packTask->status === 'for_checking' => [
+                '⏳ Handed back — waiting on the account officer',
+                'var(--ink-2)',
+            ],
+            $packTask->status === 'in_progress' => [
+                $who ? '✎ '.$who.' is drawing it' : '✎ With the artist',
+                'var(--ink-2)',
+            ],
+            // Released and waiting to be picked up. Nobody assigned means the
+            // rotation found no artist marked in today - worth saying, because
+            // it is the one case where somebody has to act.
+            default => $who
+                ? ['✓ Sent to '.$who, 'var(--success-ink)']
+                : ['⚠ Sent — but no artist is in today to take it', 'var(--danger-ink)'],
+        };
+    @endphp
+    <span style="margin-right: auto; color: {{ $packTone }}; font-weight: 600; font-size: 0.85rem;">
+        {{ $packState }}
+        <span style="font-weight: 500; color: var(--ink-3);">— sent {{ $jo->sent_to_artist_at?->format('M j, g:i A') }}</span>
+    </span>
 @endif
