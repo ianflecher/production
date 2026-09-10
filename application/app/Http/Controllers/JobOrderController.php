@@ -217,6 +217,25 @@ class JobOrderController extends Controller
         );
     }
 
+    /** Serve an artist-imported one-image Tech Pack from private storage. */
+    public function importedTechPack(\Illuminate\Http\Request $request, ProductionOrder $order)
+    {
+        $this->assertOrderVisible($order);
+
+        $phase = $request->query('phase') === \App\Models\TechPack::PHASE_MASSPROD
+            ? \App\Models\TechPack::PHASE_MASSPROD
+            : \App\Models\TechPack::PHASE_SAMPLE;
+        $pack = $order->techPackFor($phase);
+        $path = $pack?->imported_pack_path;
+
+        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->response(
+            $path,
+            $pack->imported_pack_name ?: basename($path)
+        );
+    }
+
     public function completeJobOrder(ProductionOrder $order): View
     {
         $this->assertOrderVisible($order);

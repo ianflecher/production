@@ -122,7 +122,24 @@
     };
     $defaultBanner = strtoupper(trim('Standard '.($tp->print_tech ?: $jo?->printTypeLabel() ?: 'print').' placing for '.($tp->item_style ?: $order->productLabel() ?: 'garment')));
     $banner = filled($tp->placing_title) ? strtoupper($tp->placing_title) : '';
+    $importedPackSrc = filled($tp->imported_pack_path)
+        ? route('job-orders.imported-tech-pack', ['order' => $order, 'phase' => $phase])
+        : null;
 @endphp
+
+@if ($importedPackSrc)
+    <style>
+        .tp-imported-pack { width: min(100%, 1180px); margin: 0 auto; background: #fff; border: 1px solid #172033; }
+        .tp-imported-pack img { display: block; width: 100%; height: auto; }
+        @media print { .tp-imported-pack { width: 100%; border: 0; } }
+    </style>
+    <figure class="tp-imported-pack">
+        <img src="{{ $importedPackSrc }}" alt="Imported complete Tech Pack">
+        <figcaption class="no-print" style="padding:0.5rem 0.7rem; font-size:0.82rem; color:var(--ink-2);">Imported complete Tech Pack{{ $tp->imported_pack_name ? ': '.$tp->imported_pack_name : '' }}</figcaption>
+    </figure>
+    <div class="no-print" style="max-width:1180px; margin:0.75rem auto; color:var(--ink-2); font-size:0.85rem;">To replace or remove this image, use the import section above and save the Tech Pack.</div>
+    @php return; @endphp
+@endif
 
 <div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}" data-phase="{{ $phase }}">
     {{-- The leader lines, drawn over the sheet. A pack in the trade points from

@@ -264,6 +264,8 @@ class TaskController extends Controller
             'bottom_text_width' => ['nullable', 'integer', 'min:120', 'max:900'],
             'bottom_text_height' => ['nullable', 'integer', 'min:80', 'max:700'],
             'folder_shot' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
+            'imported_tech_pack' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
+            'remove_imported_tech_pack' => ['nullable', 'boolean'],
             'remove_image' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
             // "this picture belongs in that box" - dragged from one box to
             // another on the sheet. Only meaningful for a picture already
@@ -376,6 +378,25 @@ class TaskController extends Controller
         $pack = $order->openTechPack($task->techPackPhase());
 
         $imageUploads = $pack->image_uploads ?? [];
+
+        // Some suppliers send a finished sheet as one JPEG/PNG. Keep it as a
+        // private upload and show that exact sheet for review and print rather
+        // than trying to pull it apart into editable boxes.
+        if ($request->boolean('remove_imported_tech_pack') && $pack->imported_pack_path) {
+            Storage::disk('local')->delete($pack->imported_pack_path);
+            $packFields['imported_pack_path'] = null;
+            $packFields['imported_pack_name'] = null;
+        }
+
+        if ($request->hasFile('imported_tech_pack')) {
+            if ($pack->imported_pack_path) {
+                Storage::disk('local')->delete($pack->imported_pack_path);
+            }
+
+            $file = $request->file('imported_tech_pack');
+            $packFields['imported_pack_path'] = $file->store('imported-tech-packs', 'local');
+            $packFields['imported_pack_name'] = $file->getClientOriginalName();
+        }
 
         // The sample panel grows and shrinks with the garment: the × takes a box
         // away, the + adds one. The picture goes with the box — leaving the file

@@ -191,6 +191,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->whereNumber('order')->name('job-orders.folder-shot');
     Route::get('/orders/{order}/tech-pack-images/{slot}', [JobOrderController::class, 'techPackImage'])
         ->whereNumber('order')->name('job-orders.tech-pack-image');
+    Route::get('/orders/{order}/imported-tech-pack', [JobOrderController::class, 'importedTechPack'])
+        ->whereNumber('order')->name('job-orders.imported-tech-pack');
 
     Route::get('/job-order-files/{file}/view', [OrderReferenceFileController::class, 'viewReferenceFile'])
         ->whereNumber('file')->name('job-order-files.view');

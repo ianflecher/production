@@ -347,6 +347,16 @@ class InquiryController extends Controller
         // added later is sent as it is added - see InquiryDesignController.
         $inquiry->designs()->whereNull('sent_at')->update(['sent_at' => now()]);
 
+        // Briefs created before designs were split into their own rows could
+        // carry the old enquiry-only state, "brief". Once one is sent, that
+        // state means exactly "with artist"; leaving it unchanged makes the
+        // artist queue (correctly) filter the row out. Normalize it here too,
+        // so an old draft that is sent today cannot disappear.
+        $inquiry->designs()
+            ->where('status', Inquiry::LAYOUT_BRIEF)
+            ->whereNotNull('sent_at')
+            ->update(['status' => \App\Models\InquiryDesign::STATUS_WITH_ARTIST]);
+
         // Anyone left without a name takes whoever is in today, so a brief sent
         // on a quiet morning does not sit on nobody's desk.
         $inquiry->designs()->whereNull('artist_id')->get()

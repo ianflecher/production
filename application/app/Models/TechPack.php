@@ -43,6 +43,9 @@ class TechPack extends Model
         // Direct uploads for the eight picture boxes on the tech-pack sheet.
         'image_uploads', 'image_boxes', 'image_sizes', 'hidden_boxes', 'box_positions', 'callouts',
         'extra_notes',
+        // A complete pack supplied as one approved image instead of rebuilt
+        // from the interactive boxes.
+        'imported_pack_path', 'imported_pack_name',
         // Where the files are, and who drew it
         'folder_shot_path', 'folder_shot_name', 'file_location_notes',
         'artist_name',
