@@ -75,6 +75,7 @@
     .doc table.plain td { border:none; padding:0; }
     .doc input { width:100%; border:none; background:transparent; font-size:0.72rem;
                  padding:0.05rem 0.1rem; font-family:inherit; color:#111; }
+    .doc .doc-number input { text-align:center; font-weight:700; }
     .doc input:focus { outline:1px solid #2563eb; background:#eff6ff; }
     .doc input.num, .doc .num { text-align:right; }
     .doc .ctr { text-align:center; }
@@ -259,8 +260,8 @@
             <tr>
                 <td colspan="2" class="sec" style="border:none;">BILL TO:</td>
                 @unless ($isPq)
-                    <td class="lbl" style="width:16%; border:none; text-align:right; background:transparent;">Quotation #:</td>
-                    <td style="width:22%; border:none;"><input type="text" name="number" value="{{ old('number', $doc->number) }}"></td>
+                    <td class="sec" style="width:15%; border:none; background:transparent;">Quotation #:</td>
+                    <td class="doc-number" style="width:19%; border:none;"><input type="text" name="number" value="{{ old('number', $doc->number) }}" aria-label="Quotation number"></td>
                 @else
                     <td colspan="2" style="border:none;"></td>
                 @endunless
@@ -277,15 +278,15 @@
             @for ($i = 0; $i < $maxRows; $i++)
                 <tr>
                     @if (isset($left[$i]))
-                        <td class="lbl" style="width:18%; text-align:right;">{{ $left[$i][0] }}:</td>
-                        <td style="width:44%;"><input type="text" name="fields[{{ $left[$i][1] }}]" value="{{ old('fields.'.$left[$i][1], $f($left[$i][1])) }}"></td>
+                        <td class="lbl" style="width:15%; text-align:right;">{{ $left[$i][0] }}:</td>
+                        <td style="width:51%;"><input type="text" name="fields[{{ $left[$i][1] }}]" value="{{ old('fields.'.$left[$i][1], $f($left[$i][1])) }}"></td>
                     @else
                         <td style="border:none; background:transparent;"></td><td style="border:none; background:transparent;"></td>
                     @endif
 
                     @if (isset($right[$i]))
-                        <td class="lbl" style="width:16%; text-align:right;">{{ $right[$i][0] }}</td>
-                        <td style="width:22%;">
+                        <td class="lbl" style="width:15%; text-align:center;">{{ $right[$i][0] }}</td>
+                        <td style="width:19%;">
                             @if ($right[$i][1] === '__number')
                                 <input type="text" name="number" value="{{ old('number', $doc->number) }}">
                             @else
@@ -324,12 +325,12 @@
                     </td>
                     <td><input type="text" name="items[{{ $i }}][size]" value="{{ $row['size'] ?? '' }}" style="text-align:center;"></td>
                     <td><input type="number" step="1" min="0" name="items[{{ $i }}][quantity]" value="{{ $row['quantity'] ?? '' }}" class="num"></td>
-                    <td><input type="number" step="0.01" min="0" name="items[{{ $i }}][unit_price]" value="{{ $row['unit_price'] ?? '' }}" class="num"></td>
+                    <td><input type="number" step="0.01" min="-10000000" name="items[{{ $i }}][unit_price]" value="{{ $row['unit_price'] ?? '' }}" class="num"></td>
                     {{-- Blank on empty lines — ₱0.00 everywhere was just noise. --}}
-                    <td class="num">{{ $amt > 0 ? $peso($amt) : '' }}</td>
+                    <td class="num">{{ $amt != 0.0 ? $peso($amt) : '' }}</td>
                     @if ($isPq)
-                        <td class="num">{{ $amt > 0 ? $peso($rowVat) : '' }}</td>
-                        <td class="num">{{ $amt > 0 ? $peso($amt + $rowVat) : '' }}</td>
+                        <td class="num">{{ $amt != 0.0 ? $peso($rowVat) : '' }}</td>
+                        <td class="num">{{ $amt != 0.0 ? $peso($amt + $rowVat) : '' }}</td>
                     @endif
                 </tr>
             @endforeach
@@ -398,7 +399,7 @@
                    ['Gross', null, $peso($t['net']), 'y'],
                    ['Downpayment', 'downpayment', null, 'p'],
                    ['Fullpayment', 'full_payment', null, 'p'],
-                   ['W/ Holding Tax 2307', 'withholding_tax', null, 'p'],
+                   ['W/ Holding Tax'.($order->withholding_rate ? ' '.$order->withholding_rate.'%' : ' 2307'), 'withholding_tax', null, 'p'],
                    ['Total Balance', 'total_balance', null, 'y']]
                 : [['Total Quantity', null, number_format($t['quantity']), 'y'],
                    ['Total Amount Due', null, $peso($t['amount']), 'yr'],
@@ -617,7 +618,7 @@
             '<td><input type="text" name="items[' + i + '][description]"></td>' +
             '<td><input type="text" name="items[' + i + '][size]" style="text-align:center;"></td>' +
             '<td><input type="number" step="1" min="0" name="items[' + i + '][quantity]" class="num"></td>' +
-            '<td><input type="number" step="0.01" min="0" name="items[' + i + '][unit_price]" class="num"></td>' +
+            '<td><input type="number" step="0.01" min="-10000000" name="items[' + i + '][unit_price]" class="num"></td>' +
             '<td class="num"></td>';
         if (isPq) { html += '<td class="num"></td><td class="num"></td>'; }
         tr.innerHTML = html;
@@ -642,10 +643,10 @@
                 if (!qEl || !uEl) return;
                 var q = num(qEl.value), u = num(uEl.value), amt = q * u, vat = isPq ? amt * 0.12 : 0;
                 var cells = tr.querySelectorAll('td.num');   // the display cells (not the input tds)
-                if (cells[0]) cells[0].textContent = amt > 0 ? money(amt) : '';
+                if (cells[0]) cells[0].textContent = amt !== 0 ? money(amt) : '';
                 if (isPq) {
-                    if (cells[1]) cells[1].textContent = amt > 0 ? money(vat) : '';
-                    if (cells[2]) cells[2].textContent = amt > 0 ? money(amt + vat) : '';
+                    if (cells[1]) cells[1].textContent = amt !== 0 ? money(vat) : '';
+                    if (cells[2]) cells[2].textContent = amt !== 0 ? money(amt + vat) : '';
                 }
                 totalQty += q; totalAmt += amt; totalVat += vat;
             });

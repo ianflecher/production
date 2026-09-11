@@ -117,6 +117,8 @@ class JobOrderController extends Controller
             'zipper_type' => ['nullable', 'string', 'max:60'],
             'lip_pocket_color' => ['nullable', 'string', 'max:60'],
             'placing_title' => ['nullable', 'string', 'max:160'],
+            'pack_created_date' => ['nullable', 'date'],
+            'pack_delivery_date' => ['nullable', 'date'],
         ]);
 
         // There may be no pack yet - the officer reaches this sheet before any
@@ -130,6 +132,7 @@ class JobOrderController extends Controller
         $pack->fill(\Illuminate\Support\Arr::only($data, [
             'design_name', 'fitting', 'item_style', 'tshirt_color', 'thread_color',
             'zipper_type', 'lip_pocket_color', 'placing_title',
+            'pack_created_date', 'pack_delivery_date',
         ]));
         $pack->production_order_id = $order->id;
         $pack->phase = $phase;

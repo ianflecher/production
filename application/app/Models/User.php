@@ -45,6 +45,16 @@ class User extends Authenticatable
     /** A leader in everything but name — see isSupervisor(). */
     public const JOB_SUPERVISOR = 'supervisor';
 
+    /** A sewing supervisor is deliberately narrower than a line supervisor. */
+    public const JOB_SEWING_SUPERVISOR = 'sewing supervisor';
+
+    /**
+     * The HR desk: hiring, payslips, incidents, loans and the people's own
+     * requests. Their pages are all under /hr and their data in hr_ tables,
+     * kept apart from the shop floor system on purpose.
+     */
+    public const JOB_HR = 'hr';
+
     /**
      * The leader of the artists. He is an artist himself — he takes tech packs
      * off the same rotation as the rest of them — and on top of that he checks
@@ -96,6 +106,9 @@ class User extends Authenticatable
                 'inventory' => 'Inventory (finished products)',
                 'mover' => 'Mover',
             ],
+            'Supervision' => [
+                self::JOB_SEWING_SUPERVISOR => 'Sewing Supervisor',
+            ],
             // Kept because existing accounts hold them, and somebody who really
             // does work the whole line should still be able to say so.
             'Whole team' => [
@@ -111,6 +124,7 @@ class User extends Authenticatable
         return [
             self::ROLE_SALES => 'Account Officer',
             self::ROLE_FINANCE => 'Finance',
+            self::JOB_HR => 'HR',
             self::JOB_SUPERVISOR => 'Supervisor',
             self::JOB_ARTIST_LEAD => 'Artist Leader',
             self::ROLE_LEADER => 'Leader',
@@ -153,6 +167,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        // Set when an account is made FOR somebody — HR hiring, or a password
+        // reset. Without it here, User::create() drops it without a word and
+        // the new hire walks straight past the change-password page.
+        'must_change_password',
         'job_role',
         'team',
         'price_list',
@@ -185,6 +203,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'is_active' => 'boolean',
             'is_team_leader' => 'boolean',
             'can_create_orders' => 'boolean',
@@ -243,7 +262,7 @@ class User extends Authenticatable
             // isLeader() said true — the `role:` middleware trusts this value,
             // so every leader page (approvals, users, orders, calendar) 403'd
             // even though UserController already scopes the user list for them.
-            'supervisor' => self::ROLE_LEADER,
+            'supervisor', self::JOB_SEWING_SUPERVISOR, 'sewer supervisor' => self::ROLE_LEADER,
             // The mover walks the floor chasing progress, so she needs to READ
             // every job order and see where each one is stuck. She gets the
             // viewing pages only — nothing that changes an order.
@@ -272,7 +291,11 @@ class User extends Authenticatable
      */
     public function isSupervisor(): bool
     {
-        return strtolower(trim((string) $this->job_role)) === self::JOB_SUPERVISOR;
+        return in_array(strtolower(trim((string) $this->job_role)), [
+            self::JOB_SUPERVISOR,
+            self::JOB_SEWING_SUPERVISOR,
+            'sewer supervisor',
+        ], true);
     }
 
     /**
@@ -287,8 +310,11 @@ class User extends Authenticatable
             return null;
         }
 
-        // Sir Boying supervises production; any other supervisor defaults to design.
-        return str_contains(strtolower($this->name), 'boying') ? 'production' : 'design';
+        $role = strtolower(trim((string) $this->job_role));
+
+        return in_array($role, [self::JOB_SEWING_SUPERVISOR, 'sewer supervisor'], true)
+            ? 'sewing'
+            : 'production';
     }
 
     /**
@@ -314,6 +340,37 @@ class User extends Authenticatable
     }
 
     /**
+     * May hand a layout from one artist to another.
+     *
+     * The floor leader always could. The artist leader could not, which was
+     * the wrong way round: the artists are his, he is the one who knows which
+     * of them is free, and asking a leader to move an artist's work for him
+     * was a message in the middle of a decision he had already made — the same
+     * reasoning that already lets him give out the artists' tasks.
+     */
+    public function canMoveArtistWork(): bool
+    {
+        return $this->isLeader() || $this->isSuperAdmin() || $this->isArtistLead();
+    }
+
+    /** The HR desk. */
+    public function isHr(): bool
+    {
+        return strtolower(trim((string) $this->job_role)) === self::JOB_HR;
+    }
+
+    /**
+     * May open the HR pages: the HR desk itself, and the people the shop
+     * already trusts with everybody's business - a leader, a supervisor, and
+     * Boss G. Hiring is a conversation between those desks, so all of them see
+     * who has applied.
+     */
+    public function canUseHr(): bool
+    {
+        return $this->isHr() || $this->isSuperAdmin() || $this->isLeader();
+    }
+
+    /**
      * Does this user's management scope cover $other? Leaders and super admins
      * oversee everyone; a supervisor only their slice of the floor.
      */
@@ -331,6 +388,14 @@ class User extends Authenticatable
             return $other->isArtist();
         }
 
+        if ($scope === 'sewing') {
+            return strtolower(trim((string) $other->job_role)) === 'sewing';
+        }
+
+        if ($scope === 'production') {
+            return self::isProductionFlowRole($other->job_role);
+        }
+
         return self::roleDomain($other->job_role) === $scope;
     }
 
@@ -344,7 +409,7 @@ class User extends Authenticatable
     {
         $r = strtolower(trim((string) $role));
 
-        if (in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_FINANCE, 'supervisor'], true)) {
+        if (in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_FINANCE, 'supervisor', self::JOB_SEWING_SUPERVISOR, 'sewer supervisor'], true)) {
             return 'admin';
         }
 
@@ -353,6 +418,19 @@ class User extends Authenticatable
         }
 
         return 'production';
+    }
+
+    /** Roles a production supervisor manages: Printer through Quality Control. */
+    public static function isProductionFlowRole(?string $role): bool
+    {
+        $role = strtolower(trim((string) $role));
+
+        return in_array($role, [
+            self::JOB_PRODUCTION,
+            'printer', 'embroidery', 'small press', 'roller press',
+            'laser cutting', 'manual cutting', 'pairing', 'sewing',
+            'quality control', 'qc',
+        ], true) || str_contains($role, 'press');
     }
 
     /**
@@ -397,6 +475,12 @@ class User extends Authenticatable
 
         if ($this->isSupervisor()) {
             return $this->supervisorScope();
+        }
+
+        // Leaders oversee the customer-facing design side: account officers,
+        // agents and artists. The production line belongs to its supervisors.
+        if ($this->role === self::ROLE_LEADER) {
+            return 'design';
         }
 
         return null;   // other leaders manage everyone
@@ -477,10 +561,16 @@ class User extends Authenticatable
         return $this->isMover();
     }
 
-    /** Finance, leaders and super admins may see the payments ledger. */
+    /** Finance and Super Admin may see the payments ledger. */
     public function canManageFinance(): bool
     {
-        return $this->isFinance() || $this->isLeader();
+        // Supervisors derive the leader permission role for the production
+        // pipeline, but Finance is never part of their boundary.
+        if ($this->isSupervisor()) {
+            return false;
+        }
+
+        return $this->isFinance() || $this->isSuperAdmin() || $this->role === self::ROLE_LEADER;
     }
 
     public function isAgent(): bool
@@ -577,12 +667,12 @@ class User extends Authenticatable
     }
 
     /**
-     * The raw-materials inventory: leaders/admins plus the supply-chain team
-     * (including accounts whose job role is literally "Raw materials").
+     * The raw-materials inventory belongs to Super Admin and the supply-chain
+     * desk. Leaders and supervisors do not get this tab or its routes.
      */
     public function canManageInventory(): bool
     {
-        if ($this->isLeader()) {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
@@ -600,7 +690,22 @@ class User extends Authenticatable
      */
     public function canManageProducts(): bool
     {
-        if ($this->isLeader()) {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        // A sewing supervisor is deliberately narrower than the rest of the
+        // leader-shaped roles - her scope is the sewing benches, and the
+        // finished-goods desk is not one of them. She reads as a leader only
+        // because the role: middleware needs her to (see getRoleAttribute()),
+        // and that alone was handing her an inventory to count. Asked by scope
+        // rather than by job title, so it keeps matching however the position
+        // is spelled.
+        if ($this->managementScope() === 'sewing') {
+            return false;
+        }
+
+        if ($this->role === self::ROLE_LEADER) {
             return true;
         }
 
@@ -624,7 +729,7 @@ class User extends Authenticatable
      */
     public function canUseStations(): bool
     {
-        if ($this->isLeader()) {
+        if ($this->isSuperAdmin() || $this->isSupervisor()) {
             return true;
         }
 

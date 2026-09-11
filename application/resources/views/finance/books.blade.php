@@ -84,6 +84,76 @@
     </div>
 </div>
 
+{{-- The petty cash tin.
+     Its balance is a running one and deliberately ignores the month picker:
+     money left in the tin on the 31st is still in it on the 1st. The top-ups
+     listed underneath are the chosen month's, like everything else here. --}}
+<div class="card panel">
+    <h2>Petty cash</h2>
+    <p class="sub">
+        The tin the shop spends small amounts from. Put money in here, then record an expense
+        with <strong>Petty cash</strong> as the method and it comes straight back out.
+    </p>
+
+    <div class="bk-stats" style="margin-bottom: 1.1rem;">
+        <div class="card bk-stat {{ $pettyCash > 0 ? 'in' : 'out' }}">
+            <div class="lbl">In the tin</div>
+            <div class="val">₱{{ number_format($pettyCash, 2) }}</div>
+            <div class="note">Available to spend right now</div>
+        </div>
+        <div class="card bk-stat">
+            <div class="lbl">Put in</div>
+            <div class="val">₱{{ number_format($pettyCashIn, 2) }}</div>
+            <div class="note">All top-ups, all time</div>
+        </div>
+        <div class="card bk-stat">
+            <div class="lbl">Spent from it</div>
+            <div class="val">₱{{ number_format($pettyCashOut, 2) }}</div>
+            <div class="note">Expenses paid with petty cash</div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ route('books.petty-cash.store') }}" class="bk-form">
+        @csrf
+        <div>
+            <label for="pc_amount">Add money</label>
+            <input type="number" step="0.01" min="0.01" id="pc_amount" name="amount"
+                   value="{{ old('amount') }}" placeholder="0.00" required>
+        </div>
+        <div>
+            <label for="pc_occurred_at">Date</label>
+            <input type="date" id="pc_occurred_at" name="occurred_at"
+                   value="{{ old('occurred_at', now()->toDateString()) }}" required>
+        </div>
+        <div style="flex: 1 1 260px;">
+            <label for="pc_note">Note <span style="font-weight:400; color:var(--ink-3);">(optional)</span></label>
+            <input type="text" id="pc_note" name="note" value="{{ old('note') }}"
+                   maxlength="255" placeholder="Where the money came from">
+        </div>
+        <div style="align-self: flex-end;">
+            <button class="btn btn-primary">Add to petty cash</button>
+        </div>
+    </form>
+
+    @if ($pettyCashTopups->isNotEmpty())
+        <div class="tbl-wrap" style="margin-top: 1.1rem;">
+            <table class="tbl">
+                <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th>Added by</th></tr></thead>
+                <tbody>
+                    @foreach ($pettyCashTopups as $t)
+                        <tr>
+                            <td>{{ $t->occurred_at?->format('M j, Y') }}</td>
+                            <td>₱{{ number_format((float) $t->amount, 2) }}</td>
+                            <td>{{ $t->note ?: '—' }}</td>
+                            <td>{{ $t->recorder?->name ?? '—' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+</div>
+
 {{-- Where the money went --}}
 @if ($byCategory->isNotEmpty())
     <div class="card panel">
@@ -153,8 +223,9 @@
         </div>
 
         <div>
-            <label for="receipt">Receipt (optional)</label>
-            <input type="file" id="receipt" name="receipt" accept=".jpg,.jpeg,.png,.webp,.pdf">
+            <label for="receipt">Receipt *</label>
+            <input type="file" id="receipt" name="receipt" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
+            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — image or PDF receipt.</div>
         </div>
 
         <div class="full">

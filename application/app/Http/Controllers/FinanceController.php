@@ -19,19 +19,22 @@ class FinanceController extends Controller
         $search = trim((string) $request->query('q', ''));
         $method = $request->query('method');
 
-        return Payment::with(['order.client', 'recorder'])
+        return Payment::with(['order.client', 'recorder', 'confirmer'])
             ->when($search !== '', function ($q) use ($search) {
                 $q->whereHas('order', fn ($o) => $o
                     ->where('order_number', 'like', "%{$search}%")
                     ->orWhere('customer_name', 'like', "%{$search}%"));
             })
-            ->when($method, fn ($q) => $q->where('method', $method))
+            ->when($method, fn ($q) => $method === Payment::METHOD_OTHER_TRANSFER
+                ? $q->where('method', 'like', Payment::METHOD_OTHER_TRANSFER.'%')
+                : $q->where('method', $method))
             ->orderByDesc('paid_at')
             ->orderByDesc('id');
     }
 
     public function index(Request $request): View
     {
+        abort_unless($request->user()->canManageFinance(), 403);
         $search = trim((string) $request->query('q', ''));
         $method = $request->query('method');
 
@@ -59,23 +62,19 @@ class FinanceController extends Controller
      */
     public function export(Request $request)
     {
-        $payments = $this->filtered($request)->get();
+        abort_unless($request->user()->canManageFinance(), 403);
 
-        // VATable and non-VAT sales are two different books at filing time, so
-        // they get a tab each with their own totals. One list with a VAT column
-        // means whoever needs one of them filters and re-adds it by hand every
-        // single time — and a hand-made total is a number nobody can check.
-        [$vatable, $plain] = $payments->partition(
-            fn (Payment $p) => $p->order?->vat_inclusive === true
-        );
+        // This is the actual cash ledger, not a queue of claims awaiting the
+        // bank check. Pending entries stay on Finance until confirmed.
+        $payments = $this->filtered($request)->whereNotNull('confirmed_at')->get();
 
-        return SpreadsheetExport::downloadSheets(
+        return SpreadsheetExport::download(
             'payments-'.now()->format('Y-m-d').'.xlsx',
-            [
-                self::ledgerSheet('VAT sales (12%)', $vatable, true),
-                self::ledgerSheet('Non-VAT sales', $plain, false),
-                self::summarySheet($vatable, $plain),
-            ],
+            'Confirmed payments',
+            self::ledgerColumns(),
+            self::ledgerRows($payments),
+            ['Amount paid'],
+            $payments->count().' confirmed payment(s)',
         );
     }
 
@@ -86,90 +85,37 @@ class FinanceController extends Controller
      * whole non-VAT sheet invites somebody to read it as tax that was charged
      * and came to nothing, rather than tax that never applied.
      */
-    private static function ledgerSheet(string $title, $payments, bool $withVat): array
+    private static function ledgerRows($payments): array
     {
-        $rows = $payments->map(function (Payment $p) use ($withVat) {
-            $gross = (float) $p->amount;
-            $net = $withVat
-                ? round($gross / (1 + \App\Models\ProductionOrder::VAT_RATE), 2)
-                : $gross;
-
-            $line = [
+        return $payments->map(function (Payment $p) {
+            return [
+                $p->paid_at,
                 $p->order?->order_number ?? '',
                 $p->order?->clientName() ?? '',
                 $p->order?->client?->tin ?? '',
-            ];
-
-            if ($withVat) {
-                $line[] = $net;
-                $line[] = round($gross - $net, 2);
-            }
-
-            return array_merge($line, [
-                $gross,
-                $p->kind ?? 'payment',
+                (float) $p->amount,
                 $p->method ?? '',
                 $p->reference ?? '',
-                $p->hasProof() ? ($p->proof_name ?: 'yes') : 'none',
+                $p->kind ?? 'payment',
                 $p->recorder?->name ?? '',
-                $p->paid_at,
-            ]);
-        })->values();
-
-        $columns = [
-            ['Order', SpreadsheetExport::TEXT],
-            ['Client', SpreadsheetExport::TEXT],
-            ['TIN', SpreadsheetExport::TEXT],
-        ];
-
-        if ($withVat) {
-            $columns[] = ['Net of VAT', SpreadsheetExport::MONEY];
-            $columns[] = ['VAT 12%', SpreadsheetExport::MONEY];
-        }
-
-        $columns = array_merge($columns, [
-            ['Amount paid', SpreadsheetExport::MONEY],
-            ['Type', SpreadsheetExport::TEXT],
-            ['Method', SpreadsheetExport::TEXT],
-            ['Reference', SpreadsheetExport::TEXT],
-            ['Proof', SpreadsheetExport::TEXT],
-            ['Recorded by', SpreadsheetExport::TEXT],
-            ['Paid at', SpreadsheetExport::DATE],
-        ]);
-
-        return [
-            'title' => $title,
-            'columns' => $columns,
-            'rows' => $rows,
-            'totalOf' => $withVat
-                ? ['Net of VAT', 'VAT 12%', 'Amount paid']
-                : ['Amount paid'],
-            'subtitle' => $payments->count().' payment(s)',
-        ];
+                $p->confirmedByName() ?? '',
+            ];
+        })->values()->all();
     }
 
-    /** The two tabs added up, so the workbook answers "how much VAT" on its own. */
-    private static function summarySheet($vatable, $plain): array
+    private static function ledgerColumns(): array
     {
-        $vatGross = (float) $vatable->sum('amount');
-        $vatNet = round($vatGross / (1 + \App\Models\ProductionOrder::VAT_RATE), 2);
-        $plainGross = (float) $plain->sum('amount');
-
         return [
-            'title' => 'Summary',
-            'columns' => [
-                ['', SpreadsheetExport::TEXT],
-                ['Payments', SpreadsheetExport::NUMBER],
-                ['Net of VAT', SpreadsheetExport::MONEY],
-                ['VAT 12%', SpreadsheetExport::MONEY],
-                ['Total collected', SpreadsheetExport::MONEY],
-            ],
-            'rows' => [
-                ['VAT sales (12%)', $vatable->count(), $vatNet, round($vatGross - $vatNet, 2), $vatGross],
-                ['Non-VAT sales', $plain->count(), $plainGross, 0.0, $plainGross],
-            ],
-            'totalOf' => ['Payments', 'Net of VAT', 'VAT 12%', 'Total collected'],
-            'subtitle' => 'Both tabs added up',
+            ['Date', SpreadsheetExport::DATE],
+            ['Order #', SpreadsheetExport::TEXT],
+            ['Name', SpreadsheetExport::TEXT],
+            ['TIN', SpreadsheetExport::TEXT],
+            ['Amount paid', SpreadsheetExport::MONEY],
+            ['Method', SpreadsheetExport::TEXT],
+            ['Reference number', SpreadsheetExport::TEXT],
+            ['Type', SpreadsheetExport::TEXT],
+            ['Recorded by', SpreadsheetExport::TEXT],
+            ['Confirmed by', SpreadsheetExport::TEXT],
         ];
     }
 
@@ -181,16 +127,6 @@ class FinanceController extends Controller
      * that watches the account agreeing — and it is what starts the job: the
      * mockup is released and the tech pack opens off the back of it.
      */
-    /** Names used before, so an accountant types theirs once. */
-    public static function pastConfirmers(): array
-    {
-        return Payment::whereNotNull('confirmed_name')
-            ->distinct()
-            ->orderBy('confirmed_name')
-            ->pluck('confirmed_name')
-            ->all();
-    }
-
     public function confirm(Request $request, Payment $payment): \Illuminate\Http\RedirectResponse
     {
         abort_unless($request->user()->canConfirmPayments(), 403);
@@ -199,19 +135,12 @@ class FinanceController extends Controller
             return back()->with('success', 'That payment was already confirmed.');
         }
 
-        // Two accountants share the finance login, so the account cannot say
-        // who looked. Asked for, and required: an unsigned confirmation is the
-        // thing this whole step exists to prevent.
-        $data = $request->validate([
-            'confirmed_name' => ['required', 'string', 'max:100'],
-        ], [
-            'confirmed_name.required' => 'Type your name — the finance login is shared, so the record needs to say who checked.',
-        ]);
-
+        // The signed-in Finance account is the confirmation record. This keeps
+        // the audit trail reliable without asking staff to type a second name.
         $payment->update([
             'confirmed_at' => now(),
             'confirmed_by' => $request->user()->id,
-            'confirmed_name' => trim($data['confirmed_name']),
+            'confirmed_name' => $request->user()->name,
         ]);
 
         // Confirming the FIRST payment is what opens the job. Asked again now
@@ -227,7 +156,7 @@ class FinanceController extends Controller
             $order->scheduleStepDeadlines();
 
             // And the sample gets a date of its own - three days from this
-            // payment, four for a jersey. The order's due date is the promise
+            // payment. The order's due date is the promise
             // to the client about the finished batch; this is the shop's
             // promise about the sample, and a sample that quietly sat for a
             // week used to surface only when the batch behind it ran short.
@@ -244,6 +173,7 @@ class FinanceController extends Controller
 
     public function proof(Payment $payment)
     {
+        abort_unless(request()->user()?->canManageFinance(), 403);
         abort_unless($payment->hasProof() && Storage::disk('local')->exists($payment->proof_path), 404);
 
         return Storage::disk('local')->response(

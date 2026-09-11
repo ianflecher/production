@@ -305,6 +305,13 @@
     @endif
 </div>
 
+{{-- HR, for whoever does it. Sits above the role's own dashboard because
+     somebody who hires is usually opening this page to find out who applied,
+     and it is the half of their job the shop screens below say nothing about. --}}
+@if ($hrOverview ?? null)
+    @include('hr.partials.overview', ['hr' => $hrOverview])
+@endif
+
 @if ($isLeader)
     <div class="dash-stat-grid">
         <div class="dash-stat red">
@@ -981,6 +988,50 @@
             </a>
         </div>
     </div>
+
+    @if (isset($toConfirm))
+        {{-- Finance: the orders whose money is still only a claim. Each row
+             opens the finance page already filtered to that order, so the
+             Confirm button is one click away instead of somewhere in a
+             paginated list of every payment the shop has ever taken. --}}
+        @if ($toConfirm->isEmpty())
+            <div class="card panel" style="margin-top: 1.4rem;">
+                <h2>Nothing waiting to be confirmed</h2>
+                <p class="sub" style="margin: 0;">
+                    Every payment on file has been checked against the account. New ones an
+                    account officer records will appear here.
+                </p>
+            </div>
+        @else
+            <div class="card panel" style="margin-top: 1.4rem;">
+                <h2>Waiting for you to confirm</h2>
+                <p class="sub">
+                    Recorded by an account officer, not yet checked against the account. Oldest
+                    first — a job with an unconfirmed deposit cannot start.
+                </p>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead><tr><th>Order</th><th>Client</th><th>Amount</th><th>Kind</th><th>Recorded</th></tr></thead>
+                        <tbody>
+                            @foreach ($toConfirm as $p)
+                                <tr>
+                                    <td style="font-weight: 600;">
+                                        <a href="{{ route('finance.index', ['q' => $p->order?->order_number]) }}">
+                                            {{ $p->order?->order_number ?? '—' }}
+                                        </a>
+                                    </td>
+                                    <td>{{ $p->order?->clientName() ?: $p->order?->customer_name }}</td>
+                                    <td>₱{{ number_format((float) $p->amount, 2) }}</td>
+                                    <td>{{ ucfirst(str_replace('_', ' ', (string) $p->kind)) }}</td>
+                                    <td>{{ $p->paid_at?->format('M j, Y') ?? '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
+    @endif
 
     @if (isset($stationCards))
         {{-- Station operator: a card per machine they run — waiting count + who's on it. --}}

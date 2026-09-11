@@ -70,7 +70,93 @@ Route::post('/imprint-customs/inquiry-questionnaire/{inquiry:brief_token}/attach
     ->name('client.inquiry-design-brief.attachment.delete');
 
 // ============ Authenticated routes (active accounts only) ============
+/*
+ * -------- HR: the public application form --------
+ *
+ * Unauthenticated, because somebody who does not work here yet cannot log in
+ * to apply. Throttled because anyone on the internet can reach it: six posts
+ * a minute from one address is more than a person filling in a form and far
+ * less than a script filling the table.
+ */
+Route::get('/imprint-customs/apply', [\App\Http\Controllers\Hr\HrApplicationController::class, 'show'])
+    ->name('hr.apply');
+Route::post('/imprint-customs/apply', [\App\Http\Controllers\Hr\HrApplicationController::class, 'submit'])
+    ->middleware('throttle:6,1')->name('hr.apply.submit');
+Route::get('/imprint-customs/apply/thank-you', [\App\Http\Controllers\Hr\HrApplicationController::class, 'thanks'])
+    ->name('hr.apply.thanks');
+
 Route::middleware(['auth', 'active'])->group(function () {
+    // -------- HR: the office side. Everything under /hr, checked in the
+    // controller against canUseHr() — the HR desk, a leader, a supervisor
+    // and Boss G. --------
+    // Choosing your own password after somebody else chose the first one.
+    // Reachable while must_change_password is set — see the middleware.
+    Route::get('/change-password', [\App\Http\Controllers\Auth\ChangePasswordController::class, 'show'])->name('password.change');
+    Route::post('/change-password', [\App\Http\Controllers\Auth\ChangePasswordController::class, 'save'])->name('password.change.save');
+
+    // The HR overview lives on the dashboard now. Kept as a redirect so a
+    // bookmark or an old notification link still lands somewhere useful.
+    Route::get('/hr', fn () => redirect()->route('dashboard'))->name('hr.dashboard');
+    Route::get('/hr/applicants', [\App\Http\Controllers\Hr\HrApplicantController::class, 'index'])->name('hr.applicants.index');
+    Route::get('/hr/applicants/{applicant}', [\App\Http\Controllers\Hr\HrApplicantController::class, 'show'])
+        ->whereNumber('applicant')->name('hr.applicants.show');
+    Route::get('/hr/applicants/{applicant}/photo', [\App\Http\Controllers\Hr\HrApplicantController::class, 'photo'])
+        ->whereNumber('applicant')->name('hr.applicants.photo');
+    Route::post('/hr/applicants/{applicant}/status', [\App\Http\Controllers\Hr\HrApplicantController::class, 'setStatus'])
+        ->whereNumber('applicant')->name('hr.applicants.status');
+    Route::post('/hr/applicants/{applicant}/interviews', [\App\Http\Controllers\Hr\HrInterviewController::class, 'store'])
+        ->whereNumber('applicant')->name('hr.interviews.store');
+    Route::post('/hr/interviews/{interview}', [\App\Http\Controllers\Hr\HrInterviewController::class, 'record'])
+        ->whereNumber('interview')->name('hr.interviews.record');
+
+    // The job offer, and the account a yes turns into.
+    Route::post('/hr/applicants/{applicant}/offer', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'store'])
+        ->whereNumber('applicant')->name('hr.offers.store');
+    Route::get('/hr/offers/{offer}', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'edit'])
+        ->whereNumber('offer')->name('hr.offers.edit');
+    Route::post('/hr/offers/{offer}', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'update'])
+        ->whereNumber('offer')->name('hr.offers.update');
+    Route::post('/hr/offers/{offer}/send', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'send'])
+        ->whereNumber('offer')->name('hr.offers.send');
+    Route::post('/hr/offers/{offer}/accept', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'accept'])
+        ->whereNumber('offer')->name('hr.offers.accept');
+    Route::post('/hr/offers/{offer}/decline', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'decline'])
+        ->whereNumber('offer')->name('hr.offers.decline');
+
+    // -------- The employee's own: no id in any of these, so there is
+    // nothing to change to somebody else's number. --------
+    Route::get('/my-hr', [\App\Http\Controllers\Hr\MyHrController::class, 'index'])->name('hr.my');
+    Route::post('/my-hr/requests', [\App\Http\Controllers\Hr\MyHrController::class, 'fileRequest'])->name('hr.my.requests.store');
+    Route::post('/my-hr/requests/{hrRequest}/withdraw', [\App\Http\Controllers\Hr\MyHrController::class, 'withdrawRequest'])
+        ->whereNumber('hrRequest')->name('hr.my.requests.withdraw');
+    Route::post('/my-hr/incidents/{incident}/read', [\App\Http\Controllers\Hr\MyHrController::class, 'acknowledgeIncident'])
+        ->whereNumber('incident')->name('hr.my.incidents.read');
+
+    // -------- The office side of the people --------
+    Route::get('/hr/employees', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'index'])->name('hr.employees.index');
+    Route::get('/hr/employees/{employee}', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'show'])
+        ->whereNumber('employee')->name('hr.employees.show');
+    Route::post('/hr/employees/{employee}/payslips', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storePayslip'])
+        ->whereNumber('employee')->name('hr.payslips.store');
+    Route::post('/hr/payslips/{payslip}/release', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'releasePayslip'])
+        ->whereNumber('payslip')->name('hr.payslips.release');
+    Route::post('/hr/employees/{employee}/incidents', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storeIncident'])
+        ->whereNumber('employee')->name('hr.incidents.store');
+    Route::post('/hr/employees/{employee}/loans', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storeLoan'])
+        ->whereNumber('employee')->name('hr.loans.store');
+    Route::post('/hr/loans/{loan}/payments', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storeLoanPayment'])
+        ->whereNumber('loan')->name('hr.loans.payments.store');
+    Route::post('/hr/requests/{hrRequest}/decide', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'decideRequest'])
+        ->whereNumber('hrRequest')->name('hr.requests.decide');
+
+    // -------- Payslip cut-offs and government remittances --------
+    Route::get('/hr/deadlines', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'index'])->name('hr.deadlines.index');
+    Route::post('/hr/deadlines', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'store'])->name('hr.deadlines.store');
+    Route::post('/hr/deadlines/{deadline}/toggle', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'toggle'])
+        ->whereNumber('deadline')->name('hr.deadlines.toggle');
+    Route::post('/hr/deadlines/{deadline}/delete', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'destroy'])
+        ->whereNumber('deadline')->name('hr.deadlines.destroy');
+
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -82,6 +168,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     // printing, and it belongs to the order so everyone sees the same one.
     Route::post('/orders/{order}/mockup-offset', [ProductionOrderController::class, 'saveMockupOffset'])
         ->whereNumber('order')->name('orders.mockup-offset');
+    // The original schedule is automatic, but an account officer, supervisor
+    // or leader can move one step's deadline from the live pipeline.
+    Route::post('/orders/{order}/tasks/{task}/deadline', [ProductionOrderController::class, 'updateTaskDeadline'])
+        ->whereNumber('order')->whereNumber('task')->name('orders.tasks.deadline');
 
     // Web Push: browser opts in (works even when closed). This is how alerts
     // reach someone now — the server sends them. Nothing asks on a timer.
@@ -246,7 +336,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     // and the leader group (leader, supervisor, super admin) watches the whole
     // shop's — InquiryController::index already hands a leader every inquiry,
     // it was only this gate that kept them out.
-    Route::middleware('role:sales,leader,super_admin')->group(function () {
+    // The artist leader is in here to READ. He gets the list so he can reach a
+    // brief and hand its layout to another artist; logging a follow-up and
+    // everything else on the page stays the office's — see the partial.
+    Route::middleware('role:sales,leader,super_admin,artist_lead')->group(function () {
         Route::get('/inquiries', [\App\Http\Controllers\InquiryController::class, 'index'])->name('inquiries.index');
     });
 
@@ -260,8 +353,15 @@ Route::middleware(['auth', 'active'])->group(function () {
     // The layout page itself. Sales work it; a leader reads it and is the only
     // one who may move it to another artist, so they have to be able to open it
     // — it lived in the sales-only group, which 403'd every leader.
-    Route::middleware('role:sales,leader,super_admin')->group(function () {
+    Route::middleware('role:sales,leader,super_admin,artist_lead')->group(function () {
+        // The artist leader is in this group for the layout page alone — it is
+        // where he moves a brief between his artists. The controller keeps him
+        // to that: he gets no say over the client's details below.
         Route::get('/inquiries/{inquiry}/layout', [\App\Http\Controllers\InquiryController::class, 'layout'])->name('inquiries.layout');
+    });
+
+    Route::middleware('role:sales,leader,super_admin')->group(function () {
+        Route::patch('/inquiries/{inquiry}/client', [\App\Http\Controllers\InquiryController::class, 'updateClient'])->name('inquiries.client.update');
     });
 
     // The designs under a brief. The officer lists them and answers the
@@ -285,7 +385,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Moving a layout to another artist is the leader's, and it has to work
     // before there is a job order — see InquiryController::reassignLayoutArtist.
-    Route::middleware('role:leader,super_admin')->group(function () {
+    Route::middleware('role:leader,super_admin,artist_lead')->group(function () {
         Route::post('/inquiries/{inquiry}/layout/artist', [\App\Http\Controllers\InquiryController::class, 'reassignLayoutArtist'])
             ->whereNumber('inquiry')->name('inquiries.layout.artist');
     });
@@ -369,6 +469,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         // -------- Bookkeeping: money in vs money out, month by month --------
         Route::get('/books', [BookkeepingController::class, 'index'])->name('books.index');
         Route::post('/books/expenses', [BookkeepingController::class, 'store'])->name('books.expenses.store');
+        // Money into the petty cash tin. What comes out is an ordinary expense
+        // paid with "Petty cash", so there is no matching withdrawal route.
+        Route::post('/books/petty-cash', [BookkeepingController::class, 'topUpPettyCash'])->name('books.petty-cash.store');
         Route::post('/books/expenses/{expense}/delete', [BookkeepingController::class, 'destroy'])
             ->whereNumber('expense')->name('books.expenses.destroy');
         Route::get('/books/expenses/{expense}/receipt', [BookkeepingController::class, 'receipt'])

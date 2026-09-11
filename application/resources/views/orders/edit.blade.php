@@ -174,6 +174,14 @@
                 <label for="discount_note">Reason (optional)</label>
                 <input id="discount_note" type="text" name="discount_note" maxlength="255" value="{{ old('discount_note', $order->discount_note) }}" placeholder="e.g. team sponsorship">
             </div>
+            <div class="field" style="width:180px; margin:0;">
+                <label for="shipping_cost">Shipping cost (₱)</label>
+                <input id="shipping_cost" type="number" name="shipping_cost" step="0.01" min="0" value="{{ old('shipping_cost', (float) $order->shipping_cost ?: '') }}" placeholder="0.00" oninput="updatePrice()">
+            </div>
+            <div class="field" style="min-width:240px; margin:0;">
+                <label>Layout fee</label>
+                <div class="muted" style="padding-top:0.55rem;">₱500 is added automatically and refunded at 24 pcs or more.</div>
+            </div>
         </div>
         <label style="display:flex; align-items:flex-start; gap:0.5rem; font-weight:500; margin-top:0.8rem; max-width:620px;">
             <input type="checkbox" id="downpayment_waived" name="downpayment_waived" value="1" style="width:auto; margin:0.2rem 0 0;" @checked(old('downpayment_waived', $order->downpayment_waived))>
@@ -189,6 +197,12 @@
             <input type="checkbox" id="vat_inclusive" name="vat_inclusive" value="1" style="width:auto;margin:0;" @checked(old('vat_inclusive', $order->vat_inclusive)) onchange="updatePrice()">
             VAT inclusive — add 12% to the total
         </label>
+        <div id="withholdingOptions" style="display:none; margin:0.6rem 0 0 1.75rem;">
+            <div style="font-size:0.86rem; font-weight:600;">Withholding tax — deduct from the VAT total</div>
+            <label style="display:inline-flex; align-items:center; gap:0.35rem; margin:0.35rem 0.7rem 0 0; font-weight:400;"><input type="radio" name="withholding_rate" value="0" @checked((int) old('withholding_rate', $order->withholding_rate) === 0) onchange="updatePrice()"> None</label>
+            <label style="display:inline-flex; align-items:center; gap:0.35rem; margin:0.35rem 0.7rem 0 0; font-weight:400;"><input type="radio" name="withholding_rate" value="1" @checked((int) old('withholding_rate', $order->withholding_rate) === 1) onchange="updatePrice()"> 1%</label>
+            <label style="display:inline-flex; align-items:center; gap:0.35rem; margin:0.35rem 0; font-weight:400;"><input type="radio" name="withholding_rate" value="2" @checked((int) old('withholding_rate', $order->withholding_rate) === 2) onchange="updatePrice()"> 2%</label>
+        </div>
     </div>
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
@@ -347,7 +361,11 @@
 
         // Total = (unit x qty) + back pocket + rush, less discount, then +12% VAT when ticked.
         const discount = parseFloat(document.getElementById('discount_amount')?.value) || 0;
+        const shipping = parseFloat(document.getElementById('shipping_cost')?.value) || 0;
         const vatOn = document.getElementById('vat_inclusive')?.checked;
+        const withholdingRate = vatOn ? (parseInt(document.querySelector('input[name="withholding_rate"]:checked')?.value, 10) || 0) : 0;
+        const withholdingOptions = document.getElementById('withholdingOptions');
+        if (withholdingOptions) withholdingOptions.style.display = vatOn ? 'block' : 'none';
 
         if (unit !== null && qty > 0) {
             const chartedQty = showOffChart ? Math.max(0, qty - offChartQty) : qty;
@@ -363,17 +381,25 @@
                         : 'Set a price for these ' + offChartQty + ' pcs — the other ' + chartedQty + ' are at ' + peso(unit) + '.')
                     : '';
             }
-            const subtotal = garment + pocketAmount + rushFee;
+            const workBeforeLayout = garment + pocketAmount + rushFee + shipping;
+            const layoutFee = discount >= workBeforeLayout ? 0 : 500;
+            const layoutFeeRefund = qty >= 24 ? layoutFee : 0;
+            const subtotal = garment + pocketAmount + rushFee + shipping + layoutFee - layoutFeeRefund;
             const vatable = Math.max(0, subtotal - discount);
             const vat = vatOn ? vatable * 0.12 : 0;
+            const withholding = vatable * (withholdingRate / 100);
             unitOut.textContent = peso(unit);
-            totalOut.textContent = peso(vatable + vat);
+            totalOut.textContent = peso(vatable + vat - withholding);
             const bits = [];
             if (showOffChart && offChartUnit > 0) bits.push(offChartQty + ' off-chart pcs at ' + peso(offChartUnit));
             if (pocketAmount > 0) bits.push('back pocket ' + peso(pocketAmount));
             if (rushFee > 0) bits.push('rush ' + peso(rushFee));
+            if (shipping > 0) bits.push('shipping ' + peso(shipping));
+            if (layoutFee > 0) bits.push('layout fee ' + peso(layoutFee));
+            if (layoutFeeRefund > 0) bits.push('less layout fee refund (24+ pcs) ' + peso(layoutFeeRefund));
             if (discount > 0) bits.push('less ' + peso(Math.min(discount, subtotal)) + ' discount');
             if (vatOn) bits.push('+12% VAT ' + peso(vat));
+            if (withholdingRate > 0) bits.push('less ' + withholdingRate + '% withholding ' + peso(withholding));
             noteText = (noteText ? noteText + ' ' : '') + 'Garment ' + peso(garment)
                 + (bits.length ? ', ' + bits.join(', ') : '') + '.';
         } else { unitOut.textContent = unit !== null ? peso(unit) : '—'; totalOut.textContent = (pocketAmount > 0 && qty > 0) ? peso(pocketAmount) : '—'; }

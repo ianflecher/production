@@ -7,7 +7,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
-    public const METHODS = ['Cash', 'GCash', 'Bank Transfer'];
+    public const METHOD_OTHER_TRANSFER = 'Other transfer';
+
+    public const METHODS = [
+        'Cash',
+        'GCash',
+        'Bank transfer – UnionBank',
+        'Tayocash – EastWest',
+        self::METHOD_OTHER_TRANSFER,
+    ];
 
     protected $fillable = [
         'production_order_id', 'amount', 'method', 'reference',
@@ -37,13 +45,13 @@ class Payment extends Model
     /**
      * Who confirmed it, in the shop's own terms.
      *
-     * The name they typed, because two accountants share one finance login —
-     * falling back to the account when a confirmation predates the question
-     * being asked.
+     * The signed-in Finance account is the source of truth. The saved name is
+     * retained only as a fallback for confirmations made before account-based
+     * attribution was introduced.
      */
     public function confirmedByName(): ?string
     {
-        return $this->confirmed_name ?: $this->confirmer?->name;
+        return $this->confirmer?->name ?: $this->confirmed_name;
     }
 
     public function confirmer()

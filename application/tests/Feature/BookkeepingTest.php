@@ -16,6 +16,12 @@ class BookkeepingTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+    }
+
     private function finance(): User
     {
         return User::factory()->create(['job_role' => User::ROLE_FINANCE, 'is_active' => true]);
@@ -29,6 +35,7 @@ class BookkeepingTest extends TestCase
             'amount' => 1500.50,
             'spent_at' => now()->toDateString(),
             'method' => 'Cash',
+            'receipt' => UploadedFile::fake()->image('receipt.jpg'),
         ], $o);
     }
 
@@ -51,7 +58,7 @@ class BookkeepingTest extends TestCase
     public function test_expense_requires_its_core_fields(): void
     {
         $this->actingAs($this->finance())->post('/books/expenses', [])
-            ->assertInvalid(['category', 'description', 'amount', 'spent_at']);
+            ->assertInvalid(['category', 'description', 'amount', 'spent_at', 'receipt']);
 
         $this->assertSame(0, Expense::count());
     }
@@ -72,8 +79,6 @@ class BookkeepingTest extends TestCase
 
     public function test_a_receipt_can_be_attached_and_is_kept_private(): void
     {
-        Storage::fake('local');
-
         $this->actingAs($this->finance())->post('/books/expenses', $this->expensePayload([
             'receipt' => UploadedFile::fake()->image('receipt.jpg'),
         ]));
@@ -81,6 +86,17 @@ class BookkeepingTest extends TestCase
         $expense = Expense::firstOrFail();
         $this->assertTrue($expense->hasReceipt());
         Storage::disk('local')->assertExists($expense->receipt_path);
+    }
+
+    public function test_an_expense_requires_a_receipt(): void
+    {
+        $payload = $this->expensePayload();
+        unset($payload['receipt']);
+
+        $this->actingAs($this->finance())->post('/books/expenses', $payload)
+            ->assertInvalid(['receipt']);
+
+        $this->assertSame(0, Expense::count());
     }
 
     public function test_removing_an_expense_takes_it_out_of_the_books(): void

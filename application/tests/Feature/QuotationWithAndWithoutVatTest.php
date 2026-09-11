@@ -32,13 +32,13 @@ class QuotationWithAndWithoutVatTest extends TestCase
     {
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
 
-        $order = ProductionOrder::create([
+        $order = ProductionOrder::create(array_merge([
             'order_number' => 'IC2026-000'.(42 + $this->made++), 'customer_name' => 'Quote Co',
             'product_type' => 'round_neck', 'quantity' => 100,
             'unit_price' => 250,                    // 100 × 250 = 25,000
             'vat_inclusive' => $vat,
             'due_date' => now()->addWeeks(2), 'created_by' => $sales->id, 'status' => 'active',
-        ] + $extra);
+        ], $extra));
 
         $order->jobOrder()->create(['status' => 'draft', 'created_by' => $sales->id]);
 
@@ -64,6 +64,43 @@ class QuotationWithAndWithoutVatTest extends TestCase
         $this->assertSame(28000.0, $pb['total']);
     }
 
+    public function test_withholding_reduces_a_vat_order_by_the_selected_rate(): void
+    {
+        $pb = $this->order(true, ['withholding_rate' => 2])->pricingBreakdown();
+
+        $this->assertSame(2, $pb['withholding_rate']);
+        $this->assertSame(500.0, $pb['withholding']);
+        $this->assertSame(27500.0, $pb['total']);
+    }
+
+    public function test_the_layout_fee_is_refunded_on_an_order_of_twenty_four_or_more_pieces(): void
+    {
+        $short = $this->order(false, ['quantity' => 23])->pricingBreakdown();
+        $qualifyingOrder = $this->order(false, ['quantity' => 24]);
+        $qualifying = $qualifyingOrder->pricingBreakdown();
+
+        $this->assertSame(500.0, $short['layout_fee']);
+        $this->assertSame(0.0, $short['layout_fee_refund']);
+        $this->assertSame(6250.0, $short['total']);
+        $this->assertSame(500.0, $qualifying['layout_fee_refund']);
+        $this->assertSame(6000.0, $qualifying['total']);
+
+        $lines = OrderDocument::defaultsFor($qualifyingOrder, OrderDocument::TYPE_PQ)['items'];
+        $this->assertTrue(collect($lines)->contains('description', 'Layout fee'));
+        $this->assertTrue(collect($lines)->contains('description', 'Layout fee refund (24+ pcs)'));
+    }
+
+    public function test_shipping_is_added_to_the_order_and_quotation(): void
+    {
+        $order = $this->order(false, ['quantity' => 24, 'shipping_cost' => 180]);
+        $pb = $order->pricingBreakdown();
+
+        $this->assertSame(180.0, $pb['shipping']);
+        $this->assertSame(6180.0, $pb['total']);
+        $this->assertTrue(collect(OrderDocument::defaultsFor($order, OrderDocument::TYPE_PQ)['items'])
+            ->contains('description', 'Shipping cost'));
+    }
+
     public function test_the_discount_comes_off_before_the_vat(): void
     {
         // Twelve per cent of what is actually being charged, not of the list
@@ -84,6 +121,23 @@ class QuotationWithAndWithoutVatTest extends TestCase
         $this->assertSame(0.0, $pb['vatable']);
         $this->assertSame(0.0, $pb['vat']);
         $this->assertSame(0.0, $pb['total']);
+    }
+
+    public function test_a_discount_that_makes_the_work_free_also_waives_the_layout_fee(): void
+    {
+        // Use fewer than 24 pieces so the result cannot be explained by the
+        // normal 24-piece layout-fee refund.
+        $order = $this->order(false, ['quantity' => 23, 'discount_amount' => 5750]);
+        $pb = $order->pricingBreakdown();
+
+        $this->assertSame(0.0, $pb['layout_fee']);
+        $this->assertSame(0.0, $pb['layout_fee_refund']);
+        $this->assertSame(5750.0, $pb['discount']);
+        $this->assertSame(0.0, $pb['total']);
+
+        $lines = OrderDocument::defaultsFor($order, OrderDocument::TYPE_PQ)['items'];
+        $this->assertFalse(collect($lines)->contains('description', 'Layout fee'));
+        $this->assertFalse(collect($lines)->contains('description', 'Layout fee refund (24+ pcs)'));
     }
 
     public function test_a_vat_order_is_offered_the_receipt_and_a_plain_one_is_not(): void
@@ -153,7 +207,9 @@ class QuotationWithAndWithoutVatTest extends TestCase
         $this->actingAs($sales)
             ->get(route('orders.document', [$order, OrderDocument::TYPE_PQ]))
             ->assertOk()
-            ->assertSee('12% VAT');
+            ->assertSee('12% VAT')
+            ->assertSee('Layout fee')
+            ->assertSee('Layout fee refund (24+ pcs)');
 
         $this->actingAs($sales)
             ->get(route('orders.document', [$order, OrderDocument::TYPE_DR]))

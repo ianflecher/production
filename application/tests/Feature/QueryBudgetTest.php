@@ -59,7 +59,11 @@ class QueryBudgetTest extends TestCase
 
         // [label, url, budget]
         $pages = [
-['Dashboard', '/dashboard', 32],
+            // 33: the sidebar asks once whether this person has an employee
+            // record, which is what decides whether "My HR" is shown to them.
+            // It is one query on every page and it buys the only way an
+            // employee reaches their own payslips, so it is worth the one.
+            ['Dashboard', '/dashboard', 33],
             // 24: the list now loads the canonical client name (including the
             // surname used for sorting), workflow tasks and payment existence.
             // Those are page-wide eager loads, so the count stays flat as rows

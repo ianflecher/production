@@ -56,6 +56,7 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
     {
         $this->actingAs($sales)->post(route('orders.payment', $order), [
             'portion' => 'half', 'method' => 'Cash',
+            'reference' => 'CASH-1001',
             'proof' => UploadedFile::fake()->image('slip.jpg'),
         ]);
     }
@@ -75,6 +76,22 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
             $order->tasks()->where('department', 'Final mockup')->value('status'),
             'the artist was set to work on an unconfirmed payment'
         );
+    }
+
+    public function test_an_officer_cannot_record_another_payment_while_finance_is_checking(): void
+    {
+        [$sales, , $order] = $this->orderAwaitingMoney();
+
+        $this->record($sales, $order);
+
+        $this->actingAs($sales)->post(route('orders.payment', $order), [
+            'portion' => 'half',
+            'method' => 'Cash',
+            'reference' => 'CASH-1002',
+            'proof' => UploadedFile::fake()->image('second-slip.jpg'),
+        ])->assertSessionHasErrors('payment');
+
+        $this->assertSame(1, $order->fresh()->payments()->count());
     }
 
     public function test_confirming_it_starts_the_job(): void
@@ -116,7 +133,7 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
         $this->record($sales, $order);
         $payment = $order->fresh()->payments()->firstOrFail();
 
-        $this->actingAs($finance)->post(route('finance.confirm', $payment), ['confirmed_name' => 'Rey']);
+        $this->actingAs($finance)->post(route('finance.confirm', $payment));
         $first = $payment->fresh()->confirmed_at;
 
         $this->actingAs($finance)->post(route('finance.confirm', $payment), ['confirmed_name' => 'Rey']);
@@ -137,30 +154,26 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
         $this->assertSame($finance->name, $payment->fresh()->confirmer->name);
     }
 
-    public function test_it_records_which_accountant_confirmed(): void
+    public function test_it_records_the_signed_in_finance_account(): void
     {
-        // Two accountants share the finance login, so "confirmed by finance@"
-        // says nothing about who actually checked the bank.
         [$sales, $finance, $order] = $this->orderAwaitingMoney();
 
         $this->record($sales, $order);
         $payment = $order->fresh()->payments()->firstOrFail();
 
         $this->actingAs($finance)
-            ->post(route('finance.confirm', $payment), ['confirmed_name' => 'Marites'])
+            ->post(route('finance.confirm', $payment))
             ->assertRedirect();
 
         $payment = $payment->fresh();
 
-        $this->assertSame('Marites', $payment->confirmed_name);
-        $this->assertSame('Marites', $payment->confirmedByName());
-        // The login is still recorded underneath it.
+        $this->assertSame($finance->name, $payment->confirmed_name);
+        $this->assertSame($finance->name, $payment->confirmedByName());
         $this->assertSame($finance->id, $payment->confirmed_by);
     }
 
-    public function test_it_will_not_confirm_unsigned(): void
+    public function test_it_confirms_without_a_manually_typed_name(): void
     {
-        // An unsigned confirmation is the thing this whole step exists to stop.
         [$sales, $finance, $order] = $this->orderAwaitingMoney();
 
         $this->record($sales, $order);
@@ -168,10 +181,10 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
 
         $this->actingAs($finance)
             ->post(route('finance.confirm', $payment), ['confirmed_name' => ''])
-            ->assertSessionHasErrors('confirmed_name');
+            ->assertRedirect();
 
-        $this->assertFalse($payment->fresh()->isConfirmed());
-        $this->assertFalse($order->fresh()->hasDownpayment(), 'the job started on an unsigned confirmation');
+        $this->assertTrue($payment->fresh()->isConfirmed());
+        $this->assertTrue($order->fresh()->hasDownpayment());
     }
 
     public function test_an_older_confirmation_falls_back_to_the_account(): void
@@ -187,7 +200,7 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
         $this->assertSame($finance->name, $payment->fresh()->confirmedByName());
     }
 
-    public function test_the_ledger_asks_for_a_name(): void
+    public function test_the_ledger_confirms_using_the_signed_in_account(): void
     {
         [$sales, $finance, $order] = $this->orderAwaitingMoney();
 
@@ -195,8 +208,9 @@ class FinanceConfirmsBeforeWorkStartsTest extends TestCase
 
         $this->actingAs($finance)->get(route('finance.index'))
             ->assertOk()
-            ->assertSee('name="confirmed_name"', false)
-            ->assertSee('Your name', false);
+            ->assertSee('Confirm')
+            ->assertDontSee('name="confirmed_name"', false)
+            ->assertDontSee('Your name', false);
     }
 
     public function test_money_taken_before_this_existed_still_counts(): void

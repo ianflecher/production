@@ -43,7 +43,12 @@
                     @endif
                 </a>
 
-                @if (auth()->user()->isLeader())
+                @if (auth()->user()->isSupervisor())
+                    {{-- Supervisors work only their assigned part of the floor.
+                         The Station board below supplies the appropriate
+                         stations: sewing only for a Sewing Supervisor, or the
+                         production line for a Supervisor. --}}
+                @elseif (auth()->user()->isLeader())
                     <a href="{{ route('orders.index') }}" class="nav-item {{ request()->routeIs('orders.*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
                         Production Orders
@@ -131,6 +136,13 @@
                     {{-- The artist leader works the bench like the rest of them,
                          and on top of that checks what they hand in. --}}
                     @if (auth()->user()->isArtistLead())
+                        {{-- The briefs, so he can find one and hand its layout
+                             to another artist. Read-only for him: the page's
+                             own actions are the office's. --}}
+                        <a href="{{ route('inquiries.index') }}" class="nav-item {{ request()->routeIs('inquiries.index') ? 'active' : '' }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                            Follow-ups
+                        </a>
                         <a href="{{ route('approvals') }}" class="nav-item {{ request()->routeIs('approvals') ? 'active' : '' }}">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/></svg>
                             Tech packs to check
@@ -173,7 +185,7 @@
                 @endif
 
                 {{-- Finance — all payments & proof. --}}
-                @if (auth()->user()->canManageFinance())
+                @if (! auth()->user()->isSupervisor() && auth()->user()->canManageFinance())
                     <a href="{{ route('finance.index') }}" class="nav-item {{ request()->routeIs('finance.*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                         Finance
@@ -187,6 +199,55 @@
                 @endif
             </nav>
 
+            {{-- HR keeps its own section, the way it keeps its own tables and
+                 its own /hr routes. The HR desk is not a leader of the floor,
+                 so it cannot ride on the Management section below. --}}
+            @if (auth()->user()->canUseHr())
+                @php $hrNew = \App\Models\HrApplicant::newCount(); @endphp
+                <nav class="nav-section">
+                    <div class="nav-label">HR</div>
+                    {{-- No "HR overview" item: the dashboard is the overview
+                         now, and two links to the same thing is one too many. --}}
+                    <a href="{{ route('hr.applicants.index') }}" class="nav-item {{ request()->routeIs('hr.applicants.*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/></svg>
+                        Applicants
+                        @if ($hrNew > 0)
+                            <span class="count-pill">{{ $hrNew }}</span>
+                        @endif
+                    </a>
+                    <a href="{{ route('hr.employees.index') }}" class="nav-item {{ request()->routeIs('hr.employees.*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                        People
+                    </a>
+                    <a href="{{ route('hr.deadlines.index') }}" class="nav-item {{ request()->routeIs('hr.deadlines.*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        {{-- No count here on purpose: it would be a query on
+                             every page the shop loads, for a number the HR
+                             overview already shows on the dashboard. --}}
+                        Deadlines
+                    </a>
+                </nav>
+            @endif
+
+            {{-- Everybody who has an employee record gets their own HR page —
+                 their payslips, their loans, what they have asked for. --}}
+            @if (\App\Models\HrEmployee::where('user_id', auth()->id())->exists())
+                <nav class="nav-section">
+                    <div class="nav-label">Me</div>
+                    <a href="{{ route('hr.my') }}" class="nav-item {{ request()->routeIs('hr.my*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        My HR
+                    </a>
+                </nav>
+            @endif
+
+            {{-- Supervisors are in this section too now. They run people, and
+                 the page they were missing is the one that lists them: a
+                 supervisor had no way to see their own benches, mark somebody
+                 present, or reset a password without a full leader doing it
+                 for them. UserController::index already narrows the list to
+                 whoever they oversee - Sir Boying sees his fourteen on the
+                 production line, not the whole shop. --}}
             @if (auth()->user()->isLeader())
             <nav class="nav-section">
                 <div class="nav-label">Management</div>
@@ -197,11 +258,17 @@
                      at /system/errors for anyone who needs it. --}}
 
                 {{-- The board says what every station is doing and the calendar
-                     says what is due. Neither answers "what is holding us up?" --}}
-                <a href="{{ route('reports.bottlenecks') }}" class="nav-item {{ request()->routeIs('reports.*') ? 'active' : '' }}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg>
-                    Where work gets stuck
-                </a>
+                     says what is due. Neither answers "what is holding us up?"
+
+                     Kept to the full leaders: it reports on the whole shop,
+                     and a supervisor who runs one slice of the floor cannot
+                     act on most of what it would show them. --}}
+                @unless (auth()->user()->isSupervisor())
+                    <a href="{{ route('reports.bottlenecks') }}" class="nav-item {{ request()->routeIs('reports.*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg>
+                        Where work gets stuck
+                    </a>
+                @endunless
 
                 <a href="{{ route('users.index') }}" class="nav-item {{ request()->routeIs('users.*') ? 'active' : '' }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>

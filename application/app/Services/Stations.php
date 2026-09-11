@@ -11,6 +11,9 @@ use App\Models\JobOrder;
  */
 class Stations
 {
+    /** Every parallel production work area has at least five stations. */
+    private const MIN_PARALLEL_STATIONS = 5;
+
     /**
      * key => [label, group, departments it draws work from]
      *
@@ -38,28 +41,27 @@ class Stations
         }
 
         // Add-on stations, so more than one job can run at once. The counts are
-        // what the shop actually has on the floor: three small presses, two
-        // rollers. (The fabric-merge press runs on these same press stations,
-        // by its type.)
+        // Every parallel work area has at least five stations. The fabric-merge
+        // press runs on these same press stations, by its type.
         $stations['embroidery'] = ['label' => 'Embroidery', 'group' => 'Add-ons', 'departments' => ['Embroidery']];
         foreach ([
-            'small_press' => ['Small press', 3],
-            'roller_press' => ['Roller press', 2],
+            'small_press' => ['Small press', self::MIN_PARALLEL_STATIONS],
+            'roller_press' => ['Roller press', self::MIN_PARALLEL_STATIONS],
         ] as $key => [$label, $howMany]) {
             for ($i = 1; $i <= $howMany; $i++) {
                 $stations[$key.'_'.$i] = ['label' => "$label #$i", 'group' => 'Add-ons', 'departments' => [$label]];
             }
         }
 
-        // Cutting: 5 laser + 5 manual stations (station-based, no tasks)
-        for ($i = 1; $i <= 5; $i++) {
+        // Cutting: five laser + five manual stations (station-based, no tasks)
+        for ($i = 1; $i <= self::MIN_PARALLEL_STATIONS; $i++) {
             $stations['laser_cutting_'.$i] = [
                 'label' => "Laser Cutting #$i",
                 'group' => 'Cutting',
                 'departments' => ['Laser cutting'],
             ];
         }
-        for ($i = 1; $i <= 5; $i++) {
+        for ($i = 1; $i <= self::MIN_PARALLEL_STATIONS; $i++) {
             $stations['manual_cutting_'.$i] = [
                 'label' => "Manual Cutting #$i",
                 'group' => 'Cutting',
@@ -100,15 +102,16 @@ class Stations
     }
 
     /**
-     * Which stations a user may see/run, from their job role. Leaders and the
-     * super admin see everything; each floor role sees only its own station(s).
+     * Which stations a user may see/run, from their job role. Super admin sees
+     * everything; supervisors see only their line and leaders run no machine
+     * board at all. Each floor role sees only its own station(s).
      * An empty list means the station board is not for them.
      *
      * @return array<int, string> station keys
      */
     public static function forUser(\App\Models\User $user): array
     {
-        if ($user->isLeader() || $user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
             return self::keys();
         }
 
@@ -154,6 +157,15 @@ class Stations
             'sewing' => $sewings,
             'quality control' => $qcs,
             'qc' => $qcs,
+            // A production supervisor owns the work from the printer through
+            // quality control. Raw Materials and Sticker stay with Supply.
+            // A sewing supervisor sees sewing only.
+            'supervisor' => array_merge(
+                $printers, ['embroidery'], $smallPresses, $rollerPresses,
+                $cuttings, $pairings, $sewings, $qcs,
+            ),
+            'sewing supervisor' => $sewings,
+            'sewer supervisor' => $sewings,
             // The old broad "production" role covers the whole line.
             'production' => array_merge($cuttings, $pairings, $sewings, $qcs),
         ];

@@ -295,7 +295,7 @@ class MessageController extends Controller
 
     /**
      * Everyone in an order's conversation: the officer who owns it, whoever is
-     * assigned to its tasks, the leaders/admins — and the mover.
+     * assigned to its tasks, the leaders/admins, Finance — and the mover.
      *
      * The mover is in every conversation whether or not she holds a task on it,
      * because chasing a job is her whole job: she has to be reachable by name on
@@ -313,6 +313,9 @@ class MessageController extends Controller
                 $q->whereIn('id', $assignments->keys())
                     ->orWhere('id', $order->created_by)
                     ->orWhereIn('job_role', [User::ROLE_LEADER, User::ROLE_SUPER_ADMIN])
+                    // Finance confirms payments across every job, so it is a
+                    // participant on every job-order conversation too.
+                    ->orWhereRaw('LOWER(TRIM(job_role)) = ?', [User::ROLE_FINANCE])
                     ->orWhereRaw('LOWER(TRIM(job_role)) = ?', ['mover']);
             })
             ->orderBy('name')

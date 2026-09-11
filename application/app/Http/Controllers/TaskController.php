@@ -258,6 +258,8 @@ class TaskController extends Controller
             'tag_2_details' => ['nullable', 'string', 'max:120'],
             'file_location_notes' => ['nullable', 'string', 'max:200'],
             'artist_name' => ['nullable', 'string', 'max:100'],
+            'pack_created_date' => ['nullable', 'date'],
+            'pack_delivery_date' => ['nullable', 'date'],
             'bottom_text' => ['nullable', 'string', 'max:1000'],
             'bottom_image_width' => ['nullable', 'integer', 'min:120', 'max:900'],
             'bottom_image_height' => ['nullable', 'integer', 'min:100', 'max:700'],
@@ -279,6 +281,9 @@ class TaskController extends Controller
             'remove_note' => ['nullable', 'integer', 'min:0'],
             'extra_notes' => ['nullable', 'array', 'max:12'],
             'extra_notes.*' => ['nullable', 'string', 'max:200'],
+            // The sizes this sample is sewn in, one piece of each.
+            'sample_sizes' => ['nullable', 'array', 'max:20'],
+            'sample_sizes.*' => ['nullable', 'string', 'max:20'],
             // What the artist dragged each picture box to, as a share of the
             // sheet's width.
             // Where each box was dragged to, as a share of the sheet's width.
@@ -361,6 +366,7 @@ class TaskController extends Controller
             // read against the picture it sits beside.
             'tag_1_details', 'tag_2_details',
             'file_location_notes', 'artist_name',
+            'pack_created_date', 'pack_delivery_date',
             'bottom_text', 'bottom_image_width', 'bottom_image_height',
             'bottom_text_width', 'bottom_text_height',
         ])->all();
@@ -461,6 +467,20 @@ class TaskController extends Controller
             }
 
             $packFields['extra_notes'] = $notes ?: null;
+        }
+
+        // The sample's own size list. Blank rows are dropped - the sheet always
+        // offers one spare box so another size can be added, and an untouched
+        // spare is not a size. Saved even when it comes to nothing, because
+        // clearing every row is a real answer: this sample is one piece, no
+        // size named.
+        if ($request->has('sample_sizes')) {
+            $sizes = array_values(array_filter(
+                array_map('trim', $data['sample_sizes'] ?? []),
+                fn ($s) => $s !== ''
+            ));
+
+            $packFields['sample_sizes'] = $sizes;
         }
 
         // The leader lines: whichever pins were moved, and any that were

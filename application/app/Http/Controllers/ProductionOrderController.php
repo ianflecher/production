@@ -281,8 +281,10 @@ class ProductionOrderController extends Controller
             'other_size_qty' => ['nullable', 'integer', 'min:0', 'max:100000'],
 
             'vat_inclusive' => ['nullable', 'boolean'],
+            'withholding_rate' => ['nullable', 'integer', 'in:0,1,2'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
+            'shipping_cost' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'downpayment_waived' => ['nullable', 'boolean'],
             'downpayment_waiver_note' => ['nullable', 'string', 'max:500'],
 
@@ -366,11 +368,14 @@ class ProductionOrderController extends Controller
         $rush = (bool) ($data['rush'] ?? false);
         $rushFee = $rush ? round((float) ($data['rush_fee'] ?? 0), 2) : null;
 
-        // Total = (unit x qty) + back pocket + rush, less the discount, then +12% VAT when ticked.
+        // Total = (unit x qty) + back pocket + rush, less the discount, then
+        // +12% VAT and less any selected withholding tax.
         $vat = (bool) ($data['vat_inclusive'] ?? false);
+        $withholdingRate = $vat ? (int) ($data['withholding_rate'] ?? 0) : 0;
         $discount = (float) ($data['discount_amount'] ?? 0);
+        $shippingCost = round((float) ($data['shipping_cost'] ?? 0), 2);
         $totalPrice = ProductionOrder::computeTotal(
-            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee
+            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee, $withholdingRate, $shippingCost
         );
 
         $clientFields = [
@@ -445,10 +450,12 @@ class ProductionOrderController extends Controller
             'skip_sample' => (bool) ($data['skip_sample'] ?? false),
             'rush' => $rush,
             'rush_fee' => $rushFee,
+            'shipping_cost' => $shippingCost,
             'unit_price' => $unitPrice,
             'custom_size_price' => $customSizePrice,
             'total_price' => $totalPrice,
             'vat_inclusive' => $vat,
+            'withholding_rate' => $withholdingRate,
             'discount_amount' => $discount,
             'discount_note' => $data['discount_note'] ?? null,
             'downpayment_waived' => (bool) ($data['downpayment_waived'] ?? false),
@@ -529,17 +536,38 @@ class ProductionOrderController extends Controller
             // One approved design is enough to begin the sample and
             // pre-production work. Mass production has its own approval gate.
             if ($inquiry->hasApprovedDesign()) {
-                $order->refresh()->tasks()
+                $carriedLayout = $order->refresh()->tasks()
                     ->where('stage', ProductionOrder::STAGE_LAYOUT)
                     ->where('status', '!=', 'complete')
-                    ->get()
-                    ->each(fn ($task) => $task->forceFill([
-                        'status' => 'complete',
-                        'submitted_at' => $inquiry->layout_submitted_at ?? now(),
-                        'approved_at' => $inquiry->layout_approved_at ?? now(),
-                    ])->save());
+                    ->get();
+
+                $carriedLayout->each(fn ($task) => $task->forceFill([
+                    'status' => 'complete',
+                    'submitted_at' => $inquiry->layout_submitted_at ?? now(),
+                    'approved_at' => $inquiry->layout_approved_at ?? now(),
+                ])->save());
 
                 $order->forceFill(['layout_approved_at' => $inquiry->layout_approved_at ?? now()])->save();
+
+                // Writing the row is not the same as finishing the step. Going
+                // through Task::approve() is what opens the stage after it, and
+                // forceFill goes straight to the database - so the layout was
+                // done and nothing had been told, leaving the mockup and the
+                // tech pack shut.
+                //
+                // A job with money owing never showed it: Finance confirming
+                // the deposit opens stage 2 by its own door. A sponsored job
+                // priced at zero has no payment coming to open anything, so
+                // IC2026-00006 sat with a finished layout and nothing on any
+                // artist's list until somebody noticed.
+                //
+                // hasDownpayment() already counts "owes nothing" as settled, so
+                // the ordinary handler opens the stage the moment it is asked -
+                // and a job still waiting on money is left shut, exactly as
+                // before.
+                if ($finishedLayout = $carriedLayout->last()) {
+                    $order->refresh()->handleTaskCompleted($finishedLayout->fresh());
+                }
             }
         }
 
@@ -640,8 +668,10 @@ class ProductionOrderController extends Controller
             'other_size_qty' => ['nullable', 'integer', 'min:0', 'max:100000'],
 
             'vat_inclusive' => ['nullable', 'boolean'],
+            'withholding_rate' => ['nullable', 'integer', 'in:0,1,2'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
+            'shipping_cost' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'downpayment_waived' => ['nullable', 'boolean'],
             'downpayment_waiver_note' => ['nullable', 'string', 'max:500'],
 
@@ -704,11 +734,13 @@ class ProductionOrderController extends Controller
             ? null
             : (float) $data['custom_size_price'];
         $vat = (bool) ($data['vat_inclusive'] ?? false);
+        $withholdingRate = $vat ? (int) ($data['withholding_rate'] ?? 0) : 0;
         $discount = (float) ($data['discount_amount'] ?? 0);
+        $shippingCost = round((float) ($data['shipping_cost'] ?? 0), 2);
         $rush = (bool) ($data['rush'] ?? false);
         $rushFee = $rush ? round((float) ($data['rush_fee'] ?? 0), 2) : null;
         $totalPrice = ProductionOrder::computeTotal(
-            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee
+            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee, $withholdingRate, $shippingCost
         );
 
         // Keep the linked client's details fixed up too.
@@ -750,12 +782,14 @@ class ProductionOrderController extends Controller
             'custom_size_price' => $customSizePrice,
             'total_price' => $totalPrice,
             'vat_inclusive' => $vat,
+            'withholding_rate' => $withholdingRate,
             'discount_amount' => $discount,
             'discount_note' => $data['discount_note'] ?? null,
             'downpayment_waived' => (bool) ($data['downpayment_waived'] ?? false),
             'downpayment_waiver_note' => filled($data['downpayment_waiver_note'] ?? null) ? $data['downpayment_waiver_note'] : null,
             'rush' => $rush,
             'rush_fee' => $rushFee,
+            'shipping_cost' => $shippingCost,
         ]);
 
         // The size mix may have changed, and the off-chart pieces are priced on
@@ -850,6 +884,33 @@ class ProductionOrderController extends Controller
             'order' => $order,
             'agents' => $this->assignableUsers(),
         ]);
+    }
+
+    /**
+     * Set the deadline for one pipeline step without re-spacing every other
+     * step. The automatic schedule gives the first plan; the people running
+     * the job need to adjust an individual bench when reality changes.
+     */
+    public function updateTaskDeadline(Request $request, ProductionOrder $order, Task $task): RedirectResponse
+    {
+        $this->assertOrderVisible($order);
+        abort_unless($task->production_order_id === $order->id, 404);
+
+        // Supervisors resolve as leaders (User::isLeader()), while account
+        // officers may edit deadlines on the orders they own.
+        abort_unless($request->user()->isLeader() || $request->user()->canCreateOrders(), 403);
+
+        $data = $request->validate([
+            'due_at' => ['nullable', 'date'],
+        ]);
+
+        $dueAt = filled($data['due_at'] ?? null)
+            ? \Illuminate\Support\Carbon::parse($data['due_at'])->endOfDay()
+            : null;
+
+        $task->update(['due_at' => $dueAt]);
+
+        return back()->with('success', $task->department.' deadline updated.');
     }
 
     public function updateStatus(Request $request, ProductionOrder $order): RedirectResponse

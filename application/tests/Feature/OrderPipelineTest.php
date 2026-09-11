@@ -68,6 +68,7 @@ class OrderPipelineTest extends TestCase
         $this->actingAs($sales)->post("/orders/{$order->id}/payment", [
             'portion' => 'half',
             'method' => 'GCash',
+            'reference' => 'GC-2001',
             'proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect(route('orders.show', $order));
         $this->assertDatabaseHas('payments', ['production_order_id' => $order->id, 'kind' => 'downpayment']);

@@ -85,6 +85,18 @@ class MessagingTest extends TestCase
         $this->assertSame(1, Message::count());
     }
 
+    public function test_finance_can_read_and_post_on_any_job_order_thread(): void
+    {
+        $order = $this->order();
+        $finance = $this->user(User::ROLE_FINANCE);
+
+        $this->actingAs($finance)->get("/messages/{$order->id}")->assertOk();
+        $this->actingAs($finance)->post("/messages/{$order->id}", ['body' => 'Payment is confirmed.'])
+            ->assertRedirect();
+
+        $this->assertSame([$order->id], Message::accessibleOrderIds($finance->fresh())->all());
+    }
+
     public function test_someone_not_on_the_order_cannot_post(): void
     {
         $order = $this->order();
@@ -224,5 +236,16 @@ class MessagingTest extends TestCase
 
         $this->assertDatabaseHas('app_notifications', ['user_id' => $worker->id]);
         $this->assertDatabaseMissing('app_notifications', ['user_id' => $sales->id]);
+    }
+
+    public function test_finance_is_notified_about_every_job_order_conversation(): void
+    {
+        $sales = $this->user(User::ROLE_SALES);
+        $finance = $this->user(User::ROLE_FINANCE);
+        $order = $this->order($sales);
+
+        $this->actingAs($sales)->post("/messages/{$order->id}", ['body' => 'Please check the payment.']);
+
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $finance->id]);
     }
 }

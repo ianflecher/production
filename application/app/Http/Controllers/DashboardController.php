@@ -89,6 +89,12 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
+        // The HR desk's hiring, on the dashboard rather than a page of its own.
+        // Shared rather than passed: index() returns from several branches -
+        // leader, finance, the desks - and adding it to each compact() is how
+        // one of them quietly ends up without it.
+        view()->share('hrOverview', \App\Support\HrOverview::for($user));
+
         $hour = (int) now()->format('G');
         $greeting = match (true) {
             $hour < 12 => 'Good morning',
@@ -240,15 +246,32 @@ class DashboardController extends Controller
 
         // ---- Finance desk: all payments across every order ----------------
         if ($user->isFinance()) {
+            // What the desk is actually FOR, asked first. The three money
+            // totals underneath are worth knowing and none of them is a piece
+            // of work: the job is confirming what the officers recorded, and
+            // until it is done the shop cannot start - hasDownpayment() counts
+            // confirmed money only, so an unconfirmed deposit holds the mockup
+            // shut. It was only findable by paging through every payment ever
+            // taken, so it is put on the desk's own front page.
+            $toConfirm = \App\Models\Payment::with(['order.client', 'recorder'])
+                ->whereNull('confirmed_at')
+                ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                ->orderBy('paid_at')
+                ->orderBy('id')
+                ->get();
+
             $stats = [
                 ['label' => 'Total collected', 'value' => '₱'.number_format((float) \App\Models\Payment::sum('amount'), 2), 'note' => 'All recorded payments'],
                 ['label' => 'This month', 'value' => '₱'.number_format((float) \App\Models\Payment::whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('amount'), 2), 'note' => 'Collected in '.now()->format('F')],
                 ['label' => 'Payment records', 'value' => \App\Models\Payment::count(), 'note' => 'On file'],
             ];
-            $desk = ['url' => route('finance.index'), 'action' => 'Open finance',
-                'title' => 'Finance', 'text' => 'Review every payment and its proof across all orders.'];
 
-            return view('dashboard', compact('user', 'greeting', 'stats', 'desk'));
+            $desk = ['url' => route('finance.index'), 'action' => 'Open finance',
+                'title' => 'Finance', 'text' => $toConfirm->isEmpty()
+                    ? 'Nothing is waiting to be confirmed. Review every payment and its proof across all orders.'
+                    : 'Confirm what the officers have recorded — a job cannot start until its deposit is confirmed.'];
+
+            return view('dashboard', compact('user', 'greeting', 'stats', 'desk', 'toConfirm'));
         }
 
         // ---- Desks that don't work from a task list ----------------------

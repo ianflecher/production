@@ -160,7 +160,8 @@ class Message extends Model
 
     /**
      * Who may read and post in an order's thread. Same rule the job-order files
-     * already use, so the chat never widens access to an order.
+     * already use, except Finance: Finance verifies payments for every order
+     * and must be reachable in that order's conversation.
      */
     public static function canAccess(User $user, ProductionOrder $order): bool
     {
@@ -172,6 +173,7 @@ class Message extends Model
         }
 
         return $user->isLeader()
+            || $user->isFinance()
             || ($user->isSales() && $order->created_by === $user->id)
             || $order->tasks()->where('assigned_to', $user->id)->exists();
     }
@@ -194,7 +196,7 @@ class Message extends Model
             // they are not assigned to is still theirs to answer, and they
             // were only seeing threads on orders they happened to hold a step
             // on.
-            ->when(! $user->isLeader() && ! $user->isMover() && ! $user->canManageInventory(),
+            ->when(! $user->isLeader() && ! $user->isMover() && ! $user->isFinance() && ! $user->canManageInventory(),
                 function ($q) use ($user) {
                 $q->where(function ($w) use ($user) {
                     $w->where('created_by', $user->id)

@@ -20,10 +20,25 @@
     <a href="{{ route('inquiries.create') }}" class="btn btn-primary">+ New inquiry</a>
 </div>
 
+@include('partials.list-search', [
+    'action' => route('inquiries.index'),
+    'value' => $search ?? '',
+    'placeholder' => 'Client, company, number, or what they asked for…',
+    'label' => 'Search follow-ups',
+])
+
 @if ($followUps->isEmpty())
     <div class="card panel">
         <p class="sub" style="margin: 0;">
-            Nobody is waiting. Every inquiry taken so far has become an order.
+            {{-- An empty list means two different things. Telling somebody who
+                 searched for a name that every inquiry has become an order
+                 reads as "that client ordered already", which is the opposite
+                 of what happened. --}}
+            @if (filled($search ?? ''))
+                Nobody on the follow-up list matches “{{ $search }}”.
+            @else
+                Nobody is waiting. Every inquiry taken so far has become an order.
+            @endif
         </p>
     </div>
 

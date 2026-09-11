@@ -69,7 +69,41 @@ class BookkeepingController extends Controller
             'byCategory' => $byCategory,
             'categories' => Expense::CATEGORIES,
             'methods' => Expense::METHODS,
+            // The tin is a running balance, not a monthly one: money left in
+            // it on the 31st is still in it on the 1st. So it is deliberately
+            // NOT filtered by the month being looked at, while the top-ups
+            // listed beside it are, like everything else on this page.
+            'pettyCash' => \App\Models\PettyCashTopup::balance(),
+            'pettyCashIn' => \App\Models\PettyCashTopup::totalIn(),
+            'pettyCashOut' => \App\Models\PettyCashTopup::totalOut(),
+            'pettyCashTopups' => \App\Models\PettyCashTopup::with('recorder')
+                ->whereBetween('occurred_at', [$from, $to])
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->get(),
         ]);
+    }
+
+    /** Put money into the petty cash tin. */
+    public function topUpPettyCash(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:100000000'],
+            'occurred_at' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        \App\Models\PettyCashTopup::create([
+            'amount' => round((float) $data['amount'], 2),
+            'occurred_at' => $data['occurred_at'],
+            'note' => $data['note'] ?? null,
+            'recorded_by' => $request->user()->id,
+        ]);
+
+        return redirect()
+            ->route('books.index', ['month' => Carbon::parse($data['occurred_at'])->format('Y-m')])
+            ->with('success', '₱'.number_format((float) $data['amount'], 2).' added to petty cash. '
+                .'The tin now holds ₱'.number_format(\App\Models\PettyCashTopup::balance(), 2).'.');
     }
 
     public function store(Request $request): RedirectResponse
@@ -82,10 +116,21 @@ class BookkeepingController extends Controller
             'method' => ['nullable', 'in:'.implode(',', Expense::METHODS)],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:2000'],
-            // Receipts are optional here — unlike a client payment, not every
-            // shop expense comes with one.
-            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:512000'],
+            'receipt' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:512000'],
         ]);
+
+        // A tin cannot pay out more than it holds. Without this the balance
+        // goes negative and stops meaning anything - the point of counting a
+        // tin is that the number matches the notes inside it.
+        if (($data['method'] ?? null) === Expense::METHOD_PETTY_CASH) {
+            $balance = \App\Models\PettyCashTopup::balance();
+
+            if (round((float) $data['amount'], 2) > $balance) {
+                return back()->withInput()->withErrors(['amount' =>
+                    'Petty cash only holds ₱'.number_format($balance, 2)
+                    .'. Add money to the tin first, or pay this one another way.']);
+            }
+        }
 
         $receiptPath = null;
         $receiptName = null;

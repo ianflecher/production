@@ -113,8 +113,51 @@ class ProductsFinanceStationsTest extends TestCase
         $this->actingAs($desk)->get('/products')->assertOk();
     }
 
-    public function test_station_board_is_visible_to_leaders(): void
+    public function test_leader_does_not_get_the_machine_station_board(): void
     {
-        $this->actingAs($this->user(User::ROLE_LEADER))->get('/stations')->assertOk();
+        $this->actingAs($this->user(User::ROLE_LEADER))->get('/stations')->assertForbidden();
+    }
+
+    public function test_supervisor_boundaries_only_include_their_line_stations(): void
+    {
+        $line = $this->user(User::JOB_SUPERVISOR);
+        $sewing = $this->user(User::JOB_SEWING_SUPERVISOR);
+
+        $lineStations = \App\Services\Stations::forUser($line);
+        $sewingStations = \App\Services\Stations::forUser($sewing);
+
+        $this->assertNotEmpty($lineStations);
+        $this->assertContains('printer_dtf_printer', $lineStations);
+        $this->assertContains('laser_cutting_1', $lineStations);
+        $this->assertContains('sewing_1', $lineStations);
+        $this->assertContains('qc_1', $lineStations);
+        $this->assertNotContains('raw_materials', $lineStations);
+        $this->assertNotContains('sticker', $lineStations);
+        $this->assertTrue(collect($sewingStations)->every(fn ($station) => str_starts_with($station, 'sewing_')));
+        $this->actingAs($line)->get('/stations')->assertOk();
+        $this->actingAs($sewing)->get('/stations')->assertOk();
+    }
+
+    public function test_parallel_station_areas_have_at_least_five_benches(): void
+    {
+        $keys = array_keys(\App\Services\Stations::all());
+
+        foreach (['small_press_', 'roller_press_', 'laser_cutting_', 'manual_cutting_', 'pairing_', 'sewing_', 'qc_'] as $prefix) {
+            $this->assertGreaterThanOrEqual(
+                5,
+                count(array_filter($keys, fn ($key) => str_starts_with($key, $prefix))),
+                $prefix.' must have at least five stations',
+            );
+        }
+    }
+
+    public function test_supervisors_do_not_get_the_finance_tab_or_route(): void
+    {
+        $supervisor = $this->user(User::JOB_SUPERVISOR);
+
+        $this->actingAs($supervisor)->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee(route('finance.index'), false);
+        $this->actingAs($supervisor)->get('/finance')->assertForbidden();
     }
 }

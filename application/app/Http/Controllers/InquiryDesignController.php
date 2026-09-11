@@ -278,8 +278,9 @@ class InquiryDesignController extends Controller
         if ($inquiry->order && $inquiry->layoutApproved()) {
             $order = $inquiry->order;
             $order->unlockStage(\App\Models\ProductionOrder::STAGE_LAYOUT);
-            $order->tasks()->where('stage', \App\Models\ProductionOrder::STAGE_LAYOUT)
-                ->where('status', '!=', 'complete')->get()
+            $carriedLayout = $order->tasks()->where('stage', \App\Models\ProductionOrder::STAGE_LAYOUT)
+                ->where('status', '!=', 'complete')->get();
+            $carriedLayout
                 ->each(fn ($task) => $task->forceFill([
                     'status' => 'complete',
                     'submitted_at' => $inquiry->layout_submitted_at ?? now(),
@@ -287,6 +288,14 @@ class InquiryDesignController extends Controller
                 ])->save());
             $order->forceFill(['layout_approved_at' => $inquiry->layout_approved_at ?? now()])->save();
             $inquiry->markOrdered($order);
+
+            // The same door as the one in ProductionOrderController: writing
+            // 'complete' onto the row is not finishing the step, and it is
+            // finishing it that opens the stage after. Without this, a job that
+            // owes nothing waits on a payment that is never coming.
+            if ($finishedLayout = $carriedLayout->last()) {
+                $order->refresh()->handleTaskCompleted($finishedLayout->fresh());
+            }
 
             // If the sample/pre-production work finished while the last
             // design was awaiting approval, retry the held batch stage now.
@@ -365,7 +374,10 @@ class InquiryDesignController extends Controller
             $design->artist_id === $user->id
                 || $design->inquiry->created_by === $user->id
                 || $user->isLeader()
-                || $user->isSales(),
+                || $user->isSales()
+                // The artist leader decides who draws these, so he has to be
+                // able to open one that is not his own.
+                || $user->canMoveArtistWork(),
             403
         );
 

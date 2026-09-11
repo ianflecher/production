@@ -11,9 +11,8 @@ use Tests\TestCase;
  * A date on every step, not just on the order.
  *
  * "Due the 14th" tells a sewer nothing about whether they are late — there are
- * sixteen steps between the money and the door. The span from the confirmed
- * downpayment to the due date is shared out evenly, and each step carries the
- * moment it has to be finished by, with the last landing on the due date.
+ * sixteen steps between the money and the door. Sample steps use their own
+ * three-day window; batch steps share the remaining time to delivery.
  */
 class EveryStepCarriesItsOwnDateTest extends TestCase
 {
@@ -68,24 +67,29 @@ class EveryStepCarriesItsOwnDateTest extends TestCase
         );
     }
 
-    public function test_the_span_is_shared_evenly(): void
+    public function test_the_sample_gets_three_days_and_mass_production_gets_the_remaining_window(): void
     {
-        // Thirty days over the pipeline: the gap between one step and the next
-        // is the same the whole way down.
         $start = now()->startOfDay();
         $order = $this->order($start->copy()->addDays(30));
 
         $order->scheduleStepDeadlines($start);
 
-        $dates = $order->fresh()->tasks()->orderBy('sequence')->pluck('due_at')->values();
+        $tasks = $order->fresh()->tasks()->orderBy('sequence')->get();
+        $sampleDates = $tasks->where('stage', '<', 10)->pluck('due_at')->values();
+        $massDates = $tasks->where('stage', '>=', 10)->pluck('due_at')->values();
 
-        $gaps = [];
-        for ($i = 1; $i < $dates->count(); $i++) {
-            $gaps[] = $dates[$i - 1]->diffInMinutes($dates[$i]);
+        $this->assertSame($start->copy()->addDays(3)->toDateString(), $sampleDates->last()->toDateString());
+        $this->assertSame($order->due_date->toDateString(), $massDates->last()->toDateString());
+        $this->assertTrue($massDates->first()->greaterThanOrEqualTo($sampleDates->last()));
+
+        foreach ([$sampleDates, $massDates] as $dates) {
+            $gaps = [];
+            for ($i = 1; $i < $dates->count(); $i++) {
+                $gaps[] = $dates[$i - 1]->diffInMinutes($dates[$i]);
+            }
+
+            $this->assertLessThanOrEqual(1, max($gaps) - min($gaps));
         }
-
-        // Rounding to the minute leaves at most a minute between the gaps.
-        $this->assertLessThanOrEqual(1, max($gaps) - min($gaps), 'the steps were not shared evenly');
     }
 
     public function test_a_job_already_past_its_date_wants_everything_now(): void
@@ -115,6 +119,42 @@ class EveryStepCarriesItsOwnDateTest extends TestCase
             ->assertOk()
             ->assertSee('Due')
             ->assertSee($step->due_at->format('M j'));
+    }
+
+    public function test_the_account_officer_and_supervisor_can_change_one_pipeline_deadline(): void
+    {
+        $order = $this->order();
+        $step = $order->tasks()->orderBy('sequence')->firstOrFail();
+        $sales = User::findOrFail($order->created_by);
+        $supervisor = User::factory()->create([
+            'job_role' => User::JOB_SUPERVISOR,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($sales)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee('name="due_at"', false);
+
+        $this->actingAs($sales)->post(route('orders.tasks.deadline', [$order, $step]), [
+            'due_at' => '2026-10-08',
+        ])->assertRedirect();
+        $this->assertSame('2026-10-08', $step->fresh()->due_at->toDateString());
+
+        $this->actingAs($supervisor)->post(route('orders.tasks.deadline', [$order, $step]), [
+            'due_at' => '2026-10-12',
+        ])->assertRedirect();
+        $this->assertSame('2026-10-12', $step->fresh()->due_at->toDateString());
+    }
+
+    public function test_a_floor_user_cannot_change_a_pipeline_deadline(): void
+    {
+        $order = $this->order();
+        $step = $order->tasks()->orderBy('sequence')->firstOrFail();
+        $printer = User::factory()->create(['job_role' => 'printer', 'is_active' => true]);
+
+        $this->actingAs($printer)->post(route('orders.tasks.deadline', [$order, $step]), [
+            'due_at' => '2026-10-08',
+        ])->assertForbidden();
     }
 
     public function test_a_late_step_is_marked_late_on_the_table(): void

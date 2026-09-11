@@ -35,12 +35,38 @@ class InquiryController extends Controller
      */
     public function index(Request $request): View
     {
-        $this->assertAccess($request);
+        // The artist leader reads this list; everybody else must be the office.
+        if (! $request->user()->isArtistLead()) {
+            $this->assertAccess($request);
+        }
+
+        $search = trim((string) $request->query('q', ''));
 
         return view('inquiries.index', [
+            'search' => $search,
             'followUps' => Inquiry::with(['client', 'officer', 'followUps.user'])
-                ->visibleTo($request->user())
+                // Whose brief it is does not narrow what the artist leader
+                // sees: any of them may be carrying a layout of his to move.
+                // visibleTo() is left alone — it is asked by other pages that
+                // mean it in the officer's sense.
+                ->when(! $request->user()->isArtistLead(),
+                    fn ($q) => $q->visibleTo($request->user()))
                 ->forFollowUp()
+                // Searched in the database so it reaches every name on the
+                // list, not the ones that happen to be on screen. The fields
+                // are the ones the row actually shows - a name, the company,
+                // the number they rang from, and what they asked for.
+                //
+                // Kept inside its own closure on purpose: these are ORs, and
+                // loose at the top level the first of them would break out of
+                // visibleTo() and put other officers' clients on the page.
+                ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                    ->where('what_they_want', 'like', "%{$search}%")
+                    ->orWhereHas('client', fn ($c) => $c
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('company', 'like', "%{$search}%")
+                        ->orWhere('contact_number', 'like', "%{$search}%"))))
                 ->get(),
         ]);
     }
@@ -114,16 +140,33 @@ class InquiryController extends Controller
     }
 
     /** Step two: collect exactly what the artist needs before job details. */
-    public function layout(Request $request, Inquiry $inquiry): View
+    /**
+     * Who may open a brief's layout page.
+     *
+     * The artist leader is let in whoever wrote the brief: the artists drawing
+     * it are his, and he cannot move work between them without seeing it. He
+     * is NOT let into the rest of this controller — assertAccess still keeps
+     * the client's details and the brief itself to the office.
+     */
+    private function assertMayReadLayout(Request $request, Inquiry $inquiry): void
     {
+        if ($request->user()->isArtistLead()) {
+            return;
+        }
+
         $this->assertAccess($request);
         $this->assertMine($request, $inquiry);
+    }
+
+    public function layout(Request $request, Inquiry $inquiry): View
+    {
+        $this->assertMayReadLayout($request, $inquiry);
 
         return view('inquiries.layout', [
             'inquiry' => $inquiry->load('client'),
-            // Only a leader may move a layout, so only a leader is asked the
-            // question — and only they pay for the query.
-            'artists' => $request->user()->isLeader()
+            // Only somebody who may MOVE a layout is asked the question, and
+            // only they pay for the query.
+            'artists' => $request->user()->canMoveArtistWork()
                 ? User::where('is_active', true)
                     ->get()
                     ->filter(fn (User $u) => $u->isArtist())
@@ -131,6 +174,28 @@ class InquiryController extends Controller
                     ->values()
                 : collect(),
         ]);
+    }
+
+    /** Correct a client's name from the inquiry they belong to. */
+    public function updateClient(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        $data = $request->validate([
+            'client_name' => ['required', 'string', 'max:255'],
+            'client_last_name' => ['required', 'string', 'max:255'],
+        ], [
+            'client_name.required' => 'Enter the first name.',
+            'client_last_name.required' => 'Enter the last name.',
+        ]);
+
+        $inquiry->client()->update([
+            'name' => $data['client_name'],
+            'last_name' => $data['client_last_name'],
+        ]);
+
+        return back()->with('success', 'Client name updated.');
     }
 
     public function uploadLayout(Request $request, Inquiry $inquiry): RedirectResponse
@@ -278,7 +343,13 @@ class InquiryController extends Controller
         // the thing they are working from. assertAccess alone let only sales
         // and leaders through, so every thumbnail on the layout queue came
         // back 403 and rendered as a broken image.
-        if ($inquiry->layout_artist_id !== $request->user()->id) {
+        // Whoever may MOVE the layout has to be able to see what they are
+        // moving — the artist leader reads these briefs to decide who should
+        // draw them. Without him here every thumbnail on the brief came back
+        // 403 and rendered as a broken image, which is the same fault this
+        // guard was already widened once to fix.
+        if ($inquiry->layout_artist_id !== $request->user()->id
+            && ! $request->user()->canMoveArtistWork()) {
             $this->assertAccess($request);
             $this->assertMine($request, $inquiry);
         }
@@ -405,7 +476,7 @@ class InquiryController extends Controller
      */
     public function reassignLayoutArtist(Request $request, Inquiry $inquiry): RedirectResponse
     {
-        abort_unless($request->user()->isLeader(), 403);
+        abort_unless($request->user()->canMoveArtistWork(), 403);
 
         $data = $request->validate(
             ['layout_artist_id' => ['required', 'integer', 'exists:users,id']],

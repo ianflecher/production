@@ -76,6 +76,12 @@ class ProductionOrder extends Model
     /** VAT added to the total when the order is marked VAT inclusive. */
     public const VAT_RATE = 0.12;
 
+    /** The artwork/layout charge is returned as a credit on qualifying orders. */
+    public const LAYOUT_FEE = 500.0;
+
+    /** At 24 pieces, the client receives the layout fee back in full. */
+    public const LAYOUT_FEE_REFUND_QTY = 24;
+
     /**
      * A due date this close is a rush job.
      *
@@ -108,8 +114,8 @@ class ProductionOrder extends Model
         'inquiry_id', 'inquiry_design_id',
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
-        'rush', 'rush_fee',
-        'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'discount_amount', 'discount_note', 'downpayment_waived', 'downpayment_waiver_note',
+        'rush', 'rush_fee', 'shipping_cost',
+        'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'withholding_rate', 'discount_amount', 'discount_note', 'downpayment_waived', 'downpayment_waiver_note',
         'quantity', 'due_date', 'sample_due_date', 'layout_approved_at', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
         'replaces_order_id', 'replacement_reason',
@@ -129,11 +135,13 @@ class ProductionOrder extends Model
             'skip_sample' => 'boolean',
             'rush' => 'boolean',
             'rush_fee' => 'decimal:2',
+            'shipping_cost' => 'decimal:2',
             'needs_sticker' => 'boolean',
             'unit_price' => 'decimal:2',
             'custom_size_price' => 'decimal:2',
             'total_price' => 'decimal:2',
             'vat_inclusive' => 'boolean',
+            'withholding_rate' => 'integer',
             'discount_amount' => 'decimal:2',
             'downpayment_waived' => 'boolean',
             'brief_expires_at' => 'datetime',
@@ -178,9 +186,10 @@ class ProductionOrder extends Model
 
     /**
      * The money math in one place so every screen shows the same figures:
-     * subtotal → less discount → plus 12% VAT (when ticked) → total.
+     * subtotal → less discount → plus 12% VAT (when ticked) → less any
+     * 1% or 2% withholding tax → total.
      *
-     * @return array{subtotal: ?float, discount: float, vatable: ?float, vat: float, total: ?float}
+     * @return array{subtotal: ?float, discount: float, vatable: ?float, vat: float, withholding_rate: int, withholding: float, total: ?float}
      */
     /** How many pieces carry a back pocket (0..quantity). */
     public function backPocketCount(): int
@@ -222,6 +231,12 @@ class ProductionOrder extends Model
         return $this->rush ? (float) $this->rush_fee : 0.0;
     }
 
+    /** Delivery charged to this order, agreed by the account officer. */
+    public function shippingAmount(): float
+    {
+        return max(0, (float) $this->shipping_cost);
+    }
+
     /**
      * The pieces the price list does not cover: CS, and a typed size such as
      * "Kids 8" that is not on the chart. They are priced by hand.
@@ -239,6 +254,43 @@ class ProductionOrder extends Model
         return $size === 'CS' || ! in_array($size, self::SIZES, true);
     }
 
+    /**
+     * The layout fee is waived when the discount already makes the actual work
+     * free. A free order must not quietly become a ₱500 layout charge.
+     */
+    public function layoutFeeAmount(): float
+    {
+        $work = $this->workAmountBeforeLayout();
+
+        if ($work === null || (float) $this->discount_amount >= $work) {
+            return 0.0;
+        }
+
+        return self::LAYOUT_FEE;
+    }
+
+    /** The work total before a layout fee, discount, VAT, or withholding. */
+    public function workAmountBeforeLayout(): ?float
+    {
+        $custom = $this->custom_size_price !== null ? $this->customSizeQty() : 0;
+        $charted = max(0, (int) $this->quantity - $custom);
+
+        if ($this->unit_price === null) {
+            return null;
+        }
+
+        $garment = ((float) $this->unit_price * $charted) + ((float) $this->custom_size_price * $custom);
+
+        return $garment + $this->backPocketAmount() + $this->addonAmount()
+            + $this->rushAmount() + $this->shippingAmount();
+    }
+
+    /** The layout fee is credited back once the client orders 24 pieces. */
+    public function layoutFeeRefund(): float
+    {
+        return $this->quantity >= self::LAYOUT_FEE_REFUND_QTY ? $this->layoutFeeAmount() : 0.0;
+    }
+
     public function pricingBreakdown(): array
     {
         // The charted sizes are on the automatic tier price; the off-chart
@@ -252,16 +304,24 @@ class ProductionOrder extends Model
             : null;
 
         if ($garment === null) {
-            return ['subtotal' => null, 'charted_qty' => 0, 'custom_size_qty' => 0, 'custom_size_amount' => 0.0, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'rush' => 0.0, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'total' => null];
+            return ['subtotal' => null, 'charted_qty' => 0, 'custom_size_qty' => 0, 'custom_size_amount' => 0.0, 'back_pocket' => 0.0, 'back_pocket_qty' => 0, 'addon' => 0.0, 'addon_label' => null, 'rush' => 0.0, 'shipping' => 0.0, 'layout_fee' => 0.0, 'layout_fee_refund' => 0.0, 'discount' => 0.0, 'vatable' => null, 'vat' => 0.0, 'withholding_rate' => 0, 'withholding' => 0.0, 'total' => null];
         }
 
         $backPocket = $this->backPocketAmount();
         $addon = $this->addonAmount();
         $rush = $this->rushAmount();
-        $gross = $garment + $backPocket + $addon + $rush;   // before discount
+        $shipping = $this->shippingAmount();
+        $workBeforeLayout = $garment + $backPocket + $addon + $rush + $shipping;
+        $layoutFee = (float) $this->discount_amount >= $workBeforeLayout ? 0.0 : self::LAYOUT_FEE;
+        $layoutFeeRefund = $this->layoutFeeRefund();
+        $gross = $garment + $backPocket + $addon + $rush + $shipping + $layoutFee - $layoutFeeRefund; // before discount
         $discount = min((float) $this->discount_amount, $gross);
         $vatable = round($gross - $discount, 2);
         $vat = $this->vat_inclusive ? round($vatable * self::VAT_RATE, 2) : 0.0;
+        $withholdingRate = $this->vat_inclusive && in_array((int) $this->withholding_rate, [1, 2], true)
+            ? (int) $this->withholding_rate
+            : 0;
+        $withholding = round($vatable * ($withholdingRate / 100), 2);
 
         return [
             'subtotal' => round($garment, 2),            // garment lines only
@@ -273,10 +333,15 @@ class ProductionOrder extends Model
             'addon' => round($addon, 2),
             'addon_label' => $this->addonLabel(),
             'rush' => round($rush, 2),
+            'shipping' => round($shipping, 2),
+            'layout_fee' => $layoutFee,
+            'layout_fee_refund' => $layoutFeeRefund,
             'discount' => round($discount, 2),
             'vatable' => $vatable,
             'vat' => $vat,
-            'total' => round($vatable + $vat, 2),
+            'withholding_rate' => $withholdingRate,
+            'withholding' => $withholding,
+            'total' => round($vatable + $vat - $withholding, 2),
         ];
     }
 
@@ -299,7 +364,7 @@ class ProductionOrder extends Model
      * Compute the total for a given set of figures (used when saving an order,
      * before the model is persisted).
      */
-    public static function computeTotal(?float $unitPrice, int $qty, float $discount = 0, bool $vat = false, float $backPocketAmount = 0, float $extras = 0): ?float
+    public static function computeTotal(?float $unitPrice, int $qty, float $discount = 0, bool $vat = false, float $backPocketAmount = 0, float $extras = 0, int $withholdingRate = 0, float $shippingCost = 0): ?float
     {
         if ($unitPrice === null) {
             return null;
@@ -307,9 +372,15 @@ class ProductionOrder extends Model
 
         // $extras covers one-off charges on the job rather than per piece —
         // the rush fee, and the Step 4 add-on.
-        $vatable = max(0, ($unitPrice * $qty) + $backPocketAmount + $extras - $discount);
+        $workBeforeLayout = ($unitPrice * $qty) + $backPocketAmount + $extras + max(0, $shippingCost);
+        $layoutFee = $discount >= $workBeforeLayout ? 0.0 : self::LAYOUT_FEE;
+        $layoutRefund = $qty >= self::LAYOUT_FEE_REFUND_QTY ? $layoutFee : 0.0;
+        $vatable = max(0, $workBeforeLayout + $layoutFee - $layoutRefund - $discount);
 
-        return round($vat ? $vatable * (1 + self::VAT_RATE) : $vatable, 2);
+        $withholdingRate = $vat && in_array($withholdingRate, [1, 2], true) ? $withholdingRate : 0;
+        $withholding = $vatable * ($withholdingRate / 100);
+
+        return round($vat ? $vatable * (1 + self::VAT_RATE) - $withholding : $vatable, 2);
     }
 
     /** Pieces already booked on a due date (cancelled orders free up capacity). */
@@ -758,11 +829,9 @@ class ProductionOrder extends Model
     /**
      * Give every step the date it has to be finished by.
      *
-     * The order has a due date and the floor has sixteen steps to reach it, so
-     * "due the 14th" told a sewer nothing about whether they were late. The
-     * span from the confirmed downpayment to the due date is shared out evenly
-     * and each step gets its own moment, in sequence — step one a share in,
-     * the last one landing on the due date itself.
+     * The sample and the batch have separate promises. The sample run (layout
+     * through presenting the sample) has three days. Only after that does the
+     * batch run receive the remaining time through the client's due date.
      *
      * Evenly on purpose. Weighting a cut against a sew is a guess about work
      * nobody has measured, and a wrong weight is worse than an even split
@@ -773,13 +842,17 @@ class ProductionOrder extends Model
      * time. A job already past its due date gets today for everything that is
      * left — it is late, and pretending otherwise helps nobody.
      */
-    public function scheduleStepDeadlines(?\Carbon\CarbonInterface $from = null): int
+    public function scheduleStepDeadlines(?\Carbon\CarbonInterface $from = null, bool $preserveCompleted = false): int
     {
         if (! $this->due_date) {
             return 0;
         }
 
         $steps = $this->tasks()->orderBy('sequence')->get();
+
+        if ($preserveCompleted) {
+            $steps = $steps->reject(fn (Task $step) => in_array($step->status, ['complete', 'cancelled'], true))->values();
+        }
 
         if ($steps->isEmpty()) {
             return 0;
@@ -797,19 +870,56 @@ class ProductionOrder extends Model
             return $steps->count();
         }
 
-        $minutes = $start->diffInMinutes($end);
-        $each = $minutes / $steps->count();
+        $assignWindow = static function ($windowSteps, \Carbon\CarbonInterface $windowStart, \Carbon\CarbonInterface $windowEnd): void {
+            $count = $windowSteps->count();
 
-        $last = $steps->count() - 1;
+            if ($count === 0) {
+                return;
+            }
 
-        foreach ($steps->values() as $i => $step) {
-            // The last step IS the due date, not a sum that rounds towards it —
-            // half a minute of rounding was landing it the day after.
-            $step->update([
-                'due_at' => $i === $last
-                    ? $end
-                    : $start->copy()->addMinutes((int) round($each * ($i + 1))),
-            ]);
+            if ($windowEnd->lessThanOrEqualTo($windowStart)) {
+                foreach ($windowSteps as $step) {
+                    $step->update(['due_at' => $windowEnd]);
+                }
+
+                return;
+            }
+
+            $each = $windowStart->diffInMinutes($windowEnd) / $count;
+            $last = $count - 1;
+
+            foreach ($windowSteps->values() as $i => $step) {
+                $step->update([
+                    // The last step of each phase lands exactly on the phase
+                    // deadline, avoiding a rounding spill into the next day.
+                    'due_at' => $i === $last
+                        ? $windowEnd
+                        : $windowStart->copy()->addMinutes((int) round($each * ($i + 1))),
+                ]);
+            }
+        };
+
+        // A skip-sample order has only one run, so it keeps the full window.
+        $sampleSteps = $this->skip_sample
+            ? collect()
+            : $steps->filter(fn (Task $step) => $step->stage < 10)->values();
+        $massProductionSteps = $steps->filter(fn (Task $step) => $step->stage >= 10)->values();
+
+        if ($sampleSteps->isEmpty()) {
+            $assignWindow($massProductionSteps, $start, $end);
+        } else {
+            $sampleEnd = $start->copy()->startOfDay()
+                ->addDays(self::SAMPLE_LEAD_DAYS)
+                ->endOfDay();
+
+            // A promised delivery earlier than the normal sample window does
+            // not move the client deadline; both phases simply become urgent.
+            if ($sampleEnd->greaterThan($end)) {
+                $sampleEnd = $end->copy();
+            }
+
+            $assignWindow($sampleSteps, $start, $sampleEnd);
+            $assignWindow($massProductionSteps, $sampleEnd, $end);
         }
 
         return $steps->count();
@@ -853,12 +963,10 @@ class ProductionOrder extends Model
         $this->refresh()->rebuildPipeline($this->decoration_methods ?? [], $this->cutting_type);
     }
 
-    /** Three days, or four for a jersey. */
+    /** Every sample has a fixed three-day window before batch work begins. */
     public function sampleLeadDays(): int
     {
-        return in_array($this->product_type, self::JERSEY_PRODUCT_TYPES, true)
-            ? self::SAMPLE_LEAD_DAYS_JERSEY
-            : self::SAMPLE_LEAD_DAYS;
+        return self::SAMPLE_LEAD_DAYS;
     }
 
     /**

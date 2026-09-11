@@ -7,6 +7,7 @@
 @php
     [$done, $total] = $order->progress();
     $isLeader = auth()->user()->isLeader();
+    $canEditPipelineDeadline = $isLeader || auth()->user()->canCreateOrders();
     $layoutReleased = $order->layoutReleased();
     $layoutApproved = $order->layoutApproved();
     $mockupApproved = $order->mockupApproved();
@@ -275,11 +276,23 @@
                         @if (($pb['rush'] ?? 0) > 0)
                             <tr><td style="color: var(--ink-3);">🚨 Rush fee</td><td style="text-align: right;">+ ₱{{ number_format($pb['rush'], 2) }}</td></tr>
                         @endif
+                        @if (($pb['shipping'] ?? 0) > 0)
+                            <tr><td style="color: var(--ink-3);">Shipping cost</td><td style="text-align: right;">+ ₱{{ number_format($pb['shipping'], 2) }}</td></tr>
+                        @endif
+                        @if ($pb['layout_fee'] > 0)
+                            <tr><td style="color: var(--ink-3);">Layout fee</td><td style="text-align: right;">+ ₱{{ number_format($pb['layout_fee'], 2) }}</td></tr>
+                        @endif
+                        @if ($pb['layout_fee_refund'] > 0)
+                            <tr><td style="color: var(--success-ink);">Layout fee refund (24+ pcs)</td><td style="text-align: right; color: var(--success-ink);">− ₱{{ number_format($pb['layout_fee_refund'], 2) }}</td></tr>
+                        @endif
                         @if ($pb['discount'] > 0)
                             <tr><td style="color: var(--ink-3);">Discount</td><td style="text-align: right; color: var(--danger-ink);">− ₱{{ number_format($pb['discount'], 2) }}@if ($order->discount_note) <span class="muted" style="font-size:0.8rem;">({{ $order->discount_note }})</span>@endif</td></tr>
                         @endif
                         @if ($order->vat_inclusive)
                             <tr><td style="color: var(--ink-3);">VAT (12%)</td><td style="text-align: right;">+ ₱{{ number_format($pb['vat'], 2) }}</td></tr>
+                        @endif
+                        @if (($pb['withholding'] ?? 0) > 0)
+                            <tr><td style="color: var(--ink-3);">Withholding tax ({{ $pb['withholding_rate'] }}%)</td><td style="text-align: right; color: var(--danger-ink);">− ₱{{ number_format($pb['withholding'], 2) }}</td></tr>
                         @endif
                     @endif
                     <tr><td style="color: var(--ink-3); font-weight: 600;">Total price</td><td style="text-align: right; font-weight: 600;">{{ $order->total_price !== null ? '₱'.number_format((float) $order->total_price, 2) : 'For quotation' }}</td></tr>
@@ -375,6 +388,8 @@
             @php $bal = $order->balance() ?? 0; @endphp
             @if ($order->total_price === null)
                 <p class="muted" style="margin-top:0.4rem;">Set a price first to record a payment — <a href="{{ route('orders.edit', $order) }}">edit the order</a>.</p>
+            @elseif ($order->hasPaymentAwaitingFinance())
+                <p style="margin-top:0.4rem; color: var(--warning-ink); font-weight:600;">⌛ Finance is checking the recorded payment. Another payment cannot be recorded yet.</p>
             @elseif ($bal <= 0)
                 <p style="margin-top:0.4rem; color: var(--success-ink); font-weight:600;">✓ Fully paid.</p>
             @else
@@ -398,9 +413,13 @@
                                     <option value="{{ $m }}">{{ $m }}</option>
                                 @endforeach
                             </select>
+                            <label style="margin-top:0.5rem;" for="other_transfer">Other transfer (if selected)</label>
+                            <input id="other_transfer" type="text" name="other_transfer" maxlength="100" placeholder="e.g. Maya, BDO, Metrobank">
+                            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required only when “Other transfer” is selected.</div>
 
-                            <label style="margin-top:0.5rem;">Reference (optional)</label>
-                            <input type="text" name="reference" placeholder="Receipt / txn no.">
+                            <label style="margin-top:0.5rem;">Reference number <span style="color: var(--danger-ink);">*</span></label>
+                            <input type="text" name="reference" placeholder="Receipt / txn no." required>
+                            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — receipt, transaction, or official reference number.</div>
 
                             <label style="margin-top:0.5rem;">Proof of payment <span style="color: var(--danger-ink);">*</span></label>
                             <input type="file" name="proof" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
@@ -409,6 +428,11 @@
                             <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.8rem;">
                                 @if (! $order->hasDownpayment())
                                     <button type="submit" name="portion" value="half" class="btn btn-primary btn-sm" style="width:100%;">Half downpayment — ₱{{ number_format($order->total_price / 2, 2) }}</button>
+                                    <div style="display:flex; gap:0.4rem; align-items:stretch; margin-top:0.15rem;">
+                                        <input type="number" step="0.01" min="{{ number_format($order->total_price / 2, 2, '.', '') }}" max="{{ $order->total_price }}" name="amount" placeholder="50% or more (₱)" class="no-caps" style="flex:1; min-width:0;">
+                                        <button type="submit" name="portion" value="custom_downpayment" class="btn btn-ghost btn-sm" style="white-space:nowrap;">Record amount</button>
+                                    </div>
+                                    <div style="font-size:0.72rem;color:var(--ink-3);">Custom downpayment must be at least ₱{{ number_format($order->total_price / 2, 2) }} (50%).</div>
                                     <button type="submit" name="portion" value="full" class="btn btn-success btn-sm" style="width:100%;">Full payment — ₱{{ number_format($order->total_price, 2) }}</button>
                                 @else
                                     <button type="submit" name="portion" value="balance" class="btn btn-success btn-sm" style="width:100%;">Pay remaining balance — ₱{{ number_format($bal, 2) }}</button>
@@ -684,7 +708,7 @@
                     <th style="width: 30px;">#</th>
                     <th>Department</th>
                     <th>Status</th>
-                    <th>Due</th>
+                    <th>Deadline / Due</th>
                     <th>Assigned to</th>
                     @if ($isLeader)<th>Actions</th>@endif
                 </tr>
@@ -705,6 +729,20 @@
                     ];
                 @endphp
                 @foreach ($order->tasks as $task)
+                    @if (! $order->skip_sample && $task->stage === 1)
+                        <tr>
+                            <td colspan="{{ $isLeader ? 6 : 5 }}" style="background:#eef6ff; color:#1d4ed8; font-size:0.76rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:.48rem .65rem;">
+                                Sample phase · due within 3 days
+                            </td>
+                        </tr>
+                    @endif
+                    @if (! $order->skip_sample && $task->stage === 10)
+                        <tr>
+                            <td colspan="{{ $isLeader ? 6 : 5 }}" style="background:#f0fdf4; color:#15803d; font-size:0.76rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:.48rem .65rem; border-top:2px solid #86efac;">
+                                Mass production phase · uses the remaining time until {{ $order->due_date?->format('M j, Y') ?? 'delivery' }}
+                            </td>
+                        </tr>
+                    @endif
                     @php
                         $rc = $rowColors[$task->status] ?? '#b3bdcc';
                         $isCurrentRow = $task->id === ($currentTask?->id ?? null);
@@ -749,7 +787,18 @@
                              colouring a finished step red says nothing anybody
                              can act on. --}}
                         <td style="white-space: nowrap; font-size: 0.82rem;">
-                            @if ($task->due_at)
+                            @if ($canEditPipelineDeadline)
+                                <form method="POST" action="{{ route('orders.tasks.deadline', [$order, $task]) }}" style="display:flex; align-items:center; gap:0.3rem;">
+                                    @csrf
+                                    <input type="date" name="due_at" value="{{ $task->due_at?->toDateString() }}" aria-label="{{ $task->department }} deadline" style="width:132px; padding:0.28rem 0.35rem; font-size:0.78rem;">
+                                    <button class="btn btn-ghost btn-sm" title="Save deadline" aria-label="Save {{ $task->department }} deadline">Save</button>
+                                </form>
+                                @if ($task->due_at)
+                                    <div style="margin-top:0.2rem; font-size:0.72rem; {{ $task->isOverdue() ? 'color:var(--danger-ink, #b91c1c); font-weight:700;' : 'color:var(--ink-3);' }}">
+                                        {{ $task->due_at->format('M j') }}@if ($task->isOverdue()) · {{ $task->due_at->diffForHumans() }}@endif
+                                    </div>
+                                @endif
+                            @elseif ($task->due_at)
                                 @if ($task->isOverdue())
                                     <span style="color: var(--danger-ink, #b91c1c); font-weight: 700;">
                                         {{ $task->due_at->format('M j') }}

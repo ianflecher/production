@@ -16,9 +16,8 @@ use Tests\TestCase;
  * only noticed when the batch behind it ran short - and the whole delay landed
  * on the floor at the end, where there is no time left to absorb it.
  *
- * Three days from the confirmed payment, four for a riding jersey, which is
- * panelled and takes a longer press. The batch keeps the order due date: that
- * promise to the client has not changed.
+ * Three days from the confirmed payment for every product. The batch keeps
+ * the order due date: that promise to the client has not changed.
  */
 class SampleHasItsOwnDeadlineTest extends TestCase
 {
@@ -60,14 +59,12 @@ class SampleHasItsOwnDeadlineTest extends TestCase
         $this->assertSame('2026-09-04', $order->computeSampleDueDate()->toDateString());
     }
 
-    public function test_a_riding_jersey_gets_a_fourth_day(): void
+    public function test_a_riding_jersey_uses_the_same_three_day_sample_window(): void
     {
-        // Panelled cut, longer press. Three days made it late by design on
-        // every jersey the shop took.
         $order = $this->paidOn($this->order('riding_jersey'), '2026-09-01 09:00:00');
 
-        $this->assertSame(4, $order->sampleLeadDays());
-        $this->assertSame('2026-09-05', $order->computeSampleDueDate()->toDateString());
+        $this->assertSame(3, $order->sampleLeadDays());
+        $this->assertSame('2026-09-04', $order->computeSampleDueDate()->toDateString());
     }
 
     public function test_the_batch_keeps_the_orders_own_due_date(): void

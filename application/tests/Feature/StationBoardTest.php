@@ -21,7 +21,10 @@ class StationBoardTest extends TestCase
 
     private function leader(): User
     {
-        return User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+        // The station-board scenarios exercise the unrestricted operations
+        // board. That belongs to the super admin; normal leaders are limited
+        // to account officers, agents and artists.
+        return User::factory()->create(['job_role' => User::ROLE_SUPER_ADMIN, 'is_active' => true]);
     }
 
     /** An active order whose given department is released to the floor. */

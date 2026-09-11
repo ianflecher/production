@@ -135,6 +135,7 @@ class FullShopWalkthroughTest extends TestCase
                 // Nothing is recorded on somebody's word: the shop keeps a
                 // picture of every payment against the order.
                 'portion' => 'half', 'method' => 'Cash',
+                'reference' => 'CASH-2001',
                 'proof' => UploadedFile::fake()->image('deposit-slip.jpg'),
             ]);
 

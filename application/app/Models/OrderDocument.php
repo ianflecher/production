@@ -143,6 +143,39 @@ class OrderDocument extends Model
             ];
         }
 
+        if ($order->shippingAmount() > 0) {
+            $items[] = [
+                'description' => 'Shipping cost',
+                'size' => '',
+                'quantity' => 1,
+                'unit_price' => $order->shippingAmount(),
+                'addon' => true,
+            ];
+        }
+
+        // The layout is charged on every quotation. At 24 pieces, the same
+        // amount is credited back so the client can see why it is free rather
+        // than wondering why the fee silently disappeared.
+        if ($pb['layout_fee'] > 0) {
+            $items[] = [
+                'description' => 'Layout fee',
+                'size' => '',
+                'quantity' => 1,
+                'unit_price' => ProductionOrder::LAYOUT_FEE,
+                'addon' => true,
+            ];
+        }
+
+        if ($pb['layout_fee_refund'] > 0) {
+            $items[] = [
+                'description' => 'Layout fee refund (24+ pcs)',
+                'size' => '',
+                'quantity' => 1,
+                'unit_price' => -1 * (float) $pb['layout_fee_refund'],
+                'addon' => true,
+            ];
+        }
+
         // The discount the order was given, as its own line.
         //
         // It was recorded on the order and applied there, but the sheet knew
@@ -190,6 +223,7 @@ class OrderDocument extends Model
                 'full_payment' => $paid ?: null,
                 'total_balance' => $order->balance(),
                 'total_vat' => $type === self::TYPE_PQ ? $pb['vat'] : null,
+                'withholding_tax' => $type === self::TYPE_PQ && $pb['withholding'] > 0 ? $pb['withholding'] : null,
                 // Signatures
                 'prepared_by' => $order->creator?->name,
                 'date_prepared' => now()->format('Y-m-d'),
@@ -213,11 +247,21 @@ class OrderDocument extends Model
             $amount += $q * $u;
         }
 
-        // On what is owed after the discount line, matching the order's own
-        // pricingBreakdown(). max() guards a sheet edited into the negative:
-        // the shop does not refund VAT on a discount bigger than the job.
+        // Nothing is the floor. pricingBreakdown() caps the discount at the
+        // gross when the sheet is BUILT, but the lines are a snapshot: lower
+        // the order's price afterwards and the discount already written stays
+        // bigger than the job it came off, so the sheet totals to less than
+        // nothing. A sponsored job was showing the client -P500.00 owing while
+        // the order itself, capped, read zero.
+        //
+        // The shop does not owe a client for discounting past the value of
+        // their own work. That was already true of the VAT - which is what the
+        // max() here used to guard on its own - and it is just as true of the
+        // amount the VAT is taken on, so the floor sits above both.
+        $amount = max(0, $amount);
+
         $vat = $this->isVat()
-            ? round(max(0, $amount) * ProductionOrder::VAT_RATE, 2)
+            ? round($amount * ProductionOrder::VAT_RATE, 2)
             : 0.0;
 
         return [

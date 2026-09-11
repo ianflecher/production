@@ -46,8 +46,16 @@ class SupervisorAccessTest extends TestCase
             'orders' => ['/orders'],
             'calendar' => ['/calendar'],
             'dashboard' => ['/dashboard'],
-            'stations' => ['/stations'],
         ];
+    }
+
+    public function test_a_supervisor_sees_the_production_flow_from_printer_to_quality_control(): void
+    {
+        $this->actingAs($this->supervisor())->get('/stations')->assertOk()
+            ->assertSee('Production Line')
+            ->assertSee('Laser Cutting #1')
+            ->assertSee('DTF Printer')
+            ->assertDontSee('Raw Materials');
     }
 
     public function test_the_spelling_of_the_job_role_does_not_matter(): void

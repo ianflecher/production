@@ -109,7 +109,10 @@ class OrderDocumentController extends Controller
         foreach ($items as $row) {
             $net += (float) ($row['quantity'] ?? 0) * (float) ($row['unit_price'] ?? 0);
         }
-        $gross = $type === \App\Models\OrderDocument::TYPE_PQ ? $net * 1.12 : $net;
+        $withholding = $type === \App\Models\OrderDocument::TYPE_PQ
+            ? $net * ((int) $order->withholding_rate / 100)
+            : 0;
+        $gross = $type === \App\Models\OrderDocument::TYPE_PQ ? ($net * 1.12) - $withholding : $net;
 
         // A sheet with a discount line can legitimately come to nothing — a
         // fully sponsored job is worth zero and the order should say so. The
@@ -118,6 +121,12 @@ class OrderDocumentController extends Controller
         $hasPricedLine = collect($items)
             ->contains(fn ($row) => (float) ($row['unit_price'] ?? 0) != 0.0);
 
+        // Whether the job was already clear to start, asked BEFORE the sheet
+        // rewrites the total - a sheet that discounts a job down to nothing
+        // settles it, and there is then no payment coming to open the next
+        // stage. Same re-check the order's own edit screen makes.
+        $hadDownpaymentClearance = $order->hasDownpayment();
+
         $synced = false;
         if ($hasPricedLine && $gross >= 0) {
             $order->update([
@@ -125,6 +134,13 @@ class OrderDocumentController extends Controller
                 'vat_inclusive' => $type === \App\Models\OrderDocument::TYPE_PQ,
             ]);
             $synced = true;
+
+            $order->refresh();
+            if (! $hadDownpaymentClearance && $order->hasDownpayment() && $order->layoutApproved()) {
+                $order->unlockStage(\App\Models\ProductionOrder::STAGE_MOCKUP);
+                $order->scheduleStepDeadlines();
+                $order->applySampleDueDate();
+            }
         }
 
         return redirect()->route('orders.document', [$order, $type])

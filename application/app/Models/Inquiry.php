@@ -285,13 +285,20 @@ class Inquiry extends Model
 
     /**
      * The follow-up list, in the order it should be worked: whoever has been
-     * waiting longest, first. There are no scheduled dates — a name is on the
-     * list from the day they ask until the day they order, and that is the
-     * whole of it.
+     * waiting longest, first. A multi-design inquiry stays visible until each
+     * approved design has its own order; the first order must not hide the
+     * other approved designs that still need to be written up.
      */
     public function scopeForFollowUp($query)
     {
-        return $query->open()->orderBy('created_at');
+        return $query
+            ->where(function ($visible) {
+                $visible->where('status', self::STATUS_OPEN)
+                    ->orWhereHas('designs', fn ($designs) => $designs
+                        ->where('status', InquiryDesign::STATUS_APPROVED)
+                        ->whereDoesntHave('order'));
+            })
+            ->orderBy('created_at');
     }
 
     /**

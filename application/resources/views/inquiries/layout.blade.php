@@ -200,12 +200,24 @@
     $layoutSummary = $inquiry->layout_sent_at
         ? 'The brief is locked while it moves through artist work and client approval.'
         : 'Prepare the artist\'s design brief. No downpayment is needed until the client approves the layout.';
+
+    /* The artist leader is on this page for one thing: to hand the layout to a
+       different artist. The brief itself — the client's details, the reference
+       files, the descriptions, what is sent and when — is the account
+       officer's work, so he READS it and nothing more. Every control below is
+       behind this. */
+    $officeControls = ! auth()->user()->isArtistLead();
 @endphp
 
 <div class="layout-page-head">
     <div>
         <span class="layout-eyebrow">Step 2 · Design brief</span>
-        <h1>{{ $inquiry->client->fullName() }}</h1>
+        <div style="display:flex; align-items:center; gap:.65rem; flex-wrap:wrap;">
+            <h1 style="margin:0;">{{ $inquiry->client->fullName() }}</h1>
+            @if ($officeControls)
+                <button type="button" class="btn btn-ghost btn-sm" id="editClientNameOpen">✎ Edit client</button>
+            @endif
+        </div>
         <p class="sub" style="margin:0;">Add the design and instructions the artist will work from, then continue to the New Job Order.</p>
     </div>
 
@@ -213,6 +225,41 @@
         📝 Design questionnaire &amp; ChatGPT prompt
     </a>
 </div>
+
+{{-- The dialog goes with its button. Left in the page it is a form the artist
+     leader cannot open but could still post, and the route would refuse him. --}}
+@if ($officeControls)
+<div id="editClientNameBack" class="icc-back" hidden>
+    <div class="icc-card icc-form" role="dialog" aria-modal="true" aria-labelledby="editClientNameTitle">
+        <div class="icc-head">
+            <div>
+                <h2 class="icc-title" id="editClientNameTitle">Edit client name</h2>
+                <p class="icc-body">Correct the name before the layout, quotation, and job order are prepared.</p>
+            </div>
+            <button type="button" class="icc-x" id="editClientNameClose" aria-label="Close">&times;</button>
+        </div>
+
+        <form method="POST" action="{{ route('inquiries.client.update', $inquiry) }}">
+            @csrf
+            @method('PATCH')
+            <div class="field">
+                <label for="client_name">First name</label>
+                <input id="client_name" name="client_name" value="{{ old('client_name', $inquiry->client->name) }}" maxlength="255" required autofocus>
+                @error('client_name')<span class="error">{{ $message }}</span>@enderror
+            </div>
+            <div class="field">
+                <label for="client_last_name">Last name</label>
+                <input id="client_last_name" name="client_last_name" value="{{ old('client_last_name', $inquiry->client->last_name) }}" maxlength="255" required>
+                @error('client_last_name')<span class="error">{{ $message }}</span>@enderror
+            </div>
+            <div class="icc-acts">
+                <button type="button" class="icc-btn icc-no" id="editClientNameCancel">Cancel</button>
+                <button type="submit" class="icc-btn icc-go">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 
 <div class="card layout-workspace">
     <div class="layout-workspace-head">
@@ -243,7 +290,7 @@
                         <span class="layout-file-name">{{ $file['original_name'] }}</span>
                     </a>
 
-                    @if (! $inquiry->layout_sent_at)
+                    @if (! $inquiry->layout_sent_at && $officeControls)
                         <form method="POST" action="{{ route('inquiries.layout.file.delete', [$inquiry, 'index' => $index]) }}"
                               class="layout-file-remove" onsubmit="return confirm('Remove this design file?');">
                             @csrf
@@ -259,7 +306,7 @@
         </div>
     @endif
 
-    @if (! $inquiry->layout_sent_at)
+    @if (! $inquiry->layout_sent_at && $officeControls)
         <div class="layout-upload">
             <label>ChatGPT design output</label>
             <span class="hint">Choose an image and it uploads immediately. This is what the artist works from.</span>
@@ -294,7 +341,7 @@
     {{-- Moving the whole brief at once. A leader watching an artist go home
          sick does not want to move six designs one at a time; what the client
          has already approved stays with whoever drew it. --}}
-    @if (auth()->user()->isLeader() && $artists->isNotEmpty() && $designs->isNotEmpty())
+    @if (auth()->user()->canMoveArtistWork() && $artists->isNotEmpty() && $designs->isNotEmpty())
         <form method="POST" action="{{ route('inquiries.layout.artist', $inquiry) }}"
               style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap; margin:.6rem 0 1rem;">
             @csrf
@@ -353,7 +400,7 @@
             {{-- Each design carries its own instruction. A jacket and a jersey
                  on the same brief often need different logos, colours, or
                  placement notes, so one shared note was too easy to misread. --}}
-            @if (! $inquiry->layout_sent_at)
+            @if (! $inquiry->layout_sent_at && $officeControls)
                 <form method="POST" action="{{ route('inquiries.designs.description', [$inquiry, $design]) }}" style="margin:.65rem 0;">
                     @csrf
                     <label for="design_description_{{ $design->id }}" style="display:block; font-size:.78rem; font-weight:700; margin-bottom:.25rem;">Notes / description for {{ $design->name() }}</label>
@@ -374,7 +421,9 @@
                  Who may: the officer while the brief is still a draft, because
                  they are arranging the set; a leader after it has gone out,
                  because moving work somebody has started is their call. --}}
-            @if (! $design->approved() && $artists->isNotEmpty()
+            {{-- Per design. The artist leader uses the whole-brief handover
+                 above instead — this one is the office arranging the set. --}}
+            @if ($officeControls && ! $design->approved() && $artists->isNotEmpty()
                  && (auth()->user()->isLeader() || ! $inquiry->layout_sent_at))
                 <form method="POST" action="{{ route('inquiries.designs.artist', [$inquiry, $design]) }}"
                       style="display:flex; gap:.4rem; align-items:flex-end; flex-wrap:wrap; margin:.5rem 0;">
@@ -412,7 +461,7 @@
             {{-- Answered one at a time. The job order still opens on the whole
                  set: an order written against a design the client has not seen
                  is a number on the books for something nobody agreed to. --}}
-            @if ($design->submitted())
+            @if ($officeControls && $design->submitted())
                 @php $spent = $design->revisionsUsedUp() && ! auth()->user()->isLeader(); @endphp
                 <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-start; margin-top:.5rem;">
                     <form method="POST" action="{{ route('inquiries.designs.approve', [$inquiry, $design]) }}">
@@ -450,7 +499,10 @@
                         <a href="{{ route('orders.show', $design->order) }}" class="btn btn-primary btn-sm">
                             Go to job order {{ $design->order->order_number }} &rarr;
                         </a>
-                    @else
+                    @elseif ($officeControls)
+                        {{-- Writing the job order is the account officer's.
+                             The artist leader reads that it is still to be
+                             written; he does not write it. --}}
                         <a href="{{ route('orders.create', ['inquiry' => $inquiry->id, 'design' => $design->id]) }}"
                            class="btn btn-primary btn-sm">
                             + Create the job order
@@ -461,7 +513,7 @@
             @endif
 
             {{-- Taken off the list only while nothing has been drawn on it. --}}
-            @if (! $design->approved() && $design->drawings()->isEmpty())
+            @if ($officeControls && ! $design->approved() && $design->drawings()->isEmpty())
                 <form method="POST" action="{{ route('inquiries.designs.delete', [$inquiry, $design]) }}" style="margin-top:.5rem;">
                     @csrf
                     <button type="submit" class="btn btn-ghost btn-sm">Remove this design</button>
@@ -472,6 +524,7 @@
 
     {{-- Adding them. Several at once, because a kit is listed in one go rather
          than six visits to this form. --}}
+    @if ($officeControls)
     <form method="POST" action="{{ route('inquiries.designs.store', $inquiry) }}"
           style="display:flex; gap:.45rem; align-items:flex-end; flex-wrap:wrap; margin:.8rem 0 1rem;">
         @csrf
@@ -502,6 +555,7 @@
         </div>
         <button type="submit" class="btn btn-ghost btn-sm">+ Add design</button>
     </form>
+    @endif
 
     @if ($inquiry->layout_sent_at)
         {{-- No "create job order" button for the brief as a whole.
@@ -524,6 +578,7 @@
             @endif
         </div>
     @else
+        @if ($officeControls)
         <form method="POST" action="{{ route('inquiries.layout.complete', $inquiry) }}" class="layout-pre-send">
             @csrf
             <strong style="display:block; font-size:.86rem;">Ready to send?</strong>
@@ -532,9 +587,46 @@
             <button type="submit" class="btn btn-primary btn-sm">📤 Send to artist for layout</button>
             <span style="display:inline-block; color:var(--ink-3); font-size:.78rem; margin-left:.4rem;">The job order opens after client approval.</span>
         </form>
+        @endif
     @endif
     </section>
     </div>
 </div>
+
+<script>
+    (function () {
+        const back = document.getElementById('editClientNameBack');
+        const open = document.getElementById('editClientNameOpen');
+        const form = back.querySelector('form');
+
+        // The page content is animated, so keep a fixed overlay under body;
+        // otherwise its centre would be the scrolling content, not the screen.
+        document.body.appendChild(back);
+
+        function show() {
+            back.hidden = false;
+            document.body.style.overflow = 'hidden';
+            form.querySelector('input')?.focus();
+        }
+
+        function hide() {
+            back.hidden = true;
+            document.body.style.overflow = '';
+            open.focus();
+        }
+
+        open.addEventListener('click', show);
+        document.getElementById('editClientNameClose').addEventListener('click', hide);
+        document.getElementById('editClientNameCancel').addEventListener('click', hide);
+        back.addEventListener('click', event => { if (event.target === back) { hide(); } });
+        document.addEventListener('keydown', event => {
+            if (! back.hidden && event.key === 'Escape') { hide(); }
+        });
+
+        @if ($errors->has('client_name') || $errors->has('client_last_name'))
+            show();
+        @endif
+    })();
+</script>
 </div>
 @endsection

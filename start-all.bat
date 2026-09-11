@@ -132,10 +132,16 @@ if errorlevel 1 (
 )
 
 rem ---------- 4/4 Cloudflare Quick Tunnel (public address for clients) ----------
-tasklist /FI "IMAGENAME eq cloudflared.exe" 2>nul | "%SystemRoot%\System32\find.exe" /I "cloudflared.exe" >nul
+rem Ask whether our tunnel ANSWERS, not whether a cloudflared process exists.
+rem A quick tunnel can lose its address and keep its process, and this step used
+rem to call that "already running" and reprint the dead address - see
+rem test-tunnel.ps1, which also clears away a tunnel it finds dead so the fresh
+rem start below is not skipped again.
+set "TUNNELUP=0"
+for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\test-tunnel.ps1" -Port %PORT%') do set "TUNNELUP=%%i"
 
-if not errorlevel 1 (
-    echo [4/4] Quick Tunnel is already running - keeping the current address.
+if not "%TUNNELUP%"=="0" (
+    echo [4/4] Quick Tunnel for port %PORT% is up and answering - keeping the current address.
 ) else (
     echo [4/4] Starting Cloudflare Quick Tunnel...
 

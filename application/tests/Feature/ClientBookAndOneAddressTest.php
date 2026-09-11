@@ -147,6 +147,41 @@ class ClientBookAndOneAddressTest extends TestCase
         $this->assertSame('12 Rizal St., Angeles City', $client->delivery_address);
     }
 
+    public function test_the_inquiry_owner_can_correct_the_client_name(): void
+    {
+        $officer = $this->user(User::ROLE_SALES);
+        $this->actingAs($officer)->post('/inquiries', $this->inquiryPayload())->assertRedirect();
+
+        $inquiry = Inquiry::firstOrFail();
+
+        $this->actingAs($officer)
+            ->patch(route('inquiries.client.update', $inquiry), [
+                'client_name' => 'Maria',
+                'client_last_name' => 'Santos',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('Maria Santos', $inquiry->refresh()->client->fullName());
+    }
+
+    public function test_another_officer_cannot_edit_somebody_elses_inquiry_client(): void
+    {
+        $owner = $this->user(User::ROLE_SALES);
+        $other = $this->user(User::ROLE_SALES);
+        $this->actingAs($owner)->post('/inquiries', $this->inquiryPayload())->assertRedirect();
+
+        $inquiry = Inquiry::firstOrFail();
+
+        $this->actingAs($other)
+            ->patch(route('inquiries.client.update', $inquiry), [
+                'client_name' => 'Wrong',
+                'client_last_name' => 'Person',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('Juan Dela Cruz', $inquiry->refresh()->client->fullName());
+    }
+
     public function test_the_address_is_still_required(): void
     {
         $this->actingAs($this->user(User::ROLE_SALES))

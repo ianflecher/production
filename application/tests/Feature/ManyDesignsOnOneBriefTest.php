@@ -286,6 +286,7 @@ class ManyDesignsOnOneBriefTest extends TestCase
         // The brief is not finished with: Rider 2 is approved and still has no
         // order, so the client stays on the follow-up list.
         $this->assertSame(1, $inquiry->fresh()->designsAwaitingAnOrder()->count());
+        $this->assertTrue(Inquiry::forFollowUp()->whereKey($inquiry->id)->exists());
 
         // And the second order is written from the same brief.
         $this->actingAs($officer)->post(route('orders.store'), [

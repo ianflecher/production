@@ -22,7 +22,7 @@
         </p>
         @if (!empty($managementScope))
             <p class="muted" style="margin-top:0.3rem; font-size:0.82rem;">
-                👁 You supervise the <strong>{{ ['design' => 'design side (account officers & artists)', 'artist' => 'artists', 'production' => 'production side (printer → QC)'][$managementScope] ?? $managementScope }}</strong> — only that staff is shown here.
+                👁 You supervise the <strong>{{ ['design' => 'design side (account officers, agents & artists)', 'artist' => 'artists', 'production' => 'production flow (printer through quality control)', 'sewing' => 'sewing team'][$managementScope] ?? $managementScope }}</strong> — only that staff is shown here.
             </p>
         @endif
     </div>

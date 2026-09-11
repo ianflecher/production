@@ -19,11 +19,19 @@ class PaymentController extends Controller
     {
         $this->assertOrderVisible($order);
 
+        // An officer may record what the client says they paid once. Until
+        // Finance confirms or rejects that claim, another entry would either
+        // duplicate the deposit or make the balance impossible to audit.
+        if ($order->hasPaymentAwaitingFinance()) {
+            return back()->withErrors(['payment' => 'Finance is still checking the recorded payment. Wait for their confirmation before recording another payment.']);
+        }
+
         $data = $request->validate([
-            'portion' => ['required', 'in:half,full,balance,partial'],
-            'amount' => ['nullable', 'numeric', 'min:1', 'max:100000000', 'required_if:portion,partial'],
+            'portion' => ['required', 'in:half,custom_downpayment,full,balance,partial'],
+            'amount' => ['nullable', 'numeric', 'min:1', 'max:100000000', 'required_if:portion,partial,custom_downpayment'],
             'method' => ['required', 'in:'.implode(',', \App\Models\Payment::METHODS)],
-            'reference' => ['nullable', 'string', 'max:255'],
+            'other_transfer' => ['nullable', 'string', 'max:100', 'required_if:method,'.\App\Models\Payment::METHOD_OTHER_TRANSFER],
+            'reference' => ['required', 'string', 'max:255'],
             // Proof is mandatory — no payment is recorded without it.
             // Images/PDF only, never executables. No app-side size cap; PHP's
             // upload_max_filesize (40M) is the practical ceiling.
@@ -51,8 +59,21 @@ class PaymentController extends Controller
             return back()->withErrors(['payment' => 'Record the downpayment first, then you can add partial payments.']);
         }
 
+        if ($data['portion'] === 'custom_downpayment' && ! $wasFirst) {
+            return back()->withErrors(['payment' => 'The downpayment is already recorded. Use a partial payment or pay the remaining balance.']);
+        }
+
+        $minimumDownpayment = round($total / 2, 2);
+        if ($data['portion'] === 'custom_downpayment'
+            && round((float) ($data['amount'] ?? 0), 2) < $minimumDownpayment) {
+            return back()->withErrors(['amount' => 'The first downpayment must be at least 50% (₱'.number_format($minimumDownpayment, 2).').']);
+        }
+
         $amount = match ($data['portion']) {
             'half' => round($total / 2, 2),
+            // An agent may collect more than 50% up front, but never more
+            // than the total balance of the order.
+            'custom_downpayment' => min(round((float) ($data['amount'] ?? 0), 2), $balance),
             'full' => $wasFirst ? $total : $balance,
             'balance' => $balance,
             // A custom amount, never more than what's still owed.
@@ -75,10 +96,15 @@ class PaymentController extends Controller
             $proofPath = $file->store('payment-proofs', 'local');
         }
 
+        $method = $data['method'];
+        if ($method === \App\Models\Payment::METHOD_OTHER_TRANSFER) {
+            $method .= ' — '.trim($data['other_transfer']);
+        }
+
         $order->recordPayment([
             'amount' => $amount,
-            'method' => $data['method'] ?? null,
-            'reference' => $data['reference'] ?? null,
+            'method' => $method,
+            'reference' => trim($data['reference']),
             'proof_path' => $proofPath,
             'proof_name' => $proofName,
             'kind' => $kind,

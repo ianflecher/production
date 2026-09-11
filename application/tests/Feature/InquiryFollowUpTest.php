@@ -195,4 +195,46 @@ class InquiryFollowUpTest extends TestCase
         $this->assertSame(Inquiry::STATUS_ORDERED, $inquiry->status);
         $this->assertSame('Walk In', $inquiry->client->fullName());
     }
+
+    public function test_the_search_finds_a_client_by_name_or_by_what_they_asked_for(): void
+    {
+        $officer = $this->officer();
+        $this->inquiryOf($officer, 'Zandro');
+        $this->inquiryOf($officer, 'Someone')->update(['what_they_want' => 'HYBRID SHIRT 60 PIECES']);
+
+        $this->actingAs($officer)->get(route('inquiries.index', ['q' => 'Zandro']))
+            ->assertOk()->assertSee('Zandro')->assertDontSee('HYBRID SHIRT');
+
+        $this->actingAs($officer)->get(route('inquiries.index', ['q' => 'HYBRID']))
+            ->assertOk()->assertSee('HYBRID SHIRT')->assertDontSee('Zandro');
+    }
+
+    public function test_searching_never_reaches_another_officers_client(): void
+    {
+        $mine = $this->officer();
+        $theirs = $this->officer();
+        $this->inquiryOf($theirs, 'Zandro');
+
+        // The OR conditions have to stay inside their own group. Loose at the
+        // top level the first of them breaks out of visibleTo(), and an officer
+        // searching a name is handed somebody else's client.
+        //
+        // Asked of the RESULT, not of the page: the box echoes the term back,
+        // so "Zandro" is on screen either way and assertDontSee proves nothing.
+        $this->actingAs($mine)->get(route('inquiries.index', ['q' => 'Zandro']))
+            ->assertOk()
+            ->assertSee('Nobody on the follow-up list matches')
+            ->assertDontSee('Zandro Client');
+    }
+
+    public function test_an_empty_search_does_not_claim_everybody_ordered(): void
+    {
+        $officer = $this->officer();
+        $this->inquiryOf($officer, 'Zandro');
+
+        $this->actingAs($officer)->get(route('inquiries.index', ['q' => 'nobodyhere']))
+            ->assertOk()
+            ->assertSee('Nobody on the follow-up list matches')
+            ->assertDontSee('has become an order');
+    }
 }

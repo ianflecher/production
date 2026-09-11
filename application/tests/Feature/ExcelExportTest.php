@@ -39,6 +39,8 @@ class ExcelExportTest extends TestCase
             'due_date' => now()->addWeek(), 'created_by' => $sales->id, 'status' => 'active',
         ]);
 
+        $finance = User::factory()->create(['job_role' => User::ROLE_FINANCE, 'is_active' => true, 'name' => 'Finance Mia']);
+
         Payment::create([
             'production_order_id' => $order->id,
             'amount' => 25500,
@@ -48,9 +50,11 @@ class ExcelExportTest extends TestCase
             'reference' => '5909978E',
             'paid_at' => now()->subDay(),
             'recorded_by' => $sales->id,
+            'confirmed_at' => now(),
+            'confirmed_by' => $finance->id,
         ]);
 
-        return User::factory()->create(['job_role' => User::ROLE_FINANCE, 'is_active' => true]);
+        return $finance;
     }
 
     /** Download an export and open it the way Excel would. */
@@ -82,10 +86,10 @@ class ExcelExportTest extends TestCase
     public function test_money_is_a_number_excel_can_add_up(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
         // Row 4 is the heading row, so the first payment is row 5.
-        $amount = $sheet->getCell('F5');
+        $amount = $sheet->getCell('E5');
 
         $this->assertIsFloat($amount->getValue());
         $this->assertEqualsWithDelta(25500.0, $amount->getValue(), 0.01);
@@ -95,95 +99,78 @@ class ExcelExportTest extends TestCase
     public function test_a_reference_is_not_mangled_into_scientific_notation(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
-        $this->assertSame('5909978E', $sheet->getCell('I5')->getValue(),
+        $this->assertSame('5909978E', $sheet->getCell('G5')->getValue(),
             'a reference must survive as typed, not become 5.9E+08');
     }
 
-    public function test_vat_is_broken_out_so_the_line_can_be_checked(): void
+    public function test_the_columns_follow_the_payment_ledger_order(): void
     {
         $finance = $this->ledgerWithOnePayment(vat: true);
-        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
-        $net = (float) $sheet->getCell('D5')->getValue();
-        $vat = (float) $sheet->getCell('E5')->getValue();
-        $gross = (float) $sheet->getCell('F5')->getValue();
+        $headings = [];
+        foreach (range('A', 'J') as $column) {
+            $headings[] = (string) $sheet->getCell($column.'4')->getValue();
+        }
 
-        $this->assertEqualsWithDelta($gross, $net + $vat, 0.02, 'net + VAT must equal what was paid');
-        $this->assertGreaterThan(0, $vat);
+        $this->assertSame([
+            'Date', 'Order #', 'Name', 'TIN', 'Amount paid', 'Method',
+            'Reference number', 'Type', 'Recorded by', 'Confirmed by',
+        ], $headings);
     }
 
-    public function test_a_non_vat_payment_lands_on_its_own_tab(): void
+    public function test_an_unconfirmed_payment_is_not_exported(): void
     {
         $finance = $this->ledgerWithOnePayment(vat: false);
 
-        $vat = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
-        $plain = $this->sheetFrom($finance, '/finance/export', 'Non-VAT sales');
+        Payment::create([
+            'production_order_id' => ProductionOrder::firstOrFail()->id,
+            'amount' => 999, 'kind' => 'balance', 'method' => 'Cash',
+            'reference' => 'PENDING-ONLY', 'paid_at' => now(),
+        ]);
 
-        $this->assertSame('', (string) $vat->getCell('A5')->getValue(), 'the VAT tab should be empty');
-        $this->assertSame('IC2026-00074', $plain->getCell('A5')->getValue());
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
+
+        $this->assertSame('IC2026-00074', $sheet->getCell('B5')->getValue());
+        $this->assertSame('', (string) $sheet->getCell('B6')->getValue());
     }
 
-    public function test_the_non_vat_tab_has_no_vat_columns_at_all(): void
+    public function test_the_export_is_one_confirmed_payment_ledger(): void
     {
         // A column of "VAT 0.00" reads as tax that was charged and came to
         // nothing, rather than tax that never applied.
         $finance = $this->ledgerWithOnePayment(vat: false);
-        $plain = $this->sheetFrom($finance, '/finance/export', 'Non-VAT sales');
-
-        $headings = [];
-        foreach (range('A', $plain->getHighestColumn()) as $c) {
-            $headings[] = (string) $plain->getCell($c.'4')->getValue();
-        }
-
-        $this->assertNotContains('VAT 12%', $headings);
-        $this->assertNotContains('Net of VAT', $headings);
-        $this->assertContains('Amount paid', $headings);
+        $this->assertSame(['Confirmed payments'], $this->tabsOf($finance, '/finance/export'));
     }
 
-    public function test_the_workbook_separates_vat_from_non_vat(): void
-    {
-        $finance = $this->ledgerWithOnePayment();
-
-        $this->assertSame(
-            ['VAT sales (12%)', 'Non-VAT sales', 'Summary'],
-            $this->tabsOf($finance, '/finance/export')
-        );
-    }
-
-    public function test_the_summary_adds_the_two_tabs_up(): void
+    public function test_the_export_records_who_confirmed_the_payment(): void
     {
         $finance = $this->ledgerWithOnePayment(vat: true);
-        $summary = $this->sheetFrom($finance, '/finance/export', 'Summary');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
-        $this->assertSame('VAT sales (12%)', $summary->getCell('A5')->getValue());
-        $this->assertSame('Non-VAT sales', $summary->getCell('A6')->getValue());
-
-        // 25,500 gross at 12% is 22,767.86 net + 2,732.14 tax.
-        $this->assertEqualsWithDelta(22767.86, (float) $summary->getCell('C5')->getValue(), 0.02);
-        $this->assertEqualsWithDelta(2732.14, (float) $summary->getCell('D5')->getValue(), 0.02);
-        $this->assertEqualsWithDelta(25500.0, (float) $summary->getCell('E5')->getValue(), 0.02);
+        $this->assertSame('Finance Mia', $sheet->getCell('J5')->getValue());
     }
 
     public function test_the_total_is_a_formula_not_a_typed_number(): void
     {
         // Typed totals stop agreeing the moment anybody filters or deletes a row.
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
         $last = $sheet->getHighestRow();
 
         $this->assertSame('TOTAL', $sheet->getCell('A'.$last)->getValue());
-        $this->assertStringStartsWith('=SUM(', (string) $sheet->getCell('F'.$last)->getValue());
+        $this->assertStringStartsWith('=SUM(', (string) $sheet->getCell('E'.$last)->getValue());
     }
 
     public function test_a_date_is_a_date(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
-        $cell = $sheet->getCell('L5');
+        $cell = $sheet->getCell('A5');
 
         $this->assertIsNumeric($cell->getValue(), 'a date must be an Excel date, not text');
         $this->assertStringContainsString('yyyy', $cell->getStyle()->getNumberFormat()->getFormatCode());
@@ -192,9 +179,9 @@ class ExcelExportTest extends TestCase
     public function test_the_sheet_says_what_it_is_and_when_it_was_taken(): void
     {
         $finance = $this->ledgerWithOnePayment();
-        $sheet = $this->sheetFrom($finance, '/finance/export', 'VAT sales (12%)');
+        $sheet = $this->sheetFrom($finance, '/finance/export', 'Confirmed payments');
 
-        $this->assertSame('VAT sales (12%)', $sheet->getCell('A1')->getValue());
+        $this->assertSame('Confirmed payments', $sheet->getCell('A1')->getValue());
         $this->assertStringContainsString('Exported', (string) $sheet->getCell('A2')->getValue());
         // Headings stay put on a long ledger.
         $this->assertSame('A5', $sheet->getFreezePane());

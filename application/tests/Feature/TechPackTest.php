@@ -221,6 +221,8 @@ class TechPackTest extends TestCase
             // there is no box to type it into any more.
             'zipper_type' => 'Nylon zipper',
             'bottom_hem' => 'Elastic hem',
+            'pack_created_date' => '2026-09-01',
+            'pack_delivery_date' => '2026-09-18',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         // The tag notes come from the artist, who can see where the picture
@@ -234,6 +236,8 @@ class TechPackTest extends TestCase
         $this->assertSame('Nylon zipper', $pack->zipper_type);
         $this->assertSame('Elastic hem', $order->fresh()->jobOrder->bottom_hem);
         $this->assertSame('Woven label, centre back', $pack->tag_1_details);
+        $this->assertSame('2026-09-01', $pack->pack_created_date->toDateString());
+        $this->assertSame('2026-09-18', $pack->pack_delivery_date->toDateString());
     }
 
     public function test_a_spec_box_posted_by_the_artist_is_ignored(): void
@@ -341,6 +345,28 @@ class TechPackTest extends TestCase
         $this->actingAs($sales)->get("/orders/{$order->id}/job-order")
             ->assertOk()
             ->assertSee($url, false);
+    }
+
+    public function test_an_imported_complete_pack_replaces_the_editable_sheet_but_keeps_file_location(): void
+    {
+        Storage::fake('local');
+        [, $artist, $order, $task] = $this->shop();
+
+        $path = UploadedFile::fake()->image('supplier-tech-pack.png')->store('imported-tech-packs', 'local');
+        $order->techPacks()->create([
+            'phase' => \App\Models\TechPack::PHASE_SAMPLE,
+            'imported_pack_path' => $path,
+            'imported_pack_name' => 'supplier-tech-pack.png',
+            'file_location_notes' => '\\\\IC-SERVER\\Ready for print',
+        ]);
+
+        $this->actingAs($artist)->get(route('tasks.job-order', $task))
+            ->assertOk()
+            ->assertSee('Imported complete Tech Pack')
+            ->assertSee('name="file_location_notes"', false)
+            ->assertSee('\\\\IC-SERVER\\Ready for print')
+            ->assertDontSee('<div class="tp-sheet', false)
+            ->assertDontSee('name="tech_pack_images[front_mockup]"', false);
     }
 
     public function test_the_artist_types_the_file_location_without_an_automatic_host(): void

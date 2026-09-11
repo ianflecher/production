@@ -78,6 +78,15 @@
 
         return '<input class="tp-in" type="text" name="'.$field.'" value="'.e($value).'" maxlength="'.$max.'" placeholder="'.e($placeholder).'"'.$list.'>';
     };
+    $dateFill = function (string $field, ?string $fallback = null) use ($tp, $canType) {
+        $stored = $tp->$field?->toDateString() ?? $fallback;
+        $value = old($field, $stored);
+        $readOnly = ! $canType($field);
+
+        return '<input class="tp-in'.($readOnly ? ' is-printed' : '').'" type="date"'
+            .($readOnly ? ' readonly tabindex="-1"' : ' name="'.$field.'"')
+            .' value="'.e((string) $value).'">';
+    };
     // The × takes the BOX away, picture and all — a plain tee does not want two
     // empty boxes printed under it. It is a submit button, so it travels the
     // same road as an upload: post the form, the server drops the slot, deletes
@@ -144,23 +153,9 @@
         <img src="{{ $importedPackSrc }}" alt="Imported complete Tech Pack">
         <figcaption class="no-print" style="padding:0.5rem 0.7rem; font-size:0.82rem; color:var(--ink-2);">Imported complete Tech Pack{{ $tp->imported_pack_name ? ': '.$tp->imported_pack_name : '' }}</figcaption>
     </figure>
-    {{-- The sheet below still renders, and that is deliberate. A Tech Pack
-         cannot be sent for review while any of its seventeen boxes is empty -
-         see missingTechPackFields() - and hiding the sheet behind an imported
-         image left nobody with anywhere to type them, artist or officer. The
-         image is the pack; the boxes are the record that lets it move. --}}
-    <div class="no-print" style="max-width:1180px; margin:0.75rem auto; color:var(--ink-2); font-size:0.85rem;">
-        This image is what prints. The sheet below is not printed — it is there because the
-        Tech Pack cannot be sent for review while any of its boxes is empty. Copy across what
-        the image already says, or type N/A where a row does not apply.@if ($editable) To replace
-        or remove the image, use the import section above.@endif
-    </div>
-
-    {{-- The one box that is not merely paperwork. The printer opens the files
-         from this path at their own station - see partials/file-location-bar -
-         and an imported sheet is a picture, so nothing reads it off the image.
-         Asked for here, at the top, rather than left to be found in the sheet
-         below. It stays the artist's to type, as it is on the sheet itself. --}}
+    {{-- The imported image replaces the built-in sheet. The only extra field is
+         the file location: the printer needs a real path, and it cannot be
+         recovered from a flattened image. --}}
     @php $importedPath = (string) $tp->file_location_notes; @endphp
     <div class="no-print tp-imported-floc{{ blank($importedPath) ? ' is-missing' : '' }}">
         @if (blank($importedPath))
@@ -183,7 +178,8 @@
     </div>
 @endif
 
-<div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}{{ $importedPackSrc ? ' tp-sheet-superseded' : '' }}" data-phase="{{ $phase }}">
+@unless ($importedPackSrc)
+<div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}" data-phase="{{ $phase }}">
     {{-- The leader lines, drawn over the sheet. A pack in the trade points from
          the woven-label box to the collar and from the front-print box to the
          chest; without that the floor matches pictures to places by eye. Each
@@ -300,8 +296,8 @@
             <tr><th>Client</th><td>{{ $val($order->clientName()) }}</td><th>Design name</th><td>{!! $fill('design_name','Design name') !!}</td></tr>
             <tr><th>Account officer</th><td>{{ $val($order->creator?->name) }}</td><th>Fitting</th><td>{!! $fill('fitting','Original fit',60) !!}</td></tr>
             <tr><th>Type / style</th><td>{!! $canType('item_style')?$fill('item_style','Cotton shirt',100):e($val($tp->item_style?:$order->productLabel())) !!}</td><th>Print type</th><td>{!! $canType('print_type')?$fill('print_type','DTF',60,$jo):e($val($jo?->printTypeLabel())) !!}</td></tr>
-            <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{{ $order->created_at?->format('F j, Y')??'—' }}</td></tr>
-            <tr><th>Fabric</th><td>{!! $fill('fabric','Cotton blend',255,$jo) !!}</td><th>Delivery date</th><td>{{ $order->due_date?->format('F j, Y')??'—' }}</td></tr>
+            <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{!! $dateFill('pack_created_date', $order->created_at?->toDateString()) !!}</td></tr>
+            <tr><th>Fabric</th><td>{!! $fill('fabric','Cotton blend',255,$jo) !!}</td><th>Delivery date</th><td>{!! $dateFill('pack_delivery_date', $order->due_date?->toDateString()) !!}</td></tr>
         </table>
     </header>
 
@@ -322,15 +318,77 @@
 
     <section class="tp-ref-materials"><div class="tp-ref-black-title">Size list and quantity</div>
         <div class="tp-ref-sizelist">
-            <table class="tp-ref-table">
-                <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
-                @forelse ($order->itemsInSizeOrder() as $item)
-                    <tr><td>{{ $item->size ?: 'One size' }}</td><td>{{ $item->quantity }}</td></tr>
-                @empty
-                    <tr><td>&mdash;</td><td>&mdash;</td></tr>
-                @endforelse
-                <tr class="tp-ref-size-total"><td>Total</td><td>{{ number_format($order->quantity) }}</td></tr>
-            </table>
+            @if ($tp->isSample())
+                {{-- A sample is ONE of each size. The order's breakdown - 830
+                     pieces across five sizes - belongs to the batch, and
+                     printing it here told the floor to cut the whole job.
+                     Which sizes get sewn is its own decision, so the list is
+                     typed on the sheet rather than copied off the order. --}}
+                @php $sampleSizes = $tp->sampleSizeList($order); @endphp
+                <table class="tp-ref-table">
+                    <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
+                    @forelse ($sampleSizes as $i => $size)
+                        <tr>
+                            <td>
+                                @if ($textEditable)
+                                    <input class="tp-in" type="text" name="sample_sizes[]" value="{{ $size }}"
+                                           maxlength="20" aria-label="Sample size {{ $i + 1 }}">
+                                @else
+                                    {{ $size }}
+                                @endif
+                            </td>
+                            <td>1</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td>
+                                @if ($textEditable)
+                                    <input class="tp-in" type="text" name="sample_sizes[]" value=""
+                                           maxlength="20" placeholder="Size" aria-label="Sample size">
+                                @else
+                                    &mdash;
+                                @endif
+                            </td>
+                            <td>@if ($textEditable) 1 @else &mdash; @endif</td>
+                        </tr>
+                    @endforelse
+
+                    @if ($textEditable)
+                        {{-- One spare row, so another size can be added without
+                             a button and without any script. An empty one is
+                             dropped when the sheet is saved. --}}
+                        <tr>
+                            <td><input class="tp-in" type="text" name="sample_sizes[]" value=""
+                                       maxlength="20" placeholder="+ add a size" aria-label="Add a sample size"></td>
+                            <td>1</td>
+                        </tr>
+                    @endif
+
+                    <tr class="tp-ref-size-total"><td>Total</td><td>{{ count($sampleSizes) }}</td></tr>
+                </table>
+            @else
+                {{-- The batch, less the pieces the sample already used. The
+                     sample is cut from the real order, so sewing the full
+                     count here makes one more garment than anybody bought. --}}
+                @php
+                    $batch = $tp->batchSizeList($order);
+                    $batchTotal = array_sum(array_column($batch, 'quantity'));
+                @endphp
+                <table class="tp-ref-table">
+                    <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
+                    @forelse ($batch as $row)
+                        <tr><td>{{ $row['size'] }}</td><td>{{ $row['quantity'] }}</td></tr>
+                    @empty
+                        <tr><td>&mdash;</td><td>&mdash;</td></tr>
+                    @endforelse
+                    <tr class="tp-ref-size-total"><td>Total</td><td>{{ number_format($batchTotal) }}</td></tr>
+                </table>
+                @if ($batchTotal < (int) $order->quantity)
+                    <div class="no-print" style="font-size:0.72rem; color:var(--ink-3); padding:0.2rem 0.4rem;">
+                        {{ number_format((int) $order->quantity - $batchTotal) }} already sewn as the sample.
+                    </div>
+                @endif
+            @endif
         </div><div class="tp-ref-black-title">Materials and components</div>
         <table class="tp-ref-table">
         <tr><th>Neck type</th><td>{!! $canType('neck')?$fill('neck','Round neck / 1 x 1 ribbings',100,$jo):e($val(trim(($jo?->neck??'').($jo?->neck_size?' / '.$jo->neck_size:'')))) !!}</td></tr>
@@ -477,6 +535,7 @@
     <div class="tp-ref-artist">Artist: <strong>{{ $val($artistName) }}</strong></div>
     <div class="tp-ref-footer-brand">Imprint Customs Tech Pack</div>
 </div>
+@endunless
 
 {{-- Outside the sheet, under the Imprint Customs badge.
 
@@ -492,7 +551,7 @@
     </datalist>
 @endforeach
 
-@if ($imageEditable)
+@if ($imageEditable && ! $importedPackSrc)
     <div class="tp-build no-print">
         <div class="tp-ref-add-bar">
             @if ($tp->nextSampleSlot())

@@ -256,13 +256,17 @@ class WholePipelineTest extends TestCase
             'sizes' => ['S' => 6, 'M' => 10, 'L' => 8, 'XL' => 4],
             'rush' => 1,
             'rush_fee' => 2500,
+            'shipping_cost' => 180,
             'vat_inclusive' => 1,
+            'withholding_rate' => 2,
         ])->assertRedirect();
 
         $this->order = ProductionOrder::where('order_number', 'IC2026-05500')->firstOrFail();
         $this->assertSame(28, $this->order->quantity);
         $this->assertSame('Maria Santos', $this->order->customer_name);
         $this->assertTrue((bool) $this->order->rush);
+        $this->assertSame(2, $this->order->withholding_rate);
+        $this->assertSame('180.00', $this->order->shipping_cost);
 
         // ---- 2. Brief to the artist, layout worked and client-approved ------
         $this->actingAs($this->staff['sales'])
@@ -350,6 +354,7 @@ class WholePipelineTest extends TestCase
             ->post("/orders/{$this->order->id}/payment", [
                 'portion' => 'balance',
                 'method' => 'Cash',
+                'reference' => 'CASH-778812',
                 'proof' => UploadedFile::fake()->image('cash-receipt.jpg'),
             ])->assertRedirect();
 

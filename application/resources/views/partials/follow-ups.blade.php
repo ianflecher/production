@@ -67,12 +67,18 @@
                 </ul>
             @endif
 
-            <form method="POST" action="{{ route('inquiries.follow-up', $inq) }}" class="follow-up-form">
-                @csrf
-                <input type="text" name="note" maxlength="2000" required
-                       placeholder="What they said when you called…">
-                <button type="submit" class="btn btn-ghost btn-sm">Log</button>
-            </form>
+            {{-- Chasing the client is the office's job. The artist leader is
+                 on this page to find a brief and move its layout, not to ring
+                 anybody, and the route would refuse him anyway — a box that
+                 answers 403 is worse than no box. --}}
+            @unless ($user->isArtistLead())
+                <form method="POST" action="{{ route('inquiries.follow-up', $inq) }}" class="follow-up-form">
+                    @csrf
+                    <input type="text" name="note" maxlength="2000" required
+                           placeholder="What they said when you called…">
+                    <button type="submit" class="btn btn-ghost btn-sm">Log</button>
+                </form>
+            @endunless
         </div>
     @endforeach
 </div>

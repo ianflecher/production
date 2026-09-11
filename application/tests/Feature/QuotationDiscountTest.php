@@ -120,6 +120,28 @@ class QuotationDiscountTest extends TestCase
         $this->assertSame(0.0, (float) $order->pricingBreakdown()['total']);
     }
 
+    public function test_a_saved_discount_line_that_outgrew_the_job_still_reads_nothing(): void
+    {
+        // The cap above happens when the sheet is BUILT. The lines are then a
+        // snapshot, so dropping the order's price afterwards leaves a discount
+        // behind it that is bigger than the job — 10 x 1,900 against a 19,500
+        // discount written when the shirts were 1,950. The sheet was showing a
+        // sponsored client -500.00 owing.
+        $order = $this->order(19500);
+        $doc = $this->sheet($order, OrderDocument::TYPE_DR);
+
+        $doc->update(['items' => [
+            ['description' => '9TNINE TUNE WINDBREAKER', 'size' => 'L', 'quantity' => 10, 'unit_price' => 1900],
+            ['description' => 'Discount — sponsored-racer', 'size' => '', 'quantity' => 1, 'unit_price' => -19500, 'addon' => true],
+        ]]);
+
+        $totals = $doc->fresh()->totals();
+
+        $this->assertSame(0.0, (float) $totals['amount'], 'nothing owed, not minus five hundred');
+        $this->assertSame(0.0, (float) $totals['net']);
+        $this->assertSame(10, $totals['quantity'], 'the garments are still counted');
+    }
+
     public function test_the_discount_line_does_not_count_as_garments(): void
     {
         $doc = $this->sheet($this->order(1000), OrderDocument::TYPE_DR);

@@ -43,12 +43,18 @@ class TechPack extends Model
         // Direct uploads for the eight picture boxes on the tech-pack sheet.
         'image_uploads', 'image_boxes', 'image_sizes', 'hidden_boxes', 'box_positions', 'callouts',
         'extra_notes',
+        // Which sizes THIS sample is made in — one piece of each. Not the
+        // order's breakdown, which is the batch's.
+        'sample_sizes',
         // A complete pack supplied as one approved image instead of rebuilt
         // from the interactive boxes.
         'imported_pack_path', 'imported_pack_name',
         // Where the files are, and who drew it
         'folder_shot_path', 'folder_shot_name', 'file_location_notes',
         'artist_name',
+        // Printed dates belong to this sheet, not necessarily the order's
+        // creation and promised delivery dates.
+        'pack_created_date', 'pack_delivery_date',
         'bottom_text', 'bottom_image_width', 'bottom_image_height',
         'bottom_text_width', 'bottom_text_height',
     ];
@@ -61,6 +67,9 @@ class TechPack extends Model
         'box_positions' => 'array',
         'callouts' => 'array',
         'extra_notes' => 'array',
+        'sample_sizes' => 'array',
+        'pack_created_date' => 'date',
+        'pack_delivery_date' => 'date',
     ];
 
     public const IMAGE_SLOTS = [
@@ -468,6 +477,74 @@ class TechPack extends Model
     public function isSample(): bool
     {
         return $this->phase !== self::PHASE_MASSPROD;
+    }
+
+    /**
+     * The batch's size list: what the order asked for, less the pieces the
+     * sample already used up.
+     *
+     * A sample is a real garment cut from the real order. Printing the full
+     * 830 on the mass-production sheet asks the floor to sew 831 in total and
+     * leaves a spare nobody ordered, so each size the sample was made in comes
+     * down by the one that was made.
+     *
+     * An order that skips the sample has nothing to take off, and a size that
+     * was never sampled keeps its full count.
+     *
+     * @return array<int, array{size: string, quantity: int}>
+     */
+    public function batchSizeList(ProductionOrder $order): array
+    {
+        $sampled = [];
+
+        if (! $order->skip_sample) {
+            // techPackOrNew, not techPackFor: a sample gets sewn whether or not
+            // anybody has opened its sheet yet, and asking for the saved row
+            // meant the batch quietly kept the full count until somebody did.
+            // The unsaved one answers with the order's own sizes, which is
+            // exactly what the sample would be made in.
+            $sampled = array_count_values(
+                $order->techPackOrNew(self::PHASE_SAMPLE)->sampleSizeList($order)
+            );
+        }
+
+        return $order->itemsInSizeOrder()->map(function ($item) use ($sampled) {
+            $size = (string) ($item->size ?: 'One size');
+
+            return [
+                'size' => $size,
+                // Never below nothing: a one-piece order sampled once has no
+                // batch left to sew, and "-1" on a cutting sheet is nonsense.
+                'quantity' => max(0, (int) $item->quantity - ($sampled[$size] ?? 0)),
+            ];
+        })->all();
+    }
+
+    /**
+     * The sizes this sample is made in — one piece of each.
+     *
+     * A sample is not the order in miniature: the batch's 830 pieces across
+     * five sizes say nothing about what to cut today. Until somebody says
+     * otherwise it is one of every size the order asked for, which is the
+     * usual thing to sew for a fitting, and from then on it is whatever the
+     * sheet was edited to say.
+     *
+     * @return array<int, string>
+     */
+    public function sampleSizeList(ProductionOrder $order): array
+    {
+        $saved = $this->sample_sizes;
+
+        if (is_array($saved)) {
+            return array_values(array_filter(array_map('trim', $saved), fn ($s) => $s !== ''));
+        }
+
+        return $order->itemsInSizeOrder()
+            ->map(fn ($item) => (string) ($item->size ?: 'One size'))
+            ->filter(fn ($s) => $s !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** "Sample" / "Mass production", for the heading on the sheet. */

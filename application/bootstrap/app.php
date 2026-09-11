@@ -24,6 +24,15 @@ return Application::configure(basePath: dirname(__DIR__))
             NoStoreHtmlPages::class,
         ]);
 
+        // An account whose password somebody else chose cannot go anywhere
+        // else until it is changed. Appended to the whole web group rather
+        // than to one route group, so no corner of the app is a way round it.
+        // It does nothing at all unless must_change_password is set, and that
+        // defaults to false — every account that exists today is unaffected.
+        $middleware->web(append: [
+            \App\Http\Middleware\MustChangePassword::class,
+        ]);
+
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'role' => EnsureRole::class,

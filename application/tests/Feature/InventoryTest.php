@@ -182,10 +182,10 @@ class InventoryTest extends TestCase
         $this->actingAs($sales)->get('/inventory')->assertForbidden();
     }
 
-    public function test_leader_can_access_inventory(): void
+    public function test_leader_cannot_access_raw_materials_inventory(): void
     {
         $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
 
-        $this->actingAs($leader)->get('/inventory')->assertOk();
+        $this->actingAs($leader)->get('/inventory')->assertForbidden();
     }
 }

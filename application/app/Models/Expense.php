@@ -28,8 +28,21 @@ class Expense extends Model
         'other' => 'Other',
     ];
 
-    /** Payment methods, kept identical to Payment::METHODS so reports line up. */
-    public const METHODS = Payment::METHODS;
+    /**
+     * The tin the shop keeps notes and coins in, for the small things nobody
+     * writes a bank transfer for.
+     *
+     * It is a method here and NOT on Payment, which is the other direction: a
+     * client pays the shop, and they cannot pay out of the shop's own tin.
+     */
+    public const METHOD_PETTY_CASH = 'Petty cash';
+
+    /**
+     * How an expense was paid. The client-facing methods, kept in the same
+     * order as Payment::METHODS so the two halves of the books line up, plus
+     * the petty cash tin — which only money going OUT can come from.
+     */
+    public const METHODS = [...Payment::METHODS, self::METHOD_PETTY_CASH];
 
     protected $fillable = [
         'category', 'description', 'amount', 'spent_at', 'method',
