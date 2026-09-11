@@ -131,17 +131,59 @@
     <style>
         .tp-imported-pack { width: min(100%, 1180px); margin: 0 auto; background: #fff; border: 1px solid #172033; }
         .tp-imported-pack img { display: block; width: 100%; height: auto; }
-        @media print { .tp-imported-pack { width: 100%; border: 0; } }
+        @media print {
+            .tp-imported-pack { width: 100%; border: 0; }
+            .tp-sheet-superseded { display: none !important; }
+        }
+        .tp-imported-floc { width: min(100%, 1180px); margin: 0.75rem auto; padding: 0.8rem 0.9rem; border: 1px solid #172033; border-radius: 6px; }
+        .tp-imported-floc.is-missing { border-color: #d71920; }
+        .tp-imported-floc p { margin: 0.3rem 0 0.6rem; color: var(--ink-2); font-size: 0.85rem; }
+        .tp-imported-floc input { width: 100%; max-width: 640px; padding: 0.45rem 0.6rem; font: inherit; }
     </style>
     <figure class="tp-imported-pack">
         <img src="{{ $importedPackSrc }}" alt="Imported complete Tech Pack">
         <figcaption class="no-print" style="padding:0.5rem 0.7rem; font-size:0.82rem; color:var(--ink-2);">Imported complete Tech Pack{{ $tp->imported_pack_name ? ': '.$tp->imported_pack_name : '' }}</figcaption>
     </figure>
-    <div class="no-print" style="max-width:1180px; margin:0.75rem auto; color:var(--ink-2); font-size:0.85rem;">To replace or remove this image, use the import section above and save the Tech Pack.</div>
-    @php return; @endphp
+    {{-- The sheet below still renders, and that is deliberate. A Tech Pack
+         cannot be sent for review while any of its seventeen boxes is empty -
+         see missingTechPackFields() - and hiding the sheet behind an imported
+         image left nobody with anywhere to type them, artist or officer. The
+         image is the pack; the boxes are the record that lets it move. --}}
+    <div class="no-print" style="max-width:1180px; margin:0.75rem auto; color:var(--ink-2); font-size:0.85rem;">
+        This image is what prints. The sheet below is not printed — it is there because the
+        Tech Pack cannot be sent for review while any of its boxes is empty. Copy across what
+        the image already says, or type N/A where a row does not apply.@if ($editable) To replace
+        or remove the image, use the import section above.@endif
+    </div>
+
+    {{-- The one box that is not merely paperwork. The printer opens the files
+         from this path at their own station - see partials/file-location-bar -
+         and an imported sheet is a picture, so nothing reads it off the image.
+         Asked for here, at the top, rather than left to be found in the sheet
+         below. It stays the artist's to type, as it is on the sheet itself. --}}
+    @php $importedPath = (string) $tp->file_location_notes; @endphp
+    <div class="no-print tp-imported-floc{{ blank($importedPath) ? ' is-missing' : '' }}">
+        @if (blank($importedPath))
+            <strong>No print location in the image</strong>
+            <p>The printer opens the print-ready files from this path at their station. Nothing can read it off an imported picture, so it has to be typed.</p>
+        @else
+            <strong>Print location</strong>
+            <p>What the printer will open. Check it against the image.</p>
+        @endif
+
+        @if ($imageEditable)
+            <input class="tp-ref-file-path" type="text" name="file_location_notes" maxlength="200"
+                   value="{{ $importedPath }}"
+                   placeholder="Type the file location or folder path">
+        @elseif (filled($importedPath))
+            <code>{{ $importedPath }}</code>
+        @else
+            <p style="margin-bottom:0;">The assigned artist types this on their own copy of the sheet.</p>
+        @endif
+    </div>
 @endif
 
-<div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}" data-phase="{{ $phase }}">
+<div class="tp-sheet tp-reference-sheet{{ $imageEditable ? ' is-editing' : '' }}{{ $importedPackSrc ? ' tp-sheet-superseded' : '' }}" data-phase="{{ $phase }}">
     {{-- The leader lines, drawn over the sheet. A pack in the trade points from
          the woven-label box to the collar and from the front-print box to the
          chest; without that the floor matches pictures to places by eye. Each
@@ -390,7 +432,11 @@
              {{-- The artist's path, so only the artist types it. An officer
                   editing the sheet was able to overwrite where the files
                   actually are, from a desk that cannot see that machine. --}}
-            @if($imageEditable)
+            {{-- With an imported pack the box is asked for above the sheet
+                 instead. Two inputs of this name on one form would submit
+                 twice, and this one - being later - would win, wiping whatever
+                 was typed up there with its own empty value. --}}
+            @if($imageEditable && ! $importedPackSrc)
                 <div class="tp-ref-path-line">
                     <input class="tp-ref-file-path" type="text" name="file_location_notes" maxlength="200"
                            value="{{ $savedPath }}"
@@ -1462,6 +1508,10 @@ document.querySelectorAll('.tp-image-input').forEach(function(input){input.addEv
 window.printTechPack = async function () {
     var sheet = document.querySelector('.tp-reference-sheet');
     var pictures = sheet ? Array.from(sheet.querySelectorAll('img:not(.is-empty)')) : [];
+    // An imported pack sits outside the sheet and is the only thing that
+    // prints, so it is the one picture that must not be snapshotted half-loaded.
+    var imported = document.querySelector('.tp-imported-pack img');
+    if (imported) { pictures.push(imported); }
 
     await Promise.all(pictures.map(function (picture) {
         if (picture.complete && picture.naturalWidth > 0) {
