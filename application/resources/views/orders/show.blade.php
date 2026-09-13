@@ -780,10 +780,26 @@
                         || $design->artist_id === auth()->id()
                         || $design->inquiry?->created_by === auth()->id()
                     );
+                    // The drawing that was APPROVED, which is the last one.
+                    //
+                    // A redraw appends: submitting again adds to the list and
+                    // leaves the superseded version sitting at the earlier
+                    // index. Read forwards, a design that went through one
+                    // round of changes shows the drawing the client rejected -
+                    // which is the wrong picture on every job that was ever
+                    // sent back.
+                    //
+                    // Files tagged "revision" are skipped whichever end they
+                    // are at: those are the client's markups saying what to
+                    // change, not the artist's work.
                     $designShot = null;
 
                     if ($mayOpenDesign) {
-                        foreach ((array) ($design->files ?? []) as $i => $f) {
+                        foreach (array_reverse((array) ($design->files ?? []), true) as $i => $f) {
+                            if (($f['kind'] ?? 'layout') === 'revision') {
+                                continue;
+                            }
+
                             if (str_starts_with((string) ($f['mime'] ?? ''), 'image/')) {
                                 $designShot = ['design' => $design->id, 'index' => $i];
                                 break;
