@@ -42,10 +42,52 @@
     </p>
 
     <div style="display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap;">
-        <button type="button" class="btn btn-primary" onclick="history.back();">
+        {{-- Not history.back(). The board opens a brief in its own tab, so
+             the commonest way to arrive here is in a tab with nothing behind
+             it, where back() does nothing at all and the button sits there
+             looking broken.
+
+             The page that sent us is a real address and works from a fresh
+             tab, so that is what the button becomes. It survives the link's
+             rel="noopener" - that withholds the opener, not the referrer -
+             and it is checked against our own host, because a referrer is
+             whatever the other side chose to send. --}}
+        <a href="{{ url('/') }}" id="err403Back" class="btn btn-primary" style="display:none;">
             ← Back
-        </button>
-        <a href="{{ url('/') }}" class="btn btn-ghost">Go to my dashboard</a>
+        </a>
+        <a href="{{ url('/') }}" id="err403Home" class="btn btn-primary">Go to my dashboard</a>
     </div>
+
+    <p id="err403Tab" class="muted" style="display:none; font-size:0.8rem; margin:1rem 0 0;">
+        This opened in its own tab — closing it puts you back where you were.
+    </p>
 </div>
+
+<script>
+    (function () {
+        var back = document.getElementById('err403Back');
+        var home = document.getElementById('err403Home');
+        var tabNote = document.getElementById('err403Tab');
+        var from = document.referrer;
+
+        var ours = false;
+        try {
+            ours = !!from && new URL(from).origin === window.location.origin
+                && new URL(from).pathname !== window.location.pathname;
+        } catch (e) { ours = false; }
+
+        if (ours) {
+            back.href = from;
+            back.style.display = '';
+            home.className = 'btn btn-ghost';
+            return;
+        }
+
+        // Nowhere to send them but home. Say why there is no Back, so its
+        // absence reads as deliberate rather than as something missing.
+        if (window.history.length <= 1) {
+            tabNote.style.display = '';
+        }
+    })();
+</script>
 @endsection
