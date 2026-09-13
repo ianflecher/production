@@ -517,6 +517,65 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
             ->assertDontSee('dl-wait is-long', false);
     }
 
+    /**
+     * A brief nobody ever sent is timed from the brief, not from its row.
+     *
+     * Found on the shop's own board: two enquiries whose questionnaire was
+     * answered and which were never handed to an artist, both reading five
+     * days old. One had been sitting since August. Their design rows were
+     * written later than the enquiries they belong to - backfilled when a
+     * brief stopped being one design and became several - so the row was
+     * younger than the work, and the column that exists to say how long
+     * something has been ignored was under-reporting exactly those.
+     */
+    public function test_a_brief_never_sent_is_timed_from_the_enquiry(): void
+    {
+        $officer = $this->officer('vip', 'Patricia');
+
+        $inquiry = Inquiry::create([
+            'client_id' => Client::create(['name' => 'Never', 'last_name' => 'Sent'])->id,
+            'created_by' => $officer->id,
+            'team' => $officer->team,
+            'status' => Inquiry::STATUS_OPEN,
+            'what_they_want' => 'Shirts',
+        ]);
+        $inquiry->forceFill(['created_at' => now()->subDays(17)])->save();
+
+        // The row itself was written later than the enquiry it sits under.
+        $design = $inquiry->designs()->create(['position' => 0, 'status' => 'brief']);
+        $design->forceFill(['created_at' => now()->subDays(5)])->save();
+
+        $row = $this->rowFor($design->fresh());
+
+        $this->assertNull($row['artist'], 'nobody was ever put on it');
+        $this->assertSame(17, $row['waiting'],
+            'the board timed the row rather than the wait');
+    }
+
+    /**
+     * A second design added to an old brief is not seventeen days late. It
+     * was asked for today and nobody has failed at anything yet.
+     */
+    public function test_a_later_design_on_an_old_brief_starts_its_own_clock(): void
+    {
+        $officer = $this->officer('vip', 'Patricia');
+
+        $inquiry = Inquiry::create([
+            'client_id' => Client::create(['name' => 'Old', 'last_name' => 'Brief'])->id,
+            'created_by' => $officer->id,
+            'team' => $officer->team,
+            'status' => Inquiry::STATUS_OPEN,
+            'what_they_want' => 'Shirts',
+        ]);
+        $inquiry->forceFill(['created_at' => now()->subDays(17)])->save();
+
+        $inquiry->designs()->create(['position' => 0, 'status' => 'brief']);
+        $second = $inquiry->designs()->create(['position' => 1, 'status' => 'brief']);
+
+        $this->assertSame(0, $this->rowFor($second->fresh())['waiting'],
+            'a design asked for today was called seventeen days late');
+    }
+
     /* ---------------- narrowing the board ---------------- */
 
     /** The count at the top is the way into the rows behind it. */

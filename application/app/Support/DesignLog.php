@@ -134,7 +134,18 @@ class DesignLog
             InquiryDesign::STATUS_SUBMITTED => $design->submitted_at,
             // On somebody's desk - or not even sent to one yet.
             InquiryDesign::STATUS_WITH_ARTIST => $design->sent_at ?? $design->created_at,
-            default => $design->created_at,
+            // Never sent to anybody. The first design on a brief IS the brief -
+            // you raise an enquiry by describing one thing you want - so the
+            // wait started when the enquiry did, not when its row was written.
+            // Two of these read five days old on a board where one had been
+            // sitting since August: their rows were backfilled when a brief
+            // stopped being one design and started being several, and the row
+            // is younger than the work. A SECOND design added to an old brief
+            // is different - nobody has failed at anything yet - so that one
+            // still starts from its own creation.
+            default => ((int) $design->position === 0 && $design->inquiry?->created_at)
+                ? $design->inquiry->created_at
+                : $design->created_at,
         };
     }
 
