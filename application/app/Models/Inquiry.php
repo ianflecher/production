@@ -328,8 +328,23 @@ class Inquiry extends Model
         return $query
             ->where(function ($visible) {
                 $visible->where('status', self::STATUS_OPEN)
+                    // A design that has not become a job yet, whatever stage it
+                    // is at. This asked for an APPROVED one, which quietly lost
+                    // the client who has ordered before and come back: their
+                    // inquiry is marked ordered, so the first half does not
+                    // catch them, and a design still being drawn did not
+                    // satisfy the second. They fell off the list until the
+                    // client approved the drawing - and the officer chasing
+                    // that order had nowhere to see them in the meantime.
+                    //
+                    // A design still being written up ("brief") is not out of
+                    // anybody's hands yet and is left off.
                     ->orWhereHas('designs', fn ($designs) => $designs
-                        ->where('status', InquiryDesign::STATUS_APPROVED)
+                        ->whereIn('status', [
+                            InquiryDesign::STATUS_WITH_ARTIST,
+                            InquiryDesign::STATUS_SUBMITTED,
+                            InquiryDesign::STATUS_APPROVED,
+                        ])
                         ->whereDoesntHave('order'));
             })
             ->orderBy('created_at');
