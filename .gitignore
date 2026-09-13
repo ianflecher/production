@@ -35,3 +35,8 @@ Thumbs.db
 
 # Cloudflare tunnel binary (52MB, downloadable — never track it)
 cloudflared/cloudflared.exe
+
+# The stable-link page is its own repository, cloned here by
+# install-redirector.ps1 so update-redirector.ps1 has somewhere to push from.
+# It is a working checkout of imprint-link, not part of this project.
+redirector/
