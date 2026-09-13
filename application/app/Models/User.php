@@ -517,6 +517,39 @@ class User extends Authenticatable
         };
     }
 
+    /**
+     * Who may read the designing board.
+     *
+     * It started as the leader's, on the reasoning that every team's work at
+     * once is oversight rather than anybody's own queue. That was wrong about
+     * who needs it: the officer wants to know whether the drawing she is
+     * chasing has been picked up, and the artist wants to see where his own
+     * sits in the week. Both were reading it over somebody's shoulder.
+     *
+     * So it is the design side's - officers, agents, artists, the artist
+     * leader - and the leaders above them. Not the floor: printing through
+     * QC never touch a design, and the board would be a page of other
+     * people's work with nothing on it for them.
+     */
+    public function canSeeDesignBoard(): bool
+    {
+        return self::roleDomain($this->job_role) === 'design' || $this->isLeader();
+    }
+
+    /**
+     * Who may move a design to another artist FROM the board.
+     *
+     * Handing work between artists is the artist leader's job and the
+     * leader's; it is not something an account officer does to somebody
+     * else's queue, and not something an artist does to their own. The
+     * endpoint has always decided this for itself - the board only stops
+     * offering a control that would be refused.
+     */
+    public function canReassignArtists(): bool
+    {
+        return $this->isLeader() || $this->isArtistLead();
+    }
+
     public function isLeader(): bool
     {
         return $this->role === self::ROLE_LEADER || $this->isSuperAdmin() || $this->isSupervisor();

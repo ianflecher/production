@@ -43,11 +43,10 @@
                     @endif
                 </a>
 
-                {{-- The designing board: the whole shop's designs at once,
-                     which is the leader's view of the floor rather than
-                     anybody's own queue. The rest of the shop gets the summary
-                     of it on their dashboard. --}}
-                @if (auth()->user()->isLeader())
+                {{-- The designing board: the whole shop's designs at once.
+                     The design side reads it and the floor does not - see
+                     User::canSeeDesignBoard. --}}
+                @if (auth()->user()->canSeeDesignBoard())
                 <a href="{{ route('design.log') }}" class="nav-item {{ request()->routeIs('design.log') ? 'active' : '' }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                     Designing board

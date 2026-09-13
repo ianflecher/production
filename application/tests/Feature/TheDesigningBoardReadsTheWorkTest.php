@@ -255,30 +255,85 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
     /* ---------------- the page ---------------- */
 
     /**
-     * The whole board is every team's work at once, which is an oversight view
-     * rather than anybody's own queue — so the page is the leader's.
+     * The board is the design side's, and not the floor's.
+     *
+     * It began as the leader's, on the reasoning that every team's work at
+     * once is oversight rather than anybody's own queue. That was wrong about
+     * who needs it. The officer chasing a drawing wants to know whether it has
+     * been picked up; the artist wants to see where his own sits in the week.
+     * Both were reading it over somebody's shoulder, which is the sign that a
+     * page is shut to the people it is about.
+     *
+     * The floor stays out, and not as a rank: printing through QC never touch
+     * a design, so the board would be a page of other people's work with
+     * nothing on it for them.
      */
-    public function test_the_board_page_belongs_to_the_leader(): void
+    public function test_the_board_is_the_design_sides_and_not_the_floors(): void
     {
         $officer = $this->officer('vip', 'Pau');
         $artist = $this->artist('Maru');
         $this->design($officer, $artist, 'Shared');
 
+        $lead = User::factory()->create(['job_role' => User::JOB_ARTIST_LEAD, 'is_active' => true]);
+
         foreach ([User::ROLE_LEADER, User::ROLE_SUPER_ADMIN] as $role) {
             $this->actingAs(User::factory()->create(['job_role' => $role, 'is_active' => true]))
-                ->get(route('design.log'))
+                ->get(route('design.log'))->assertOk()->assertSee('Shared Client');
+        }
+
+        foreach ([$officer, $artist, $lead] as $person) {
+            $this->actingAs($person)->get(route('design.log'))
                 ->assertOk()
                 ->assertSee('Shared Client');
         }
+    }
 
-        foreach ([$officer, $artist, User::factory()->create(['job_role' => User::ROLE_FINANCE, 'is_active' => true])] as $person) {
-            $this->actingAs($person)->get(route('design.log'))->assertForbidden();
+    /** The floor, and the desks that are not the design side. */
+    public function test_the_floor_does_not_get_the_board(): void
+    {
+        $this->design($this->officer('vip', 'Pau'), $this->artist('Maru'), 'Shared');
+
+        foreach ([User::JOB_PRODUCTION, 'printer', 'sewing', 'quality control', User::ROLE_FINANCE] as $role) {
+            $this->actingAs(User::factory()->create(['job_role' => $role, 'is_active' => true]))
+                ->get(route('design.log'))
+                ->assertForbidden();
         }
     }
 
     /**
-     * The summary of it stays everybody's. That is the half the shop floor
-     * used to read over somebody's shoulder, and it costs them no page.
+     * Reading it is the whole design side's; moving work between artists is
+     * not. That is the artist leader's job and the leader's — an officer does
+     * not reach into somebody else's queue, and an artist does not quietly
+     * hand his own away. The endpoint has always refused them; this is the
+     * board not offering a control that would be refused.
+     */
+    public function test_only_the_two_leaders_are_offered_the_artist_dropdown(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $artist = $this->artist('Maru');
+        $design = $this->design($officer, $artist, 'Handover', ['sent_at' => now()]);
+        $where = route('inquiries.designs.artist', [$design->inquiry_id, $design->id]);
+
+        foreach ([User::ROLE_LEADER, User::JOB_ARTIST_LEAD] as $role) {
+            $this->actingAs(User::factory()->create(['job_role' => $role, 'is_active' => true]))
+                ->get(route('design.log'))->assertOk()->assertSee($where, false);
+        }
+
+        foreach ([$officer, $artist] as $person) {
+            $this->actingAs($person)->get(route('design.log'))
+                ->assertOk()
+                ->assertSee('Handover Client')          // they read the row
+                ->assertDontSee($where, false);         // they cannot move it
+        }
+    }
+
+    /**
+     * The summary of it stays everybody's, and the way through to the full
+     * board is offered to exactly the people it opens for.
+     *
+     * A button that answers Forbidden is worse than no button, so this is the
+     * same question as the page's own gate asked in the one place a person
+     * actually meets it.
      */
     public function test_the_dashboard_summary_is_still_everybodys(): void
     {
@@ -286,19 +341,21 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
         $artist = $this->artist('Maru');
         $this->design($officer, $artist, 'Shared');
 
-        foreach ([$officer, $artist] as $person) {
+        $floor = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
+
+        foreach ([$officer, $artist, $floor] as $person) {
             $this->actingAs($person)->get(route('dashboard'))
                 ->assertOk()
                 ->assertSee('Designing board')
-                ->assertSee('Shared Client')
-                // A button that answers Forbidden is worse than no button.
-                ->assertDontSee('Open the board');
+                ->assertSee('Shared Client');
         }
 
-        $this->actingAs(User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]))
-            ->get(route('dashboard'))
-            ->assertOk()
-            ->assertSee('Open the board');
+        foreach ([$officer, $artist, User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true])] as $person) {
+            $this->actingAs($person)->get(route('dashboard'))->assertSee('Open the board');
+        }
+
+        // The floor reads the summary and is offered no door it cannot open.
+        $this->actingAs($floor)->get(route('dashboard'))->assertDontSee('Open the board');
     }
 
     /**

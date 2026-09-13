@@ -35,10 +35,11 @@
     // it is the next thing they were going to do anyway. Pressing the one
     // already on turns it off, so the strip needs no "all" button beside it.
     $tallyLink = fn (string $name) => $filterLink(['status' => $status === $name ? '' : $name]);
-    // Moving a design between artists is the leader's call once the brief has
-    // gone out — the same rule the handover has always had. The board only
-    // offers what the endpoint would accept.
-    $canMove = auth()->user()->isLeader();
+    // Reading the board is the whole design side's; moving a design between
+    // artists is not. That is the artist leader's job and the leader's, and
+    // the endpoint has always said so — the board only stops offering a
+    // control that would be refused. See User::canReassignArtists.
+    $canMove = auth()->user()->canReassignArtists();
 @endphp
 
 <div class="page-head">

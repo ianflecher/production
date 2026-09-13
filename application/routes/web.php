@@ -521,10 +521,12 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // -------- The designing board --------
     // The sheet the artists' team kept by hand, read straight off the work.
-    // The whole board is the leader's: it is every team's work at once, which
-    // is an oversight view rather than anybody's own queue. The summary of it
-    // on the dashboard stays everybody's - see partials/design-board-panel.
-    Route::middleware('role:leader,super_admin')->group(function () {
+    // The design side's, and the leaders above them: the officer chasing a
+    // drawing wants to know whether it has been picked up, and the artist
+    // wants to see where his own sits in the week. Not the floor - printing
+    // through QC never touch a design. Moving work between artists is a
+    // narrower permission again; see User::canReassignArtists.
+    Route::middleware('role:leader,super_admin,design_side')->group(function () {
         Route::get('/design-log', [\App\Http\Controllers\DesignLogController::class, 'index'])->name('design.log');
     });
 

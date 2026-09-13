@@ -20,13 +20,16 @@ class EnsureRole
     {
         $user = $request->user();
 
-        // Two tokens are not roles but permissions a PERSON can hold, so they
-        // are asked of the user rather than matched against their role: the
-        // artist lead, and the order desk, which one leader also runs.
+        // Some of these are not roles but permissions a PERSON can hold, so
+        // they are asked of the user rather than matched against their role:
+        // the artist lead, the order desk which one leader also runs, and the
+        // design side - officers, agents and artists together, who are four
+        // different roles and one audience.
         $ok = $user && (
             in_array($user->role, $roles, true)
             || (in_array('artist_lead', $roles, true) && $user->isArtistLead())
             || (in_array('order_desk', $roles, true) && $user->canCreateOrders())
+            || (in_array('design_side', $roles, true) && $user->canSeeDesignBoard())
         );
 
         abort_unless($ok, 403);

@@ -32,9 +32,9 @@
             <h2 style="margin:0;">Designing board</h2>
             <p class="sub" style="margin:0.15rem 0 0;">The latest designs and where each one has got to.</p>
         </div>
-        {{-- Only for the people the full board belongs to. A button that
+        {{-- Only for the people the full board opens for. A button that
              answers Forbidden is worse than no button. --}}
-        @if (auth()->user()->isLeader())
+        @if (auth()->user()->canSeeDesignBoard())
             <a href="{{ route('design.log') }}" class="btn btn-ghost btn-sm">Open the board</a>
         @endif
     </div>
