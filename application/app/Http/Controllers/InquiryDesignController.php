@@ -125,6 +125,46 @@ class InquiryDesignController extends Controller
         return back()->with('success', 'Design description saved.');
     }
 
+    /**
+     * Rename a design.
+     *
+     * The name was settled when the design was created and never again, so a
+     * typo or a wrong number - EVO COTTON SHIRT 3 where the set runs to two -
+     * could only be fixed by deleting the design, which is itself refused once
+     * anything has been drawn on it.
+     *
+     * Allowed after the brief has gone out, unlike the description beside it.
+     * The description is the instruction the artist is drawing to and changing
+     * it under them would be moving the goalposts; the name is only what the
+     * thing is called on a list, and a wrong one is most worth fixing exactly
+     * when somebody is looking at it.
+     */
+    public function rename(Request $request, Inquiry $inquiry, int $design): RedirectResponse
+    {
+        $this->assertAccess($request);
+        $this->assertMine($request, $inquiry);
+
+        $data = $request->validate(
+            ['label' => ['nullable', 'string', 'max:120']],
+            ['label.max' => 'A design name is at most 120 characters.']
+        );
+
+        $design = $this->designOf($inquiry, $design);
+        $was = $design->name();
+
+        // Emptied on purpose falls back to "Design 3" and similar, which is
+        // what an unnamed design has always been called - see name().
+        $design->update([
+            'label' => filled($data['label'] ?? null) ? trim($data['label']) : null,
+        ]);
+
+        $now = $design->fresh()->name();
+
+        return back()->with('success', $was === $now
+            ? 'The name is unchanged.'
+            : $was.' is now called '.$now.'.');
+    }
+
     /** Take one off the list. Only while nothing has been drawn on it. */
     public function destroy(Request $request, Inquiry $inquiry, int $design): RedirectResponse
     {

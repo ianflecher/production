@@ -63,6 +63,23 @@
         text-align: center; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
     .layout-file-card:hover { transform: translateY(-2px); border-color: #b9cae8; box-shadow: 0 10px 22px rgba(31, 54, 91, .1); }
+    /* The design's name, typed over where it is read. Written to look like the
+       heading it replaces until somebody reaches for it, so a brief of six
+       designs does not read as a column of form boxes. */
+    .design-card-rename { display: flex; align-items: center; gap: .3rem; margin: 0; min-width: 0; }
+    .design-card-rename input {
+        font: inherit; font-weight: 700; color: inherit;
+        min-width: 0; width: 15rem; max-width: 100%;
+        padding: .15rem .35rem; border: 1px solid transparent; border-radius: 6px; background: transparent;
+    }
+    .design-card-rename input:hover { border-color: #dce4f0; background: #fff; }
+    .design-card-rename input:focus { border-color: #2563eb; background: #fff; outline: none; }
+    .design-card-rename button {
+        flex: none; cursor: pointer; font-size: .72rem; font-weight: 700;
+        padding: .18rem .5rem; border: 1px solid #dce4f0; border-radius: 6px;
+        background: #fff; color: #566172; opacity: 0; transition: opacity .12s ease;
+    }
+    .design-card-rename:hover button, .design-card-rename input:focus + button { opacity: 1; }
     .layout-file-remove { position: absolute; z-index: 2; top: -.42rem; right: -.42rem; margin: 0; }
     .layout-file-remove button {
         display: grid; place-items: center; width: 25px; height: 25px; padding: 0;
@@ -382,7 +399,21 @@
              the one thing to do about it next. --}}
         <div class="design-card{{ $design->approved() ? ' is-approved' : '' }}">
             <div class="design-card-head">
-                <strong class="design-card-name">{{ $design->name() }}</strong>
+                @if ($officeControls)
+                    {{-- Typed over in place. The name is only what the design is
+                         called on a list, so it stays editable after the brief
+                         has gone out - which is when a wrong one is noticed. --}}
+                    <form method="POST" action="{{ route('inquiries.designs.rename', [$inquiry, $design]) }}"
+                          class="design-card-rename">
+                        @csrf
+                        <input type="text" name="label" value="{{ $design->label }}" maxlength="120"
+                               placeholder="{{ $design->name() }}"
+                               aria-label="Name of {{ $design->name() }}">
+                        <button type="submit" title="Save the name">Save</button>
+                    </form>
+                @else
+                    <strong class="design-card-name">{{ $design->name() }}</strong>
+                @endif
                 @if ($design->approved())
                     <span class="design-pill is-approved">&#10003; Approved</span>
                 @elseif ($design->submitted())
