@@ -118,6 +118,13 @@
         box-shadow: 0 4px 12px color-mix(in srgb, var(--summary-color) 38%, transparent);
     }
 
+    /* Both of these are spans inside a span, so they sat on one line and read
+       "OPEN ORDERS 11" with the number hung off the end of its own label. The
+       margin below was written for a stack that was never stacking, because
+       margin-top does nothing to an inline box. */
+    .order-summary-label,
+    .order-summary-value { display: block; }
+
     .order-summary-label {
         color: #647890;
         font-size: 0.68rem;
@@ -127,7 +134,7 @@
     }
 
     .order-summary-value {
-        margin-top: 0.1rem;
+        margin-top: 0.15rem;
         color: color-mix(in srgb, var(--summary-color) 78%, #152033);
         font-size: 1.45rem;
         font-weight: 800;

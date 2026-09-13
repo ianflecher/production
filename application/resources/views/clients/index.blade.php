@@ -24,6 +24,10 @@
     </div>
 @else
     <div class="card panel">
+        {{-- Every other list puts its table in one of these; this one did not,
+             so above the width where it stacks the table pushed the whole page
+             sideways instead of scrolling inside its own card. --}}
+        <div class="tbl-wrap">
         <table class="tbl">
             <thead>
                 <tr>
@@ -54,6 +58,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     </div>
 @endif
 

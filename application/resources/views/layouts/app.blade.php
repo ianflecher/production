@@ -660,5 +660,39 @@
     })();
 </script>
 
+<script>
+/* A stacked table's cells take their labels from its own headings.
+
+   A table that stacks on a phone loses its headings with the table, so each
+   cell has to say what it is. Written by hand that is a label per cell per
+   table, and it is wrong the first time somebody adds a column and does not
+   think about a screen they are not looking at - which is the whole problem,
+   because on the desktop they are working on it looks perfect.
+
+   So the headings are the labels. Nothing has to be opted in and nothing
+   has to be maintained: a column added later is labelled by having a
+   heading, which it was always going to have. A hand-written data-label is left alone:
+   the designing board names some of its cells differently from the column
+   they sit under, and it means it. */
+(function () {
+    document.querySelectorAll('table.tbl').forEach(function (table) {
+        var heads = table.querySelectorAll('thead th');
+        if (!heads.length) { return; }
+
+        var labels = Array.prototype.map.call(heads, function (th) {
+            return (th.textContent || '').trim();
+        });
+
+        table.querySelectorAll('tbody tr').forEach(function (row) {
+            /* A cell spanning the table is a message, not a field. */
+            Array.prototype.forEach.call(row.cells, function (cell, i) {
+                if (cell.hasAttribute('data-label') || cell.colSpan > 1) { return; }
+                if (labels[i]) { cell.setAttribute('data-label', labels[i]); }
+            });
+        });
+    });
+})();
+</script>
+
 </body>
 </html>

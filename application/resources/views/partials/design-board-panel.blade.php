@@ -42,8 +42,11 @@
     @if ($designBoard->isEmpty())
         <p class="sub" style="margin:0.6rem 0 0;">No designs have come in this week.</p>
     @else
+        {{-- Six columns do not fit a phone, and swiped in a panel this size
+             they were not scrolled off but cut off. Stacked instead, which is
+             why every cell below names itself - see tbl-stack. --}}
         <div class="tbl-wrap" style="margin-top:0.6rem;">
-            <table class="tbl design-log">
+            <table class="tbl design-log tbl-stack">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -57,20 +60,20 @@
                 <tbody>
                     @foreach ($designBoard as $row)
                         <tr>
-                            <td style="white-space:nowrap;">{{ $row['date']->format('n/j') }}</td>
-                            <td style="font-weight:600;">{{ Str::limit($row['client'], 30) }}</td>
-                            <td style="white-space:nowrap;">{{ $row['agent'] }}</td>
-                            <td style="white-space:nowrap;">
+                            <td style="white-space:nowrap;" data-label="Date">{{ $row['date']->format('n/j') }}</td>
+                            <td style="font-weight:600;" data-label="Client">{{ Str::limit($row['client'], 30) }}</td>
+                            <td style="white-space:nowrap;" data-label="Agent">{{ $row['agent'] }}</td>
+                            <td style="white-space:nowrap;" data-label="Artist">
                                 {{ $row['artist'] ?? '—' }}
                                 @if ($row['revisions'] > 0)
                                     <span class="dl-rev">R{{ $row['revisions'] }}</span>
                                 @endif
                             </td>
-                            <td><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
+                            <td data-label="Status"><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
                             {{-- Printed only when it says something the status does
                                  not - see the board itself, which had the same
                                  column repeating itself down every row. --}}
-                            <td>
+                            <td data-label="Note">
                                 @if ($row['notes'] !== $row['status'] && $row['notes'] !== 'Work in progress')
                                     <span class="dl-tag is-{{ $noteTone[$row['notes']] ?? 'plain' }}">{{ $row['notes'] }}</span>
                                 @endif

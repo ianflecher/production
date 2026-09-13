@@ -1315,46 +1315,99 @@ input.is-suggested {
 .dl-artist-form select:hover { border-color: var(--border-strong); background: var(--surface); }
 .dl-artist-form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
 
-/* Any table, stacked, when its columns will not fit.
+/* A table cell may break a word rather than prise its table open.
+
+   The client-and-job panel on an order sits in a grid cell about 400px wide
+   and wanted 500, because its value column would not go below the widest
+   thing in it. Nothing there is unusual - an address, a size breakdown - it
+   simply had no permission to wrap. With it, the panel fits at every width
+   and the fixed label column beside it is left alone. */
+.tbl td { overflow-wrap: anywhere; }
+
+/* Boxes that refused to shrink, and pushed the page sideways doing it.
+
+   A grid or flex child is min-width:auto by default, which means it will not
+   go narrower than its own contents no matter how small its parent gets - it
+   prises the parent open instead. On the dashboard that was a 370px column
+   inside a 336px grid; in the alert on the products page it was a flex row of
+   text that would not wrap. Both showed up as a page that slid sideways about
+   twenty pixels with nothing visibly hanging over the edge, which is the
+   hardest kind of this fault to find.
+
+   min-width:0 lets them shrink, and the wrap lets the alert use the height it
+   has instead of width it does not. */
+@media (max-width: 1250px) {
+    .dash-grid-main > *,
+    .dash-grid-two > *,
+    .dash-stack > * { min-width: 0; }
+
+    .alert-success, .alert-info, .alert-warning, .alert-danger { flex-wrap: wrap; }
+    .alert-success > *, .alert-info > *, .alert-warning > *, .alert-danger > * { min-width: 0; }
+}
+
+/* Every table, stacked, on a screen that cannot hold its columns.
 
    The designing board earned a layout of its own because it is read by
-   scanning one column down forty rows. Most tables are not; the users list is
-   five fields about one person, and five fields about one person is a card.
-   So this is the plain version, and a table opts in by wearing tbl-stack and
-   giving each cell a data-label - which is also the whole of the work, since
-   the headings go with the table and the label is what is left to name the
-   value.
+   scanning one column down forty rows. Most tables are not read that way. A
+   users row is five fields about one person, a stock row is six about one
+   material, and that is a card.
+
+   This is a default rather than something a table opts into, and that is
+   deliberate: opting in means every table written from here on is cut off on
+   a phone until somebody remembers, and they will not remember, because on
+   the desktop they are working on it looks perfect. A table that genuinely
+   wants its columns at any width says tbl-wide and keeps them.
 
    Do NOT do half of it. display:block on the table alone leaves the cells
    behaving like cells and the columns collapse to a few pixels - the warning
    earlier in this file is about exactly that. Every element down to the cell
-   is relaid out here. */
-@media (max-width: 700px) {
-    .tbl-stack,
-    .tbl-stack thead,
-    .tbl-stack tbody,
-    .tbl-stack tr,
-    .tbl-stack td { display: block; width: auto; }
+   is relaid out here.
 
-    /* Off screen rather than display:none, so a screen reader keeps them. */
-    .tbl-stack thead {
+   The number is 1250 and not something rounder because the sidebar comes back
+   at 901px and takes about 368 with the page padding: a 1024 window leaves a
+   table 656 and a 901 window leaves it 533, which is narrower than the phone
+   layout it has just stopped using. 1250 is where the widest of these finally
+   has its room - the clients list at 823, and the payments ledger at 870 once
+   two of its columns were folded into one. */
+@media (max-width: 1250px) {
+    /* The board is excluded because its own rules already cover this width
+       and it lays its cards out differently. */
+    .tbl:not(.dl-full):not(.tbl-wide),
+    .tbl:not(.dl-full):not(.tbl-wide) thead,
+    .tbl:not(.dl-full):not(.tbl-wide) tbody,
+    .tbl:not(.dl-full):not(.tbl-wide) tr,
+    .tbl:not(.dl-full):not(.tbl-wide) td { display: block; width: auto; }
+
+    /* Off screen rather than display:none, so a screen reader keeps them.
+       The cells have to be relaid out too: left as table-cells inside a box
+       one pixel wide they still measured themselves against their content and
+       pushed the page sideways - nineteen pixels of scroll on the dashboard
+       with nothing visible anywhere causing it. */
+    .tbl:not(.dl-full):not(.tbl-wide) thead {
         position: absolute; width: 1px; height: 1px;
         overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
     }
+    .tbl:not(.dl-full):not(.tbl-wide) thead tr,
+    .tbl:not(.dl-full):not(.tbl-wide) thead th { display: block; width: auto; }
 
-    .tbl-stack tbody tr {
+    .tbl:not(.dl-full):not(.tbl-wide) tbody tr {
         border: 1px solid var(--border-strong); border-radius: 9px;
         background: var(--surface);
         padding: 0.6rem 0.75rem;
         margin: 0.5rem 0;
     }
-    .tbl-stack tbody tr:hover td { background: transparent; }
+    .tbl:not(.dl-full):not(.tbl-wide) tbody tr:hover td { background: transparent; }
 
-    .tbl-stack td {
+    .tbl:not(.dl-full):not(.tbl-wide) td {
         border: 0; padding: 0.18rem 0;
         font-size: 0.82rem;
+        white-space: normal !important;
     }
-    .tbl-stack td::before {
+
+    /* The label comes from the cell, and the cell gets it from the heading
+       above it - see the script at the foot of the layout. A cell with no
+       label prints no empty line where one would have been. */
+    .tbl:not(.dl-full):not(.tbl-wide) td[data-label]::before {
         content: attr(data-label);
         display: block;
         font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
@@ -1362,26 +1415,27 @@ input.is-suggested {
     }
 
     /* The first cell is what the card is about, so it is a heading and needs
-       no label above it saying "Name". */
-    .tbl-stack td:first-child {
+       no label above it repeating the obvious. */
+    .tbl:not(.dl-full):not(.tbl-wide) td:first-child {
         font-size: 1rem; font-weight: 700;
         margin-bottom: 0.2rem;
     }
-    .tbl-stack td:first-child::before { content: none; }
+    .tbl:not(.dl-full):not(.tbl-wide) td:first-child::before { content: none; }
 
     /* A cell with nothing in it is not a field worth a label. */
-    .tbl-stack td:empty { display: none; }
+    .tbl:not(.dl-full):not(.tbl-wide) td:empty { display: none; }
 
-    /* The buttons want the width, and a thumb wants the height. */
-    .tbl-stack td[data-label="Actions"] { margin-top: 0.45rem; }
-    .tbl-stack td[data-label="Actions"] .btn { min-height: 34px; }
+    /* Buttons want the width, and a thumb wants the height. */
+    .tbl:not(.dl-full):not(.tbl-wide) td .btn { min-height: 34px; }
 
-    /* "No user accounts found" spans the table and is not a field. */
-    .tbl-stack td[colspan] { text-align: left !important; padding: 1rem 0 !important; }
-    .tbl-stack td[colspan]::before { content: none; }
+    /* A cell spanning the table is a message - "no accounts found" - and not
+       a field, so it keeps neither a label nor a card. */
+    .tbl:not(.dl-full):not(.tbl-wide) td[colspan] {
+        text-align: left !important; padding: 1rem 0 !important;
+    }
 
     /* Stacked, it is as wide as the page and has nothing to scroll. */
-    .tbl-wrap:has(.tbl-stack) { overflow-x: visible; }
+    .tbl-wrap:has(.tbl:not(.dl-full):not(.tbl-wide)) { overflow-x: visible; }
 }
 
 /* The board on anything that cannot hold its columns.

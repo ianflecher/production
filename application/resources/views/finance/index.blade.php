@@ -76,8 +76,7 @@
                         <th>Method</th>
                         <th>Reference</th>
                         <th>Proof</th>
-                        <th>Recorded by</th>
-                        <th>When</th>
+                        <th>Recorded</th>
                         <th>Confirmed</th>
                     </tr>
                 </thead>
@@ -105,8 +104,15 @@
                                     <span style="color: var(--ink-3);">—</span>
                                 @endif
                             </td>
-                            <td style="font-size:0.82rem;">{{ $p->recorder?->name ?? '—' }}</td>
-                            <td style="font-size:0.82rem; color: var(--ink-3); white-space:nowrap;">{{ $p->paid_at?->format('M j, Y g:i A') ?? '—' }}</td>
+                            {{-- Who wrote it down and when they did are one fact,
+                                 and as two columns they were the widest thing in
+                                 the table: a name that had to fit beside a full
+                                 timestamp that refused to wrap. Stacked, the
+                                 column is as wide as the longer of the two. --}}
+                            <td style="font-size:0.82rem;">
+                                {{ $p->recorder?->name ?? '—' }}
+                                <div style="color: var(--ink-3); white-space:nowrap;">{{ $p->paid_at?->format('M j, g:i A') ?? '—' }}</div>
+                            </td>
                             {{-- What the officer recorded is the client's word
                                  for it. This column is the account agreeing,
                                  and the job does not start without it. --}}
