@@ -35,6 +35,10 @@ class WholePipelineTest extends TestCase
         foreach ([
             'sales' => User::ROLE_SALES,
             'leader' => User::ROLE_LEADER,
+            // The station board is not the leader's - they answer for the
+            // work, they do not take the machine. Somebody on this walkthrough
+            // has to be allowed on the floor.
+            'supervisor' => User::JOB_SUPERVISOR,
             'finance' => User::ROLE_FINANCE,
             'artist' => User::JOB_ARTIST,
             'supply' => User::JOB_SUPPLY_CHAIN,
@@ -86,6 +90,17 @@ class WholePipelineTest extends TestCase
     /** The station a department is worked at, if it is floor work. */
     private function stationFor(string $department): ?string
     {
+        // A department that appears in the station list is not necessarily
+        // WORKED from the board. The raw-materials desk has a station against
+        // its name and is kept off the board on purpose - it fulfils from its
+        // own inventory page - so nobody on the floor can take that machine
+        // and the step has to be worked like any other task.
+        $desk = $this->staff[$department] ?? null;
+
+        if ($desk && ! $desk->canUseStations()) {
+            return null;
+        }
+
         foreach (\App\Services\Stations::all() as $key => $station) {
             if (in_array($department, $station['departments'], true)) {
                 return $key;
@@ -101,13 +116,32 @@ class WholePipelineTest extends TestCase
      */
     private function runAtStation(Task $task, string $station): void
     {
-        $operator = $this->staff['leader'];   // leaders can take any station
+        // The floor runs its own machines. The leader stood in here once, on
+        // the grounds that leaders can take any station; they cannot, and the
+        // rule is deliberate - see ProductsFinanceStationsTest.
+        //
+        // The person whose department this step belongs to takes it, which is
+        // how it happens in the shop - unless their desk is not a machine at
+        // all. The raw-materials desk works from its own inventory page and is
+        // kept off the board on purpose, so the supervisor takes that one.
+        $operator = $this->staff[$task->department] ?? null;
 
-        $this->actingAs($operator)->post('/stations/start', [
+        if (! $operator || ! $operator->canUseStations()) {
+            $operator = $this->staff['supervisor'];
+        }
+
+        $taking = $this->actingAs($operator)->post('/stations/start', [
             'station' => $station,
             'operator_name' => 'Jully',
             'production_order_id' => $this->order->id,
-        ])->assertRedirect();
+        ]);
+
+        // Named, because "expected a redirect, got 403" on a walkthrough this
+        // long says nothing about which machine nobody could take.
+        $this->assertTrue($taking->isRedirect(), sprintf(
+            'a %s could not take %s for the %s step (status %d)',
+            $operator->job_role, $station, $task->department, $taking->status()
+        ));
 
         $session = \App\Models\StationSession::where('station', $station)
             ->whereNull('ended_at')->latest('id')->firstOrFail();
@@ -409,11 +443,15 @@ class WholePipelineTest extends TestCase
                 'orders list' => '/orders',
                 'dashboard' => '/dashboard',
                 'calendar' => '/calendar',
-                'stations' => '/stations',
                 'approvals' => '/approvals',
                 'products' => '/products',
                 'books' => '/books',
                 'finance' => '/finance',
+            ],
+            // Raw materials are the supply-chain desk's, not the leader's -
+            // canManageInventory() admits that desk and the admin, nobody
+            // else. Checked under the desk that owns them rather than dropped.
+            'supply' => [
                 'material requests' => '/material-requests',
                 'inventory' => '/inventory',
             ],
@@ -421,6 +459,11 @@ class WholePipelineTest extends TestCase
                 'quotation' => "/orders/$id/document/pq",
                 'receipt' => "/orders/$id/document/dr",
                 'order (agent view)' => "/orders/$id",
+            ],
+            // The station board belongs to the floor, so it is opened by
+            // somebody who works it rather than dropped from the walkthrough.
+            'supervisor' => [
+                'stations' => '/stations',
             ],
         ];
 

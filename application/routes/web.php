@@ -223,7 +223,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/messages/{order}', [MessageController::class, 'store'])
         ->whereNumber('order')->middleware('throttle:60,1')->name('messages.store');
 
-    // -------- Raw materials inventory (supply chain + leaders; checked in controller) --------
+    // -------- Raw materials inventory (the supply-chain desk; checked in controller) --------
     Route::get('/inventory', [\App\Http\Controllers\InventoryController::class, 'index'])->name('inventory.index');
     Route::post('/inventory', [\App\Http\Controllers\InventoryController::class, 'store'])->name('inventory.store');
     Route::post('/inventory/{item}', [\App\Http\Controllers\InventoryController::class, 'update'])->whereNumber('item')->name('inventory.update');
