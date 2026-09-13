@@ -35,8 +35,18 @@ class DesignLogController extends Controller
         $team = in_array($team, ['meta', 'vip'], true) ? $team : '';
         $search = trim((string) $request->query('q', ''));
         $status = trim((string) $request->query('status', ''));
+        $mine = $request->boolean('mine');
 
         $artists = $rows->pluck('artist')->filter()->unique()->sort()->values();
+
+        // Whether to offer the filter at all, answered off the rows already in
+        // hand and before any of them are filtered away. A button that can
+        // only ever come back empty is a dead button - and asking the database
+        // again to find out would cost the page a second copy of itself.
+        $me = $request->user()->id;
+        $isOnRow = fn ($row) => $row['design']->artist_id === $me
+            || $row['design']->inquiry?->created_by === $me;
+        $hasOwnRows = $rows->contains($isOnRow);
 
         if ($artist !== '') {
             $rows = $rows->filter(fn ($row) => $row['artist'] === $artist);
@@ -44,6 +54,16 @@ class DesignLogController extends Controller
 
         if ($team !== '') {
             $rows = $rows->filter(fn ($row) => str_starts_with(strtolower($row['agent']), $team));
+        }
+
+        // "Mine" has to mean different things to different people, because
+        // the board is one page read by two trades: an officer's own rows are
+        // the briefs she took, an artist's are the designs on his desk. Asked
+        // as one question - am I on this row - it needs no role behind it, and
+        // it answers for the account officer who is also a leader, whose rows
+        // are hers as an agent and not as a rank.
+        if ($mine) {
+            $rows = $rows->filter($isOnRow);
         }
 
         // Ninety days of work is several hundred rows, and finding one client
@@ -71,6 +91,8 @@ class DesignLogController extends Controller
             'team' => $team,
             'search' => $search,
             'status' => $status,
+            'mine' => $mine,
+            'hasOwnRows' => $hasOwnRows,
             'byDay' => $rows->groupBy(fn ($row) => $row['date']->toDateString()),
             'total' => $rows->count(),
             // The bench, for moving a design from one artist to another

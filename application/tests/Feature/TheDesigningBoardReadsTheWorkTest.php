@@ -371,7 +371,11 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
         $officer = $this->officer('vip', 'Pau');
         $artist = $this->artist('Mick');
 
-        $this->design($officer, $artist, 'Only');
+        // The first one carries a job too. Measured against a board with no
+        // orders on it at all, the baseline skips every query the order side
+        // needs and the comparison is between two different shapes of page
+        // rather than between one row and many.
+        $this->orderFor($this->design($officer, $artist, 'Only'));
         $one = $this->countQueries(fn () => DesignLog::rows());
 
         for ($i = 0; $i < 12; $i++) {
@@ -417,6 +421,87 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
 
         $this->assertSame($maru->id, $design->fresh()->artist_id);
         $this->assertSame('Maru', $this->rowFor($design->fresh())['artist']);
+    }
+
+    /**
+     * The artist leader can actually do the thing he is offered.
+     *
+     * Opening the dropdown to him was half the change: the endpoint behind it
+     * asked three separate questions - are you sales, is this your brief, are
+     * you a leader - and he is none of those, so every press answered 403. A
+     * button that answers Forbidden is worse than no button, and this is the
+     * test that would have said so.
+     */
+    public function test_the_artist_leader_can_move_a_design_and_not_merely_be_offered_it(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $design = $this->design($officer, $this->artist('Mick'), 'Moved', ['sent_at' => now()]);
+        $design->inquiry->update(['layout_sent_at' => now()]);
+        $maru = $this->artist('Maru');
+
+        $lead = User::factory()->create(['job_role' => User::JOB_ARTIST_LEAD, 'is_active' => true]);
+
+        $this->actingAs($lead)
+            ->post(route('inquiries.designs.artist', [$design->inquiry_id, $design->id]),
+                ['artist_id' => $maru->id])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($maru->id, $design->fresh()->artist_id);
+    }
+
+    /**
+     * And nobody else, once the brief has gone out.
+     *
+     * "The leader and the artist leader" is narrower than the leader
+     * permission role, which carries the supervisors with it. A production
+     * supervisor runs the floor from printing onward; moving a drawing
+     * between artists was never his to do.
+     */
+    public function test_nobody_else_may_move_work_that_has_already_started(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $design = $this->design($officer, $this->artist('Mick'), 'Started', ['sent_at' => now()]);
+        $design->inquiry->update(['layout_sent_at' => now()]);
+        $maru = $this->artist('Maru');
+        $mickId = $design->artist_id;
+
+        $others = [
+            $officer,                                    // whose brief it is
+            $this->artist('Port'),                       // an artist
+            User::factory()->create(['job_role' => 'supervisor', 'is_active' => true]),
+            User::factory()->create(['job_role' => User::ROLE_FINANCE, 'is_active' => true]),
+        ];
+
+        foreach ($others as $person) {
+            $this->actingAs($person)
+                ->post(route('inquiries.designs.artist', [$design->inquiry_id, $design->id]),
+                    ['artist_id' => $maru->id])
+                ->assertForbidden();
+        }
+
+        $this->assertSame($mickId, $design->fresh()->artist_id);
+    }
+
+    /**
+     * Before it goes out it is still the officer's own set to arrange, which
+     * is the older rule and stays.
+     */
+    public function test_the_officer_still_arranges_their_own_draft(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $design = $this->design($officer, $this->artist('Mick'), 'Draft');
+        $maru = $this->artist('Maru');
+
+        $this->assertNull($design->inquiry->layout_sent_at);
+
+        $this->actingAs($officer)
+            ->post(route('inquiries.designs.artist', [$design->inquiry_id, $design->id]),
+                ['artist_id' => $maru->id])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($maru->id, $design->fresh()->artist_id);
     }
 
     /** The artist whose desk it lands on is told, which is the point. */
@@ -669,6 +754,165 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
         foreach (['Waiting', 'Client', 'Brief', 'Agent', 'Artist', 'Drawn', 'Status', 'Note'] as $label) {
             $this->assertStringContainsString('data-label="'.$label.'"', $page);
         }
+    }
+
+    /* ---------------- what the note says ---------------- */
+
+    /**
+     * The note names the step, because "work in progress" named nothing.
+     *
+     * It was true of every job on the board that was not stuck, which made it
+     * the commonest word on the page and the least useful. Where a job is
+     * standing - the final mockup, printing, sewing - is somewhere a person
+     * can go and look.
+     */
+    public function test_a_moving_job_is_noted_by_the_step_it_is_standing_on(): void
+    {
+        $design = $this->design($this->officer('vip', 'Pau'), $this->artist('Mick'), 'Moving', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+        ]);
+        $order = $this->orderFor($design);
+
+        Payment::create([
+            'production_order_id' => $order->id, 'amount' => 2500,
+            'kind' => 'downpayment', 'status' => 'confirmed', 'confirmed_at' => now(),
+        ]);
+
+        // Nothing open yet: every step is still behind its gate.
+        $order->tasks()->update(['status' => 'todo']);
+        $this->assertSame('Work in progress', $this->rowFor($design->refresh())['notes']);
+
+        // Open the final mockup, and that is where the job is.
+        $order->tasks()->where('department', 'like', 'Final mockup%')->update(['status' => 'ready']);
+        $this->assertSame('Final mockup', $this->rowFor($design->refresh())['notes']);
+    }
+
+    /** The earliest open step, not whichever one the query happened to find. */
+    public function test_the_note_names_the_earliest_step_still_open(): void
+    {
+        $design = $this->design($this->officer('vip', 'Pau'), $this->artist('Mick'), 'Two', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+        ]);
+        $order = $this->orderFor($design);
+
+        Payment::create([
+            'production_order_id' => $order->id, 'amount' => 2500,
+            'kind' => 'downpayment', 'status' => 'confirmed', 'confirmed_at' => now(),
+        ]);
+
+        $order->tasks()->update(['status' => 'todo']);
+
+        $open = $order->tasks()->orderBy('stage')->orderBy('id')->get()->take(3);
+        $this->assertGreaterThan(1, $open->count(), 'the pipeline was too short to tell them apart');
+
+        // Two open at once: the answer is the earlier.
+        $order->tasks()->whereIn('id', [$open->first()->id, $open->last()->id])
+            ->update(['status' => 'ready']);
+
+        $this->assertSame($open->first()->department, $this->rowFor($design->refresh())['notes']);
+    }
+
+    /**
+     * Money in but unconfirmed is somebody else's queue.
+     *
+     * "Waiting DP" says to go and chase the client. When the officer has
+     * already recorded the payment and finance has not agreed it landed, the
+     * client is not the person to chase and chasing them is a phone call that
+     * makes the shop look like it loses money.
+     */
+    public function test_a_recorded_but_unconfirmed_payment_waits_on_finance(): void
+    {
+        $design = $this->design($this->officer('vip', 'Patricia'), $this->artist('Mick'), 'Unsure', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+        ]);
+        $order = $this->orderFor($design);
+
+        $this->assertSame('Waiting DP', $this->rowFor($design->refresh())['notes']);
+
+        // Recorded by the officer, not yet agreed by finance.
+        $payment = Payment::create([
+            'production_order_id' => $order->id, 'amount' => 2500,
+            'kind' => 'downpayment', 'status' => 'pending',
+        ]);
+
+        $this->assertSame('Waiting for finance', $this->rowFor($design->refresh())['notes']);
+
+        $payment->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+
+        $this->assertNotSame('Waiting for finance', $this->rowFor($design->refresh())['notes']);
+    }
+
+    /** A job that owes nothing is waiting on nobody, and never did. */
+    public function test_a_job_that_owes_nothing_is_not_waiting_on_a_downpayment(): void
+    {
+        $design = $this->design($this->officer('vip', 'Pau'), $this->artist('Mick'), 'Sponsored', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+        ]);
+        $order = $this->orderFor($design, ['unit_price' => 0, 'total_price' => 0]);
+
+        $notes = $this->rowFor($design->refresh())['notes'];
+
+        $this->assertNotSame('Waiting DP', $notes);
+        $this->assertNotSame('Waiting for finance', $notes);
+    }
+
+    /* ---------------- my own rows ---------------- */
+
+    /**
+     * "Mine" is one question - am I on this row - and not a role.
+     *
+     * The board is one page read by two trades. An officer's own rows are the
+     * briefs she took; an artist's are the designs on his desk. Asked this way
+     * it also answers for the account officer who is also a leader, whose rows
+     * are hers as an agent rather than as a rank.
+     */
+    public function test_mine_shows_an_officer_her_own_briefs(): void
+    {
+        $mine = $this->officer('vip', 'Pau');
+        $theirs = $this->officer('meta', 'Kyson');
+        $artist = $this->artist('Mick');
+
+        $this->design($mine, $artist, 'Hers');
+        $this->design($theirs, $artist, 'Somebodyelses');
+
+        $this->actingAs($mine)->get(route('design.log', ['mine' => 1]))
+            ->assertOk()
+            ->assertSee('Hers Client')
+            ->assertDontSee('Somebodyelses');
+    }
+
+    public function test_mine_shows_an_artist_the_designs_on_his_desk(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $mick = $this->artist('Mick');
+        $maru = $this->artist('Maru');
+
+        $this->design($officer, $mick, 'Hisdesk');
+        $this->design($officer, $maru, 'Herdesk');
+
+        $this->actingAs($mick)->get(route('design.log', ['mine' => 1]))
+            ->assertOk()
+            ->assertSee('Hisdesk Client')
+            ->assertDontSee('Herdesk');
+    }
+
+    /** And it is not offered to somebody who is on none of them. */
+    public function test_the_mine_button_is_not_offered_to_a_reader_with_no_rows(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $this->design($officer, $this->artist('Mick'), 'Shared');
+
+        // Escaped, not raw: this link carries a second parameter, and Blade
+        // writes the & between them as &amp;.
+        $onlyMine = route('design.log', ['days' => 45, 'mine' => 1]);
+
+        $this->actingAs($officer)->get(route('design.log'))
+            ->assertOk()->assertSee($onlyMine);
+
+        // A leader who took no briefs and drew nothing has no own rows.
+        $this->actingAs(User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]))
+            ->get(route('design.log'))
+            ->assertOk()->assertDontSee($onlyMine);
     }
 
     /* ---------------- narrowing the board ---------------- */

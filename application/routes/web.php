@@ -365,10 +365,15 @@ Route::middleware(['auth', 'active'])->group(function () {
     });
 
     // The designs under a brief. The officer lists them and answers the
-    // client; the leader moves them between artists once the brief has gone
-    // out. Which of those each person may do is decided in the controller -
-    // this only says who may reach the pages at all.
-    Route::middleware('role:sales,leader,super_admin,order_desk')->group(function () {
+    // client; the leader and the artist leader move them between artists once
+    // the brief has gone out. Which of those each person may do is decided in
+    // the controller - this only says who may reach the pages at all.
+    //
+    // artist_lead is here for the handover and nothing else. Everything else
+    // in this group asks the controller for sales-or-leader and refuses him,
+    // which is right: he moves work between artists, he does not write the
+    // brief or answer the client.
+    Route::middleware('role:sales,leader,super_admin,order_desk,artist_lead')->group(function () {
         Route::post('/inquiries/{inquiry}/designs', [\App\Http\Controllers\InquiryDesignController::class, 'store'])
             ->whereNumber('inquiry')->name('inquiries.designs.store');
         Route::post('/inquiries/{inquiry}/designs/{design}/name', [\App\Http\Controllers\InquiryDesignController::class, 'rename'])

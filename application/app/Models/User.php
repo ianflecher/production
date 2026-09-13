@@ -547,7 +547,18 @@ class User extends Authenticatable
      */
     public function canReassignArtists(): bool
     {
-        return $this->isLeader() || $this->isArtistLead();
+        // Asking for ROLE_LEADER is not enough and neither is isLeader():
+        // a supervisor's job role DERIVES the leader permission role (see
+        // getRoleAttribute), so both answer true for the floor supervisors.
+        // A production supervisor runs printing onward and has no business
+        // moving a drawing between artists, so they are named out.
+        if ($this->isSupervisor()) {
+            return false;
+        }
+
+        return $this->role === self::ROLE_LEADER
+            || $this->isSuperAdmin()
+            || $this->isArtistLead();
     }
 
     public function isLeader(): bool

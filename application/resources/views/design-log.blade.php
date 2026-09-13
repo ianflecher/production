@@ -28,7 +28,8 @@
         'On hold' => 'dp',
     ];
     $filterLink = fn (array $change) => route('design.log', array_filter(array_merge(
-        array_filter(['days' => $days, 'artist' => $artist, 'team' => $team, 'q' => $search, 'status' => $status]),
+        array_filter(['days' => $days, 'artist' => $artist, 'team' => $team, 'q' => $search,
+            'status' => $status, 'mine' => $mine ? 1 : null]),
         $change
     )));
     // A count nobody can click is a fact; a count that opens the rows behind
@@ -72,12 +73,24 @@
         'value' => $search,
         'placeholder' => 'Client, design, agent or artist…',
         'label' => 'Search the board',
-        'keep' => ['days' => $days, 'team' => $team, 'artist' => $artist, 'status' => $status],
+        'keep' => ['days' => $days, 'team' => $team, 'artist' => $artist, 'status' => $status,
+            'mine' => $mine ? 1 : null],
     ])
 
     <span class="list-search-note">{{ $total }} {{ Str::plural('design', $total) }}</span>
 
     <div class="toolbar-filters">
+        @if ($hasOwnRows)
+            {{-- First, because on a board of forty rows the commonest question
+                 anybody brings to it is about their own. --}}
+            <div class="seg" role="group" aria-label="Whose work">
+                <a href="{{ $filterLink(['mine' => null]) }}"
+                   @if (! $mine) aria-current="page" @endif>Everyone</a>
+                <a href="{{ $filterLink(['mine' => 1]) }}"
+                   @if ($mine) aria-current="page" @endif>Mine</a>
+            </div>
+        @endif
+
         <div class="seg" role="group" aria-label="How far back">
             @foreach ($dayChoices as $choice)
                 <a href="{{ $filterLink(['days' => $choice]) }}"
@@ -110,7 +123,7 @@
     <div class="card panel">
         <p class="sub" style="margin:0;">
             Nothing on the board for this stretch.
-            @if ($artist !== '' || $team !== '' || $status !== '' || $search !== '')
+            @if ($artist !== '' || $team !== '' || $status !== '' || $search !== '' || $mine)
                 <a href="{{ route('design.log', ['days' => $days]) }}">Show everything</a>.
             @endif
         </p>

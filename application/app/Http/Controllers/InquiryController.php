@@ -801,6 +801,27 @@ class InquiryController extends Controller
             return;
         }
 
-        abort_unless($user->leadsTeam() && $inquiry->team === $user->team, 403);
+        // Named, not just refused. The designing board shows the whole shop's
+        // work on purpose, so people click through to briefs that are not
+        // theirs as a matter of course - and a bare 403 reads as a broken
+        // system rather than as somebody else's client. See errors/403.
+        abort_unless($user->leadsTeam() && $inquiry->team === $user->team,
+            403, self::notYoursMessage($inquiry));
+    }
+
+    /** Whose brief this is, for a refusal somebody can act on. */
+    private static function notYoursMessage(Inquiry $inquiry): string
+    {
+        $officer = $inquiry->officer?->name;
+        $team = strtoupper(trim((string) $inquiry->team));
+        $client = $inquiry->client?->fullName();
+
+        $whose = $officer
+            ? $officer.($team ? ' on '.$team : '')
+            : 'another account officer';
+
+        return $client
+            ? $client.'\'s brief belongs to '.$whose.'.'
+            : 'This brief belongs to '.$whose.'.';
     }
 }

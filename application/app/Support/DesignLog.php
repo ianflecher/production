@@ -61,9 +61,27 @@ class DesignLog
                             ->where('stage', '>=', self::MASSPROD_STAGE)
                             ->whereNotIn('status', ['todo', 'cancelled']),
                     ])
+                    // Two questions about the money, not one. A job with no
+                    // payment at all is waiting on the client; a job with a
+                    // payment nobody has confirmed is waiting on finance, and
+                    // those are two different people to go and ask.
                     ->withExists([
+                        // This one keeps its default name on purpose:
+                        // hasDownpayment() looks for payments_exists and
+                        // answers from it instead of going back to the
+                        // database for every row.
                         'payments' => fn ($p) => $p->whereNotNull('confirmed_at'),
-                    ]),
+                        'payments as has_any_payment' => fn ($p) => $p,
+                    ])
+                    // The step the job is actually standing on. Loaded with
+                    // the orders rather than asked per row, and narrowed to
+                    // the open ones so it is a short list however long the
+                    // pipeline is. Nothing else may read tasks off these
+                    // orders: what is loaded here is a filtered slice, not
+                    // the pipeline - see step().
+                    ->with(['tasks' => fn ($t) => $t
+                        ->whereIn('status', ['ready', 'in_progress'])
+                        ->orderBy('stage')->orderBy('id')]),
             ])
             ->where('created_at', '>=', now()->subDays($days)->startOfDay())
             ->orderByDesc('created_at')
@@ -206,6 +224,29 @@ class DesignLog
     }
 
     /**
+     * The step a job is standing on, in the pipeline's own words.
+     *
+     * The earliest open one: a job with the printer and the cutter both ready
+     * is doing the earlier of the two, and that is the one somebody would
+     * name if you asked. Only "ready" and "in_progress" count - a "todo" step
+     * is locked behind a gate it has not passed, so naming it would say the
+     * job is somewhere it has not reached.
+     *
+     * Nothing open at all means every step so far is finished and the next is
+     * waiting on a gate, which the caller words for itself.
+     */
+    private static function step(ProductionOrder $order): ?string
+    {
+        if (! $order->relationLoaded('tasks')) {
+            return null;
+        }
+
+        return $order->tasks
+            ->sortBy([['stage', 'asc'], ['id', 'asc']])
+            ->first()?->department;
+    }
+
+    /**
      * The note the sheet keeps beside the status — and it is the useful half.
      *
      * "Waiting for orderlist" and "Waiting DP" are the two places a finished
@@ -219,8 +260,16 @@ class DesignLog
                 $order->status === 'cancelled' => 'Cancelled',
                 $order->status === 'complete' => 'Delivered',
                 $order->status === 'on_hold' => 'On hold',
+                // The money is in but nobody has agreed it landed. The job
+                // does not start on this, and the person to chase is finance
+                // rather than the client - which "Waiting DP" did not say.
+                ! $order->hasDownpayment() && $order->has_any_payment => 'Waiting for finance',
                 ! $order->hasDownpayment() => 'Waiting DP',
-                default => 'Work in progress',
+                // Otherwise it is moving, and the useful thing is WHERE.
+                // "Work in progress" was true of every job on the board and
+                // told nobody anything; "Final mockup" or "Sewing" is a place
+                // a person can go and look.
+                default => self::step($order) ?? 'Work in progress',
             };
         }
 

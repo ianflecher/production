@@ -38,7 +38,28 @@ class InquiryDesignController extends Controller
             return;
         }
 
-        abort_unless($user->leadsTeam() && $inquiry->team === $user->team, 403);
+        // Named, not just refused. The designing board shows the whole shop's
+        // work on purpose, so people click through to briefs that are not
+        // theirs as a matter of course - and a bare 403 reads as a broken
+        // system rather than as somebody else's client. See errors/403.
+        abort_unless($user->leadsTeam() && $inquiry->team === $user->team,
+            403, self::notYoursMessage($inquiry));
+    }
+
+    /** Whose brief this is, for a refusal somebody can act on. */
+    private static function notYoursMessage(Inquiry $inquiry): string
+    {
+        $officer = $inquiry->officer?->name;
+        $team = strtoupper(trim((string) $inquiry->team));
+        $client = $inquiry->client?->fullName();
+
+        $whose = $officer
+            ? $officer.($team ? ' on '.$team : '')
+            : 'another account officer';
+
+        return $client
+            ? $client.'\'s brief belongs to '.$whose.'.'
+            : 'This brief belongs to '.$whose.'.';
     }
 
     /** The design must belong to the enquiry in the URL, not just exist. */
@@ -193,14 +214,23 @@ class InquiryDesignController extends Controller
      */
     public function assign(Request $request, Inquiry $inquiry, int $design): RedirectResponse
     {
-        $this->assertAccess($request);
-        $this->assertMine($request, $inquiry);
+        // Two people may do this, at two different times.
+        //
+        // The artist leader is the one whose job this actually is, and he
+        // could not do it at all: he is not sales and not a leader, so all
+        // three of the officer's gates refused him. The board offered him the
+        // control anyway, which is a button that answers Forbidden - worse
+        // than no button. So the rule is written here as it is meant:
+        //
+        //   the leader or the artist leader, at any time; otherwise the
+        //   officer whose brief it is, and only while it is still a draft,
+        //   because moving work somebody has already started is not theirs.
+        if (! $request->user()->canReassignArtists()) {
+            $this->assertAccess($request);
+            $this->assertMine($request, $inquiry);
 
-        // The officer arranges the set while the brief is still a draft. Once
-        // it has gone out, moving work somebody has already started is the
-        // leader's call - the same rule the whole-brief handover has always
-        // had, kept per design.
-        abort_unless(! $inquiry->layout_sent_at || $request->user()->isLeader(), 403);
+            abort_if($inquiry->layout_sent_at, 403);
+        }
 
         $data = $request->validate(
             ['artist_id' => ['required', 'integer', 'exists:users,id']],
