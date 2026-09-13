@@ -1023,10 +1023,21 @@ class TaskController extends Controller
     {
         $mockup = \App\Models\ProductionOrder::STAGE_MOCKUP;
 
+        // META or VIP, for the artist leader who wants one team's packs at a
+        // time. Anything else in the box means both, so a stale or hand-typed
+        // ?team= shows the queue rather than an empty page.
+        $team = strtolower((string) $request->query('team', ''));
+        $team = in_array($team, ['meta', 'vip'], true) ? $team : '';
+
+        // order.inquiry and order.creator are what salesTeam() reads. Loaded
+        // here because the page asks it of every row — left off, the split is
+        // two queries a pack.
+        $teamSources = ['order.inquiry', 'order.creator'];
+
         // Tech Packs arrive here only after the account officer has approved
         // them. Group by order because older data can contain a renamed legacy
         // Production template row for the same deliverable.
-        $packages = Task::with(['order.jobOrder', 'order.items', 'assignee', 'files'])
+        $packages = Task::with(array_merge(['order.jobOrder', 'order.items', 'assignee', 'files'], $teamSources))
             ->where('stage', $mockup)
             ->where('approver_role', 'leader')
             ->where('status', 'for_checking')
@@ -1039,7 +1050,7 @@ class TaskController extends Controller
             ->groupBy('production_order_id');
 
         // Everything else (pairing, sewing, QC…) — one row each.
-        $singles = Task::with(['order', 'assignee', 'files'])
+        $singles = Task::with(array_merge(['order', 'assignee', 'files'], $teamSources))
             ->where('status', 'for_checking')
             ->where('approver_role', 'leader')
             ->where('stage', '!=', $mockup)
@@ -1055,12 +1066,20 @@ class TaskController extends Controller
             $packages = $packages->reject(
                 fn ($group) => $group->contains('assigned_to', $request->user()->id)
             );
+
+            // Narrowed after his own packs are out, so the count he is left
+            // with is the count he can actually work.
+            if ($team !== '') {
+                $packages = $packages->filter(
+                    fn ($group) => $group->first()->order?->salesTeam() === $team
+                );
+            }
         }
 
         // Two people share this queue, so a pack that one of them signs off
         // must not simply vanish for the other — it drops into "already
         // checked" with the time it was approved, and stays there for a week.
-        $checked = Task::with(['order.client', 'assignee'])
+        $checked = Task::with(array_merge(['order.client', 'assignee'], $teamSources))
             ->where('stage', $mockup)
             ->where('approver_role', 'leader')
             ->where('status', 'complete')
@@ -1082,7 +1101,7 @@ class TaskController extends Controller
         $artists = collect();
 
         if ($request->user()->isArtistLead() || $request->user()->isLeader()) {
-            $bench = Task::with(['order.client', 'assignee'])
+            $bench = Task::with(array_merge(['order.client', 'assignee'], $teamSources))
                 ->where('team', \App\Models\User::JOB_ARTIST)
                 ->whereNotIn('status', ['complete', 'cancelled', 'todo'])
                 ->whereHas('order', fn ($q) => $q->where('status', 'active'))
@@ -1108,7 +1127,18 @@ class TaskController extends Controller
                 ->get();
         }
 
+        // Asking for one team means the page, not one list on it. Left on the
+        // checking queue alone, choosing VIP still showed META work on the
+        // bench underneath — which reads as the filter having failed.
+        if ($team !== '' && $request->user()->isArtistLead()) {
+            $onTeam = fn ($order) => $order?->salesTeam() === $team;
+
+            $checked = $checked->filter(fn ($group) => $onTeam($group->first()->order));
+            $bench = $bench->filter(fn ($step) => $onTeam($step->order));
+        }
+
         return view('tasks.approvals', [
+            'team' => $team,
             'packages' => $packages,
             'singles' => $singles,
             'checked' => $checked,

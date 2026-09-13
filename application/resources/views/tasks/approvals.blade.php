@@ -16,11 +16,48 @@
     $fileTile = function ($f) {
         return $f;
     };
+
+    $team = $team ?? '';
+
+    // META and VIP are two books of clients with two sets of officers behind
+    // them. The artist leader checks both, and run together he cannot see
+    // which team's packs are piling up — so his queue is sorted into them and
+    // he can ask for one team at a time. The leader's page is left alone: hers
+    // carries sewing, printing and QC as well, which are not a sales team's.
+    $isArtistLead = auth()->user()->isArtistLead();
+    $teamOf = fn ($group) => strtoupper((string) ($group->first()->order?->salesTeam() ?? ''));
+    $packageRows = $isArtistLead
+        ? $packages->sortBy(fn ($group) => $teamOf($group) ?: 'zzz')
+        : $packages;
+    $shownTeam = null;
 @endphp
+
+@if ($isArtistLead)
+    <div class="list-toolbar">
+        <div class="toolbar-filters">
+            <div class="seg" role="group" aria-label="Show one team's packs">
+                @foreach (['' => 'All teams', 'meta' => 'META', 'vip' => 'VIP'] as $value => $label)
+                    <a href="{{ route('approvals', array_filter(['team' => $value])) }}"
+                       @if ($team === $value) aria-current="page" @endif>{{ $label }}</a>
+                @endforeach
+            </div>
+        </div>
+    </div>
+@endif
 
 @if ($packages->isEmpty() && $singles->isEmpty())
     <div class="card panel" style="text-align: center; padding: 2.5rem;">
-        <p class="muted">Nothing to check right now. Submitted work will appear here.</p>
+        {{-- With a team chosen, "nothing to check" is about that team only.
+             Said plainly it reads as an empty shop, and the other team's packs
+             sit unchecked behind a filter he has forgotten is on. --}}
+        @if ($team !== '')
+            <p class="muted">
+                Nothing from {{ strtoupper($team) }} to check right now.
+                <a href="{{ route('approvals') }}">Show both teams</a>.
+            </p>
+        @else
+            <p class="muted">Nothing to check right now. Submitted work will appear here.</p>
+        @endif
     </div>
 @endif
 
@@ -45,8 +82,22 @@
                 </thead>
                 <tbody>
                     {{-- Tech Packs already checked by their account officers. --}}
-                    @foreach ($packages as $orderId => $group)
+                    @foreach ($packageRows as $orderId => $group)
                         @php $order = $group->first()->order; @endphp
+
+                        {{-- A heading row each time the team changes. The rows
+                             are sorted by team above, so this fires once per
+                             team rather than every other row. --}}
+                        @if ($isArtistLead)
+                            @php $rowTeam = $teamOf($group); @endphp
+                            @if ($rowTeam !== $shownTeam)
+                                @php $shownTeam = $rowTeam; @endphp
+                                <tr class="tbl-group">
+                                    <th colspan="6">{{ $rowTeam ?: 'No team' }}</th>
+                                </tr>
+                            @endif
+                        @endif
+
                         <tr>
                             <td>
                                 <a href="{{ route('orders.show', $order) }}" style="font-weight: 600;">{{ $order->order_number }}</a>

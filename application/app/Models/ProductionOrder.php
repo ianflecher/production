@@ -114,7 +114,7 @@ class ProductionOrder extends Model
         'inquiry_id', 'inquiry_design_id',
         'decoration_methods', 'cutting_type', 'needs_sticker',
         'massprod_priority', 'skip_sample', 'back_pocket', 'back_pocket_qty',
-        'rush', 'rush_fee', 'shipping_cost',
+        'rush', 'rush_fee', 'shipping_cost', 'charge_layout_fee',
         'unit_price', 'custom_size_price', 'total_price', 'vat_inclusive', 'withholding_rate', 'discount_amount', 'discount_note', 'downpayment_waived', 'downpayment_waiver_note',
         'quantity', 'due_date', 'sample_due_date', 'layout_approved_at', 'status', 'completed_at', 'created_by',
         'mockup_offset_x', 'mockup_offset_y',
@@ -135,6 +135,7 @@ class ProductionOrder extends Model
             'skip_sample' => 'boolean',
             'rush' => 'boolean',
             'rush_fee' => 'decimal:2',
+            'charge_layout_fee' => 'boolean',
             'shipping_cost' => 'decimal:2',
             'needs_sticker' => 'boolean',
             'unit_price' => 'decimal:2',
@@ -260,6 +261,14 @@ class ProductionOrder extends Model
      */
     public function layoutFeeAmount(): float
     {
+        // Asked for, not assumed. It used to go on every quotation, and an
+        // officer who did not want it had to discount it back off — which
+        // read on the sheet as the shop giving money away rather than as a
+        // fee that was never charged.
+        if (! $this->charge_layout_fee) {
+            return 0.0;
+        }
+
         $work = $this->workAmountBeforeLayout();
 
         if ($work === null || (float) $this->discount_amount >= $work) {
@@ -312,7 +321,9 @@ class ProductionOrder extends Model
         $rush = $this->rushAmount();
         $shipping = $this->shippingAmount();
         $workBeforeLayout = $garment + $backPocket + $addon + $rush + $shipping;
-        $layoutFee = (float) $this->discount_amount >= $workBeforeLayout ? 0.0 : self::LAYOUT_FEE;
+        // layoutFeeAmount() carries the tick and the waivers together, so the
+        // breakdown cannot disagree with the model about whether it applies.
+        $layoutFee = $this->layoutFeeAmount();
         $layoutFeeRefund = $this->layoutFeeRefund();
         $gross = $garment + $backPocket + $addon + $rush + $shipping + $layoutFee - $layoutFeeRefund; // before discount
         $discount = min((float) $this->discount_amount, $gross);
@@ -364,7 +375,7 @@ class ProductionOrder extends Model
      * Compute the total for a given set of figures (used when saving an order,
      * before the model is persisted).
      */
-    public static function computeTotal(?float $unitPrice, int $qty, float $discount = 0, bool $vat = false, float $backPocketAmount = 0, float $extras = 0, int $withholdingRate = 0, float $shippingCost = 0): ?float
+    public static function computeTotal(?float $unitPrice, int $qty, float $discount = 0, bool $vat = false, float $backPocketAmount = 0, float $extras = 0, int $withholdingRate = 0, float $shippingCost = 0, bool $chargeLayoutFee = false): ?float
     {
         if ($unitPrice === null) {
             return null;
@@ -373,7 +384,9 @@ class ProductionOrder extends Model
         // $extras covers one-off charges on the job rather than per piece —
         // the rush fee, and the Step 4 add-on.
         $workBeforeLayout = ($unitPrice * $qty) + $backPocketAmount + $extras + max(0, $shippingCost);
-        $layoutFee = $discount >= $workBeforeLayout ? 0.0 : self::LAYOUT_FEE;
+        // Only when it was ticked, and still never on a job the discount has
+        // already taken to nothing.
+        $layoutFee = (! $chargeLayoutFee || $discount >= $workBeforeLayout) ? 0.0 : self::LAYOUT_FEE;
         $layoutRefund = $qty >= self::LAYOUT_FEE_REFUND_QTY ? $layoutFee : 0.0;
         $vatable = max(0, $workBeforeLayout + $layoutFee - $layoutRefund - $discount);
 
@@ -624,6 +637,23 @@ class ProductionOrder extends Model
         return $this->belongsTo(Inquiry::class);
     }
 
+    /**
+     * Which book of clients this job came out of — META or VIP.
+     *
+     * The order does not carry the team itself; the brief it was written from
+     * does. A job taken straight off the counter has no brief, so the officer
+     * who wrote it answers for it instead — they belong to one team or the
+     * other, and it is the same answer the brief would have given. Walk-ins
+     * written by somebody on neither team stay unlabelled rather than being
+     * guessed into a team they are not.
+     */
+    public function salesTeam(): ?string
+    {
+        $team = $this->inquiry?->team ?: $this->creator?->team;
+
+        return filled($team) ? strtolower(trim((string) $team)) : null;
+    }
+
     /** Which design this order is making - one of the brief's, or none. */
     public function inquiryDesign(): BelongsTo
     {
@@ -830,8 +860,9 @@ class ProductionOrder extends Model
      * Give every step the date it has to be finished by.
      *
      * The sample and the batch have separate promises. The sample run (layout
-     * through presenting the sample) has three days. Only after that does the
-     * batch run receive the remaining time through the client's due date.
+     * through presenting the sample) has sampleLeadDays() — three days, or
+     * four for a jersey. Only after that does the batch run receive the
+     * remaining time through the client's due date.
      *
      * Evenly on purpose. Weighting a cut against a sew is a guess about work
      * nobody has measured, and a wrong weight is worse than an even split
@@ -908,8 +939,11 @@ class ProductionOrder extends Model
         if ($sampleSteps->isEmpty()) {
             $assignWindow($massProductionSteps, $start, $end);
         } else {
+            // Through sampleLeadDays(), not the bare constant: a jersey gets
+            // the longer window, and reading the constant here was how the
+            // schedule and the jersey rule disagreed.
             $sampleEnd = $start->copy()->startOfDay()
-                ->addDays(self::SAMPLE_LEAD_DAYS)
+                ->addDays($this->sampleLeadDays())
                 ->endOfDay();
 
             // A promised delivery earlier than the normal sample window does
@@ -963,10 +997,19 @@ class ProductionOrder extends Model
         $this->refresh()->rebuildPipeline($this->decoration_methods ?? [], $this->cutting_type);
     }
 
-    /** Every sample has a fixed three-day window before batch work begins. */
+    /**
+     * How many days this order's sample gets before batch work begins.
+     *
+     * Three for most things, four for a jersey. The jersey allowance was
+     * written down as a constant and then never asked for — every order,
+     * panelled or not, got the flat three — which is exactly the "late by
+     * design" the constant was added to prevent.
+     */
     public function sampleLeadDays(): int
     {
-        return self::SAMPLE_LEAD_DAYS;
+        return in_array($this->product_type, self::JERSEY_PRODUCT_TYPES, true)
+            ? self::SAMPLE_LEAD_DAYS_JERSEY
+            : self::SAMPLE_LEAD_DAYS;
     }
 
     /**
@@ -1001,12 +1044,21 @@ class ProductionOrder extends Model
         return $due;
     }
 
-    /** True when the sample is wanted and the day has passed. */
+    /**
+     * True when the sample is wanted and the day has passed.
+     *
+     * Worked out rather than read off the column. sample_due_date is only
+     * rewritten when a payment is confirmed, so an order whose payment went
+     * away keeps the date it had — and would have been called late for a
+     * clock that never started running.
+     */
     public function sampleOverdue(): bool
     {
-        return $this->sample_due_date !== null
+        $due = $this->computeSampleDueDate();
+
+        return $due !== null
             && $this->status === 'active'
-            && $this->sample_due_date->copy()->endOfDay()->isPast();
+            && $due->copy()->endOfDay()->isPast();
     }
 
     /** When the first payment was confirmed — the moment the job starts. */

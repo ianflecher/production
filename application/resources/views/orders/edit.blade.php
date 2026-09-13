@@ -20,6 +20,22 @@
     @csrf
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
+        <h2>Job order number</h2>
+        <div class="field" style="max-width: 320px;">
+            <label for="order_number">Job order #</label>
+            <input id="order_number" type="text" name="order_number" maxlength="50"
+                   value="{{ old('order_number', $order->order_number) }}">
+            {{-- Quotations and delivery receipts take their own number from
+                 this one at the moment they are written, and keep it. Renaming
+                 the order afterwards does not rename a sheet already made. --}}
+            <span class="hint" style="font-size: 0.78rem;">
+                No two jobs may share a number. Any quotation or receipt already made keeps the number it was written with.
+            </span>
+            @error('order_number')<span class="error">{{ $message }}</span>@enderror
+        </div>
+    </div>
+
+    <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Client</h2>
         <div class="form-grid">
             <div class="field">
@@ -178,9 +194,21 @@
                 <label for="shipping_cost">Shipping cost (₱)</label>
                 <input id="shipping_cost" type="number" name="shipping_cost" step="0.01" min="0" value="{{ old('shipping_cost', (float) $order->shipping_cost ?: '') }}" placeholder="0.00" oninput="updatePrice()">
             </div>
-            <div class="field" style="min-width:240px; margin:0;">
-                <label>Layout fee</label>
-                <div class="muted" style="padding-top:0.55rem;">₱500 is added automatically and refunded at 24 pcs or more.</div>
+            {{-- Was a sentence explaining that ₱500 went on by itself. It is a
+                 box now: the shop charges it on some jobs and not others, and
+                 an officer who did not want it was discounting it back off. --}}
+            <div class="field" style="min-width:280px; margin:0;">
+                <label for="charge_layout_fee">Layout fee</label>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:500; padding-top:0.4rem;">
+                    <input type="checkbox" id="charge_layout_fee" name="charge_layout_fee" value="1" style="width:auto;margin:0;"
+                           @checked(old('charge_layout_fee', $order->charge_layout_fee)) onchange="updatePrice()">
+                    Charge the layout fee
+                </label>
+                {{-- The amount is fixed, so it is not on the label — that is
+                     the rush fee's problem, which is agreed per job. --}}
+                <div class="muted" style="font-size:0.78rem; margin-top:0.25rem;">
+                    Refunded at {{ \App\Models\ProductionOrder::LAYOUT_FEE_REFUND_QTY }} pcs or more.
+                </div>
             </div>
         </div>
         <label style="display:flex; align-items:flex-start; gap:0.5rem; font-weight:500; margin-top:0.8rem; max-width:620px;">
@@ -382,7 +410,9 @@
                     : '';
             }
             const workBeforeLayout = garment + pocketAmount + rushFee + shipping;
-            const layoutFee = discount >= workBeforeLayout ? 0 : 500;
+            // Follows the tick, the same test the server makes.
+            const chargeLayout = !!document.getElementById('charge_layout_fee')?.checked;
+            const layoutFee = (!chargeLayout || discount >= workBeforeLayout) ? 0 : 500;
             const layoutFeeRefund = qty >= 24 ? layoutFee : 0;
             const subtotal = garment + pocketAmount + rushFee + shipping + layoutFee - layoutFeeRefund;
             const vatable = Math.max(0, subtotal - discount);

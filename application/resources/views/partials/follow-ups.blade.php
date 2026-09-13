@@ -35,6 +35,17 @@
                         <div class="follow-up-from">{{ $from }}</div>
                     @endif
 
+                    {{-- Which of the two kinds of work this is. Only the
+                         artist leader is shown it: he is the one who filters
+                         on it, and on the "All" view a list with no marks on
+                         it does not say which rows the filter would keep. --}}
+                    @if ($user->isArtistLead())
+                        @php $revision = $inq->isRevision(); @endphp
+                        <span class="follow-up-kind {{ $revision ? 'is-revision' : 'is-new' }}">
+                            {{ $revision ? 'Revision' : 'New design' }}
+                        </span>
+                    @endif
+
                     <div class="follow-up-meta">
                         {{ $inq->client->contact_number ?: 'no number' }}
                         @if ($showOfficer && $inq->officer)

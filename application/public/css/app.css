@@ -1001,6 +1001,134 @@
 .follow-up-from { font-size: 0.8rem; color: var(--ink-2); margin-top: 0.15rem; }
 .follow-up-meta { font-size: 0.76rem; color: var(--ink-3); margin-top: 0.12rem; }
 
+/* New drawing or one that has come back — the artist leader's two piles.
+   Red for a revision on purpose: it is the one with a client already waiting
+   on it, so it should catch the eye before the new work does. */
+/* Everything that narrows a list, in one bar across the top of it. The bar
+   is what uses the full width — not the controls inside it, which keep the
+   size they want. Search at one end, filters at the other. */
+.list-toolbar {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+}
+.list-toolbar .list-search { flex: 1 1 260px; margin-bottom: 0; }
+.list-toolbar .list-search-box { max-width: 380px; }
+/* Pushed to the far end, and kept together when the bar wraps. */
+.list-toolbar .toolbar-filters {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0.5rem; margin-left: auto;
+}
+
+/* A file input you can paste into. The dashed edge is the usual sign that a
+   box will take a drop; the hint under it says the quicker way. */
+.paste-drop {
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    padding: 0.5rem 0.6rem;
+    background: var(--surface-2);
+    transition: border-color .12s ease, background .12s ease;
+}
+.paste-drop.is-dragging, .paste-drop:focus-within {
+    border-color: var(--accent); background: var(--accent-soft);
+}
+/* A picture has just landed: a short flash, so a paste is never silent. */
+.paste-drop.just-pasted { border-color: var(--success-ink); background: var(--success-soft); }
+.paste-drop.has-file { border-style: solid; background: var(--surface); }
+.paste-drop-input { display: block; width: 100%; font-size: 0.78rem; }
+.paste-drop-hint { font-size: 0.72rem; color: var(--ink-3); margin-top: 0.35rem; }
+.paste-drop-hint kbd {
+    font-family: var(--font-body); font-size: 0.68rem; font-weight: 700;
+    border: 1px solid var(--border-strong); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 0.25rem; color: var(--ink-2);
+    background: var(--surface);
+}
+.paste-drop-preview {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-top: 0.5rem; padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+}
+.paste-drop-thumb {
+    width: 46px; height: 46px; object-fit: cover;
+    border: 1px solid var(--border); border-radius: 6px; flex: none;
+}
+.paste-drop-name {
+    font-size: 0.74rem; color: var(--ink-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+.paste-drop-clear {
+    flex: none; cursor: pointer;
+    font-family: inherit; font-size: 0.7rem; font-weight: 600;
+    color: var(--danger-ink); background: var(--danger-soft);
+    border: 1px solid var(--danger-border); border-radius: 6px;
+    padding: 0.18rem 0.45rem;
+}
+.paste-drop-clear:hover { background: #fde8e8; }
+
+/* What the engine made of the picture. */
+.paste-drop-ocr { font-size: 0.72rem; margin-top: 0.4rem; line-height: 1.35; }
+.paste-drop-ocr.is-working { color: var(--accent); }
+.paste-drop-ocr.is-found { color: var(--success-ink); font-weight: 600; }
+.paste-drop-ocr.is-none { color: var(--ink-3); }
+
+/* A number read off a photograph, sitting in the box until somebody says it
+   is right. Amber rather than green on purpose: it is not confirmed, and a
+   wrong reference on a payment is a receipt nobody can match to the money. */
+input.is-suggested {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    box-shadow: inset 0 0 0 1px #fde68a;
+}
+
+/* One question, one answer: the choices joined into a single control rather
+   than loose pills, which read as six unrelated buttons in a row. */
+.seg {
+    display: inline-flex; align-items: stretch;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+}
+.seg a {
+    display: inline-flex; align-items: center;
+    padding: 0.34rem 0.72rem;
+    font-size: 0.78rem; font-weight: 600; line-height: 1.2;
+    color: var(--ink-2); text-decoration: none; white-space: nowrap;
+    border-right: 1px solid var(--border);
+    transition: background .12s ease, color .12s ease;
+}
+.seg a:last-child { border-right: 0; }
+.seg a:hover { background: var(--surface-2); color: var(--ink); }
+.seg a[aria-current] { background: var(--brand); color: #fff; }
+.seg a[aria-current]:hover { background: var(--brand-hover); color: #fff; }
+.seg a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.follow-up-kind {
+    display: inline-block;
+    font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 0.1rem 0.5rem;
+    margin-top: 0.28rem;
+}
+.follow-up-kind.is-new { color: var(--accent); background: var(--accent-soft); }
+.follow-up-kind.is-revision { color: var(--brand); background: var(--brand-soft); }
+
+/* Which team's rows start here, inside a table that holds both. Darker than
+   the column headings above it so the two do not read as the same thing. */
+.tbl tr.tbl-group th {
+    background: var(--surface-2);
+    color: var(--ink-2);
+    font-size: 0.72rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+}
+.tbl tr.tbl-group:hover th { background: var(--surface-2); }
+
 /* The dashboard's version: names only, and a way through to the tab where
    they are actually worked. The dashboard says who is waiting; the tab is
    where you do something about it. */

@@ -77,14 +77,14 @@
         <h2>Job order number</h2>
         <div class="field" style="max-width: 300px;">
             <label for="order_number">Job order #</label>
-            {{-- The shop's own numbering, not a box to fill in. Typing over it
-                 was how two jobs ended up sharing a number and how the year
-                 drifted. Shown because everybody quotes it; not editable
-                 because nobody should choose it. The number is worked out
-                 again when the order is saved, so this is a preview. --}}
-            <input id="order_number" type="text" name="order_number" readonly aria-readonly="true"
-                   value="{{ $nextNumber }}" style="background: var(--surface-2, #f1f5f9); cursor: default;">
-            <span class="hint" style="font-size: 0.78rem;">Given automatically, in order.</span>
+            {{-- The next number in the shop's own sequence, filled in and
+                 changeable. It was locked because typing over it was how two
+                 jobs once shared a number — the database keeps that from
+                 happening now, so the box is open for the times the sequence
+                 needs correcting by hand. --}}
+            <input id="order_number" type="text" name="order_number" maxlength="50"
+                   value="{{ old('order_number', $nextNumber) }}">
+            <span class="hint" style="font-size: 0.78rem;">The next one in order. Change it only if you need to — no two jobs may share a number.</span>
             @error('order_number')<span class="error">{{ $message }}</span>@enderror
         </div>
     </div>
@@ -283,9 +283,20 @@
                 <label for="shipping_cost">Shipping cost (₱)</label>
                 <input id="shipping_cost" type="number" name="shipping_cost" step="0.01" min="0" value="{{ old('shipping_cost') }}" placeholder="0.00" oninput="updatePrice()">
             </div>
-            <div class="field" style="min-width:240px; margin:0;">
-                <label>Layout fee</label>
-                <div class="muted" style="padding-top:0.55rem;">₱500 is added automatically and refunded at 24 pcs or more.</div>
+            {{-- Was a sentence saying ₱500 went on by itself. It is the box
+                 now, and it sits here beside the discount and shipping for the
+                 same reason the edit form puts it here: it is part of what the
+                 job costs, not part of how it is made. --}}
+            <div class="field" style="min-width:280px; margin:0;">
+                <label for="charge_layout_fee">Layout fee</label>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:500; padding-top:0.4rem;">
+                    <input type="checkbox" id="charge_layout_fee" name="charge_layout_fee" value="1" style="width:auto;margin:0;"
+                           @checked(old('charge_layout_fee')) onchange="updatePrice()">
+                    Charge the layout fee
+                </label>
+                <div class="muted" style="font-size:0.78rem; margin-top:0.25rem;">
+                    Refunded at {{ \App\Models\ProductionOrder::LAYOUT_FEE_REFUND_QTY }} pcs or more.
+                </div>
             </div>
         </div>
         <label style="display:flex; align-items:flex-start; gap:0.5rem; font-weight:500; margin-top:0.8rem; max-width:620px;">
@@ -519,7 +530,9 @@
                     : '';
             }
             const workBeforeLayout = garment + pocketAmount + rushFee + shipping;
-            const layoutFee = discount >= workBeforeLayout ? 0 : 500;
+            // Follows the tick, the same test the server makes.
+            const chargeLayout = !!document.getElementById('charge_layout_fee')?.checked;
+            const layoutFee = (!chargeLayout || discount >= workBeforeLayout) ? 0 : 500;
             const layoutFeeRefund = qty >= 24 ? layoutFee : 0;
             const subtotal = garment + pocketAmount + rushFee + shipping + layoutFee - layoutFeeRefund;
             const vatable = Math.max(0, subtotal - discount);

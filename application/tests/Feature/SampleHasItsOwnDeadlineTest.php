@@ -16,8 +16,11 @@ use Tests\TestCase;
  * only noticed when the batch behind it ran short - and the whole delay landed
  * on the floor at the end, where there is no time left to absorb it.
  *
- * Three days from the confirmed payment for every product. The batch keeps
- * the order due date: that promise to the client has not changed.
+ * Three days from the confirmed payment, and four for a jersey. It was three
+ * for everything to begin with, and this test said so; the fourth day was
+ * asked for afterwards, because a jersey is panelled and takes a longer press
+ * and was being marked late for work nobody had given it time to do. The
+ * batch keeps the order due date: that promise to the client has not changed.
  */
 class SampleHasItsOwnDeadlineTest extends TestCase
 {
@@ -59,12 +62,21 @@ class SampleHasItsOwnDeadlineTest extends TestCase
         $this->assertSame('2026-09-04', $order->computeSampleDueDate()->toDateString());
     }
 
-    public function test_a_riding_jersey_uses_the_same_three_day_sample_window(): void
+    public function test_a_riding_jersey_gets_a_fourth_day(): void
     {
         $order = $this->paidOn($this->order('riding_jersey'), '2026-09-01 09:00:00');
 
-        $this->assertSame(3, $order->sampleLeadDays());
-        $this->assertSame('2026-09-04', $order->computeSampleDueDate()->toDateString());
+        $this->assertSame(4, $order->sampleLeadDays());
+        $this->assertSame('2026-09-05', $order->computeSampleDueDate()->toDateString());
+    }
+
+    /** The longer window is the jersey's alone — it did not move for the rest. */
+    public function test_the_other_products_still_get_three(): void
+    {
+        foreach (['round_neck', 'polo', 'hoodie'] as $product) {
+            $order = $this->paidOn($this->order($product), '2026-09-01 09:00:00');
+            $this->assertSame(3, $order->sampleLeadDays(), $product.' was given the jersey window');
+        }
     }
 
     public function test_the_batch_keeps_the_orders_own_due_date(): void

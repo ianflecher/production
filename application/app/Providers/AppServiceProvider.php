@@ -45,38 +45,9 @@ class AppServiceProvider extends ServiceProvider
             $user = auth()->user();
 
             if ($user && ($user->isLeader() || $user->isArtistLead())) {
-                // Count the same Tech Pack rows shown on the Approvals page.
-                // These have already passed the account officer; other stages
-                // remain individual leader approvals.
-                $mockup = \App\Models\ProductionOrder::STAGE_MOCKUP;
-
-                $packages = Task::query()
-                    ->where('stage', $mockup)
-                    ->where('approver_role', 'leader')
-                    ->where('status', 'for_checking')
-                    ->where(function ($query) {
-                        $query->where('department', 'like', 'Tech pack%')
-                            ->orWhere('department', 'like', 'Production template%');
-                    })
-                    ->whereHas('order', fn ($q) => $q->where('status', 'active'))
-                    ->get()
-                    ->groupBy('production_order_id')
-                    // A pack he drew himself is not his to check, and the queue
-                    // already drops it — counting it here put a 1 on a nav item
-                    // that opens an empty page. See TaskController::approvals.
-                    ->reject(fn ($group) => $user->isArtistLead() && ! $user->isLeader()
-                        && $group->contains('assigned_to', $user->id))
-                    ->count();
-
-                $singles = Task::where('status', 'for_checking')
-                    ->where('approver_role', 'leader')
-                    ->where('stage', '!=', $mockup)
-                    ->whereHas('order', fn ($q) => $q->where('status', 'active'))
-                    ->count();
-
-                // The artist leader's badge counts tech packs only — the rest of
-                // the floor is not his queue.
-                $view->with('pendingApprovals', $user->isArtistLead() ? $packages : $packages + $singles);
+                // The same rule the Approvals page and the dashboard use, so
+                // a badge can never disagree with the page it opens.
+                $view->with('pendingApprovals', \App\Support\ApprovalQueue::countFor($user));
             }
 
             if ($user && $user->isArtist()) {
@@ -105,11 +76,26 @@ class AppServiceProvider extends ServiceProvider
                     ->whereNotIn('status', ['complete', 'cancelled'])
                     ->count());
 
-                // Account officers only review samples for their own orders, so the
-                // badge must be scoped the same way as the Sample Review page.
+            }
+
+            // Samples waiting on the account officer. Asked of everyone who can
+            // open that page, not only the sales role: a leader holding the
+            // order desk approves these too, and counting it for her alone was
+            // the difference between work being seen and work sitting there.
+            if ($user && $user->canCreateOrders()) {
                 $view->with('pendingSamples', Task::where('status', 'for_checking')
                     ->where('approver_role', 'sales')
-                    ->whereHas('order', fn ($q) => $q->where('status', 'active')->where('created_by', $user->id))
+                    ->whereHas('order', function ($q) use ($user) {
+                        $q->where('status', 'active');
+
+                        // Scoped the same way the page is: an account officer
+                        // reviews their own orders, a leader sees them all. A
+                        // badge that disagrees with the page it opens is worse
+                        // than no badge.
+                        if ($user->isSales()) {
+                            $q->where('created_by', $user->id);
+                        }
+                    })
                     ->count());
             }
 

@@ -105,6 +105,11 @@ class DashboardController extends Controller
         $activeTasks = fn () => Task::whereHas('order', fn ($q) => $q->where('status', 'active'));
 
         if ($user->isLeader()) {
+            // The one question the tile, the alert card and the sidebar badge
+            // all ask. Asked once here and handed on — it is a query to find
+            // out, and the page was asking it twice.
+            $approvalCount = \App\Support\ApprovalQueue::countFor($user);
+
             // "Active agents" = production staff actually present/working today
             // (matches how work is assigned), not just every enabled account.
             $presentAgents = User::agents()
@@ -116,7 +121,11 @@ class DashboardController extends Controller
 
             $stats = [
                 ['label' => 'Active orders', 'value' => ProductionOrder::where('status', 'active')->count(), 'note' => 'In production now'],
-                ['label' => 'Tasks for checking', 'value' => $activeTasks()->where('status', 'for_checking')->count(), 'note' => 'Waiting for your approval'],
+                // What is waiting on THIS person, not every task sitting at
+                // "for checking" — a tech pack still with the account officer
+                // is not the leader's to approve, and counting it here said
+                // she had work that her own Approvals page would not show.
+                ['label' => 'Tasks for checking', 'value' => $approvalCount, 'note' => 'Waiting for your approval'],
                 ['label' => 'Revisions requested', 'value' => $activeTasks()->where('status', 'revision_required')->count(), 'note' => 'Back with the agents'],
                 ['label' => 'Active agents', 'value' => $presentAgents, 'note' => 'Present and working today'],
             ];
@@ -128,10 +137,12 @@ class DashboardController extends Controller
                 ->get()
                 ->countBy('stage');
 
-            $forChecking = Task::with(['order', 'assignee'])
-                ->where('status', 'for_checking')
-                ->whereHas('order', fn ($q) => $q->where('status', 'active'))
-                ->orderBy('submitted_at')
+            // Five for the list underneath; the count above is the real
+            // total, which is why it is worked out separately. Deriving the
+            // number from this list capped it at five however much was
+            // actually waiting.
+            $forChecking = \App\Support\ApprovalQueue::tasksFor($user)
+                ->with(['order', 'assignee'])
                 ->limit(5)
                 ->get();
 
@@ -151,7 +162,7 @@ class DashboardController extends Controller
             );
 
             return view('dashboard', compact(
-                'user', 'greeting', 'stats', 'pipelineCounts', 'forChecking', 'recentOrders'
+                'user', 'greeting', 'stats', 'pipelineCounts', 'forChecking', 'approvalCount', 'recentOrders'
             ) + ['stepSlices' => $byStep['slices'], 'stepTotal' => $byStep['total']]);
         }
 

@@ -11,6 +11,11 @@
     $layoutReleased = $order->layoutReleased();
     $layoutApproved = $order->layoutApproved();
     $mockupApproved = $order->mockupApproved();
+    // Worked out now rather than read off the column: sample_due_date is only
+    // rewritten when a payment is confirmed, so a row whose payment went away
+    // keeps a date for a clock that is not running. Shown, that reads as a
+    // deadline nobody set.
+    $sampleDue = $order->computeSampleDueDate();
 @endphp
 
 <style>
@@ -50,9 +55,9 @@
              told about the finished batch; this is the shop's own promise about
              the sample, and a sample quietly sitting for a week used to surface
              only when the batch behind it ran short. --}}
-        @if ($order->sample_due_date)
+        @if ($sampleDue)
             <p class="muted" style="margin-top:0.2rem;">
-                Sample due {{ $order->sample_due_date->format('M j, Y') }}
+                Sample due {{ $sampleDue->format('M j, Y') }}
                 ({{ $order->sampleLeadDays() }} days from the confirmed payment)
                 @if ($order->sampleOverdue())
                     <strong style="color: var(--danger-ink, #b91c1c);">— overdue</strong>
@@ -413,16 +418,29 @@
                                     <option value="{{ $m }}">{{ $m }}</option>
                                 @endforeach
                             </select>
-                            <label style="margin-top:0.5rem;" for="other_transfer">Other transfer (if selected)</label>
-                            <input id="other_transfer" type="text" name="other_transfer" maxlength="100" placeholder="e.g. Maya, BDO, Metrobank">
-                            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required only when “Other transfer” is selected.</div>
+                            {{-- Only asked once there is something to answer.
+                                 A box captioned "if selected" sitting open
+                                 under every method is a question four
+                                 payments out of five are not being asked. --}}
+                            <div id="other_transfer_field" hidden>
+                                <label style="margin-top:0.5rem;" for="other_transfer">Which bank or wallet?</label>
+                                <input id="other_transfer" type="text" name="other_transfer" maxlength="100" placeholder="e.g. Maya, BDO, Metrobank">
+                            </div>
 
                             <label style="margin-top:0.5rem;">Reference number <span style="color: var(--danger-ink);">*</span></label>
                             <input type="text" name="reference" placeholder="Receipt / txn no." required>
                             <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — receipt, transaction, or official reference number.</div>
 
                             <label style="margin-top:0.5rem;">Proof of payment <span style="color: var(--danger-ink);">*</span></label>
-                            <input type="file" name="proof" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
+                            @include('partials.paste-image-field', [
+                                'name' => 'proof',
+                                'accept' => '.jpg,.jpeg,.png,.webp,.pdf',
+                                'required' => true,
+                                'hint' => 'the GCash or bank screenshot, drop a file, or choose one.',
+                                // Read the reference number off it and offer
+                                // it above — the officer still has to agree.
+                                'ocrTarget' => 'reference',
+                            ])
                             <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — photo/screenshot or PDF.</div>
 
                             <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.8rem;">
@@ -445,6 +463,34 @@
                                 @endif
                             </div>
                         </form>
+
+                        {{-- "Which bank or wallet?" is only a question when the
+                             method is the one that does not name itself. It is
+                             carried required/not-required with it: a required
+                             box that is hidden stops the form from submitting
+                             and says nothing about why. --}}
+                        <script>
+                        (function () {
+                            var method = document.getElementById('pay_method');
+                            var field = document.getElementById('other_transfer_field');
+                            if (!method || !field) return;
+
+                            var input = document.getElementById('other_transfer');
+                            var OTHER = @json(\App\Models\Payment::METHOD_OTHER_TRANSFER);
+
+                            function sync() {
+                                var on = method.value === OTHER;
+                                field.hidden = !on;
+                                if (input) {
+                                    if (on) { input.setAttribute('required', 'required'); }
+                                    else { input.removeAttribute('required'); input.value = ''; }
+                                }
+                            }
+
+                            method.addEventListener('change', sync);
+                            sync();
+                        })();
+                        </script>
                     </div>
                 </details>
             @endif
@@ -732,7 +778,22 @@
                     @if (! $order->skip_sample && $task->stage === 1)
                         <tr>
                             <td colspan="{{ $isLeader ? 6 : 5 }}" style="background:#eef6ff; color:#1d4ed8; font-size:0.76rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:.48rem .65rem;">
-                                Sample phase · due within 3 days
+                                {{-- What this order actually gets, not a fixed
+                                     sentence. It read "due within 3 days" over
+                                     dates that said otherwise: the window is
+                                     four days for a jersey, and on an unpaid
+                                     order it has not been measured out at all
+                                     — the clock starts at the confirmed
+                                     downpayment. Promising three days over a
+                                     schedule nobody has drawn yet is the sort
+                                     of thing people stop believing. --}}
+                                Sample phase ·
+                                @if ($sampleDue)
+                                    due {{ $sampleDue->format('M j, Y') }}
+                                    ({{ $order->sampleLeadDays() }} days from the confirmed payment)
+                                @else
+                                    {{ $order->sampleLeadDays() }} days, starting when the downpayment is confirmed
+                                @endif
                             </td>
                         </tr>
                     @endif

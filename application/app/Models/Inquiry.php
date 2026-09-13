@@ -35,6 +35,14 @@ class Inquiry extends Model
        call to give one away for free is theirs to make, not the form's. */
     public const LAYOUT_REVISION_LIMIT = 3;
 
+    /* The two things a brief can be to the artist who picks it up: a drawing
+       nobody has asked for changes on yet, or one that has come back. They are
+       different work — a revision has a note saying what to change and is
+       already late in the client's eyes — so the artist leader can ask for one
+       kind at a time. */
+    public const KIND_NEW = 'new';
+    public const KIND_REVISION = 'revision';
+
     protected $fillable = [
         'client_id', 'created_by', 'team', 'status', 'production_order_id',
         'what_they_want', 'next_follow_up_on', 'closed_at', 'closed_reason',
@@ -66,6 +74,32 @@ class Inquiry extends Model
             $inquiry->brief_token ??= Str::random(32);
             $inquiry->brief_expires_at ??= now()->addDays(30);
         });
+    }
+
+    /**
+     * Has this brief been sent back at all?
+     *
+     * Asked at both levels on purpose. layout_revision_count is bumped when
+     * the officer sends the whole lot back; a single design sent back on its
+     * own only moves that design's own count. Reading one of them alone calls
+     * half the revisions on the board new work.
+     */
+    public function isRevision(): bool
+    {
+        return (int) $this->layout_revision_count > 0
+            || $this->designs->contains(fn (InquiryDesign $d) => (int) $d->revision_count > 0);
+    }
+
+    /** New drawings, or ones that have come back. @see isRevision() */
+    public function scopeOfDesignKind($query, string $kind)
+    {
+        $sentBack = fn ($q) => $q
+            ->where('layout_revision_count', '>', 0)
+            ->orWhereHas('designs', fn ($d) => $d->where('revision_count', '>', 0));
+
+        return $kind === self::KIND_REVISION
+            ? $query->where($sentBack)
+            : $query->whereNot($sentBack);
     }
 
     /** True once the three revisions an officer may ask for are used up. */

@@ -75,8 +75,9 @@ class QuotationWithAndWithoutVatTest extends TestCase
 
     public function test_the_layout_fee_is_refunded_on_an_order_of_twenty_four_or_more_pieces(): void
     {
-        $short = $this->order(false, ['quantity' => 23])->pricingBreakdown();
-        $qualifyingOrder = $this->order(false, ['quantity' => 24]);
+        // The fee is a tick now, so a test about the fee has to ask for it.
+        $short = $this->order(false, ['quantity' => 23, 'charge_layout_fee' => true])->pricingBreakdown();
+        $qualifyingOrder = $this->order(false, ['quantity' => 24, 'charge_layout_fee' => true]);
         $qualifying = $qualifyingOrder->pricingBreakdown();
 
         $this->assertSame(500.0, $short['layout_fee']);
@@ -201,7 +202,8 @@ class QuotationWithAndWithoutVatTest extends TestCase
     public function test_the_sheet_says_which_one_the_reader_is_holding(): void
     {
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
-        $order = $this->order(true);
+        // Ticked, because this one is checking the fee prints on the sheet.
+        $order = $this->order(true, ['charge_layout_fee' => true]);
         $order->update(['created_by' => $sales->id]);
 
         $this->actingAs($sales)

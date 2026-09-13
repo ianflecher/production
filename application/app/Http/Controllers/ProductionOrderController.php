@@ -285,6 +285,7 @@ class ProductionOrderController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
             'shipping_cost' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'charge_layout_fee' => ['nullable', 'boolean'],
             'downpayment_waived' => ['nullable', 'boolean'],
             'downpayment_waiver_note' => ['nullable', 'string', 'max:500'],
 
@@ -374,8 +375,10 @@ class ProductionOrderController extends Controller
         $withholdingRate = $vat ? (int) ($data['withholding_rate'] ?? 0) : 0;
         $discount = (float) ($data['discount_amount'] ?? 0);
         $shippingCost = round((float) ($data['shipping_cost'] ?? 0), 2);
+        $chargeLayoutFee = $request->boolean('charge_layout_fee');
         $totalPrice = ProductionOrder::computeTotal(
-            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee, $withholdingRate, $shippingCost
+            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee, $withholdingRate, $shippingCost,
+            $chargeLayoutFee
         );
 
         $clientFields = [
@@ -451,6 +454,7 @@ class ProductionOrderController extends Controller
             'rush' => $rush,
             'rush_fee' => $rushFee,
             'shipping_cost' => $shippingCost,
+            'charge_layout_fee' => $chargeLayoutFee,
             'unit_price' => $unitPrice,
             'custom_size_price' => $customSizePrice,
             'total_price' => $totalPrice,
@@ -651,6 +655,18 @@ class ProductionOrderController extends Controller
         abort_unless(in_array($order->status, ['active', 'on_hold'], true), 403);
 
         $data = $request->validate([
+            // Correctable now. Still unique — two jobs sharing a number is the
+            // fault that made this read-only in the first place, and that part
+            // is the database's job rather than the officer's memory.
+            //
+            // "sometimes", not "required": this form sends it, but the other
+            // things that save an order do not, and requiring it turned every
+            // one of those into a silent validation failure.
+            'order_number' => [
+                'sometimes', 'required', 'string', 'max:50',
+                \Illuminate\Validation\Rule::unique('production_orders', 'order_number')->ignore($order->id),
+            ],
+
             'client_name' => ['required', 'string', 'max:255'],
             'client_last_name' => ['required', 'string', 'max:255'],
             'client_contact' => ['required', 'string', 'max:255'],
@@ -672,6 +688,7 @@ class ProductionOrderController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'discount_note' => ['nullable', 'string', 'max:255'],
             'shipping_cost' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'charge_layout_fee' => ['nullable', 'boolean'],
             'downpayment_waived' => ['nullable', 'boolean'],
             'downpayment_waiver_note' => ['nullable', 'string', 'max:500'],
 
@@ -737,10 +754,12 @@ class ProductionOrderController extends Controller
         $withholdingRate = $vat ? (int) ($data['withholding_rate'] ?? 0) : 0;
         $discount = (float) ($data['discount_amount'] ?? 0);
         $shippingCost = round((float) ($data['shipping_cost'] ?? 0), 2);
+        $chargeLayoutFee = $request->boolean('charge_layout_fee');
         $rush = (bool) ($data['rush'] ?? false);
         $rushFee = $rush ? round((float) ($data['rush_fee'] ?? 0), 2) : null;
         $totalPrice = ProductionOrder::computeTotal(
-            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee, $withholdingRate, $shippingCost
+            $unitPrice, $data['quantity'], $discount, $vat, $backPocketAmount, (float) $rushFee, $withholdingRate, $shippingCost,
+            $chargeLayoutFee
         );
 
         // Keep the linked client's details fixed up too.
@@ -772,6 +791,10 @@ class ProductionOrderController extends Controller
 
         // NOTE: description is edited on the job order sheet, not here — don't touch it.
         $order->update([
+            // Left alone when the form did not send one.
+            'order_number' => filled($data['order_number'] ?? null)
+                ? trim($data['order_number'])
+                : $order->order_number,
             'customer_name' => trim($data['client_name'].' '.$data['client_last_name']),
             'product_type' => $data['product_type'],
             'quantity' => $data['quantity'],
@@ -790,6 +813,7 @@ class ProductionOrderController extends Controller
             'rush' => $rush,
             'rush_fee' => $rushFee,
             'shipping_cost' => $shippingCost,
+            'charge_layout_fee' => $chargeLayoutFee,
         ]);
 
         // The size mix may have changed, and the off-chart pieces are priced on

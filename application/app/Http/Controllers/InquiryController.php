@@ -42,9 +42,24 @@ class InquiryController extends Controller
 
         $search = trim((string) $request->query('q', ''));
 
+        // New drawings or ones sent back. Anything else in the box means all
+        // of them, so a hand-typed or stale ?kind= shows the list rather than
+        // an empty page.
+        $kind = (string) $request->query('kind', '');
+        $kind = in_array($kind, [Inquiry::KIND_NEW, Inquiry::KIND_REVISION], true) ? $kind : '';
+
+        // Which book of clients. Same rule as the kind: anything unrecognised
+        // means both teams rather than an empty page.
+        $team = strtolower((string) $request->query('team', ''));
+        $team = in_array($team, ['meta', 'vip'], true) ? $team : '';
+
         return view('inquiries.index', [
             'search' => $search,
-            'followUps' => Inquiry::with(['client', 'officer', 'followUps.user'])
+            'kind' => $kind,
+            'team' => $team,
+            // Loaded for the badge that says which kind each row is, and for
+            // isRevision() underneath it — without it that is a query a row.
+            'followUps' => Inquiry::with(['client', 'officer', 'followUps.user', 'designs'])
                 // Whose brief it is does not narrow what the artist leader
                 // sees: any of them may be carrying a layout of his to move.
                 // visibleTo() is left alone — it is asked by other pages that
@@ -67,6 +82,10 @@ class InquiryController extends Controller
                         ->orWhere('last_name', 'like', "%{$search}%")
                         ->orWhere('company', 'like', "%{$search}%")
                         ->orWhere('contact_number', 'like', "%{$search}%"))))
+                // Narrowed in the database for the same reason the search is:
+                // so it means the whole list. Its ORs are closured too.
+                ->when($kind !== '', fn ($q) => $q->ofDesignKind($kind))
+                ->when($team !== '', fn ($q) => $q->where('team', $team))
                 ->get(),
         ]);
     }

@@ -200,9 +200,12 @@
     })->count();
 
     $pipelineOpenCount = $pipelineData->sum();
-    // Count job packages, not raw tasks: the mockup + template of one order are a
-    // single approval (one row on the Approvals page), so they count as 1.
-    $approvalCount = $approvalTasks
+    // Handed in by the controller, which asks the same question the Approvals
+    // page does. Counted here it was worked out from $approvalTasks — a list
+    // cut to five for display — so the card could never say more than five
+    // however much was really waiting, and it counted work belonging to the
+    // account officer as though it were the leader's.
+    $approvalCount = $approvalCount ?? $approvalTasks
         ->groupBy(fn ($t) => $t->stage === \App\Models\ProductionOrder::STAGE_MOCKUP
             ? 'pkg-'.$t->production_order_id
             : 'task-'.$t->id)
