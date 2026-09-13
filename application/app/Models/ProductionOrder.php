@@ -2212,6 +2212,21 @@ class ProductionOrder extends Model
                 continue;
             }
 
+            // The Tech Pack is the officer's sheet handed over, not merely the
+            // next step after the mockup: the artist works FROM it, and opening
+            // it is refused until it has been sent. handleTaskCompleted has
+            // held it back for that reason for a while; this path did not, so
+            // anything that unlocked the whole stage at once - a waived
+            // downpayment, a confirmed payment - released a step whose page
+            // then answered "not open yet". The artist was given work they
+            // could not start, and the board said it was theirs.
+            //
+            // sendToArtist() unlocks this stage again once the sheet is on its
+            // way, which is where the pack is meant to be released.
+            if ($task->isTechPackStep() && $this->jobOrder?->status !== 'sent_to_artist') {
+                continue;
+            }
+
             if ($task->auto_submit) {
                 // Nothing to "do" — it lands on the approver's desk immediately.
                 $task->status = 'for_checking';
