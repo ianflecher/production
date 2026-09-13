@@ -25,6 +25,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell turns ANY stderr line from a native .exe into a
+# terminating error while ErrorActionPreference is Stop, and git talks on
+# stderr when it is perfectly happy. This runs unattended every ten minutes,
+# so the exit code is the answer and the noise is just noise.
+function Invoke-Native {
+    param([Parameter(Mandatory)][string]$File, [string[]]$Arguments = @())
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $File @Arguments 2>&1 | Out-String
+        return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $output }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
 $log = Join-Path $Root "logs\redirector.log"
 
 function Write-Line([string]$message) {
@@ -102,12 +119,15 @@ Set-Content -Path $indexPath -Value $html -Encoding utf8
 
 Push-Location $PagesRepo
 try {
-    git add index.html | Out-Null
-    git -c user.name="Imprint Tunnel" -c user.email="noreply@imprintcustoms.ph" `
-        commit -m "Point at $url" --quiet
-    git push --quiet 2>&1 | Out-Null
+    Invoke-Native git @('add', 'index.html') | Out-Null
 
-    if ($LASTEXITCODE -ne 0) { throw "git push failed with exit code $LASTEXITCODE" }
+    $committed = Invoke-Native git @('-c', 'user.name=Imprint Tunnel',
+        '-c', 'user.email=noreply@imprintcustoms.ph',
+        'commit', '-m', "Point at $url", '--quiet')
+    if ($committed.Code -ne 0) { throw "commit failed: $($committed.Output)" }
+
+    $pushed = Invoke-Native git @('push', '--quiet')
+    if ($pushed.Code -ne 0) { throw "push failed: $($pushed.Output)" }
 
     Write-Line "redirector now points at $url"
 } catch {

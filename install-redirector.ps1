@@ -28,35 +28,54 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell turns ANY stderr line from a native .exe into a
+# terminating error while ErrorActionPreference is Stop - so "gh repo view" on
+# a repository that does not exist yet, which is the normal case here and
+# answers on stderr, killed this script instead of returning a code. Native
+# calls go through here: the exit code is the answer, not the noise.
+function Invoke-Native {
+    param([Parameter(Mandatory)][string]$File, [string[]]$Arguments = @())
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $File @Arguments 2>&1 | Out-String
+        return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $output }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     throw "the GitHub CLI is not installed - https://cli.github.com"
 }
 
-& gh auth status *> $null
-if ($LASTEXITCODE -ne 0) {
+if ((Invoke-Native gh @('auth', 'status')).Code -ne 0) {
     throw "GitHub is not logged in on this machine. Run:  gh auth login"
 }
 
-$owner = (& gh api user --jq .login).Trim()
+$whoami = Invoke-Native gh @('api', 'user', '--jq', '.login')
+if ($whoami.Code -ne 0) { throw "could not read the GitHub account name" }
+$owner = $whoami.Output.Trim()
 if (-not $owner) { throw "could not read the GitHub account name" }
 
 $slug = "$owner/$RepoName"
 
 # Make the repository only if it is not already there, so this is safe to run
 # again after a half-finished attempt.
-& gh repo view $slug *> $null
-if ($LASTEXITCODE -ne 0) {
+if ((Invoke-Native gh @('repo', 'view', $slug)).Code -ne 0) {
     Write-Output "creating $slug (public, Pages needs it)"
-    & gh repo create $slug --public --description "Stable link to the Imprint Production system" --confirm *> $null
-    if ($LASTEXITCODE -ne 0) { throw "could not create $slug" }
+    $made = Invoke-Native gh @('repo', 'create', $slug, '--public',
+        '--description', 'Stable link to the Imprint Production system')
+    if ($made.Code -ne 0) { throw "could not create ${slug}: $($made.Output)" }
 } else {
     Write-Output "$slug already exists - using it"
 }
 
 if (-not (Test-Path (Join-Path $PagesRepo ".git"))) {
     Write-Output "cloning into $PagesRepo"
-    & gh repo clone $slug $PagesRepo *> $null
-    if ($LASTEXITCODE -ne 0) { throw "could not clone $slug" }
+    $cloned = Invoke-Native gh @('repo', 'clone', $slug, $PagesRepo)
+    if ($cloned.Code -ne 0) { throw "could not clone ${slug}: $($cloned.Output)" }
 }
 
 Push-Location $PagesRepo
@@ -71,20 +90,28 @@ try {
 <title>Imprint Customs</title>
 <p>Setting up&hellip;</p>
 "@
-        git add index.html | Out-Null
-        git -c user.name="Imprint Tunnel" -c user.email="noreply@imprintcustoms.ph" `
-            commit -m "The stable link" --quiet
-        git push --quiet origin HEAD 2>&1 | Out-Null
+        Invoke-Native git @('add', 'index.html') | Out-Null
+        Invoke-Native git @('-c', 'user.name=Imprint Tunnel',
+            '-c', 'user.email=noreply@imprintcustoms.ph',
+            'commit', '-m', 'The stable link', '--quiet') | Out-Null
+
+        $pushed = Invoke-Native git @('push', '--quiet', 'origin', 'HEAD')
+        if ($pushed.Code -ne 0) { throw "could not push the first page: $($pushed.Output)" }
     }
 
-    $branch = (git rev-parse --abbrev-ref HEAD).Trim()
+    $branch = (Invoke-Native git @('rev-parse', '--abbrev-ref', 'HEAD')).Output.Trim()
 } finally {
     Pop-Location
 }
 
 Write-Output "turning on GitHub Pages"
-& gh api -X POST "repos/$slug/pages" -f "source[branch]=$branch" -f "source[path]=/" *> $null
-# Already on is not a failure.
+# Already on answers 409, which is not a failure worth stopping for.
+$pages = Invoke-Native gh @('api', '-X', 'POST', "repos/$slug/pages",
+    '-f', "source[branch]=$branch", '-f', 'source[path]=/')
+if ($pages.Code -ne 0 -and $pages.Output -notmatch '409|already') {
+    Write-Output "  could not turn Pages on automatically - do it once at:"
+    Write-Output "  https://github.com/$slug/settings/pages  (Source: $branch, folder /)"
+}
 
 # Point it at today's address straight away.
 & powershell -NoProfile -ExecutionPolicy Bypass `
