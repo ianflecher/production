@@ -1118,6 +1118,120 @@ input.is-suggested {
 .follow-up-kind.is-new { color: var(--accent); background: var(--accent-soft); }
 .follow-up-kind.is-revision { color: var(--brand); background: var(--brand-soft); }
 
+/* The designing board.
+
+   The team read the spreadsheet by colour before they read a word of it, so
+   the colours are the ones they already know: green is moving, amber is
+   waiting on money, red is waiting on paperwork, blue is finished and out of
+   the door. Everything else on the row is deliberately quiet — forty rows of
+   equally loud text is the thing that made the sheet hard to scan. */
+.design-log td { font-size: 0.82rem; padding: 0.42rem 0.7rem; vertical-align: middle; }
+.design-log th { position: sticky; top: 0; z-index: 2; }
+.design-log .dl-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.design-log .dl-dim { color: var(--ink-3); }
+.design-log .dl-agent { white-space: nowrap; color: var(--ink-2); font-size: 0.78rem; }
+.design-log tbody tr:hover td { background: var(--accent-soft); }
+
+/* The client is what the row is about; the rest supports it. */
+/* Wide enough that a two-part client name does not stack into three lines,
+   which is what turned the sheet into a wall. */
+.design-log .dl-client { min-width: 190px; }
+.dl-client span { font-weight: 650; }
+.dl-client small {
+    display: block; margin-top: 0.05rem;
+    font-size: 0.7rem; color: var(--ink-3);
+    text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* The day band. On the sheet this was a full-width coloured row and it is how
+   anybody finds their place, so it stays loud while the rows stay quiet. */
+.design-log tr.dl-day th {
+    position: static;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border-strong);
+    border-bottom: 1px solid var(--border);
+    padding: 0.42rem 0.7rem;
+    text-transform: none; letter-spacing: 0;
+}
+.dl-day-name { font-size: 0.8rem; font-weight: 800; color: var(--ink); }
+.dl-day-date { font-size: 0.75rem; font-weight: 600; color: var(--ink-3); margin-left: 0.4rem; }
+.dl-day-today {
+    font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #fff; background: var(--brand); border-radius: 999px;
+    padding: 0.05rem 0.4rem; margin-left: 0.45rem; vertical-align: 1px;
+}
+.dl-day-count {
+    float: right; font-size: 0.72rem; font-weight: 700; color: var(--ink-3);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 0 0.45rem;
+}
+
+/* What the whole board adds up to, across the top. */
+.dl-tally { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+.dl-tally-item {
+    font-size: 0.75rem; color: var(--ink-2);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 0.18rem 0.6rem;
+}
+.dl-tally-item strong { font-weight: 800; color: var(--ink); margin-right: 0.1rem; }
+.dl-tally-item.is-massprod strong { color: #166534; }
+.dl-tally-item.is-sample strong { color: #15803d; }
+.dl-tally-item.is-delivered strong { color: #1e40af; }
+.dl-tally-item.is-designing strong { color: var(--accent); }
+
+.dl-tag {
+    display: inline-block; white-space: nowrap;
+    font-size: 0.7rem; font-weight: 700;
+    border-radius: 5px; padding: 0.12rem 0.42rem;
+    background: var(--surface-2); color: var(--ink-2);
+}
+.dl-tag.is-massprod { background: #166534; color: #fff; }
+.dl-tag.is-sample { background: #dcfce7; color: #14532d; }
+.dl-tag.is-approved { background: var(--surface-2); color: var(--ink); }
+.dl-tag.is-delivered { background: #dbeafe; color: #1e40af; }
+.dl-tag.is-waiting { background: var(--surface-2); color: var(--ink-2); }
+.dl-tag.is-designing { background: var(--accent-soft); color: var(--accent); }
+.dl-tag.is-orderlist { background: var(--danger-soft); color: var(--danger-ink); }
+.dl-tag.is-dp { background: #fef3c7; color: #92400e; }
+.dl-tag.is-cancelled { background: var(--surface-2); color: var(--ink-3); text-decoration: line-through; }
+/* "Work in progress" is on most rows most of the time. Loud, it is the thing
+   the eye lands on; quiet, the two rows that are STUCK are. */
+.dl-tag.is-idle, .dl-tag.is-plain {
+    background: transparent; color: var(--ink-3); font-weight: 600; padding-left: 0;
+}
+
+/* A fresh drawing is the ordinary case and says so quietly; a mock up for a
+   job already written is the one worth noticing. */
+.dl-kind { font-size: 0.75rem; color: var(--ink-3); white-space: nowrap; }
+.dl-kind.is-mockup { color: var(--ink); font-weight: 700; }
+
+.dl-brief { font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+
+/* How many times it has come back — the number beside the artist's name is
+   the one thing the sheet never carried and everybody asked about. */
+.dl-rev {
+    display: inline-block; margin-left: 0.25rem;
+    font-size: 0.64rem; font-weight: 800;
+    color: var(--brand); background: var(--brand-soft);
+    border-radius: 999px; padding: 0 0.28rem;
+}
+
+/* Moving a design to another artist, in the cell that names them. Written to
+   look like text until it is reached for, so a board of forty rows does not
+   read as a wall of form controls. */
+.dl-artist-form { display: inline-block; margin: 0; }
+.dl-artist-form select {
+    font-family: inherit; font-size: 0.8rem; font-weight: 600;
+    color: var(--ink); background: transparent;
+    border: 1px solid transparent; border-radius: 6px;
+    padding: 0.12rem 0.25rem; cursor: pointer;
+    /* Room for the name itself. Squeezed to the column it showed "Ma" and
+       "Cri", which is not a person anybody can pick out. */
+    min-width: 104px;
+}
+.dl-artist-form select:hover { border-color: var(--border-strong); background: var(--surface); }
+.dl-artist-form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
+
 /* Which team's rows start here, inside a table that holds both. Darker than
    the column headings above it so the two do not read as the same thing. */
 .tbl tr.tbl-group th {

@@ -95,6 +95,14 @@ class DashboardController extends Controller
         // one of them quietly ends up without it.
         view()->share('hrOverview', \App\Support\HrOverview::for($user));
 
+        // The designing board's top of page. Shared for the same reason: the
+        // board belongs to everybody who used to read the spreadsheet, and
+        // index() returns from a different branch for each of them.
+        //
+        // A week, and the newest handful of it. The whole board is a click
+        // away; what belongs on a dashboard is what moved today.
+        view()->share('designBoard', \App\Support\DesignLog::rows(7)->take(8));
+
         $hour = (int) now()->format('G');
         $greeting = match (true) {
             $hour < 12 => 'Good morning',

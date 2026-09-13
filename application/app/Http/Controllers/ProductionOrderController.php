@@ -249,7 +249,10 @@ class ProductionOrderController extends Controller
 
         $data = $request->validate([
             // Typed by the account officer (their own numbering, e.g. IC2026-00016).
-            'order_number' => ['required', 'string', 'max:50', 'unique:production_orders,order_number'],
+            // Not "unique" any more: a second design on the same job takes
+            // the job's existing number on purpose. Whether this one is free
+            // is decided below, once the client is known.
+            'order_number' => ['required', 'string', 'max:50'],
 
             // The client was taken on page one and is read off the inquiry, so
             // this page does not ask for them again.
@@ -438,8 +441,43 @@ class ProductionOrderController extends Controller
             ]);
         }
 
+        // One inquiry, one job order number.
+        //
+        // A brief carries several designs and each approved design is written
+        // up as its own order, because each is its own run of work - its own
+        // sizes, its own press, its own steps on the floor. They are still ONE
+        // job, so they share the job's number instead of taking one each: that
+        // is how one brief's 830 pieces came to sit under IC2026-00005 and
+        // IC2026-01174 with nothing saying they belonged together.
+        //
+        // The BRIEF is what makes them one job, not the client. The same
+        // person can have two unrelated enquiries running at once, and those
+        // are two jobs.
+        //
+        // Only while the work is live. A brief whose job is delivered or
+        // cancelled is finished with.
+        $openJob = ProductionOrder::openJobFor($inquiry->id);
+
+        if ($openJob) {
+            // Whatever was typed or suggested is set aside: the job already
+            // has a number, and this is another part of that job.
+            $orderNumber = $openJob->order_number;
+        } else {
+            // A NEW job still may not take a number that is already on the
+            // books - two briefs under one number is not a job with six parts,
+            // it is two jobs nobody can tell apart. Checked here rather than
+            // as a validation rule, because the rule above has to be allowed
+            // to reuse a number on purpose.
+            $orderNumber = trim($data['order_number']);
+
+            if (ProductionOrder::where('order_number', $orderNumber)->exists()) {
+                return back()->withInput()->withErrors(['order_number' =>
+                    'Job order '.$orderNumber.' is already on another job.']);
+            }
+        }
+
         $order = ProductionOrder::createJobOrder([
-            'order_number' => $data['order_number'],
+            'order_number' => $orderNumber,
             'client_id' => $client->id,
             'customer_name' => $client->fullName(),
             'product_type' => $data['product_type'],
@@ -662,9 +700,22 @@ class ProductionOrderController extends Controller
             // "sometimes", not "required": this form sends it, but the other
             // things that save an order do not, and requiring it turned every
             // one of those into a silent validation failure.
+            // Free, or already this job's own number. The parts of one job
+            // share a number on purpose, so a plain unique rule would refuse
+            // an officer retyping the number their own siblings carry.
+            //
+            // An order with no brief behind it has no siblings to share with,
+            // so it falls back to plain uniqueness rather than excluding a
+            // NULL, which in SQL matches nothing and would refuse everything.
             'order_number' => [
                 'sometimes', 'required', 'string', 'max:50',
-                \Illuminate\Validation\Rule::unique('production_orders', 'order_number')->ignore($order->id),
+                \Illuminate\Validation\Rule::unique('production_orders', 'order_number')
+                    ->ignore($order->id)
+                    ->where(fn ($q) => $order->inquiry_id
+                        ? $q->where(fn ($w) => $w
+                            ->whereNull('inquiry_id')
+                            ->orWhere('inquiry_id', '!=', $order->inquiry_id))
+                        : $q),
             ],
 
             'client_name' => ['required', 'string', 'max:255'],

@@ -298,14 +298,22 @@ class ManyDesignsOnOneBriefTest extends TestCase
             'sizes' => ['M' => 4],
         ])->assertSessionHasNoErrors();
 
-        $second = \App\Models\ProductionOrder::where('order_number', 'IC2026-MOTO2')->firstOrFail();
+        // One client, one job order number: the second part of the job takes
+        // the number the job already has, whatever was typed for it. The
+        // ORDERS stay separate - each design is its own run of work - but the
+        // number on both says they are one job.
+        $this->assertDatabaseMissing('production_orders', ['order_number' => 'IC2026-MOTO2']);
 
+        $second = \App\Models\ProductionOrder::where('inquiry_design_id', $designs->last()->id)->firstOrFail();
+
+        $this->assertSame('IC2026-MOTO1', $second->order_number);
         $this->assertSame($designs->last()->id, $second->inquiry_design_id);
         $this->assertTrue($second->jobOrder->referenceFiles->pluck('original_name')
             ->contains('Rider 2 - drawing.png'));
 
-        // One brief, two orders, one client to chase.
+        // One brief, two orders under one number, one client to chase.
         $this->assertSame(2, $inquiry->fresh()->orders()->count());
+        $this->assertSame(2, \App\Models\ProductionOrder::where('order_number', 'IC2026-MOTO1')->count());
         $this->assertSame(0, $inquiry->fresh()->designsAwaitingAnOrder()->count());
     }
 

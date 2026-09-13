@@ -315,6 +315,13 @@
     @include('hr.partials.overview', ['hr' => $hrOverview])
 @endif
 
+{{-- The designing board. Everybody's, because the spreadsheet it replaces was
+     read by everybody: the agent who took the job, the artist drawing it and
+     the leader chasing it. --}}
+@if (($designBoard ?? null) !== null)
+    @include('partials.design-board-panel', ['designBoard' => $designBoard])
+@endif
+
 @if ($isLeader)
     <div class="dash-stat-grid">
         <div class="dash-stat red">

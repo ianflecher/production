@@ -59,11 +59,23 @@ class QueryBudgetTest extends TestCase
 
         // [label, url, budget]
         $pages = [
-            // 33: the sidebar asks once whether this person has an employee
+            // 36, not 33: the designing board's summary is on this page now,
+            // for everybody. On real data that is six page-wide loads - the
+            // designs, their brief, the client, the officer, the artist and
+            // the job behind each one - and it replaces the spreadsheet the
+            // whole shop was reading every morning.
+            //
+            // The seeded data here has no designs at all, so those loads have
+            // nothing to fetch and this run reads lower than the real page.
+            // That makes the budget a weak guard for this particular panel, so
+            // the thing actually worth catching - a cost that follows the rows
+            // - is pinned directly in TheDesigningBoardReadsTheWorkTest.
+            //
+            // The sidebar also asks once whether this person has an employee
             // record, which is what decides whether "My HR" is shown to them.
             // It is one query on every page and it buys the only way an
             // employee reaches their own payslips, so it is worth the one.
-            ['Dashboard', '/dashboard', 33],
+            ['Dashboard', '/dashboard', 36],
             // 24: the list now loads the canonical client name (including the
             // surname used for sorting), workflow tasks and payment existence.
             // Those are page-wide eager loads, so the count stays flat as rows
@@ -85,6 +97,12 @@ class QueryBudgetTest extends TestCase
             // Both are page-wide loads, flat however many stations run.
             ['Stations board', '/stations', 22],
             ['My tasks', '/my-tasks', 18],
+            // The designing board. It is a row per design and the whole point
+            // of the budget is that the count does NOT follow the rows: the
+            // client, the officer, the artist and the job behind each design
+            // are all loaded page-wide, and whether mass production has begun
+            // is counted inside the orders query rather than asked per row.
+            ['Designing board', '/design-log', 18],
             ['Inventory', '/inventory', 22],
             // 23: the page now also lists the orders waiting to be handed to
             // the client, with their payment state eager-loaded. Flat, however

@@ -1956,6 +1956,35 @@ class ProductionOrder extends Model
         }
     }
 
+    /**
+     * The job already written from this brief, if any.
+     *
+     * One inquiry, one job order number. A brief can carry several designs and
+     * each of them used to be written up with a number of its own, which is
+     * how one brief's 830 pieces ended up under two numbers that nothing on
+     * either sheet said belonged together.
+     *
+     * Keyed on the BRIEF rather than the client on purpose. A client is not a
+     * job: the same person can have two unrelated enquiries running at once,
+     * and folding the second into the first's number would say they were one
+     * piece of work. What makes several orders one job is that they came from
+     * one brief.
+     *
+     * Only while the work is live. A brief whose job is delivered or cancelled
+     * is finished with; anything written from it afterwards starts again.
+     */
+    public static function openJobFor(?int $inquiryId): ?self
+    {
+        if (! $inquiryId) {
+            return null;
+        }
+
+        return self::where('inquiry_id', $inquiryId)
+            ->whereIn('status', ['active', 'on_hold'])
+            ->orderBy('id')
+            ->first();
+    }
+
     /** A suggested job order number (the officer can type their own). */
     public static function nextOrderNumber(): string
     {

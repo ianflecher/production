@@ -517,6 +517,15 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/orders/{order}/job-order', [ProductionOrderController::class, 'jobOrder'])->whereNumber('order')->name('orders.job-order');
     });
 
+    // -------- The designing board --------
+    // The sheet the artists' team kept by hand, read straight off the work.
+    // The whole board is the leader's: it is every team's work at once, which
+    // is an oversight view rather than anybody's own queue. The summary of it
+    // on the dashboard stays everybody's - see partials/design-board-panel.
+    Route::middleware('role:leader,super_admin')->group(function () {
+        Route::get('/design-log', [\App\Http\Controllers\DesignLogController::class, 'index'])->name('design.log');
+    });
+
     // -------- The artists' layout queue --------
     // Drawn before there is a job order, so it cannot hang off a task.
     Route::middleware('auth')->group(function () {
