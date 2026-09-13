@@ -99,10 +99,45 @@ class InquiryDesign extends Model
         return max(0, self::REVISION_LIMIT - (int) $this->revision_count);
     }
 
-    /** The drawings handed back for this design. */
+
+    /**
+     * The drawing as it stands — not every version it has ever been.
+     *
+     * Submitting a redraw APPENDS, so the version the client rejected stays in
+     * the list at an earlier index. Shown, the brief page offered the officer
+     * two pictures of the same shirt with nothing saying which one was agreed,
+     * and the rejected one came first. The same list is copied onto the job
+     * order as the artist's references, so the floor was being handed it too.
+     *
+     * Files tagged "revision" never belong here at all: those are the client's
+     * markups saying what to change.
+     *
+     * Keys are the position in the stored array, because that position IS the
+     * file's address — see InquiryDesignController::file.
+     */
     public function drawings(): \Illuminate\Support\Collection
     {
-        return collect($this->files ?? []);
+        $files = collect($this->files ?? [])
+            ->reject(fn ($file) => ($file['kind'] ?? 'layout') === 'revision');
+
+        if ($files->isEmpty()) {
+            return $files;
+        }
+
+        // Anything uploaded since rounds were recorded says which one it is.
+        $rounds = $files->pluck('round')->filter()->map(fn ($r) => (int) $r);
+
+        if ($rounds->isNotEmpty()) {
+            $latest = $rounds->max();
+
+            return $files->filter(fn ($file) => (int) ($file['round'] ?? 1) === $latest);
+        }
+
+        // Older files carry no round. One drawing per round is how these were
+        // actually worked, so the last few are the current ones — and when the
+        // count does not divide that way this keeps too many rather than
+        // hiding the drawing that was approved.
+        return $files->slice(-max(1, $files->count() - (int) $this->revision_count));
     }
 
     /** An artist's queue: the designs on their desk, not yet handed back. */

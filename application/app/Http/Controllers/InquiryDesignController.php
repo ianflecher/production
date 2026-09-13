@@ -212,6 +212,9 @@ class InquiryDesignController extends Controller
                 'size' => $file->getSize(),
                 'uploaded_by' => $user->id,
                 'kind' => 'layout',
+                // Which round this drawing belongs to, so a redraw can be told
+                // from the version it replaced without counting backwards.
+                'round' => (int) $design->revision_count + 1,
             ];
         }
 
