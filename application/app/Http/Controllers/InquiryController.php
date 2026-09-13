@@ -367,8 +367,20 @@ class InquiryController extends Controller
         // draw them. Without him here every thumbnail on the brief came back
         // 403 and rendered as a broken image, which is the same fault this
         // guard was already widened once to fix.
-        if ($inquiry->layout_artist_id !== $request->user()->id
-            && ! $request->user()->canMoveArtistWork()) {
+        // Widened a third time, and this time at the right question.
+        //
+        // layout_artist_id is the OLD shape, from when a brief had one artist.
+        // A brief now carries designs and each design carries its own artist,
+        // so a brief drawn entirely through designs has that column sitting at
+        // NULL - and the artist drawing it matched nothing here, was sent
+        // through the officer's gates, and got 403 on every reference. The
+        // references are the thing they are drawing FROM.
+        $user = $request->user();
+
+        $drawingIt = $inquiry->layout_artist_id === $user->id
+            || $inquiry->designs()->where('artist_id', $user->id)->exists();
+
+        if (! $drawingIt && ! $user->canMoveArtistWork()) {
             $this->assertAccess($request);
             $this->assertMine($request, $inquiry);
         }
