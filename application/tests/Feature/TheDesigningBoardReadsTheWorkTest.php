@@ -407,6 +407,204 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
         return $count;
     }
 
+    /* ---------------- how long it has been sitting ---------------- */
+
+    /**
+     * The question the sheet could never answer.
+     *
+     * Two designs both read "Waiting For Approval". One was handed back
+     * yesterday and one has been sitting for a fortnight, and nothing on the
+     * board told them apart - which is exactly the row somebody needed to see.
+     */
+    public function test_the_clock_starts_when_the_design_last_moved(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+
+        $fresh = $this->design($officer, $this->artist('Mick'), 'Yesterday', [
+            'status' => InquiryDesign::STATUS_SUBMITTED,
+            'submitted_at' => now()->subDay(),
+        ]);
+        $old = $this->design($officer, $this->artist('Mick'), 'Fortnight', [
+            'status' => InquiryDesign::STATUS_SUBMITTED,
+            'submitted_at' => now()->subDays(14),
+        ]);
+
+        $this->assertSame(1, $this->rowFor($fresh)['waiting']);
+        $this->assertSame(14, $this->rowFor($old)['waiting']);
+    }
+
+    /** Each state has its own moment of last movement, not one shared date. */
+    public function test_each_place_it_stops_is_timed_from_its_own_moment(): void
+    {
+        $officer = $this->officer('meta', 'Kyson');
+
+        // Approved a week ago and still nobody has written the job.
+        $approved = $this->design($officer, $this->artist('JC'), 'Orderlist', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+            'submitted_at' => now()->subDays(20),
+            'approved_at' => now()->subDays(7),
+        ]);
+        $this->assertSame(7, $this->rowFor($approved)['waiting'],
+            'timed from when it was handed back rather than from when it was approved');
+
+        // On the artist's desk for five days.
+        $drawing = $this->design($officer, $this->artist('JC'), 'Drawing', [
+            'sent_at' => now()->subDays(5),
+        ]);
+        $this->assertSame(5, $this->rowFor($drawing)['waiting']);
+    }
+
+    /** A job the money has not landed on is timed from when it was written. */
+    public function test_a_job_waiting_on_the_downpayment_is_timed_from_the_job(): void
+    {
+        $design = $this->design($this->officer('vip', 'Patricia'), $this->artist('Mick'), 'Unpaid', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+        ]);
+        $order = $this->orderFor($design);
+        $order->forceFill(['created_at' => now()->subDays(6)])->save();
+
+        $row = $this->rowFor($design->refresh());
+
+        $this->assertSame('Waiting DP', $row['notes']);
+        $this->assertSame(6, $row['waiting']);
+    }
+
+    /**
+     * A job that is moving is not waiting. It has a pipeline of its own with
+     * its own dates to be late against; a second clock here would call every
+     * job on the floor overdue for the crime of being underway.
+     */
+    public function test_a_job_that_is_moving_has_no_clock_on_this_board(): void
+    {
+        $design = $this->design($this->officer('vip', 'Pau'), $this->artist('Mick'), 'Moving', [
+            'status' => InquiryDesign::STATUS_APPROVED,
+        ]);
+        $order = $this->orderFor($design);
+
+        Payment::create([
+            'production_order_id' => $order->id,
+            'amount' => 2500, 'kind' => 'downpayment',
+            'status' => 'confirmed', 'confirmed_at' => now(),
+        ]);
+
+        $row = $this->rowFor($design->refresh());
+
+        $this->assertSame('Work in progress', $row['notes']);
+        $this->assertNull($row['waiting']);
+    }
+
+    /** And the board says so, loudly, past the point where somebody should chase. */
+    public function test_a_design_sitting_too_long_is_marked_on_the_page(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $artist = $this->artist('Mick');
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        $this->design($officer, $artist, 'Chaseme', [
+            'status' => InquiryDesign::STATUS_SUBMITTED,
+            'submitted_at' => now()->subDays(DesignLog::SITTING_TOO_LONG + 2),
+        ]);
+
+        $this->actingAs($leader)->get(route('design.log'))
+            ->assertOk()
+            ->assertSee('dl-wait is-long', false);
+
+        // A day-old one is ordinary work in hand and is not shouted about.
+        InquiryDesign::query()->update(['submitted_at' => now()->subDay()]);
+
+        $this->actingAs($leader)->get(route('design.log'))
+            ->assertOk()
+            ->assertDontSee('dl-wait is-long', false);
+    }
+
+    /* ---------------- narrowing the board ---------------- */
+
+    /** The count at the top is the way into the rows behind it. */
+    public function test_pressing_a_count_shows_only_those_rows(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $artist = $this->artist('Mick');
+
+        $this->design($officer, $artist, 'Handedback', [
+            'status' => InquiryDesign::STATUS_SUBMITTED, 'submitted_at' => now(),
+        ]);
+        $this->design($officer, $artist, 'Stilldrawing');
+
+        $this->actingAs(User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]))
+            ->get(route('design.log', ['status' => 'Waiting For Approval']))
+            ->assertOk()
+            ->assertSee('Handedback')
+            ->assertDontSee('Stilldrawing');
+    }
+
+    /**
+     * And the other counts survive it. Counted after the filter rather than
+     * before it, choosing one status would zero every other one and leave no
+     * way back to them but the address bar.
+     */
+    public function test_choosing_one_status_does_not_zero_the_rest(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $artist = $this->artist('Mick');
+
+        $this->design($officer, $artist, 'Handedback', [
+            'status' => InquiryDesign::STATUS_SUBMITTED, 'submitted_at' => now(),
+        ]);
+        $this->design($officer, $artist, 'Stilldrawing');
+
+        $this->actingAs(User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]))
+            ->get(route('design.log', ['status' => 'Waiting For Approval']))
+            ->assertOk()
+            // Its row is gone from the table, but its count is still offered.
+            ->assertSee('Designing');
+    }
+
+    public function test_the_board_can_be_searched_for_a_client(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $artist = $this->artist('Mick');
+        $this->design($officer, $artist, 'Stephanie');
+        $this->design($officer, $artist, 'Somebodyelse');
+
+        $this->actingAs(User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]))
+            ->get(route('design.log', ['q' => 'stephanie']))
+            ->assertOk()
+            ->assertSee('Stephanie Client')
+            ->assertDontSee('Somebodyelse');
+    }
+
+    /**
+     * A note that repeats the status beside it is a column of nothing: twenty
+     * rows reading "Waiting For Approval / Waiting For Approval" and one
+     * reading "Waiting DP", which is the only one anybody needed to see.
+     */
+    public function test_a_note_that_repeats_the_status_is_not_printed_twice(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $artist = $this->artist('Mick');
+        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
+
+        $this->design($officer, $artist, 'Echoed', [
+            'status' => InquiryDesign::STATUS_SUBMITTED, 'submitted_at' => now(),
+        ]);
+
+        $page = $this->actingAs($leader)->get(route('design.log'))->assertOk()->getContent();
+
+        // Exactly once: the row's own status cell. Twice would be the status
+        // and the note beside it saying the same thing.
+        $this->assertSame(1, substr_count($page, '>Waiting For Approval<'),
+            'the status and its note said the same thing twice on the same row');
+
+        // The one that earns the column: approved, and nobody has written it up.
+        InquiryDesign::query()->update([
+            'status' => InquiryDesign::STATUS_APPROVED, 'approved_at' => now(),
+        ]);
+
+        $this->actingAs($leader)->get(route('design.log'))
+            ->assertOk()
+            ->assertSee('Waiting For Orderlist');
+    }
+
     public function test_the_board_can_be_narrowed_to_one_artist_or_one_team(): void
     {
         $vip = $this->officer('vip', 'Pau');

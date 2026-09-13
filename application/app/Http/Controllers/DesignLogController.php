@@ -33,6 +33,8 @@ class DesignLogController extends Controller
         $artist = trim((string) $request->query('artist', ''));
         $team = strtolower(trim((string) $request->query('team', '')));
         $team = in_array($team, ['meta', 'vip'], true) ? $team : '';
+        $search = trim((string) $request->query('q', ''));
+        $status = trim((string) $request->query('status', ''));
 
         $artists = $rows->pluck('artist')->filter()->unique()->sort()->values();
 
@@ -44,12 +46,31 @@ class DesignLogController extends Controller
             $rows = $rows->filter(fn ($row) => str_starts_with(strtolower($row['agent']), $team));
         }
 
+        // Ninety days of work is several hundred rows, and finding one client
+        // on it meant scrolling for them. The same box every other list has.
+        if ($search !== '') {
+            $needle = mb_strtolower($search);
+            $rows = $rows->filter(fn ($row) => str_contains(mb_strtolower(implode(' ', [
+                $row['client'], (string) $row['design']->label, $row['agent'], (string) $row['artist'],
+            ])), $needle));
+        }
+
+        // Counted before the status filter and not after it, so choosing one
+        // status does not zero the others and leave nothing to switch back to.
+        $tally = $rows->countBy(fn ($row) => $row['status'])->sortDesc();
+
+        if ($status !== '') {
+            $rows = $rows->filter(fn ($row) => $row['status'] === $status);
+        }
+
         return view('design-log', [
             'days' => $days,
             'dayChoices' => self::DAY_CHOICES,
             'artist' => $artist,
             'artists' => $artists,
             'team' => $team,
+            'search' => $search,
+            'status' => $status,
             'byDay' => $rows->groupBy(fn ($row) => $row['date']->toDateString()),
             'total' => $rows->count(),
             // The bench, for moving a design from one artist to another
@@ -60,7 +81,7 @@ class DesignLogController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']),
             // Counted off the rows already in hand, so the strip is free.
-            'tally' => $rows->countBy(fn ($row) => $row['status'])->sortDesc(),
+            'tally' => $tally,
         ]);
     }
 }

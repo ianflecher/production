@@ -67,7 +67,14 @@
                                 @endif
                             </td>
                             <td><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
-                            <td><span class="dl-tag is-{{ $noteTone[$row['notes']] ?? 'plain' }}">{{ $row['notes'] }}</span></td>
+                            {{-- Printed only when it says something the status does
+                                 not - see the board itself, which had the same
+                                 column repeating itself down every row. --}}
+                            <td>
+                                @if ($row['notes'] !== $row['status'] && $row['notes'] !== 'Work in progress')
+                                    <span class="dl-tag is-{{ $noteTone[$row['notes']] ?? 'plain' }}">{{ $row['notes'] }}</span>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

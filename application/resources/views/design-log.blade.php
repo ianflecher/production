@@ -28,8 +28,13 @@
         'On hold' => 'dp',
     ];
     $filterLink = fn (array $change) => route('design.log', array_filter(array_merge(
-        array_filter(['days' => $days, 'artist' => $artist, 'team' => $team]), $change
+        array_filter(['days' => $days, 'artist' => $artist, 'team' => $team, 'q' => $search, 'status' => $status]),
+        $change
     )));
+    // A count nobody can click is a fact; a count that opens the rows behind
+    // it is the next thing they were going to do anyway. Pressing the one
+    // already on turns it off, so the strip needs no "all" button beside it.
+    $tallyLink = fn (string $name) => $filterLink(['status' => $status === $name ? '' : $name]);
     // Moving a design between artists is the leader's call once the brief has
     // gone out — the same rule the handover has always had. The board only
     // offers what the endpoint would accept.
@@ -48,15 +53,30 @@
 @if ($tally->isNotEmpty())
     <div class="dl-tally">
         @foreach ($tally as $name => $count)
-            <span class="dl-tally-item is-{{ $statusTone[$name] ?? 'idle' }}">
+            <a href="{{ $tallyLink($name) }}"
+               class="dl-tally-item is-{{ $statusTone[$name] ?? 'idle' }}"
+               @if ($status === $name) aria-current="true" @endif
+               title="{{ $status === $name ? 'Show them all again' : 'Show only these' }}">
                 <strong>{{ $count }}</strong> {{ $name }}
-            </span>
+            </a>
         @endforeach
     </div>
 @endif
 
 <div class="list-toolbar">
-    <div class="toolbar-filters" style="margin-left:0;">
+    @include('partials.list-search', [
+        // The other choices are separate questions and a search should not
+        // silently answer them, so they ride through as hidden fields.
+        'action' => route('design.log'),
+        'value' => $search,
+        'placeholder' => 'Client, design, agent or artist…',
+        'label' => 'Search the board',
+        'keep' => ['days' => $days, 'team' => $team, 'artist' => $artist, 'status' => $status],
+    ])
+
+    <span class="list-search-note">{{ $total }} {{ Str::plural('design', $total) }}</span>
+
+    <div class="toolbar-filters">
         <div class="seg" role="group" aria-label="How far back">
             @foreach ($dayChoices as $choice)
                 <a href="{{ $filterLink(['days' => $choice]) }}"
@@ -83,17 +103,14 @@
         @endif
     </div>
 
-    <span class="list-search-note" style="margin-left:auto;">
-        {{ $total }} {{ Str::plural('design', $total) }}
-    </span>
 </div>
 
 @if ($byDay->isEmpty())
     <div class="card panel">
         <p class="sub" style="margin:0;">
             Nothing on the board for this stretch.
-            @if ($artist !== '' || $team !== '')
-                <a href="{{ route('design.log', ['days' => $days]) }}">Show everybody</a>.
+            @if ($artist !== '' || $team !== '' || $status !== '' || $search !== '')
+                <a href="{{ route('design.log', ['days' => $days]) }}">Show everything</a>.
             @endif
         </p>
     </div>
@@ -101,9 +118,17 @@
     <div class="card" style="padding:0; overflow:hidden;">
         <div class="tbl-wrap">
             <table class="tbl design-log">
+                {{-- Stated widths, because the widest column by content
+                     otherwise takes every spare pixel in the table. --}}
+                <colgroup>
+                    <col class="dl-c-wait"><col class="dl-c-client"><col class="dl-c-kind">
+                    <col class="dl-c-brief"><col class="dl-c-agent"><col class="dl-c-artist">
+                    <col class="dl-c-date"><col class="dl-c-date"><col class="dl-c-status">
+                    <col class="dl-c-notes">
+                </colgroup>
                 <thead>
                     <tr>
-                        <th>Date</th>
+                        <th class="dl-num" title="How long it has sat where it is">Waiting</th>
                         <th>Client</th>
                         <th>Kind</th>
                         <th>Brief</th>
@@ -131,7 +156,18 @@
 
                         @foreach ($rows as $row)
                             <tr>
-                                <td class="dl-num dl-dim">{{ $row['date']->format('j M') }}</td>
+                                {{-- The date used to be repeated here under a day band that
+                                     already says it. This is the thing it could not tell you. --}}
+                                <td class="dl-num">
+                                    @if ($row['waiting'] === null)
+                                        <span class="dl-dim">—</span>
+                                    @else
+                                        <span class="{{ $row['waiting'] >= \App\Support\DesignLog::SITTING_TOO_LONG ? 'dl-wait is-long' : 'dl-wait' }}"
+                                              title="Here since {{ $row['since']->format('j M') }}">
+                                            {{ $row['waiting'] === 0 ? 'today' : $row['waiting'].'d' }}
+                                        </span>
+                                    @endif
+                                </td>
                                 <td class="dl-client">
                                     <span>{{ $row['client'] }}</span>
                                     @if ($row['design']->label)
@@ -145,9 +181,10 @@
                                 </td>
                                 <td>
                                     @if ($row['brief'])
-                                        {{-- The same link the client is sent: the quickest way to
-                                             see what was actually asked for. --}}
-                                        <a href="{{ $row['brief'] }}" target="_blank" rel="noopener" class="dl-brief" title="Open the creative brief">Brief ↗</a>
+                                        {{-- The shop's own brief page. Opened in its own tab so
+                                             reading one does not cost the reader their place on
+                                             a board they have scrolled halfway down. --}}
+                                        <a href="{{ $row['brief'] }}" target="_blank" rel="noopener" class="dl-brief" title="Open the brief">Brief ↗</a>
                                     @else
                                         <span class="dl-dim">—</span>
                                     @endif
@@ -182,7 +219,16 @@
                                 <td class="dl-num dl-dim">{{ optional($row['received'])->format('j M') ?? '—' }}</td>
                                 <td class="dl-num dl-dim">{{ optional($row['finished'])->format('j M') ?? '—' }}</td>
                                 <td><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
-                                <td><span class="dl-tag is-{{ $noteTone[$row['notes']] ?? 'plain' }}">{{ $row['notes'] }}</span></td>
+                                {{-- A note that repeats the status beside it is a column of
+                                     nothing: twenty rows reading "Waiting For Approval /
+                                     Waiting For Approval" and one reading "Waiting DP", which
+                                     is the only one anybody needed to see. So the note is
+                                     printed when it says something the status does not. --}}
+                                <td>
+                                    @if ($row['notes'] !== $row['status'] && $row['notes'] !== 'Work in progress')
+                                        <span class="dl-tag is-{{ $noteTone[$row['notes']] ?? 'plain' }}">{{ $row['notes'] }}</span>
+                                    @endif
+                                </td>
                             </tr>
                         @endforeach
                     @endforeach

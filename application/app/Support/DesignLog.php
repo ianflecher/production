@@ -26,6 +26,16 @@ class DesignLog
     private const MASSPROD_STAGE = 10;
 
     /**
+     * How many days a design may sit in one place before the board says so.
+     *
+     * A layout goes out and the client answers the same day or the next one;
+     * an artist who has had a brief for a working week is stuck on it. Three
+     * is where the shop starts chasing, and it is a number rather than a rule
+     * — change it here and the whole board moves with it.
+     */
+    public const SITTING_TOO_LONG = 3;
+
+    /**
      * One row per design, newest day first.
      *
      * Everything the board shows is loaded up front: a board is the exact
@@ -78,18 +88,54 @@ class DesignLog
             'date' => $design->created_at ?? $inquiry?->created_at,
             'client' => $inquiry?->client?->fullName() ?? '—',
             'description' => self::description($design),
-            'brief' => $inquiry?->brief_token
-                ? route('client.inquiry-design-brief', $inquiry->brief_token)
-                : null,
+            // The shop's own copy of the brief, not the client's form. Whoever
+            // is reading this board is reading it to find out what was asked
+            // for; the tokenised link is the thing you SEND a client, and
+            // opening it from here answered the questionnaire as them.
+            'brief' => $inquiry ? route('inquiries.design-brief', $inquiry) : null,
             'agent' => self::agent($design),
             'artist' => $design->artist?->name,
             'received' => $design->sent_at,
             'finished' => $design->submitted_at,
-            'status' => self::status($design, $order),
-            'notes' => self::notes($design, $order),
+            'status' => $status = self::status($design, $order),
+            'notes' => $notes = self::notes($design, $order),
             'order' => $order,
             'revisions' => (int) $design->revision_count,
+            'since' => $since = self::since($design, $order, $notes),
+            'waiting' => $since ? (int) $since->diffInDays(now()) : null,
         ];
+    }
+
+    /**
+     * When it last moved — the clock behind the "waiting" column.
+     *
+     * The sheet carried the day the artist got it and the day they finished,
+     * and neither answers the question anybody actually asks it: how long has
+     * this one been sitting? A design handed back on Friday and a design
+     * handed back three weeks ago read identically as "Waiting For Approval",
+     * and only one of them is a problem.
+     *
+     * So the clock starts when the row entered the state it is in now, and it
+     * runs only where work STOPS. A job in the middle of its pipeline has
+     * dates of its own and its own board to be late on; this one is for the
+     * four places a design quietly stalls — nobody sent it, nobody drew it,
+     * nobody answered it, nobody paid for it.
+     */
+    private static function since(InquiryDesign $design, ?ProductionOrder $order, string $notes): ?\Illuminate\Support\Carbon
+    {
+        if ($order) {
+            return $notes === 'Waiting DP' ? $order->created_at : null;
+        }
+
+        return match ($design->status) {
+            // Said yes, and nobody has written the job up.
+            InquiryDesign::STATUS_APPROVED => $design->approved_at ?? $design->submitted_at,
+            // Handed back, and the client has not answered.
+            InquiryDesign::STATUS_SUBMITTED => $design->submitted_at,
+            // On somebody's desk - or not even sent to one yet.
+            InquiryDesign::STATUS_WITH_ARTIST => $design->sent_at ?? $design->created_at,
+            default => $design->created_at,
+        };
     }
 
     /**
