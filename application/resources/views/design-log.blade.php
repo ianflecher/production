@@ -117,25 +117,22 @@
 @else
     <div class="card" style="padding:0; overflow:hidden;">
         <div class="tbl-wrap">
-            <table class="tbl design-log">
+            <table class="tbl design-log dl-full">
                 {{-- Stated widths, because the widest column by content
                      otherwise takes every spare pixel in the table. --}}
                 <colgroup>
-                    <col class="dl-c-wait"><col class="dl-c-client"><col class="dl-c-kind">
-                    <col class="dl-c-brief"><col class="dl-c-agent"><col class="dl-c-artist">
-                    <col class="dl-c-date"><col class="dl-c-date"><col class="dl-c-status">
-                    <col class="dl-c-notes">
+                    <col class="dl-c-wait"><col class="dl-c-client"><col class="dl-c-brief">
+                    <col class="dl-c-agent"><col class="dl-c-artist"><col class="dl-c-date">
+                    <col class="dl-c-status"><col class="dl-c-notes">
                 </colgroup>
                 <thead>
                     <tr>
                         <th class="dl-num" title="How long it has sat where it is">Waiting</th>
                         <th>Client</th>
-                        <th>Kind</th>
                         <th>Brief</th>
                         <th>Agent</th>
                         <th>Artist</th>
-                        <th class="dl-num">Received</th>
-                        <th class="dl-num">Finished</th>
+                        <th class="dl-num" title="Reached the artist, and handed back">Drawn</th>
                         <th>Status</th>
                         <th>Notes</th>
                     </tr>
@@ -144,7 +141,7 @@
                     @foreach ($byDay as $day => $rows)
                         @php $when = \Illuminate\Support\Carbon::parse($day); @endphp
                         <tr class="dl-day">
-                            <th colspan="10">
+                            <th colspan="8">
                                 <span class="dl-day-name">{{ $when->format('l') }}</span>
                                 <span class="dl-day-date">{{ $when->format('j M Y') }}</span>
                                 @if ($when->isToday())
@@ -168,16 +165,18 @@
                                         </span>
                                     @endif
                                 </td>
+                                {{-- "Kind" was a column of its own saying "New Design" on
+                                     forty rows out of forty-two. The ordinary case needed no
+                                     column; the exception belongs beside the thing it is an
+                                     exception about, which is this design. --}}
                                 <td class="dl-client" data-label="Client">
                                     <span>{{ $row['client'] }}</span>
+                                    @if ($row['description'] === 'For Mock Up')
+                                        <span class="dl-kind is-mockup" title="Asked for against a job already written">Mock up</span>
+                                    @endif
                                     @if ($row['design']->label)
                                         <small>{{ $row['design']->label }}</small>
                                     @endif
-                                </td>
-                                <td data-label="Kind">
-                                    <span class="dl-kind {{ $row['description'] === 'For Mock Up' ? 'is-mockup' : '' }}">
-                                        {{ $row['description'] }}
-                                    </span>
                                 </td>
                                 <td data-label="Brief">
                                     @if ($row['brief'])
@@ -216,8 +215,11 @@
                                         <span class="dl-rev" title="Sent back {{ $row['revisions'] }} time(s)">R{{ $row['revisions'] }}</span>
                                     @endif
                                 </td>
-                                <td class="dl-num dl-dim" data-label="Received">{{ optional($row['received'])->format('j M') ?? '—' }}</td>
-                                <td class="dl-num dl-dim" data-label="Finished">{{ optional($row['finished'])->format('j M') ?? '—' }}</td>
+                                {{-- Reached the artist, and came back: two columns for one
+                                     fact, and the fact is the gap between them. --}}
+                                <td class="dl-num dl-dim" data-label="Drawn">
+                                    {{ optional($row['received'])->format('j M') ?? '—' }}<span class="dl-to">→</span>{{ optional($row['finished'])->format('j M') ?? '—' }}
+                                </td>
                                 <td data-label="Status"><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
                                 {{-- A note that repeats the status beside it is a column of
                                      nothing: twenty rows reading "Waiting For Approval /

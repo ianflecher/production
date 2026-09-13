@@ -1170,14 +1170,13 @@ input.is-suggested {
    that gutter becomes a visible empty box. These are shares of the table
    rather than fixed sizes, so a long client name still gets its line. */
 .design-log col.dl-c-wait { width: 4.5rem; }
-.design-log col.dl-c-client { width: 24%; }
-.design-log col.dl-c-kind { width: 6rem; }
+.design-log col.dl-c-client { width: 26%; }
 .design-log col.dl-c-brief { width: 4rem; }
-.design-log col.dl-c-agent { width: 12%; }
-.design-log col.dl-c-artist { width: 11%; }
-.design-log col.dl-c-date { width: 5.5rem; }
-.design-log col.dl-c-status { width: 11%; }
-.design-log col.dl-c-notes { width: 12%; }
+.design-log col.dl-c-agent { width: 13%; }
+.design-log col.dl-c-artist { width: 12%; }
+.design-log col.dl-c-date { width: 8rem; }
+.design-log col.dl-c-status { width: 12%; }
+.design-log col.dl-c-notes { width: 13%; }
 
 /* The client is what the row is about; the rest supports it. */
 /* Wide enough that a two-part client name does not stack into three lines,
@@ -1274,10 +1273,20 @@ input.is-suggested {
     background: transparent; color: var(--ink-3); font-weight: 600; padding-left: 0;
 }
 
-/* A fresh drawing is the ordinary case and says so quietly; a mock up for a
-   job already written is the one worth noticing. */
+/* A fresh drawing is the ordinary case and needs no saying at all - it was a
+   column repeating "New Design" down forty rows. A mock up for a job already
+   written is the exception, and it sits beside the design it is about. */
 .dl-kind { font-size: 0.75rem; color: var(--ink-3); white-space: nowrap; }
-.dl-kind.is-mockup { color: var(--ink); font-weight: 700; }
+.dl-kind.is-mockup {
+    display: inline-block; vertical-align: 1px; margin-left: 0.35rem;
+    font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--brand);
+    background: var(--brand-soft); border-radius: 4px; padding: 0.05rem 0.3rem;
+}
+
+/* Reached the artist on this day, came back on that one. The arrow is the
+   fact; it is quieter than either date so the dates stay the thing read. */
+.dl-to { color: var(--border-strong); margin: 0 0.3rem; font-weight: 700; }
 
 .dl-brief { font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 
@@ -1306,9 +1315,11 @@ input.is-suggested {
 .dl-artist-form select:hover { border-color: var(--border-strong); background: var(--surface); }
 .dl-artist-form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
 
-/* The board on a phone.
+/* The board on anything that cannot hold its columns.
 
-   Ten columns will not fit 375 pixels, and no amount of narrowing makes them.
+   Eight columns need 1024 pixels of table. A window narrower than about 1300
+   does not have that once the sidebar has taken its share, and 375 is not
+   close. No amount of narrowing gets there.
    Swiping the table sideways means the client is off screen by the time the
    status is on it, which is the one comparison the board exists to make. So
    below 640px it stops being a table and each design becomes a card.
@@ -1321,22 +1332,36 @@ input.is-suggested {
    data-label the view writes on it.
 
    The colgroup widths are table-layout instructions; they stop applying the
-   moment the table stops being one, so they need no undoing. */
-@media (max-width: 640px) {
-    .design-log,
-    .design-log thead,
-    .design-log tbody,
-    .design-log tr,
-    .design-log td { display: block; width: auto; }
+   moment the table stops being one, so they need no undoing.
+
+   The number below is the whole argument: above it the columns fit and a
+   table is the better thing to read; below it they do not, and the choice is
+   cards or a sideways swipe that puts the client off screen by the time the
+   status is on it. Cards win that. Move the number and the trade moves.
+
+   It is 1349 rather than a round number because the sidebar and the page
+   padding take about 322px before the table sees any: the columns need 1024,
+   so the WINDOW needs 1346. Set at 1300 the table came back twenty pixels
+   too early and scrolled the moment it did, which is the fault this is for. */
+@media (max-width: 1349px) {
+    /* Scoped to the full board, not to every table wearing its colours: the
+       dashboard panel shares the class for the tally tints and the grid, but
+       it is a six column summary carrying no cell labels, and relaid out as
+       cards it would be a column of values under nothing. */
+    .dl-full,
+    .dl-full thead,
+    .dl-full tbody,
+    .dl-full tr,
+    .dl-full td { display: block; width: auto; }
 
     /* Off screen rather than display:none, so a screen reader still has them. */
-    .design-log thead {
+    .dl-full thead {
         position: absolute; width: 1px; height: 1px;
         overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
     }
 
     /* One design, one card. */
-    .design-log tbody tr:not(.dl-day) {
+    .dl-full tbody tr:not(.dl-day) {
         display: flex; flex-wrap: wrap; align-items: baseline;
         gap: 0.1rem 0.5rem;
         border: 1px solid var(--border-strong); border-radius: 9px;
@@ -1344,51 +1369,44 @@ input.is-suggested {
         padding: 0.55rem 0.7rem;
         margin: 0.45rem 0;
     }
-    .design-log tbody tr:not(.dl-day) td { border: 0; padding: 0; }
-    .design-log tbody tr:hover td { background: transparent; }
+    .dl-full tbody tr:not(.dl-day) td { border: 0; padding: 0; }
+    .dl-full tbody tr:hover td { background: transparent; }
 
     /* Who it is, across the top. */
-    .design-log td.dl-client { order: 1; flex: 1 1 100%; min-width: 0; }
+    .dl-full td.dl-client { order: 1; flex: 1 1 100%; min-width: 0; }
     .dl-client span { font-size: 0.92rem; }
 
     /* Then the three things that say where it has got to, on one line. */
-    .design-log td[data-label="Waiting"] { order: 2; }
-    .design-log td[data-label="Status"] { order: 3; }
-    .design-log td[data-label="Note"] { order: 4; }
-    .design-log td[data-label="Waiting"] { flex: 0 0 auto; margin-top: 0.3rem; }
-    .design-log td[data-label="Status"],
-    .design-log td[data-label="Note"] { flex: 0 0 auto; margin-top: 0.3rem; }
+    .dl-full td[data-label="Waiting"] { order: 2; }
+    .dl-full td[data-label="Status"] { order: 3; }
+    .dl-full td[data-label="Note"] { order: 4; }
+    .dl-full td[data-label="Waiting"] { flex: 0 0 auto; margin-top: 0.3rem; }
+    .dl-full td[data-label="Status"],
+    .dl-full td[data-label="Note"] { flex: 0 0 auto; margin-top: 0.3rem; }
     /* Empty on most rows, and an empty box still eats a gap. */
-    .design-log td[data-label="Note"]:empty { display: none; }
+    .dl-full td[data-label="Note"]:empty { display: none; }
 
     /* Everything else reads as "label value", wrapped onto its own lines. */
-    .design-log td[data-label="Kind"],
-    .design-log td[data-label="Agent"],
-    .design-log td[data-label="Artist"],
-    .design-log td[data-label="Received"],
-    .design-log td[data-label="Finished"],
-    .design-log td[data-label="Brief"] {
+    .dl-full td[data-label="Agent"],
+    .dl-full td[data-label="Artist"],
+    .dl-full td[data-label="Drawn"],
+    .dl-full td[data-label="Brief"] {
         order: 5; flex: 0 0 auto;
         font-size: 0.74rem; color: var(--ink-2);
         margin-top: 0.3rem;
     }
-    .design-log td[data-label="Kind"]::before,
-    .design-log td[data-label="Agent"]::before,
-    .design-log td[data-label="Artist"]::before,
-    .design-log td[data-label="Received"]::before,
-    .design-log td[data-label="Finished"]::before {
+    .dl-full td[data-label="Agent"]::before,
+    .dl-full td[data-label="Artist"]::before,
+    .dl-full td[data-label="Drawn"]::before {
         content: attr(data-label) " ";
         font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
         letter-spacing: 0.05em; color: var(--ink-3);
         margin-right: 0.2rem;
     }
-    /* The two dates read as one span, so they sit together and lose a label. */
-    .design-log td[data-label="Finished"]::before { content: "→ "; letter-spacing: 0; }
-    .design-log td[data-label="Received"] { margin-right: -0.35rem; }
 
     /* The day band stays a band: it is how anybody finds their place. */
-    .design-log tr.dl-day { display: block; }
-    .design-log tr.dl-day th {
+    .dl-full tr.dl-day { display: block; }
+    .dl-full tr.dl-day th {
         display: block; border-radius: 7px;
         border-left: 1px solid var(--border); border-right: 1px solid var(--border);
         margin-top: 0.9rem;
@@ -1418,7 +1436,7 @@ input.is-suggested {
     .list-toolbar .list-search { flex-wrap: wrap; }
 
     /* Nothing is wide any more, so nothing should offer to scroll sideways. */
-    .design-log .tbl-wrap, .tbl-wrap:has(.design-log) { overflow-x: visible; }
+    .dl-full .tbl-wrap, .tbl-wrap:has(.dl-full) { overflow-x: visible; }
     .dl-artist-form select { min-width: 0; }
     .dl-agent { font-size: 0.74rem; }
 }

@@ -598,7 +598,7 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
         // One heading per column, and one label per cell to match. Counted
         // inside the board's own table: the page around it carries labels of
         // its own and they are not this table's columns.
-        preg_match('#<table class="tbl design-log">.*?</table>#s', $page, $table);
+        preg_match('#<table class="tbl design-log dl-full">.*?</table>#s', $page, $table);
         $this->assertNotEmpty($table, 'the board table was not on the page');
 
         preg_match('#<thead>.*?</thead>#s', $table[0], $head);
@@ -609,7 +609,7 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
         $this->assertSame($columns, substr_count($table[0], 'data-label='),
             'a column on the board has no label, so on a phone it is a value under nothing');
 
-        foreach (['Waiting', 'Client', 'Kind', 'Brief', 'Agent', 'Artist', 'Received', 'Finished', 'Status', 'Note'] as $label) {
+        foreach (['Waiting', 'Client', 'Brief', 'Agent', 'Artist', 'Drawn', 'Status', 'Note'] as $label) {
             $this->assertStringContainsString('data-label="'.$label.'"', $page);
         }
     }
