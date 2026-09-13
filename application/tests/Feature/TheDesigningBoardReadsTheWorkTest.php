@@ -835,7 +835,16 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
             'kind' => 'downpayment', 'status' => 'pending',
         ]);
 
-        $this->assertSame('Waiting for finance', $this->rowFor($design->refresh())['notes']);
+        $row = $this->rowFor($design->refresh());
+        $this->assertSame('Waiting for finance', $row['notes']);
+
+        // And it is a place work STOPS, so it carries a clock like the others
+        // - timed from when finance was handed it, not from the job's birth.
+        $payment->forceFill(['created_at' => now()->subDays(4)])->save();
+        $order->forceFill(['created_at' => now()->subDays(30)])->save();
+
+        $this->assertSame(4, $this->rowFor($design->refresh())['waiting'],
+            'the finance queue was timed from the job rather than from the payment');
 
         $payment->update(['status' => 'confirmed', 'confirmed_at' => now()]);
 

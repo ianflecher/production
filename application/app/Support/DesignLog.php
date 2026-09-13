@@ -65,6 +65,9 @@ class DesignLog
                     // payment at all is waiting on the client; a job with a
                     // payment nobody has confirmed is waiting on finance, and
                     // those are two different people to go and ask.
+                    // When the officer last recorded money on it. Finance's
+                    // wait starts there, not when the job was written.
+                    ->withMax('payments as payment_recorded_at', 'created_at')
                     ->withExists([
                         // This one keeps its default name on purpose:
                         // hasDownpayment() looks for payments_exists and
@@ -142,7 +145,16 @@ class DesignLog
     private static function since(InquiryDesign $design, ?ProductionOrder $order, string $notes): ?\Illuminate\Support\Carbon
     {
         if ($order) {
-            return $notes === 'Waiting DP' ? $order->created_at : null;
+            return match ($notes) {
+                // Finance has had it since the officer wrote the payment down.
+                'Waiting for finance' => $order->payment_recorded_at
+                    ? \Illuminate\Support\Carbon::parse($order->payment_recorded_at)
+                    : $order->created_at,
+                // Nothing recorded at all: the job has been unable to start
+                // since the day it was written.
+                'Waiting DP' => $order->created_at,
+                default => null,
+            };
         }
 
         return match ($design->status) {
