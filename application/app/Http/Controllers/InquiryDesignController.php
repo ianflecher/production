@@ -366,6 +366,67 @@ class InquiryDesignController extends Controller
     }
 
     /** Serve one design's file from private storage. */
+    /**
+     * Take a drawing off the design without destroying it.
+     *
+     * Submitting a redraw appends, so the version the client rejected stays in
+     * the list and is shown beside the one that was agreed - on the brief page
+     * and, worse, on the job order as a reference the floor works from.
+     *
+     * Which of them is superseded cannot be worked out from what is stored.
+     * Two attempts at inferring it from the file count both hid real work: a
+     * panel of a three-piece windbreaker set, and the hoodie from a design
+     * that is a windbreaker AND a hoodie. A design of two files with one
+     * revision looks the same either way. So a person says which, and this is
+     * how they say it.
+     *
+     * Marked, not deleted. The file stays on disk and in the record, and its
+     * position in the list does not move - that position is the address every
+     * link to it uses, so removing the entry outright would quietly repoint
+     * every other drawing on the design.
+     */
+    public function removeDrawing(Request $request, Inquiry $inquiry, int $design): RedirectResponse
+    {
+        $user = $request->user();
+        $design = $this->designOf($inquiry, $design);
+
+        // The officer whose brief it is, the artist who drew it, and leaders.
+        // Not the artist leader: he moves work between artists, he does not
+        // decide what the client agreed to.
+        abort_unless(
+            $design->artist_id === $user->id
+                || $inquiry->created_by === $user->id
+                || $user->isLeader()
+                || ($user->leadsTeam() && $inquiry->team === $user->team),
+            403
+        );
+
+        $index = (int) $request->validate(['index' => ['required', 'integer', 'min:0']])['index'];
+
+        $files = $design->files ?? [];
+        abort_unless(isset($files[$index]), 404);
+
+        // The last one standing is not removable: a design with no drawing at
+        // all cannot be approved, and the page gives no way back.
+        if ($design->drawings()->count() <= 1) {
+            return back()->withErrors(['drawings' =>
+                'That is the only drawing on '.$design->name().'. Add the new one before taking this off.']);
+        }
+
+        $name = $files[$index]['original_name'] ?? 'the drawing';
+        $files[$index]['kind'] = 'superseded';
+        $design->update(['files' => $files]);
+
+        // The job order carries these as the artist's references, and the
+        // whole point is that the floor stops working from the old one.
+        $order = $inquiry->order;
+        if ($order?->jobOrder && ($path = $files[$index]['path'] ?? null)) {
+            $order->jobOrder->referenceFiles()->where('path', $path)->delete();
+        }
+
+        return back()->with('success', $name.' is no longer shown on '.$design->name().'.');
+    }
+
     public function file(Request $request, int $design, int $index)
     {
         $user = $request->user();

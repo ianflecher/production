@@ -118,7 +118,9 @@ class InquiryDesign extends Model
     public function drawings(): \Illuminate\Support\Collection
     {
         $files = collect($this->files ?? [])
-            ->reject(fn ($file) => ($file['kind'] ?? 'layout') === 'revision');
+            // "revision" is the client's markup saying what to change;
+            // "superseded" is a drawing somebody has taken off by hand.
+            ->reject(fn ($file) => in_array($file['kind'] ?? 'layout', ['revision', 'superseded'], true));
 
         if ($files->isEmpty()) {
             return $files;
@@ -133,11 +135,18 @@ class InquiryDesign extends Model
             return $files->filter(fn ($file) => (int) ($file['round'] ?? 1) === $latest);
         }
 
-        // Older files carry no round. One drawing per round is how these were
-        // actually worked, so the last few are the current ones — and when the
-        // count does not divide that way this keeps too many rather than
-        // hiding the drawing that was approved.
-        return $files->slice(-max(1, $files->count() - (int) $this->revision_count));
+        // Older files carry no round, and nothing else in them says which
+        // version they are. Two tries at guessing from the count both got it
+        // wrong on the shop's real designs: one hid a panel of a three-piece
+        // windbreaker set, the next hid the hoodie from a design that is a
+        // windbreaker AND a hoodie. A design of two files with one revision
+        // looks identical whether it is a redraw or a pair of garments - only
+        // the names tell them apart, and names are not a rule.
+        //
+        // So they are all shown. A drawing that really has been superseded is
+        // taken off by hand, which is a person deciding rather than arithmetic
+        // guessing - see InquiryDesignController::removeDrawing.
+        return $files;
     }
 
     /** An artist's queue: the designs on their desk, not yet handed back. */

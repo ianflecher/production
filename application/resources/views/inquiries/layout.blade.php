@@ -443,17 +443,43 @@
 
             @if ($design->drawings()->isNotEmpty())
                 <div class="layout-file-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,170px)); margin:.6rem 0;">
+                    @php
+                        // Who may take one off: the officer whose brief this is,
+                        // the artist who drew it, and leaders. Matched to
+                        // InquiryDesignController::removeDrawing, so the button
+                        // is not offered to somebody it would refuse.
+                        $mayRemoveDrawing = $design->artist_id === auth()->id()
+                            || $inquiry->created_by === auth()->id()
+                            || auth()->user()->isLeader()
+                            || (auth()->user()->leadsTeam() && $inquiry->team === auth()->user()->team);
+                    @endphp
                     @foreach ($design->drawings() as $index => $file)
-                        <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank" class="layout-file-card">
-                            <span class="layout-file-preview" style="min-height:110px;">
-                                @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                                    <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" style="height:130px;">
-                                @else
-                                    <span style="font-size:1.8rem;">&#128196;</span>
-                                @endif
-                            </span>
-                            <span class="layout-file-name">{{ $file['original_name'] }}</span>
-                        </a>
+                        {{-- The card is a link, so the remove button sits beside
+                             it rather than inside: a form nested in an anchor is
+                             not markup a browser has to honour. --}}
+                        <div class="layout-file-wrap">
+                            <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank" class="layout-file-card">
+                                <span class="layout-file-preview" style="min-height:110px;">
+                                    @if (str_starts_with($file['mime'] ?? '', 'image/'))
+                                        <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" style="height:130px;">
+                                    @else
+                                        <span style="font-size:1.8rem;">&#128196;</span>
+                                    @endif
+                                </span>
+                                <span class="layout-file-name">{{ $file['original_name'] }}</span>
+                            </a>
+
+                            @if ($mayRemoveDrawing && $design->drawings()->count() > 1)
+                                <form method="POST" action="{{ route('inquiries.designs.drawing.remove', [$inquiry, $design]) }}"
+                                      class="layout-file-remove"
+                                      onsubmit="return confirm('Take {{ addslashes($file['original_name'] ?? 'this drawing') }} off this design? It stops being shown here and on the job order. The file itself is kept.');">
+                                    @csrf
+                                    <input type="hidden" name="index" value="{{ $index }}">
+                                    <button type="submit" aria-label="Take {{ $file['original_name'] ?? 'this drawing' }} off"
+                                            title="Take this drawing off — for a version that has been replaced">&times;</button>
+                                </form>
+                            @endif
+                        </div>
                     @endforeach
                 </div>
             @endif

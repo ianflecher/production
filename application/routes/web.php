@@ -539,6 +539,11 @@ Route::middleware(['auth', 'active'])->group(function () {
             ->whereNumber('design')->name('inquiries.designs.submit');
         Route::get('/layouts/designs/{design}/file/{index}', [\App\Http\Controllers\InquiryDesignController::class, 'file'])
             ->whereNumber('design')->whereNumber('index')->name('inquiries.designs.file');
+        // Taking a superseded drawing off. Out of the account-officer group for
+        // the same reason the two above are: the artist who drew it knows which
+        // of their own drawings was replaced, and the controller decides who may.
+        Route::post('/inquiries/{inquiry}/designs/{design}/drawing/remove', [\App\Http\Controllers\InquiryDesignController::class, 'removeDrawing'])
+            ->whereNumber('inquiry')->whereNumber('design')->name('inquiries.designs.drawing.remove');
     });
 
     // -------- Giving a step to somebody --------
