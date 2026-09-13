@@ -158,7 +158,7 @@
                             <tr>
                                 {{-- The date used to be repeated here under a day band that
                                      already says it. This is the thing it could not tell you. --}}
-                                <td class="dl-num">
+                                <td class="dl-num" data-label="Waiting">
                                     @if ($row['waiting'] === null)
                                         <span class="dl-dim">—</span>
                                     @else
@@ -168,18 +168,18 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td class="dl-client">
+                                <td class="dl-client" data-label="Client">
                                     <span>{{ $row['client'] }}</span>
                                     @if ($row['design']->label)
                                         <small>{{ $row['design']->label }}</small>
                                     @endif
                                 </td>
-                                <td>
+                                <td data-label="Kind">
                                     <span class="dl-kind {{ $row['description'] === 'For Mock Up' ? 'is-mockup' : '' }}">
                                         {{ $row['description'] }}
                                     </span>
                                 </td>
-                                <td>
+                                <td data-label="Brief">
                                     @if ($row['brief'])
                                         {{-- The shop's own brief page. Opened in its own tab so
                                              reading one does not cost the reader their place on
@@ -189,8 +189,8 @@
                                         <span class="dl-dim">—</span>
                                     @endif
                                 </td>
-                                <td class="dl-agent">{{ $row['agent'] }}</td>
-                                <td>
+                                <td class="dl-agent" data-label="Agent">{{ $row['agent'] }}</td>
+                                <td data-label="Artist">
                                     @if ($canMove && $bench->isNotEmpty())
                                         {{-- Changed here rather than three pages away. It posts to
                                              the same endpoint the brief page uses, so the rules and
@@ -216,15 +216,15 @@
                                         <span class="dl-rev" title="Sent back {{ $row['revisions'] }} time(s)">R{{ $row['revisions'] }}</span>
                                     @endif
                                 </td>
-                                <td class="dl-num dl-dim">{{ optional($row['received'])->format('j M') ?? '—' }}</td>
-                                <td class="dl-num dl-dim">{{ optional($row['finished'])->format('j M') ?? '—' }}</td>
-                                <td><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
+                                <td class="dl-num dl-dim" data-label="Received">{{ optional($row['received'])->format('j M') ?? '—' }}</td>
+                                <td class="dl-num dl-dim" data-label="Finished">{{ optional($row['finished'])->format('j M') ?? '—' }}</td>
+                                <td data-label="Status"><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
                                 {{-- A note that repeats the status beside it is a column of
                                      nothing: twenty rows reading "Waiting For Approval /
                                      Waiting For Approval" and one reading "Waiting DP", which
                                      is the only one anybody needed to see. So the note is
                                      printed when it says something the status does not. --}}
-                                <td>
+                                <td data-label="Note">
                                     @if ($row['notes'] !== $row['status'] && $row['notes'] !== 'Work in progress')
                                         <span class="dl-tag is-{{ $noteTone[$row['notes']] ?? 'plain' }}">{{ $row['notes'] }}</span>
                                     @endif

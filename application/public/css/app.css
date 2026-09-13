@@ -1017,9 +1017,15 @@
     border-radius: 10px;
     box-shadow: var(--shadow);
 }
-/* One line, always. Squeezed to its basis the box kept its 220px floor and
-   pushed the button onto a line of its own, which reads as a broken bar. */
-.list-toolbar .list-search { flex: 1 1 310px; flex-wrap: nowrap; margin-bottom: 0; }
+/* One line, always: squeezed, the box kept its 220px floor and pushed the
+   button onto a line of its own, which reads as a broken bar.
+   The floor has to go with it. Holding the button on the line while the box
+   refused to shrink made the whole bar unsqueezable, and every list in the
+   app grew a sideways scrollbar on a narrow window - a worse fault than the
+   one being fixed, and on more pages. Shrinking is what a search box should
+   do; the bar wraps as a whole long before it gets uncomfortable. */
+.list-toolbar .list-search { flex: 1 1 260px; flex-wrap: nowrap; margin-bottom: 0; }
+.list-toolbar .list-search-box { min-width: 0; }
 .list-toolbar .list-search-box { max-width: 380px; }
 /* Pushed to the far end, and kept together when the bar wraps. */
 .list-toolbar .toolbar-filters {
@@ -1299,6 +1305,123 @@ input.is-suggested {
 }
 .dl-artist-form select:hover { border-color: var(--border-strong); background: var(--surface); }
 .dl-artist-form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
+
+/* The board on a phone.
+
+   Ten columns will not fit 375 pixels, and no amount of narrowing makes them.
+   Swiping the table sideways means the client is off screen by the time the
+   status is on it, which is the one comparison the board exists to make. So
+   below 640px it stops being a table and each design becomes a card.
+
+   The warning further up this file is about doing HALF of this: display:block
+   on the table alone throws away table layout while the cells still behave
+   like cells, and the columns collapse to a few pixels. The way out is to do
+   it completely - every element down to the cell is laid out again - which is
+   what follows. The headings go, so each cell names itself from the
+   data-label the view writes on it.
+
+   The colgroup widths are table-layout instructions; they stop applying the
+   moment the table stops being one, so they need no undoing. */
+@media (max-width: 640px) {
+    .design-log,
+    .design-log thead,
+    .design-log tbody,
+    .design-log tr,
+    .design-log td { display: block; width: auto; }
+
+    /* Off screen rather than display:none, so a screen reader still has them. */
+    .design-log thead {
+        position: absolute; width: 1px; height: 1px;
+        overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+
+    /* One design, one card. */
+    .design-log tbody tr:not(.dl-day) {
+        display: flex; flex-wrap: wrap; align-items: baseline;
+        gap: 0.1rem 0.5rem;
+        border: 1px solid var(--border-strong); border-radius: 9px;
+        background: var(--surface);
+        padding: 0.55rem 0.7rem;
+        margin: 0.45rem 0;
+    }
+    .design-log tbody tr:not(.dl-day) td { border: 0; padding: 0; }
+    .design-log tbody tr:hover td { background: transparent; }
+
+    /* Who it is, across the top. */
+    .design-log td.dl-client { order: 1; flex: 1 1 100%; min-width: 0; }
+    .dl-client span { font-size: 0.92rem; }
+
+    /* Then the three things that say where it has got to, on one line. */
+    .design-log td[data-label="Waiting"] { order: 2; }
+    .design-log td[data-label="Status"] { order: 3; }
+    .design-log td[data-label="Note"] { order: 4; }
+    .design-log td[data-label="Waiting"] { flex: 0 0 auto; margin-top: 0.3rem; }
+    .design-log td[data-label="Status"],
+    .design-log td[data-label="Note"] { flex: 0 0 auto; margin-top: 0.3rem; }
+    /* Empty on most rows, and an empty box still eats a gap. */
+    .design-log td[data-label="Note"]:empty { display: none; }
+
+    /* Everything else reads as "label value", wrapped onto its own lines. */
+    .design-log td[data-label="Kind"],
+    .design-log td[data-label="Agent"],
+    .design-log td[data-label="Artist"],
+    .design-log td[data-label="Received"],
+    .design-log td[data-label="Finished"],
+    .design-log td[data-label="Brief"] {
+        order: 5; flex: 0 0 auto;
+        font-size: 0.74rem; color: var(--ink-2);
+        margin-top: 0.3rem;
+    }
+    .design-log td[data-label="Kind"]::before,
+    .design-log td[data-label="Agent"]::before,
+    .design-log td[data-label="Artist"]::before,
+    .design-log td[data-label="Received"]::before,
+    .design-log td[data-label="Finished"]::before {
+        content: attr(data-label) " ";
+        font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.05em; color: var(--ink-3);
+        margin-right: 0.2rem;
+    }
+    /* The two dates read as one span, so they sit together and lose a label. */
+    .design-log td[data-label="Finished"]::before { content: "→ "; letter-spacing: 0; }
+    .design-log td[data-label="Received"] { margin-right: -0.35rem; }
+
+    /* The day band stays a band: it is how anybody finds their place. */
+    .design-log tr.dl-day { display: block; }
+    .design-log tr.dl-day th {
+        display: block; border-radius: 7px;
+        border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+        margin-top: 0.9rem;
+    }
+
+    /* The filter bar was the other half of the sideways drag, and the worse
+       half: a segmented control is `overflow: hidden`, so on a phone the
+       choices past the edge were not scrolled off, they were CUT off. VIP and
+       every artist after Mick could not be reached at all.
+
+       A joined control cannot stay joined at 375px, so it stops pretending
+       to be one: the choices become pills that wrap, which is the same
+       question with the same one answer on, and all of it reachable. */
+    .list-toolbar .seg {
+        display: flex; flex-wrap: wrap; gap: 0.3rem;
+        border: 0; background: transparent; overflow: visible;
+    }
+    .list-toolbar .seg a {
+        border: 1px solid var(--border-strong); border-radius: 999px;
+        /* A thumb, not a mouse pointer. */
+        min-height: 34px; padding: 0.3rem 0.7rem;
+    }
+    .list-toolbar .seg a:last-child { border-right: 1px solid var(--border-strong); }
+    .list-toolbar .seg a[aria-current] { border-color: var(--brand); }
+
+    /* On a 360px phone the box and its button do not share a line at all. */
+    .list-toolbar .list-search { flex-wrap: wrap; }
+
+    /* Nothing is wide any more, so nothing should offer to scroll sideways. */
+    .design-log .tbl-wrap, .tbl-wrap:has(.design-log) { overflow-x: visible; }
+    .dl-artist-form select { min-width: 0; }
+    .dl-agent { font-size: 0.74rem; }
+}
 
 /* Which team's rows start here, inside a table that holds both. Darker than
    the column headings above it so the two do not read as the same thing. */

@@ -576,6 +576,44 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
             'a design asked for today was called seventeen days late');
     }
 
+    /**
+     * On a phone the board stops being a table, so its cells name themselves.
+     *
+     * Ten columns will not fit 375 pixels and no narrowing makes them, so
+     * below 640px each design becomes a card. The headings go with the table,
+     * and the only thing left telling a reader that "VIP / Pau" is the agent
+     * is the label the cell carries. A column added later without one would
+     * show up on a phone as a bare value under no heading at all, which is
+     * the quiet half of this that nobody would notice on a desktop.
+     */
+    public function test_every_cell_says_what_it_is_for_the_phone_layout(): void
+    {
+        $officer = $this->officer('vip', 'Pau');
+        $this->design($officer, $this->artist('Mick'), 'Phone');
+
+        $page = $this->actingAs(User::factory()->create([
+            'job_role' => User::ROLE_LEADER, 'is_active' => true,
+        ]))->get(route('design.log'))->assertOk()->getContent();
+
+        // One heading per column, and one label per cell to match. Counted
+        // inside the board's own table: the page around it carries labels of
+        // its own and they are not this table's columns.
+        preg_match('#<table class="tbl design-log">.*?</table>#s', $page, $table);
+        $this->assertNotEmpty($table, 'the board table was not on the page');
+
+        preg_match('#<thead>.*?</thead>#s', $table[0], $head);
+        // <th[ >] rather than <th, or the opening <thead> counts as a column.
+        $columns = preg_match_all('#<th[ >]#', $head[0] ?? '');
+
+        $this->assertGreaterThan(0, $columns, 'the board lost its headings');
+        $this->assertSame($columns, substr_count($table[0], 'data-label='),
+            'a column on the board has no label, so on a phone it is a value under nothing');
+
+        foreach (['Waiting', 'Client', 'Kind', 'Brief', 'Agent', 'Artist', 'Received', 'Finished', 'Status', 'Note'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $page);
+        }
+    }
+
     /* ---------------- narrowing the board ---------------- */
 
     /** The count at the top is the way into the rows behind it. */
