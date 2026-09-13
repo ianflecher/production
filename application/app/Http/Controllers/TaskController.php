@@ -122,9 +122,24 @@ class TaskController extends Controller
         // words rather than as a status code: from where the artist sits this
         // is not an error, it is a job still sitting on somebody else's desk.
         if ($order->jobOrder?->status !== 'sent_to_artist') {
+            // Say the one thing that is actually outstanding.
+            //
+            // This named the downpayment whatever the reason, so an artist on
+            // a job whose deposit was collected - or waived - was sent to
+            // chase money that had already been dealt with, while the thing
+            // really holding it up went unmentioned.
+            $waitingOn = match (true) {
+                ! $order->mockupApproved() => 'the final mockup has not been approved yet',
+                ! $order->hasDownpayment() => 'the downpayment has not been collected yet',
+                default => 'the account officer has not sent the job order yet',
+            };
+
+            // Named by client as well as number: several orders of one brief
+            // share a job order number now, so the number alone no longer says
+            // which job this is.
             return redirect()->route('tasks.mine')->withErrors([
-                'tech_pack' => 'The Tech Pack for '.$order->order_number.' is not open yet — '
-                    .'it is waiting for the account officer to collect the downpayment and send the job order.',
+                'tech_pack' => 'The Tech Pack for '.$order->order_number.' ('.$order->clientName().') '
+                    .'is not open yet — '.$waitingOn.'.',
             ]);
         }
 

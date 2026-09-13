@@ -953,7 +953,11 @@ class ProductionOrderController extends Controller
     public function show(ProductionOrder $order): View
     {
         $this->assertOrderVisible($order);
-        $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles', 'materialRequests.item', 'payments']);
+        // inquiryDesign.inquiry as well: the layout is drawn before the order
+        // exists, so the design the client approved hangs off the brief rather
+        // than off any task, and the pipeline has nothing to show without it.
+        $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles',
+            'materialRequests.item', 'payments', 'inquiryDesign.inquiry']);
 
         return view('orders.show', [
             'order' => $order,

@@ -761,6 +761,36 @@
             </thead>
             <tbody>
                 @php
+                    // The drawing the client approved.
+                    //
+                    // It does not hang off the Layout TASK: the layout is drawn
+                    // on the brief, before the order exists, so the task has no
+                    // files and the Layout row had nothing to show even on a
+                    // finished job. This is the picture people mean when they
+                    // ask where the design is.
+                    //
+                    // Only offered to somebody the file endpoint would actually
+                    // serve - InquiryDesignController::file decides, and an
+                    // <img> nobody may fetch is a broken icon, not a picture.
+                    $design = $order->inquiryDesign;
+                    $mayOpenDesign = $design && (
+                        $isLeader
+                        || auth()->user()->isSales()
+                        || auth()->user()->canMoveArtistWork()
+                        || $design->artist_id === auth()->id()
+                        || $design->inquiry?->created_by === auth()->id()
+                    );
+                    $designShot = null;
+
+                    if ($mayOpenDesign) {
+                        foreach ((array) ($design->files ?? []) as $i => $f) {
+                            if (str_starts_with((string) ($f['mime'] ?? ''), 'image/')) {
+                                $designShot = ['design' => $design->id, 'index' => $i];
+                                break;
+                            }
+                        }
+                    }
+
                     // Each pipeline row gets a status colour so the table reads as a
                     // living timeline.
                     $rowColors = [
@@ -839,6 +869,39 @@
                             @endif
                             @if ($task->status === 'complete' && $task->approved_at)
                                 <div style="font-size: 0.75rem; color: var(--success-ink); margin-top: 0.2rem;">✓ finished {{ $task->approved_at->format('M j, Y g:i A') }}</div>
+                            @endif
+
+                            {{-- What this step actually handed in.
+                                 The mockup was already on this page, but only
+                                 inside the design package card, which waits for
+                                 the leader to approve it - so at the point the
+                                 pipeline says the mockup is READY there was
+                                 nothing to look at. The picture belongs on the
+                                 row it came from.
+
+                                 Files are eager-loaded with the tasks, so this
+                                 is the same page at the same cost. A design
+                                 kept on a network path has nothing to show and
+                                 is left out rather than drawn as a broken
+                                 image. --}}
+                            @php
+                                $handedIn = $latestFiles($task)
+                                    ->first(fn ($f) => $f->isImage() && (! $f->isExternal() || $f->isWebLink()));
+                            @endphp
+                            @if ($handedIn)
+                                <a href="{{ route('tasks.file.view', $handedIn) }}" target="_blank" rel="noopener"
+                                   class="pipe-shot" title="What {{ $task->department }} handed in — click to open">
+                                    <img src="{{ route('tasks.file.view', $handedIn) }}"
+                                         alt="{{ $task->department }} — submitted work" loading="lazy">
+                                </a>
+                            @elseif ($designShot && $task->department === 'Layout')
+                                {{-- The approved drawing, which lives on the brief. --}}
+                                <a href="{{ route('inquiries.designs.file', [$designShot['design'], $designShot['index']]) }}"
+                                   target="_blank" rel="noopener"
+                                   class="pipe-shot" title="The design the client approved — click to open">
+                                    <img src="{{ route('inquiries.designs.file', [$designShot['design'], $designShot['index']]) }}"
+                                         alt="The approved design" loading="lazy">
+                                </a>
                             @endif
                         </td>
                         <td>@include('partials.status', ['status' => $task->status])</td>

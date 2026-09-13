@@ -1118,6 +1118,17 @@ input.is-suggested {
 .follow-up-kind.is-new { color: var(--accent); background: var(--accent-soft); }
 .follow-up-kind.is-revision { color: var(--brand); background: var(--brand-soft); }
 
+/* What a pipeline step handed in, on the step's own row. Small on purpose:
+   it is there to say "this is the one" at a glance, and the full picture is
+   one click away. */
+.pipe-shot {
+    display: inline-block; margin-top: 0.35rem;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface-2); padding: 2px; line-height: 0;
+}
+.pipe-shot img { width: 72px; height: 72px; object-fit: contain; display: block; border-radius: 4px; }
+.pipe-shot:hover { border-color: var(--accent); }
+
 /* The designing board.
 
    The team read the spreadsheet by colour before they read a word of it, so
