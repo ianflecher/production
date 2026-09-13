@@ -202,4 +202,36 @@ class UserManagementTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['email' => 'sneaky@example.com']);
     }
+
+    /**
+     * On a phone the list stops being a table, so its cells name themselves.
+     *
+     * Five columns need 622 pixels of table and a phone has about 330, so
+     * below 700px each account becomes a card. The headings go with the
+     * table, and the only thing left telling a reader that
+     * sales6@imprintcustoms.ph is the email is the label on the cell. A
+     * column added later without one would show on a phone as a value under
+     * nothing at all - which is invisible on the desktop this is written on.
+     */
+    public function test_every_cell_on_the_list_says_what_it_is(): void
+    {
+        User::factory()->create(['job_role' => User::JOB_ARTIST, 'is_active' => true]);
+
+        $page = $this->actingAs($this->superAdmin())
+            ->get(route('users.index'))->assertOk()->getContent();
+
+        preg_match('#<table class="tbl tbl-stack">.*?</table>#s', $page, $table);
+        $this->assertNotEmpty($table, 'the list is no longer the table that stacks');
+
+        preg_match('#<thead>.*?</thead>#s', $table[0], $head);
+        // <th[ >] rather than <th, or the opening <thead> counts as a column.
+        $columns = preg_match_all('#<th[ >]#', $head[0] ?? '');
+
+        $this->assertSame(5, $columns);
+
+        foreach (['Name', 'Email', 'Position', 'Today', 'Actions'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $table[0],
+                "the {$label} column has no label, so on a phone it is a value under nothing");
+        }
+    }
 }

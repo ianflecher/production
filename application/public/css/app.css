@@ -1315,6 +1315,75 @@ input.is-suggested {
 .dl-artist-form select:hover { border-color: var(--border-strong); background: var(--surface); }
 .dl-artist-form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
 
+/* Any table, stacked, when its columns will not fit.
+
+   The designing board earned a layout of its own because it is read by
+   scanning one column down forty rows. Most tables are not; the users list is
+   five fields about one person, and five fields about one person is a card.
+   So this is the plain version, and a table opts in by wearing tbl-stack and
+   giving each cell a data-label - which is also the whole of the work, since
+   the headings go with the table and the label is what is left to name the
+   value.
+
+   Do NOT do half of it. display:block on the table alone leaves the cells
+   behaving like cells and the columns collapse to a few pixels - the warning
+   earlier in this file is about exactly that. Every element down to the cell
+   is relaid out here. */
+@media (max-width: 700px) {
+    .tbl-stack,
+    .tbl-stack thead,
+    .tbl-stack tbody,
+    .tbl-stack tr,
+    .tbl-stack td { display: block; width: auto; }
+
+    /* Off screen rather than display:none, so a screen reader keeps them. */
+    .tbl-stack thead {
+        position: absolute; width: 1px; height: 1px;
+        overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+
+    .tbl-stack tbody tr {
+        border: 1px solid var(--border-strong); border-radius: 9px;
+        background: var(--surface);
+        padding: 0.6rem 0.75rem;
+        margin: 0.5rem 0;
+    }
+    .tbl-stack tbody tr:hover td { background: transparent; }
+
+    .tbl-stack td {
+        border: 0; padding: 0.18rem 0;
+        font-size: 0.82rem;
+    }
+    .tbl-stack td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.05em; color: var(--ink-3);
+    }
+
+    /* The first cell is what the card is about, so it is a heading and needs
+       no label above it saying "Name". */
+    .tbl-stack td:first-child {
+        font-size: 1rem; font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+    .tbl-stack td:first-child::before { content: none; }
+
+    /* A cell with nothing in it is not a field worth a label. */
+    .tbl-stack td:empty { display: none; }
+
+    /* The buttons want the width, and a thumb wants the height. */
+    .tbl-stack td[data-label="Actions"] { margin-top: 0.45rem; }
+    .tbl-stack td[data-label="Actions"] .btn { min-height: 34px; }
+
+    /* "No user accounts found" spans the table and is not a field. */
+    .tbl-stack td[colspan] { text-align: left !important; padding: 1rem 0 !important; }
+    .tbl-stack td[colspan]::before { content: none; }
+
+    /* Stacked, it is as wide as the page and has nothing to scroll. */
+    .tbl-wrap:has(.tbl-stack) { overflow-x: visible; }
+}
+
 /* The board on anything that cannot hold its columns.
 
    Eight columns need 1024 pixels of table. A window narrower than about 1300

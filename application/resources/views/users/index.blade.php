@@ -400,7 +400,9 @@
         </div>
     @endif
     <div class="tbl-wrap">
-        <table class="tbl">
+        {{-- Five columns need 622px and a phone has about 330. Stacked, each
+             account becomes a card that names its own fields - see tbl-stack. --}}
+        <table class="tbl tbl-stack">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -423,7 +425,7 @@
 
                     <tr data-search="{{ strtolower($user->name.' '.$user->email.' '.$user->positionLabel()) }}">
                         {{-- User name --}}
-                        <td style="font-weight: 600;">
+                        <td style="font-weight: 600;" data-label="Name">
                             {{ $user->name }}
 
                             @if ($user->id === auth()->id())
@@ -439,12 +441,12 @@
                         </td>
 
                         {{-- Email --}}
-                        <td>
+                        <td data-label="Email">
                             {{ $user->email }}
                         </td>
 
                         {{-- Position and team --}}
-                        <td>
+                        <td data-label="Position">
                             {{ $user->positionLabel() }}
 
                             @if ($user->isSales() && $user->team)
@@ -462,7 +464,7 @@
                         </td>
 
                         {{-- Today's attendance --}}
-                        <td>
+                        <td data-label="Today">
                             @if ($attendanceStatus === 'present')
                                 <span
                                     class="badge"
@@ -540,7 +542,7 @@
                         </td>
 
                         {{-- Actions --}}
-                        <td>
+                        <td data-label="Actions">
                             <div
                                 style="
                                     display: flex;
