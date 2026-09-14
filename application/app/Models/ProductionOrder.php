@@ -933,40 +933,48 @@ class ProductionOrder extends Model
             }
         };
 
-        $sampleSteps = $this->skip_sample
-            ? collect()
+        // Every job runs in two parts, and the first part depends on whether
+        // there is a sample to make.
+        //
+        // Normally it is the sample run: everything up to putting a sample in
+        // front of the client. When the sample is skipped that run is not even
+        // built - the pipeline goes stage 1, 2, 3, then straight to 10 - and
+        // what is left in front is the DESIGN run: the layout, the final
+        // mockup and the tech pack. Those are worked on every job, sample or
+        // not, and they used to carry no deadline at all because the whole
+        // window was handed to mass production. People were doing that work
+        // with nothing saying when it was wanted.
+        //
+        // Stage 3 is left out of a skip-sample job on purpose. Raw materials
+        // and printing there belong to the SAMPLE - the batch has its own at
+        // stage 10 - so with no sample to make, there is nothing for them to
+        // be due for.
+        $frontSteps = $this->skip_sample
+            ? $steps->filter(fn (Task $step) => $step->stage <= self::STAGE_MOCKUP)->values()
             : $steps->filter(fn (Task $step) => $step->stage < self::STAGE_MASS_PRODUCTION)->values();
+
         $massProductionSteps = $steps->filter(fn (Task $step) => $step->stage >= self::STAGE_MASS_PRODUCTION)->values();
 
-        // A skip-sample order has one run, so every step shares the window.
-        //
-        // It used to hand that window to the mass production steps alone, and
-        // everything before stage 10 was left with no deadline at all - the
-        // layout, the final mockup, the tech pack, the raw materials, the
-        // printing. Skipping the sample means there is no SAMPLE to put in
-        // front of the client; it does not mean the job is not drawn and
-        // printed first. Those steps went to the floor and the boards with no
-        // date on them, and nothing could call them late.
-        if ($this->skip_sample) {
-            $assignWindow($steps, $start, $end);
-        } elseif ($sampleSteps->isEmpty()) {
+        if ($frontSteps->isEmpty()) {
             $assignWindow($massProductionSteps, $start, $end);
         } else {
             // Through sampleLeadDays(), not the bare constant: a jersey gets
             // the longer window, and reading the constant here was how the
-            // schedule and the jersey rule disagreed.
-            $sampleEnd = $start->copy()->startOfDay()
+            // schedule and the jersey rule disagreed. On a skip-sample job the
+            // same allowance covers the design run, which is the same few days
+            // at the front of the job under a different name.
+            $frontEnd = $start->copy()->startOfDay()
                 ->addDays($this->sampleLeadDays())
                 ->endOfDay();
 
-            // A promised delivery earlier than the normal sample window does
+            // A promised delivery earlier than the normal front window does
             // not move the client deadline; both phases simply become urgent.
-            if ($sampleEnd->greaterThan($end)) {
-                $sampleEnd = $end->copy();
+            if ($frontEnd->greaterThan($end)) {
+                $frontEnd = $end->copy();
             }
 
-            $assignWindow($sampleSteps, $start, $sampleEnd);
-            $assignWindow($massProductionSteps, $sampleEnd, $end);
+            $assignWindow($frontSteps, $start, $frontEnd);
+            $assignWindow($massProductionSteps, $frontEnd, $end);
         }
 
         return $steps->count();

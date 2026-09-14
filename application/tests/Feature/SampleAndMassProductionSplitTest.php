@@ -233,10 +233,21 @@ class SampleAndMassProductionSplitTest extends TestCase
         $this->assertGreaterThan(0, $beforeBatch->count(),
             'a skip-sample order still has steps before mass production');
 
-        $undated = $beforeBatch->filter(fn ($t) => ! $t->due_at);
+        // The design run - drawn, mocked up, written up - is worked on every
+        // job and must carry a date.
+        $design = $beforeBatch->filter(fn ($t) => $t->stage <= ProductionOrder::STAGE_MOCKUP);
+        $undated = $design->filter(fn ($t) => ! $t->due_at);
 
+        $this->assertGreaterThan(0, $design->count());
         $this->assertCount(0, $undated,
             'these went to the floor with no deadline: '.$undated->pluck('department')->implode(', '));
+
+        // Stage 3 is the SAMPLE's materials and printing. There is no sample,
+        // so there is nothing for them to be due for - the batch has its own
+        // at stage 10.
+        $sampleOnly = $beforeBatch->filter(fn ($t) => $t->stage > ProductionOrder::STAGE_MOCKUP);
+        $this->assertCount(0, $sampleOnly->filter(fn ($t) => $t->due_at),
+            'the skipped sample run was given deadlines for work nobody is doing');
 
         // And the whole run still lands on the client's promise.
         $this->assertSame(
