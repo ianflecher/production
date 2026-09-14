@@ -85,11 +85,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/change-password', [\App\Http\Controllers\Auth\ChangePasswordController::class, 'show'])->name('password.change');
     Route::post('/change-password', [\App\Http\Controllers\Auth\ChangePasswordController::class, 'save'])->name('password.change.save');
 
-    // The HR overview lives on the dashboard now. Kept as a redirect so a
-    // bookmark or an old notification link still lands somewhere useful.
-    Route::get('/hr', fn () => redirect()->route('dashboard'))->name('hr.dashboard');
-
-    // The job offer, and the account a yes turns into.
 
     // -------- The employee's own: no id in any of these, so there is
     // nothing to change to somebody else's number. --------
