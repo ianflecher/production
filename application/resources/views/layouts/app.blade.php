@@ -210,9 +210,17 @@
 
                 {{-- Finance — all payments & proof. --}}
                 @if (! auth()->user()->isSupervisor() && auth()->user()->canManageFinance())
+                    @php $toConfirm = $paymentsToConfirm ?? 0; @endphp
                     <a href="{{ route('finance.index') }}" class="nav-item {{ request()->routeIs('finance.*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                         Finance
+                        @if ($toConfirm > 0)
+                            {{-- Money waiting on this desk and nobody else's.
+                                 Same count as the ledger it opens - see
+                                 Payment::scopeAwaitingConfirmation. --}}
+                            <span style="margin-left:auto; min-width:20px; padding:0 6px; border-radius:99px; background:#E31B23; color:#fff; font-weight:700; font-size:0.72rem; line-height:20px; text-align:center;"
+                                  title="{{ $toConfirm }} payment(s) waiting to be confirmed">{{ $toConfirm }}</span>
+                        @endif
                     </a>
 
                     {{-- Bookkeeping — money in vs money out, and expenses. --}}

@@ -43,6 +43,28 @@ class Payment extends Model
     }
 
     /**
+     * Money recorded by an officer that finance has not agreed to yet.
+     *
+     * Written once and used by all three: the badge in the sidebar, the card
+     * on the finance desk's dashboard, and the ledger page itself. A badge
+     * that counts a different thing from the page it opens is worse than no
+     * badge, because it sends somebody looking for work that is not there.
+     *
+     * This is the same gap the designing board calls "Waiting for finance" -
+     * the job does not start on it, and the person holding it is not the
+     * client.
+     */
+    public function scopeAwaitingConfirmation($query)
+    {
+        return $query
+            ->whereNull('confirmed_at')
+            // A cancelled job's money is not work waiting on this desk. The
+            // finance dashboard has always left those out; a badge counting
+            // them would send somebody to a page that does not list them.
+            ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'));
+    }
+
+    /**
      * Who confirmed it, in the shop's own terms.
      *
      * The signed-in Finance account is the source of truth. The saved name is

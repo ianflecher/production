@@ -272,9 +272,11 @@ class DashboardController extends Controller
             // confirmed money only, so an unconfirmed deposit holds the mockup
             // shut. It was only findable by paging through every payment ever
             // taken, so it is put on the desk's own front page.
+            // Through the scope, so this list and the sidebar badge that
+            // points at it can never come to disagree - see
+            // Payment::scopeAwaitingConfirmation.
             $toConfirm = \App\Models\Payment::with(['order.client', 'recorder'])
-                ->whereNull('confirmed_at')
-                ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                ->awaitingConfirmation()
                 ->orderBy('paid_at')
                 ->orderBy('id')
                 ->get();

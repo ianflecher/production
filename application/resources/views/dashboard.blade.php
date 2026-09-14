@@ -1014,7 +1014,13 @@
             </div>
         @else
             <div class="card panel" style="margin-top: 1.4rem;">
-                <h2>Waiting for you to confirm</h2>
+                {{-- The count, said out loud. The same number the sidebar
+                     badge carries, from the same scope, so the two can never
+                     disagree - see Payment::scopeAwaitingConfirmation. --}}
+                <h2>
+                    Waiting to confirm
+                    <span style="margin-left:0.45rem; min-width:22px; display:inline-block; padding:0 7px; border-radius:99px; background:#E31B23; color:#fff; font-weight:800; font-size:0.8rem; line-height:22px; text-align:center; vertical-align:2px;">{{ $toConfirm->count() }}</span>
+                </h2>
                 <p class="sub">
                     Recorded by an account officer, not yet checked against the account. Oldest
                     first — a job with an unconfirmed deposit cannot start.

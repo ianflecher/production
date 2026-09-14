@@ -50,6 +50,13 @@ class AppServiceProvider extends ServiceProvider
                 $view->with('pendingApprovals', \App\Support\ApprovalQueue::countFor($user));
             }
 
+            // Money sitting on somebody's desk. The officer has recorded it and
+            // the shop does not draw on it until finance agrees it landed, so
+            // until then the job it belongs to has not started.
+            if ($user && $user->canConfirmPayments()) {
+                $view->with('paymentsToConfirm', \App\Models\Payment::awaitingConfirmation()->count());
+            }
+
             if ($user && $user->isArtist()) {
                 // What is waiting to be drawn — the layouts sit before any job
                 // order exists, so nothing else in the nav counts them.
