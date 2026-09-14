@@ -34,23 +34,7 @@ use Illuminate\Support\Facades\Route;
  */
 
 
-/*
- * The front door.
- *
- * Two different people arrive here and want opposite things: somebody who
- * works here wants to sign in, and somebody who does not wants to apply. The
- * apply form has always been public but there was no way to FIND it - the root
- * redirected straight to the dashboard, which bounced a guest to the login
- * form, which says "Authorized staff only" and nothing else. An applicant had
- * to be sent the URL by hand.
- *
- * Somebody already signed in is not asked; they wanted the dashboard.
- */
-Route::get('/', function () {
-    return auth()->check()
-        ? redirect()->route('dashboard')
-        : view('auth.welcome');
-})->name('welcome');
+Route::redirect('/', '/dashboard');
 
 // ============ Guest routes ============
 Route::middleware('guest')->group(function () {
