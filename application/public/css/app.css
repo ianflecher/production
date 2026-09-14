@@ -1344,7 +1344,7 @@ input.is-suggested {
 
    min-width:0 lets them shrink, and the wrap lets the alert use the height it
    has instead of width it does not. */
-@media (max-width: 1250px) {
+@media (max-width: 1289px) {
     .dash-grid-main > *,
     .dash-grid-two > *,
     .dash-stack > * { min-width: 0; }
@@ -1371,42 +1371,61 @@ input.is-suggested {
    earlier in this file is about exactly that. Every element down to the cell
    is relaid out here.
 
-   The number is 1250 and not something rounder because the sidebar comes back
-   at 901px and takes about 368 with the page padding: a 1024 window leaves a
+   The number is 1289 and not something rounder because the sidebar comes back
+   at 901px and takes about 320 with the page padding: a 1024 window leaves a
    table 656 and a 901 window leaves it 533, which is narrower than the phone
-   layout it has just stopped using. 1250 is where the widest of these finally
-   has its room - the clients list at 823, and the payments ledger at 870 once
-   two of its columns were folded into one. */
-@media (max-width: 1250px) {
+   layout it has just stopped using. 1289 is where the widest of these finally
+   has its room - the orders list, which sets a 960px floor of its own so its
+   columns stay readable, and so wants about 1290 of window. The clients list
+   at 823 and the payments ledger at 870 fit well inside that. */
+@media (max-width: 1289px) {
+    /* Not every table in the app wears .tbl. The production orders list has
+       its own class and its own stylesheet, so this rule walked straight past
+       it and it went to a phone as seven columns with four of them off the
+       edge. Named here rather than given a .tbl of its own, because that
+       would drag the shared table styling onto a page that has deliberately
+       styled itself and changed how it looks on a desktop to fix a phone.
+
+       The ones left out are documents, not lists: .jo is the printed job
+       order, .tp-ref-table and .items lay out a tech pack, .sig is a
+       signature block and .cal-grid is a calendar. Stacking any of those
+       would break the thing on paper. */
     /* The board is excluded because its own rules already cover this width
        and it lays its cards out differently. */
-    .tbl:not(.dl-full):not(.tbl-wide),
-    .tbl:not(.dl-full):not(.tbl-wide) thead,
-    .tbl:not(.dl-full):not(.tbl-wide) tbody,
-    .tbl:not(.dl-full):not(.tbl-wide) tr,
-    .tbl:not(.dl-full):not(.tbl-wide) td { display: block; width: auto; }
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide),
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) thead,
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) tbody,
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) tr,
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td { display: block; width: auto; }
+
+    /* A table that sets its own floor keeps it, and a floor is not something
+       width:auto argues with: the orders list asks for 960px so its columns
+       stay readable, and stacked on a 375px phone that made every card run
+       600px off the side of the screen - not scrolling, just gone. There are
+       no columns left to protect once it is a stack. */
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) { min-width: 0; }
 
     /* Off screen rather than display:none, so a screen reader keeps them.
        The cells have to be relaid out too: left as table-cells inside a box
        one pixel wide they still measured themselves against their content and
        pushed the page sideways - nineteen pixels of scroll on the dashboard
        with nothing visible anywhere causing it. */
-    .tbl:not(.dl-full):not(.tbl-wide) thead {
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) thead {
         position: absolute; width: 1px; height: 1px;
         overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
     }
-    .tbl:not(.dl-full):not(.tbl-wide) thead tr,
-    .tbl:not(.dl-full):not(.tbl-wide) thead th { display: block; width: auto; }
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) thead tr,
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) thead th { display: block; width: auto; }
 
-    .tbl:not(.dl-full):not(.tbl-wide) tbody tr {
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) tbody tr {
         border: 1px solid var(--border-strong); border-radius: 9px;
         background: var(--surface);
         padding: 0.6rem 0.75rem;
         margin: 0.5rem 0;
     }
-    .tbl:not(.dl-full):not(.tbl-wide) tbody tr:hover td { background: transparent; }
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) tbody tr:hover td { background: transparent; }
 
-    .tbl:not(.dl-full):not(.tbl-wide) td {
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td {
         border: 0; padding: 0.18rem 0;
         font-size: 0.82rem;
         white-space: normal !important;
@@ -1415,7 +1434,7 @@ input.is-suggested {
     /* The label comes from the cell, and the cell gets it from the heading
        above it - see the script at the foot of the layout. A cell with no
        label prints no empty line where one would have been. */
-    .tbl:not(.dl-full):not(.tbl-wide) td[data-label]::before {
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td[data-label]::before {
         content: attr(data-label);
         display: block;
         font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
@@ -1424,26 +1443,26 @@ input.is-suggested {
 
     /* The first cell is what the card is about, so it is a heading and needs
        no label above it repeating the obvious. */
-    .tbl:not(.dl-full):not(.tbl-wide) td:first-child {
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td:first-child {
         font-size: 1rem; font-weight: 700;
         margin-bottom: 0.2rem;
     }
-    .tbl:not(.dl-full):not(.tbl-wide) td:first-child::before { content: none; }
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td:first-child::before { content: none; }
 
     /* A cell with nothing in it is not a field worth a label. */
-    .tbl:not(.dl-full):not(.tbl-wide) td:empty { display: none; }
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td:empty { display: none; }
 
     /* Buttons want the width, and a thumb wants the height. */
-    .tbl:not(.dl-full):not(.tbl-wide) td .btn { min-height: 34px; }
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td .btn { min-height: 34px; }
 
     /* A cell spanning the table is a message - "no accounts found" - and not
        a field, so it keeps neither a label nor a card. */
-    .tbl:not(.dl-full):not(.tbl-wide) td[colspan] {
+    :is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide) td[colspan] {
         text-align: left !important; padding: 1rem 0 !important;
     }
 
     /* Stacked, it is as wide as the page and has nothing to scroll. */
-    .tbl-wrap:has(.tbl:not(.dl-full):not(.tbl-wide)) { overflow-x: visible; }
+    .tbl-wrap:has(:is(.tbl, .orders-table, .dash-table, .inv-table):not(.dl-full):not(.tbl-wide)) { overflow-x: visible; }
 }
 
 /* The board on anything that cannot hold its columns.

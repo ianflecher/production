@@ -43,9 +43,46 @@
     $canMove = auth()->user()->canReassignArtists();
 @endphp
 
+<div class="design-board-refresh">
+<style>
+    .design-board-refresh { --board-muted:#526176; }
+    .design-board-refresh .page-head { margin-bottom:1.2rem; }
+    .design-board-refresh .page-head .grow { background:none; padding:0; border:0; box-shadow:none; }
+    .design-board-refresh .dl-tally { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:.7rem; margin-bottom:1.2rem; }
+    .design-board-refresh .dl-tally-item { display:flex; flex-direction:column; align-items:flex-start; gap:.35rem; padding:1rem; border-radius:12px; background:#fff; border:1px solid #e2e8f0; color:#526176; font-size:.8rem; }
+    .design-board-refresh .dl-tally-item strong { font-size:1.65rem; line-height:1.1; }
+    .design-board-refresh .dl-tally-item.is-waiting strong { color:#a16207; }
+    .design-board-refresh .dl-tally-item.is-approved strong { color:#15803d; }
+    .design-board-refresh .dl-tally-item[aria-current] { background:#eff6ff; border-color:#2563eb; color:#1e40af; box-shadow:0 0 0 1px #2563eb; }
+    .design-board-refresh .dl-tally-item[aria-current] strong { color:#1e40af; }
+    .design-board-refresh .list-toolbar { padding:1rem; gap:1rem; background:#fff; border:1px solid #e2e8f0; box-shadow:none; border-radius:12px; margin-bottom:1.1rem; }
+    .design-board-refresh .list-search { flex:1 1 70%; margin:0; }
+    .design-board-refresh input[type="search"] { width:100%; min-height:42px; padding:.65rem .8rem .65rem 2.3rem; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#f8fafc; }
+    .design-board-refresh .toolbar-filters { flex:1 1 100%; flex-wrap:wrap; padding-top:1rem; border-top:1px solid #edf2f7; gap:.7rem; }
+    .design-board-refresh .seg { flex-wrap:wrap; }
+    .design-board-refresh .seg a { padding:.5rem .75rem; }
+    .design-board-refresh .seg a[aria-current] { background:#eff6ff; color:#1d4ed8; }
+    .design-board-refresh .tbl-wrap { max-height:70vh; overflow:auto; }
+    .design-board-refresh .design-log td { border:0; border-bottom:1px solid #e8edf3; padding:.85rem .8rem; font-size:.85rem; background:#fff; }
+    .design-board-refresh .design-log thead th { background:#f1f5f9; color:#526176; border:0; border-bottom:1px solid #cbd5e1; padding:.8rem; z-index:3; }
+    .design-board-refresh .design-log tr.dl-day th { position:static; background:#f8fafc; border:0; border-bottom:1px solid #e2e8f0; padding:.65rem .8rem; }
+    .design-board-refresh .dl-client > span:first-child { color:#172033; font-size:.9rem; font-weight:650; }
+    .design-board-refresh .dl-client small { color:#526176; margin-top:.3rem; text-transform:none; letter-spacing:0; font-size:.8rem; }
+    .design-board-refresh .dl-dim, .design-board-refresh .dl-agent { color:#526176; }
+    .design-board-refresh .dl-tag { padding:.3rem .55rem; border-radius:6px; font-size:.75rem; }
+    .design-board-refresh .dl-tag.is-waiting { background:#fef3c7; color:#92400e; }
+    .design-board-refresh .dl-tag.is-approved { background:#dcfce7; color:#166534; }
+    .design-board-refresh .dl-needs-attention td:first-child { box-shadow:inset 3px 0 #d97706; background:#fffbeb; }
+    .design-board-refresh .dl-artist-edit summary { cursor:pointer; font-weight:600; color:#334155; list-style:none; }
+    .design-board-refresh .dl-artist-edit summary span { color:#2563eb; font-size:.72rem; margin-left:.5rem; }
+    .design-board-refresh .dl-artist-form { margin-top:.5rem; }
+    .design-board-refresh .dl-date-line { display:block; font-size:.76rem; line-height:1.65; }
+    @media(max-width:700px) { .design-board-refresh .dl-tally { grid-template-columns:repeat(2,1fr); } .design-board-refresh .tbl-wrap { max-height:none; } }
+</style>
 <div class="page-head">
     <div class="grow">
-        <p class="sub" style="margin:0;">Read off the work itself — nothing here is typed in.</p>
+        <h1>Design overview</h1>
+        <p class="sub" style="margin:.3rem 0 0;">Track each design, review waiting work, and manage artist assignments.</p>
     </div>
 </div>
 
@@ -166,7 +203,7 @@
                         </tr>
 
                         @foreach ($rows as $row)
-                            <tr>
+                            <tr @class(['dl-needs-attention' => $row['waiting'] !== null && $row['waiting'] >= \App\Support\DesignLog::SITTING_TOO_LONG])>
                                 {{-- The date used to be repeated here under a day band that
                                      already says it. This is the thing it could not tell you. --}}
                                 <td class="dl-num" data-label="Waiting">
@@ -205,6 +242,8 @@
                                 <td class="dl-agent" data-label="Agent">{{ $row['agent'] }}</td>
                                 <td data-label="Artist">
                                     @if ($canMove && $bench->isNotEmpty())
+                                        <details class="dl-artist-edit">
+                                            <summary>{{ $row['artist'] ?? 'Unassigned' }} <span>Edit</span></summary>
                                         {{-- Changed here rather than three pages away. It posts to
                                              the same endpoint the brief page uses, so the rules and
                                              the note to the new artist are the same ones. --}}
@@ -221,6 +260,7 @@
                                                 @endforeach
                                             </select>
                                         </form>
+                                        </details>
                                     @else
                                         {{ $row['artist'] ?? '—' }}
                                     @endif
@@ -232,7 +272,10 @@
                                 {{-- Reached the artist, and came back: two columns for one
                                      fact, and the fact is the gap between them. --}}
                                 <td class="dl-num dl-dim" data-label="Drawn">
-                                    {{ optional($row['received'])->format('j M') ?? '—' }}<span class="dl-to">→</span>{{ optional($row['finished'])->format('j M') ?? '—' }}
+                                    <span class="dl-date-line">{{ $row['received'] ? 'Started '.$row['received']->format('j M') : 'Not started' }}</span>
+                                    @if ($row['finished'])
+                                        <span class="dl-date-line">Done {{ $row['finished']->format('j M') }}</span>
+                                    @endif
                                 </td>
                                 <td data-label="Status"><span class="dl-tag is-{{ $statusTone[$row['status']] ?? 'idle' }}">{{ $row['status'] }}</span></td>
                                 {{-- A note that repeats the status beside it is a column of
@@ -254,4 +297,5 @@
     </div>
 @endif
 
+</div>
 @endsection

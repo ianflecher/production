@@ -674,7 +674,8 @@
    the designing board names some of its cells differently from the column
    they sit under, and it means it. */
 (function () {
-    document.querySelectorAll('table.tbl').forEach(function (table) {
+    document.querySelectorAll('table.tbl, table.orders-table, table.dash-table, table.inv-table')
+        .forEach(function (table) {
         var heads = table.querySelectorAll('thead th');
         if (!heads.length) { return; }
 
