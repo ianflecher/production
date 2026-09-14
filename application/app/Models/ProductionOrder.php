@@ -945,13 +945,16 @@ class ProductionOrder extends Model
         // window was handed to mass production. People were doing that work
         // with nothing saying when it was wanted.
         //
-        // Stage 3 is left out of a skip-sample job on purpose. Raw materials
-        // and printing there belong to the SAMPLE - the batch has its own at
-        // stage 10 - so with no sample to make, there is nothing for them to
-        // be due for.
-        $frontSteps = $this->skip_sample
-            ? $steps->filter(fn (Task $step) => $step->stage <= self::STAGE_MOCKUP)->values()
-            : $steps->filter(fn (Task $step) => $step->stage < self::STAGE_MASS_PRODUCTION)->values();
+        // Stage 3 - the raw materials and the printing - is in the front run
+        // either way. It was left out of a skip-sample job at first, on the
+        // reading that those belong to the sample and the batch has its own at
+        // stage 10. The shop says otherwise: they are worked on a skip-sample
+        // job like any other, and the board bears that out - they sit READY on
+        // the live ones. So the front run is simply everything before mass
+        // production, and the flag only decides which steps exist at all.
+        $frontSteps = $steps->filter(
+            fn (Task $step) => $step->stage < self::STAGE_MASS_PRODUCTION
+        )->values();
 
         $massProductionSteps = $steps->filter(fn (Task $step) => $step->stage >= self::STAGE_MASS_PRODUCTION)->values();
 

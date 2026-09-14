@@ -242,12 +242,13 @@ class SampleAndMassProductionSplitTest extends TestCase
         $this->assertCount(0, $undated,
             'these went to the floor with no deadline: '.$undated->pluck('department')->implode(', '));
 
-        // Stage 3 is the SAMPLE's materials and printing. There is no sample,
-        // so there is nothing for them to be due for - the batch has its own
-        // at stage 10.
-        $sampleOnly = $beforeBatch->filter(fn ($t) => $t->stage > ProductionOrder::STAGE_MOCKUP);
-        $this->assertCount(0, $sampleOnly->filter(fn ($t) => $t->due_at),
-            'the skipped sample run was given deadlines for work nobody is doing');
+        // Including the raw materials and the printing. Those were left blank
+        // at first, on the reading that they belong to the sample - but they
+        // are worked on a skip-sample job like any other, so they are dated
+        // like any other.
+        $blank = $beforeBatch->filter(fn ($t) => ! $t->due_at);
+        $this->assertCount(0, $blank,
+            'left with no deadline: '.$blank->pluck('department')->implode(', '));
 
         // And the whole run still lands on the client's promise.
         $this->assertSame(
