@@ -45,7 +45,7 @@ class HrRequest extends Model
     ];
 
     protected $fillable = [
-        'hr_employee_id', 'type', 'starts_on', 'ends_on', 'starts_at', 'ends_at',
+        'hr_employee_id', 'type', 'starts_on', 'ends_on', 'starts_at', 'ends_at', 'working_days',
         'reason', 'status', 'decision_note', 'decided_by', 'decided_at',
     ];
 
@@ -55,6 +55,9 @@ class HrRequest extends Model
             'starts_on' => 'date',
             'ends_on' => 'date',
             'decided_at' => 'datetime',
+            // Cast, or a decimal column comes back as the string "6.00" and
+            // every comparison against it is a guess about the driver.
+            'working_days' => 'float',
         ];
     }
 

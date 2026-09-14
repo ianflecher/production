@@ -20,7 +20,11 @@ class HrEmployee extends Model
 
     protected $fillable = [
         'user_id', 'hr_applicant_id', 'hr_job_offer_id',
-        'position', 'salary', 'salary_period', 'started_on', 'ended_on',
+        'position', 'salary', 'salary_period',
+        // What they are allowed off in a year. Null means nobody has set one,
+        // which is not the same as none — see Support\LeaveBalance.
+        'vacation_credits', 'sick_credits',
+        'started_on', 'ended_on',
     ];
 
     protected function casts(): array

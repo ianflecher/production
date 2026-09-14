@@ -39,6 +39,9 @@ class MyHrController extends Controller
             'employee' => $employee,
             'types' => HrRequest::TYPES,
             'hourly' => HrRequest::HOURLY,
+            // What they have left, so they can plan rather than file and hope.
+            // Null when nobody has set them an allowance - see LeaveBalance.
+            'leave' => $employee ? \App\Support\LeaveBalance::for($employee) : null,
         ]);
     }
 
@@ -60,7 +63,19 @@ class MyHrController extends Controller
             'ends_at.after' => 'The end time has to be after the start.',
         ]);
 
-        $employee->requests()->create([
+        // Only days AWAY from work are counted in days. Overtime, undertime
+        // and official business are arrangements about a working day, so they
+        // carry no day count and draw down no balance.
+        $countsInDays = ! in_array($data['type'], HrRequest::HOURLY, true);
+
+        $workingDays = $countsInDays
+            ? \App\Support\Workdays::between(
+                $data['starts_on'],
+                $data['ends_on'] ?? $data['starts_on']
+            )
+            : null;
+
+        $hrRequest = $employee->requests()->create([
             'type' => $data['type'],
             'starts_on' => $data['starts_on'],
             'ends_on' => $data['ends_on'] ?? null,
@@ -68,6 +83,11 @@ class MyHrController extends Controller
             'ends_at' => $data['ends_at'] ?? null,
             'reason' => $data['reason'],
             'status' => HrRequest::STATUS_PENDING,
+            // Counted now and kept. Friday to Monday is two days of leave and
+            // not four, and over a holiday it may be one - the desk was
+            // working that out on paper every time, and nothing on the
+            // request said which answer they had used.
+            'working_days' => $workingDays,
         ]);
 
         return back()->with('success', HrRequest::TYPES[$data['type']].' filed. HR will answer it.');

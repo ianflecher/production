@@ -281,7 +281,20 @@ class HrEmployeeController extends Controller
             $data['status'] === HrRequest::STATUS_APPROVED ? '✅ Request approved' : '✖ Request declined',
             $hrRequest->typeLabel().' — '.$hrRequest->whenLabel());
 
-        return back()->with('success', $hrRequest->typeLabel().' '.$hrRequest->statusLabel().'.');
+        $said = $hrRequest->typeLabel().' '.$hrRequest->statusLabel().'.';
+
+        // Said, not refused. Going over an allowance is a decision the desk is
+        // allowed to make - somebody with none left may still be let off for a
+        // funeral - but it should not be made without being told.
+        if ($data['status'] === HrRequest::STATUS_APPROVED
+            && \App\Support\LeaveBalance::wouldOverdraw($hrRequest->fresh())) {
+            $balance = \App\Support\LeaveBalance::for($hrRequest->employee);
+
+            $said .= ' That is more leave than they had left — '
+                .$balance['taken'].' of '.$balance['allowed'].' days now used.';
+        }
+
+        return back()->with('success', $said);
     }
 
     /** Straight to the person it is about, never to a role. */

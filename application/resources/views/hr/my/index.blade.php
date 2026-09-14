@@ -113,6 +113,24 @@
 
 {{-- ---------- Payslips ---------- --}}
 <div class="card panel" style="margin-bottom: 1.1rem;">
+    @if ($leave)
+        {{-- What is left, so somebody can plan rather than file and hope. --}}
+        <div class="card panel" style="margin-bottom:1.1rem;">
+            <h2>My leave</h2>
+            <p class="sub" style="margin:0 0 .6rem;">
+                Vacation leave for {{ now()->format('Y') }}. Only leave draws this down —
+                overtime, undertime and official business do not.
+            </p>
+            <div class="dl-tally" style="margin:0;">
+                <span class="dl-tally-item"><strong>{{ $leave['allowed'] }}</strong> allowed</span>
+                <span class="dl-tally-item"><strong>{{ $leave['taken'] }}</strong> taken</span>
+                <span class="dl-tally-item {{ $leave['left'] <= 0 ? 'is-orderlist' : '' }}">
+                    <strong>{{ $leave['left'] }}</strong> left
+                </span>
+            </div>
+        </div>
+    @endif
+
     <h2>My payslips</h2>
     @php $released = $employee->payslips->filter->isReleased(); @endphp
     @if ($released->isEmpty())
