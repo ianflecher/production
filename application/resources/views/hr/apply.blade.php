@@ -168,6 +168,12 @@
         </div>
 
         <button class="btn" type="submit" style="width: 100%; padding: 0.85rem;">Send application</button>
+
+        {{-- The other door. Staff reach this page by mistake too. --}}
+        <p style="margin: 1rem 0 0; text-align: center; font-size: .8rem; color: var(--ink-3);">
+            Already work here?
+            <a href="{{ route('login') }}">Sign in instead</a>
+        </p>
     </form>
 </div>
 
