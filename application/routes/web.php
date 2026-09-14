@@ -138,8 +138,16 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // -------- The office side of the people --------
     Route::get('/hr/employees', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'index'])->name('hr.employees.index');
+    // Staff who were here before HR was. Hiring makes a record as part of
+    // accepting an offer; this is the only way the rest ever get one.
+    Route::get('/hr/employees/new', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'create'])->name('hr.employees.create');
+    Route::post('/hr/employees', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'store'])->name('hr.employees.store');
     Route::get('/hr/employees/{employee}', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'show'])
         ->whereNumber('employee')->name('hr.employees.show');
+    Route::get('/hr/employees/{employee}/edit', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'edit'])
+        ->whereNumber('employee')->name('hr.employees.edit');
+    Route::put('/hr/employees/{employee}', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'update'])
+        ->whereNumber('employee')->name('hr.employees.update');
     Route::post('/hr/employees/{employee}/payslips', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storePayslip'])
         ->whereNumber('employee')->name('hr.payslips.store');
     Route::post('/hr/payslips/{payslip}/release', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'releasePayslip'])

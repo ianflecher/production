@@ -13,7 +13,36 @@
             @if ($employee->started_on) · started {{ $employee->started_on->format('M j, Y') }} @endif
         </p>
     </div>
+    <a href="{{ route('hr.employees.edit', $employee) }}" class="btn btn-primary btn-sm">Edit file</a>
     <a href="{{ route('hr.employees.index') }}" class="btn btn-ghost btn-sm">← All people</a>
+</div>
+
+{{-- ---------- Leave allowance ---------- --}}
+@php $balance = \App\Support\LeaveBalance::for($employee); @endphp
+<div class="card panel" style="margin-bottom: 1.1rem;">
+    <h2>Leave</h2>
+    @if ($balance)
+        <p class="sub" style="margin:0 0 .6rem;">
+            Vacation leave for {{ now()->format('Y') }}. Only leave draws this down.
+        </p>
+        <div class="dl-tally" style="margin:0;">
+            <span class="dl-tally-item"><strong>{{ $balance['allowed'] }}</strong> allowed</span>
+            <span class="dl-tally-item"><strong>{{ $balance['taken'] }}</strong> taken</span>
+            <span class="dl-tally-item {{ $balance['left'] <= 0 ? 'is-orderlist' : '' }}">
+                <strong>{{ $balance['left'] }}</strong> left
+            </span>
+            @if ($employee->sick_credits !== null)
+                <span class="dl-tally-item"><strong>{{ $employee->sick_credits }}</strong> sick days allowed</span>
+            @endif
+        </div>
+    @else
+        {{-- Not an allowance of none. Until somebody sets one they are shown
+             no balance at all, and nothing can be refused for going over it. --}}
+        <p class="sub" style="margin:0;">
+            No allowance set, so they see no balance and nothing warns when leave
+            runs past it. <a href="{{ route('hr.employees.edit', $employee) }}">Set one on their file.</a>
+        </p>
+    @endif
 </div>
 
 {{-- ---------- Timekeeping ---------- --}}

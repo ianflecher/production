@@ -9,6 +9,7 @@
         <h1>People</h1>
         <p class="muted">Everyone with an employee record. Hiring somebody through HR creates theirs.</p>
     </div>
+    <a href="{{ route('hr.employees.create') }}" class="btn btn-primary btn-sm">Add somebody</a>
 </div>
 
 @include('partials.list-search', [
@@ -24,7 +25,8 @@
             @if (filled($search))
                 Nobody matches that.
             @else
-                No employee records yet. One is created when an applicant accepts a job offer.
+                Nobody is on the books yet. Hiring through HR creates a record when
+                the offer is accepted — for staff who were already here, add them.
             @endif
         </p>
     </div>

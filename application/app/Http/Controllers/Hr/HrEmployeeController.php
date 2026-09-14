@@ -7,9 +7,11 @@ use App\Models\AppNotification;
 use App\Models\Attendance;
 use App\Models\HrEmployee;
 use App\Models\HrIncident;
+use App\Models\HrJobOffer;
 use App\Models\HrLoan;
 use App\Models\HrPayslip;
 use App\Models\HrRequest;
+use App\Models\User;
 use App\Support\LeaveBalance;
 use App\Support\PayrollCalculator;
 use Illuminate\Http\RedirectResponse;
@@ -44,6 +46,106 @@ class HrEmployeeController extends Controller
             'employees' => $employees,
             'search' => $search,
         ]);
+    }
+
+    /**
+     * Take somebody already working here onto the HR books.
+     *
+     * Hiring through HR creates an employee record as part of accepting the
+     * offer, and that was the only way one had ever been made. It is no use to
+     * the people who were already here when HR arrived: running them through
+     * the pipeline would try to mint a SECOND login, and the email is unique.
+     * So every one of them had a login, no employee record, and no My HR page
+     * at all - no payslips, no leave, nothing to clock.
+     */
+    public function create(Request $request): View
+    {
+        $this->assertAccess($request);
+
+        return view('hr.employees.create', [
+            // Only people who have not got one. The table is unique on
+            // user_id, so offering the rest would produce nothing but an error.
+            'candidates' => User::whereDoesntHave('hrEmployee')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+            'periods' => HrJobOffer::PERIODS,
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $this->assertAccess($request);
+
+        $data = $request->validate([
+            // unique: the table enforces one record per login, and a clear
+            // message beats a constraint violation.
+            'user_id' => ['required', 'integer', 'exists:users,id', 'unique:hr_employees,user_id'],
+            'position' => ['nullable', 'string', 'max:120'],
+            'salary' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+            'salary_period' => ['required', 'in:'.implode(',', array_keys(HrJobOffer::PERIODS))],
+            'started_on' => ['nullable', 'date'],
+            'vacation_credits' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'sick_credits' => ['nullable', 'integer', 'min:0', 'max:365'],
+        ], [
+            'user_id.unique' => 'That person is already on the HR books.',
+            'user_id.required' => 'Say who this record is for.',
+        ]);
+
+        $employee = HrEmployee::create($data);
+
+        return redirect()->route('hr.employees.show', $employee)
+            ->with('success', ($employee->user?->name ?? 'They').' is on the HR books. My HR is open to them now.');
+    }
+
+    /**
+     * Correct the employment file.
+     *
+     * Nothing on it could be changed once written. A salary typed wrong at
+     * hiring stayed wrong, and the leave allowance - which decides every
+     * balance the person is shown - had no way in at all.
+     */
+    public function edit(Request $request, HrEmployee $employee): View
+    {
+        $this->assertAccess($request);
+
+        return view('hr.employees.edit', [
+            'employee' => $employee->load('user'),
+            'periods' => HrJobOffer::PERIODS,
+        ]);
+    }
+
+    public function update(Request $request, HrEmployee $employee): RedirectResponse
+    {
+        $this->assertAccess($request);
+
+        $data = $request->validate([
+            'position' => ['nullable', 'string', 'max:120'],
+            'salary' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+            'salary_period' => ['required', 'in:'.implode(',', array_keys(HrJobOffer::PERIODS))],
+            'started_on' => ['nullable', 'date'],
+            'ended_on' => ['nullable', 'date', 'after_or_equal:started_on'],
+            // Blank means nobody has set an allowance, which is NOT an
+            // allowance of none - see Support\LeaveBalance. Zero is a real
+            // answer and means none, so the two must not be collapsed.
+            'vacation_credits' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'sick_credits' => ['nullable', 'integer', 'min:0', 'max:365'],
+        ], [
+            'ended_on.after_or_equal' => 'They cannot have left before they started.',
+        ]);
+
+        // A box left empty means "not set", so the nulls have to be written
+        // rather than dropped - otherwise an allowance could be given and
+        // never taken back. Array union keeps what validate() returned and
+        // only fills in a field the form did not send at all.
+        $employee->update($data + [
+            'vacation_credits' => null,
+            'sick_credits' => null,
+            'ended_on' => null,
+        ]);
+
+        return redirect()->route('hr.employees.show', $employee)
+            ->with('success', 'Employment file updated.');
     }
 
     public function show(Request $request, HrEmployee $employee): View

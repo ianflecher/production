@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Stations;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -14,9 +15,13 @@ class User extends Authenticatable
     use HasFactory, Notifiable, SoftDeletes;
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
+
     public const ROLE_LEADER = 'leader';
+
     public const ROLE_SALES = 'sales';
+
     public const ROLE_FINANCE = 'finance';
+
     public const ROLE_AGENT = 'agent';
 
     /** Walks the floor and chases progress; reads job orders, changes nothing. */
@@ -39,7 +44,9 @@ class User extends Authenticatable
 
     /** Which production team an agent works in. */
     public const JOB_ARTIST = 'artist';
+
     public const JOB_SUPPLY_CHAIN = 'supply_chain';
+
     public const JOB_PRODUCTION = 'production';
 
     /** A leader in everything but name — see isSupervisor(). */
@@ -74,7 +81,7 @@ class User extends Authenticatable
      *
      * Grouped so the dropdown reads like the shop: the floor, then the desks.
      *
-     * @return array<string, array<string, string>>  group => [value => label]
+     * @return array<string, array<string, string>> group => [value => label]
      */
     public static function positionGroups(): array
     {
@@ -216,6 +223,17 @@ class User extends Authenticatable
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Their HR record, if they are on the books.
+     *
+     * One per login and the table enforces it, so this is a hasOne rather
+     * than a hasMany. Most of the shop has none: HR arrived after they did.
+     */
+    public function hrEmployee()
+    {
+        return $this->hasOne(HrEmployee::class);
     }
 
     /**
@@ -803,7 +821,7 @@ class User extends Authenticatable
             return false;
         }
 
-        return ! empty(\App\Services\Stations::forUser($this));
+        return ! empty(Stations::forUser($this));
     }
 
     /**
