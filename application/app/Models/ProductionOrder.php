@@ -933,13 +933,23 @@ class ProductionOrder extends Model
             }
         };
 
-        // A skip-sample order has only one run, so it keeps the full window.
         $sampleSteps = $this->skip_sample
             ? collect()
             : $steps->filter(fn (Task $step) => $step->stage < self::STAGE_MASS_PRODUCTION)->values();
         $massProductionSteps = $steps->filter(fn (Task $step) => $step->stage >= self::STAGE_MASS_PRODUCTION)->values();
 
-        if ($sampleSteps->isEmpty()) {
+        // A skip-sample order has one run, so every step shares the window.
+        //
+        // It used to hand that window to the mass production steps alone, and
+        // everything before stage 10 was left with no deadline at all - the
+        // layout, the final mockup, the tech pack, the raw materials, the
+        // printing. Skipping the sample means there is no SAMPLE to put in
+        // front of the client; it does not mean the job is not drawn and
+        // printed first. Those steps went to the floor and the boards with no
+        // date on them, and nothing could call them late.
+        if ($this->skip_sample) {
+            $assignWindow($steps, $start, $end);
+        } elseif ($sampleSteps->isEmpty()) {
             $assignWindow($massProductionSteps, $start, $end);
         } else {
             // Through sampleLeadDays(), not the bare constant: a jersey gets

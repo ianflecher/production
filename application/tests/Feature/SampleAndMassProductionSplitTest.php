@@ -202,4 +202,62 @@ class SampleAndMassProductionSplitTest extends TestCase
         $this->assertNull($order->techPackFor(TechPack::PHASE_MASSPROD));
         $this->assertSame('Black', $order->techPackFor(TechPack::PHASE_SAMPLE)->tshirt_color);
     }
+
+    /**
+     * Skipping the sample does not mean skipping the first half of the job.
+     *
+     * The window was handed to the mass production steps alone, and everything
+     * before stage 10 was left with no deadline at all - the layout, the final
+     * mockup, the tech pack, the raw materials, the printing. Those steps went
+     * to the floor and to the station boards with no date on them, and nothing
+     * could ever call them late. Three of the shop's live jobs were in that
+     * state, one of them with every step before mass production undated.
+     *
+     * Skipping the sample means there is no SAMPLE to put in front of the
+     * client. The job is still drawn and still printed.
+     */
+    public function test_a_skip_sample_order_dates_every_step_not_just_the_batch(): void
+    {
+        [, , $order] = $this->shop('round_neck', skipSample: true);
+
+        $order->scheduleStepDeadlines(\Illuminate\Support\Carbon::parse('2026-09-01 09:00:00'));
+        $order = $order->fresh();
+
+        $steps = $order->tasks()->get();
+        $this->assertGreaterThan(0, $steps->count(), 'the pipeline was empty, so this proves nothing');
+
+        $beforeBatch = $steps->filter(
+            fn ($t) => $t->stage < ProductionOrder::STAGE_MASS_PRODUCTION
+        );
+
+        $this->assertGreaterThan(0, $beforeBatch->count(),
+            'a skip-sample order still has steps before mass production');
+
+        $undated = $beforeBatch->filter(fn ($t) => ! $t->due_at);
+
+        $this->assertCount(0, $undated,
+            'these went to the floor with no deadline: '.$undated->pluck('department')->implode(', '));
+
+        // And the whole run still lands on the client's promise.
+        $this->assertSame(
+            $order->due_date->toDateString(),
+            $steps->filter(fn ($t) => $t->due_at)->max('due_at')->toDateString()
+        );
+    }
+
+    /** The sample still has its own shorter window when it is not skipped. */
+    public function test_a_normal_order_still_splits_into_two_runs(): void
+    {
+        [, , $order] = $this->shop('round_neck', skipSample: false);
+
+        $order->scheduleStepDeadlines(\Illuminate\Support\Carbon::parse('2026-09-01 09:00:00'));
+        $order = $order->fresh();
+
+        $sample = $order->tasks()->get()
+            ->filter(fn ($t) => $t->stage < ProductionOrder::STAGE_MASS_PRODUCTION && $t->due_at);
+
+        $this->assertGreaterThan(0, $sample->count());
+        $this->assertSame('2026-09-04', $sample->max('due_at')->toDateString(),
+            'the sample run should still end three days in, not at the client due date');
+    }
 }
