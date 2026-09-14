@@ -276,10 +276,6 @@
         {{-- Somebody who does not work here yet lands on this page too, and
              "Authorized staff only" is not an answer to what they should do
              instead. --}}
-        <p class="login-foot">
-            Don't work here yet?
-            <a href="{{ route('hr.apply') }}" style="color:var(--lg-ink-2); text-decoration:underline;">Apply for a job</a>
-        </p>
         <p class="login-foot" style="margin-top:.5rem;">
             Internal system &middot; Authorized Imprint Customs staff only
         </p>

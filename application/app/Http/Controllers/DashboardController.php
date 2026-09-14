@@ -2,10 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Inquiry;
+use App\Models\InventoryItem;
+use App\Models\MaterialRequest;
+use App\Models\Payment;
 use App\Models\ProductionOrder;
+use App\Models\ProductItem;
+use App\Models\ProductReceipt;
+use App\Models\StationSession;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Stations;
+use App\Support\ApprovalQueue;
+use App\Support\DesignLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -22,7 +34,7 @@ class DashboardController extends Controller
      * Finished and parked orders keep their own wedges, because "how much is
      * done" is the other thing the chart is asked.
      *
-     * @param  \Illuminate\Support\Collection<int, ProductionOrder>  $orders
+     * @param  Collection<int, ProductionOrder>  $orders
      * @return array{slices: array<int, array{label: string, value: int, color: string}>, total: int}
      */
     private function stepBreakdown($orders): array
@@ -93,7 +105,6 @@ class DashboardController extends Controller
         // Shared rather than passed: index() returns from several branches -
         // leader, finance, the desks - and adding it to each compact() is how
         // one of them quietly ends up without it.
-        view()->share('hrOverview', \App\Support\HrOverview::for($user));
 
         // The designing board's top of page. Shared for the same reason: the
         // board belongs to everybody who used to read the spreadsheet, and
@@ -102,13 +113,7 @@ class DashboardController extends Controller
         // A week, and the newest handful of it. The whole board is a click
         // away; what belongs on a dashboard is what moved today.
         //
-        // Everybody except the HR desk. They are the one desk with no part in
-        // a design at any point - they hire the people, they do not draw, sell
-        // or print - so it was eight rows of somebody else's work sitting
-        // above their own. It also saves them the queries.
-        view()->share('designBoard', $user->isHr()
-            ? null
-            : \App\Support\DesignLog::rows(7)->take(8));
+        view()->share('designBoard', DesignLog::rows(7)->take(8));
 
         $hour = (int) now()->format('G');
         $greeting = match (true) {
@@ -123,7 +128,7 @@ class DashboardController extends Controller
             // The one question the tile, the alert card and the sidebar badge
             // all ask. Asked once here and handed on — it is a query to find
             // out, and the page was asking it twice.
-            $approvalCount = \App\Support\ApprovalQueue::countFor($user);
+            $approvalCount = ApprovalQueue::countFor($user);
 
             // "Active agents" = production staff actually present/working today
             // (matches how work is assigned), not just every enabled account.
@@ -156,7 +161,7 @@ class DashboardController extends Controller
             // total, which is why it is worked out separately. Deriving the
             // number from this list capped it at five however much was
             // actually waiting.
-            $forChecking = \App\Support\ApprovalQueue::tasksFor($user)
+            $forChecking = ApprovalQueue::tasksFor($user)
                 ->with(['order', 'assignee'])
                 ->limit(5)
                 ->get();
@@ -216,15 +221,15 @@ class DashboardController extends Controller
 
             $alerts = [];
             if ($needsDp->isNotEmpty()) {
-                $alerts[] = ['tone' => 'error', 'title' => $needsDp->count().' '.\Illuminate\Support\Str::plural('order', $needsDp->count()).' need downpayment',
+                $alerts[] = ['tone' => 'error', 'title' => $needsDp->count().' '.Str::plural('order', $needsDp->count()).' need downpayment',
                     'sub' => $needsDp->first()->order_number, 'url' => route('orders.show', $needsDp->first())];
             }
             if ($nearDue->isNotEmpty()) {
-                $alerts[] = ['tone' => 'warning', 'title' => $nearDue->count().' '.\Illuminate\Support\Str::plural('order', $nearDue->count()).' near due date',
+                $alerts[] = ['tone' => 'warning', 'title' => $nearDue->count().' '.Str::plural('order', $nearDue->count()).' near due date',
                     'sub' => 'Due within 3 days', 'url' => route('orders.index')];
             }
             if ($awaitApproval->isNotEmpty()) {
-                $alerts[] = ['tone' => 'info', 'title' => $awaitApproval->count().' '.\Illuminate\Support\Str::plural('order', $awaitApproval->count()).' await client approval',
+                $alerts[] = ['tone' => 'info', 'title' => $awaitApproval->count().' '.Str::plural('order', $awaitApproval->count()).' await client approval',
                     'sub' => 'Layout with the client', 'url' => route('orders.index')];
             }
 
@@ -248,10 +253,16 @@ class DashboardController extends Controller
             // ---- Recent activity (real timestamped events) ----
             $activity = collect();
             foreach ($myOrders as $o) {
-                if ($o->created_at) $activity->push(['type' => 'new', 'text' => 'New order '.$o->order_number.' created', 'at' => $o->created_at, 'url' => route('orders.show', $o)]);
-                if ($o->completed_at) $activity->push(['type' => 'done', 'text' => 'Order '.$o->order_number.' marked complete', 'at' => $o->completed_at, 'url' => route('orders.show', $o)]);
+                if ($o->created_at) {
+                    $activity->push(['type' => 'new', 'text' => 'New order '.$o->order_number.' created', 'at' => $o->created_at, 'url' => route('orders.show', $o)]);
+                }
+                if ($o->completed_at) {
+                    $activity->push(['type' => 'done', 'text' => 'Order '.$o->order_number.' marked complete', 'at' => $o->completed_at, 'url' => route('orders.show', $o)]);
+                }
                 foreach ($o->payments as $p) {
-                    if ($p->paid_at) $activity->push(['type' => 'pay', 'text' => 'Payment recorded for '.$o->order_number, 'at' => $p->paid_at, 'url' => route('orders.show', $o)]);
+                    if ($p->paid_at) {
+                        $activity->push(['type' => 'pay', 'text' => 'Payment recorded for '.$o->order_number, 'at' => $p->paid_at, 'url' => route('orders.show', $o)]);
+                    }
                 }
             }
             $recentActivity = $activity->sortByDesc('at')->take(6)->values();
@@ -259,7 +270,7 @@ class DashboardController extends Controller
             // ---- Follow-ups: who asked and has not ordered -------------
             // Everyone still waiting, longest first. A team leader's list is
             // the whole team's, which is what leading one amounts to here.
-            $followUps = \App\Models\Inquiry::with(['client', 'officer', 'followUps.user'])
+            $followUps = Inquiry::with(['client', 'officer', 'followUps.user'])
                 ->visibleTo($user)
                 ->forFollowUp()
                 ->get();
@@ -282,16 +293,16 @@ class DashboardController extends Controller
             // Through the scope, so this list and the sidebar badge that
             // points at it can never come to disagree - see
             // Payment::scopeAwaitingConfirmation.
-            $toConfirm = \App\Models\Payment::with(['order.client', 'recorder'])
+            $toConfirm = Payment::with(['order.client', 'recorder'])
                 ->awaitingConfirmation()
                 ->orderBy('paid_at')
                 ->orderBy('id')
                 ->get();
 
             $stats = [
-                ['label' => 'Total collected', 'value' => '₱'.number_format((float) \App\Models\Payment::sum('amount'), 2), 'note' => 'All recorded payments'],
-                ['label' => 'This month', 'value' => '₱'.number_format((float) \App\Models\Payment::whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('amount'), 2), 'note' => 'Collected in '.now()->format('F')],
-                ['label' => 'Payment records', 'value' => \App\Models\Payment::count(), 'note' => 'On file'],
+                ['label' => 'Total collected', 'value' => '₱'.number_format((float) Payment::sum('amount'), 2), 'note' => 'All recorded payments'],
+                ['label' => 'This month', 'value' => '₱'.number_format((float) Payment::whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('amount'), 2), 'note' => 'Collected in '.now()->format('F')],
+                ['label' => 'Payment records', 'value' => Payment::count(), 'note' => 'On file'],
             ];
 
             $desk = ['url' => route('finance.index'), 'action' => 'Open finance',
@@ -304,34 +315,6 @@ class DashboardController extends Controller
 
         // ---- The HR desk --------------------------------------------------
         // Without this she fell through to the branch below and was handed the
-        // MOVER's desk: production order counts, and a button to the floor. HR
-        // does not work the floor. Her work is who has applied, whose
-        // interview is booked, whose leave is unanswered and which of the
-        // desk's own dates is due.
-        if ($user->isHr()) {
-            $hr = \App\Support\HrOverview::for($user) ?? [];
-
-            $stats = [
-                ['label' => 'Applicants to read', 'value' => count($hr['newApplicants'] ?? []),
-                    'note' => 'Nobody has looked at these yet'],
-                ['label' => 'Interviews to do', 'value' => count($hr['upcoming'] ?? []),
-                    'note' => 'Booked and not done'],
-                ['label' => 'Requests waiting', 'value' => count($hr['requests'] ?? []),
-                    'note' => 'Each one is holding somebody up'],
-            ];
-
-            $desk = [
-                'url' => route('hr.applicants.index'),
-                'action' => 'Open applicants',
-                'title' => 'Hiring',
-                'text' => count($hr['newApplicants'] ?? []) > 0
-                    ? 'Somebody has applied and nobody has read it yet.'
-                    : 'Who has applied, who is being interviewed, and who is waiting on an offer.',
-            ];
-
-            return view('dashboard', compact('user', 'greeting', 'stats', 'desk'));
-        }
-
         // ---- Desks that don't work from a task list ----------------------
         // Only artists open work from "My Tasks". The raw-materials and finished
         // products desks work from their own pages, and machine operators from
@@ -339,17 +322,17 @@ class DashboardController extends Controller
         if (! $user->isArtist()) {
             if ($user->canManageInventory()) {
                 $stats = [
-                    ['label' => 'Material requests', 'value' => \App\Models\MaterialRequest::where('status', 'pending')->count(), 'note' => 'Waiting for you to issue or reject'],
-                    ['label' => 'Out of stock', 'value' => \App\Models\InventoryItem::where('quantity', '<=', 0)->count(), 'note' => 'Materials at zero'],
-                    ['label' => 'Materials tracked', 'value' => \App\Models\InventoryItem::count(), 'note' => 'Items in raw materials'],
+                    ['label' => 'Material requests', 'value' => MaterialRequest::where('status', 'pending')->count(), 'note' => 'Waiting for you to issue or reject'],
+                    ['label' => 'Out of stock', 'value' => InventoryItem::where('quantity', '<=', 0)->count(), 'note' => 'Materials at zero'],
+                    ['label' => 'Materials tracked', 'value' => InventoryItem::count(), 'note' => 'Items in raw materials'],
                 ];
                 $desk = ['url' => route('inventory.requests'), 'action' => 'Open material requests',
                     'title' => 'Raw materials', 'text' => 'Issue the materials each job order asked for, or reject when stock is short.'];
             } elseif ($user->canManageProducts()) {
                 $stats = [
-                    ['label' => 'To receive', 'value' => \App\Models\ProductReceipt::pending()->count(), 'note' => 'Finished orders waiting to be counted in'],
-                    ['label' => 'Out of stock', 'value' => \App\Models\ProductItem::where('quantity', '<=', 0)->count(), 'note' => 'Products at zero'],
-                    ['label' => 'Products tracked', 'value' => \App\Models\ProductItem::count(), 'note' => 'Items in inventory'],
+                    ['label' => 'To receive', 'value' => ProductReceipt::pending()->count(), 'note' => 'Finished orders waiting to be counted in'],
+                    ['label' => 'Out of stock', 'value' => ProductItem::where('quantity', '<=', 0)->count(), 'note' => 'Products at zero'],
+                    ['label' => 'Products tracked', 'value' => ProductItem::count(), 'note' => 'Items in inventory'],
                 ];
                 $desk = ['url' => route('products.index'), 'action' => 'Open inventory',
                     'title' => 'Product inventory', 'text' => 'Count in what production finished, then release products when a client receives them.'];
@@ -369,9 +352,9 @@ class DashboardController extends Controller
                 $desk = ['url' => route('orders.index'), 'action' => 'Open production orders',
                     'title' => 'Following the floor', 'text' => 'Every job order and where it has got to.'];
             } else {
-                $stationKeys = \App\Services\Stations::forUser($user);
-                $all = \App\Services\Stations::all();
-                $sessions = \App\Models\StationSession::whereNull('ended_at')
+                $stationKeys = Stations::forUser($user);
+                $all = Stations::all();
+                $sessions = StationSession::whereNull('ended_at')
                     ->whereIn('station', $stationKeys)->with('order')->get()->keyBy('station');
 
                 // One card per station the operator covers: what's waiting + who's on it.
@@ -379,20 +362,20 @@ class DashboardController extends Controller
                     return [
                         'label' => $all[$key]['label'] ?? $key,
                         'group' => $all[$key]['group'] ?? '',
-                        'waiting' => \App\Http\Controllers\StationController::eligibleOrders($key)->count(),
+                        'waiting' => StationController::eligibleOrders($key)->count(),
                         'running' => $sessions->get($key),
                     ];
                 })->values();
 
                 // The jobs actually waiting for this operator, with their step.
                 $waitingList = collect($stationKeys)->flatMap(function ($key) use ($all) {
-                    return \App\Http\Controllers\StationController::eligibleOrders($key)->with('jobOrder')->get()
+                    return StationController::eligibleOrders($key)->with('jobOrder')->get()
                         ->map(fn ($o) => ['order' => $o, 'station' => $all[$key]['label'] ?? $key]);
                 })->unique(fn ($r) => $r['order']->id.'-'.$r['station'])->take(12)->values();
 
                 $stats = [
                     ['label' => 'Jobs waiting', 'value' => collect($stationKeys)
-                        ->sum(fn ($s) => \App\Http\Controllers\StationController::eligibleOrders($s)->count()), 'note' => 'Ready for you to run'],
+                        ->sum(fn ($s) => StationController::eligibleOrders($s)->count()), 'note' => 'Ready for you to run'],
                     ['label' => 'Running now', 'value' => $sessions->count(), 'note' => 'Your stations in use'],
                     ['label' => 'Your stations', 'value' => count($stationKeys), 'note' => 'Machines you can run'],
                 ];

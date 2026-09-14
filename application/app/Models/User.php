@@ -60,7 +60,6 @@ class User extends Authenticatable
      * requests. Their pages are all under /hr and their data in hr_ tables,
      * kept apart from the shop floor system on purpose.
      */
-    public const JOB_HR = 'hr';
 
     /**
      * The leader of the artists. He is an artist himself — he takes tech packs
@@ -131,7 +130,6 @@ class User extends Authenticatable
         return [
             self::ROLE_SALES => 'Account Officer',
             self::ROLE_FINANCE => 'Finance',
-            self::JOB_HR => 'HR',
             self::JOB_SUPERVISOR => 'Supervisor',
             self::JOB_ARTIST_LEAD => 'Artist Leader',
             self::ROLE_LEADER => 'Leader',
@@ -223,17 +221,6 @@ class User extends Authenticatable
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
-    }
-
-    /**
-     * Their HR record, if they are on the books.
-     *
-     * One per login and the table enforces it, so this is a hasOne rather
-     * than a hasMany. Most of the shop has none: HR arrived after they did.
-     */
-    public function hrEmployee()
-    {
-        return $this->hasOne(HrEmployee::class);
     }
 
     /**
@@ -369,43 +356,6 @@ class User extends Authenticatable
     public function canMoveArtistWork(): bool
     {
         return $this->isLeader() || $this->isSuperAdmin() || $this->isArtistLead();
-    }
-
-    /** The HR desk. */
-    public function isHr(): bool
-    {
-        return strtolower(trim((string) $this->job_role)) === self::JOB_HR;
-    }
-
-    /**
-     * May open the HR pages: the HR desk, and Boss G.
-     *
-     * It used to take the leaders and the supervisors too, on the reasoning
-     * that hiring is a conversation between the desks that already carry
-     * everybody's business. But these pages are not the hiring conversation -
-     * they are the employment file. What a person earns, what they have
-     * borrowed, what has been written down about their conduct. That is the
-     * HR desk's and the owner's, and a leader runs the work rather than the
-     * file.
-     *
-     * Being named as the person doing an interview is a different question
-     * and a wider one - see canInterview().
-     */
-    public function canUseHr(): bool
-    {
-        return $this->isHr() || $this->isSuperAdmin();
-    }
-
-    /**
-     * May be put down as the person doing an interview.
-     *
-     * Wider than canUseHr on purpose: a supervisor interviews the sewer who
-     * will work for them, and the artist leader interviews an artist. None of
-     * that requires being able to read anybody's payslip.
-     */
-    public function canInterview(): bool
-    {
-        return $this->canUseHr() || $this->isLeader() || $this->isArtistLead();
     }
 
     /**

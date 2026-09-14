@@ -78,17 +78,8 @@ Route::post('/imprint-customs/inquiry-questionnaire/{inquiry:brief_token}/attach
  * a minute from one address is more than a person filling in a form and far
  * less than a script filling the table.
  */
-Route::get('/imprint-customs/apply', [\App\Http\Controllers\Hr\HrApplicationController::class, 'show'])
-    ->name('hr.apply');
-Route::post('/imprint-customs/apply', [\App\Http\Controllers\Hr\HrApplicationController::class, 'submit'])
-    ->middleware('throttle:6,1')->name('hr.apply.submit');
-Route::get('/imprint-customs/apply/thank-you', [\App\Http\Controllers\Hr\HrApplicationController::class, 'thanks'])
-    ->name('hr.apply.thanks');
 
 Route::middleware(['auth', 'active'])->group(function () {
-    // -------- HR: the office side. Everything under /hr, checked in the
-    // controller against canUseHr() — the HR desk, a leader, a supervisor
-    // and Boss G. --------
     // Choosing your own password after somebody else chose the first one.
     // Reachable while must_change_password is set — see the middleware.
     Route::get('/change-password', [\App\Http\Controllers\Auth\ChangePasswordController::class, 'show'])->name('password.change');
@@ -97,82 +88,21 @@ Route::middleware(['auth', 'active'])->group(function () {
     // The HR overview lives on the dashboard now. Kept as a redirect so a
     // bookmark or an old notification link still lands somewhere useful.
     Route::get('/hr', fn () => redirect()->route('dashboard'))->name('hr.dashboard');
-    Route::get('/hr/applicants', [\App\Http\Controllers\Hr\HrApplicantController::class, 'index'])->name('hr.applicants.index');
-    Route::get('/hr/applicants/{applicant}', [\App\Http\Controllers\Hr\HrApplicantController::class, 'show'])
-        ->whereNumber('applicant')->name('hr.applicants.show');
-    Route::get('/hr/applicants/{applicant}/photo', [\App\Http\Controllers\Hr\HrApplicantController::class, 'photo'])
-        ->whereNumber('applicant')->name('hr.applicants.photo');
-    Route::post('/hr/applicants/{applicant}/status', [\App\Http\Controllers\Hr\HrApplicantController::class, 'setStatus'])
-        ->whereNumber('applicant')->name('hr.applicants.status');
-    Route::post('/hr/applicants/{applicant}/interviews', [\App\Http\Controllers\Hr\HrInterviewController::class, 'store'])
-        ->whereNumber('applicant')->name('hr.interviews.store');
-    Route::post('/hr/interviews/{interview}', [\App\Http\Controllers\Hr\HrInterviewController::class, 'record'])
-        ->whereNumber('interview')->name('hr.interviews.record');
 
     // The job offer, and the account a yes turns into.
-    Route::post('/hr/applicants/{applicant}/offer', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'store'])
-        ->whereNumber('applicant')->name('hr.offers.store');
-    Route::get('/hr/offers/{offer}', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'edit'])
-        ->whereNumber('offer')->name('hr.offers.edit');
-    Route::post('/hr/offers/{offer}', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'update'])
-        ->whereNumber('offer')->name('hr.offers.update');
-    Route::post('/hr/offers/{offer}/send', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'send'])
-        ->whereNumber('offer')->name('hr.offers.send');
-    Route::post('/hr/offers/{offer}/accept', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'accept'])
-        ->whereNumber('offer')->name('hr.offers.accept');
-    Route::post('/hr/offers/{offer}/decline', [\App\Http\Controllers\Hr\HrJobOfferController::class, 'decline'])
-        ->whereNumber('offer')->name('hr.offers.decline');
 
     // -------- The employee's own: no id in any of these, so there is
     // nothing to change to somebody else's number. --------
-    Route::get('/my-hr', [\App\Http\Controllers\Hr\MyHrController::class, 'index'])->name('hr.my');
-    Route::post('/my-hr/requests', [\App\Http\Controllers\Hr\MyHrController::class, 'fileRequest'])->name('hr.my.requests.store');
-    Route::post('/my-hr/requests/{hrRequest}/withdraw', [\App\Http\Controllers\Hr\MyHrController::class, 'withdrawRequest'])
-        ->whereNumber('hrRequest')->name('hr.my.requests.withdraw');
-    Route::post('/my-hr/incidents/{incident}/read', [\App\Http\Controllers\Hr\MyHrController::class, 'acknowledgeIncident'])
-        ->whereNumber('incident')->name('hr.my.incidents.read');
     // Clocked by the person themselves. A leader marking a team at ten would
     // record the whole shop as two hours late.
-    Route::post('/my-hr/clock-in', [\App\Http\Controllers\Hr\MyHrController::class, 'clockIn'])->name('hr.my.clock-in');
-    Route::post('/my-hr/clock-out', [\App\Http\Controllers\Hr\MyHrController::class, 'clockOut'])->name('hr.my.clock-out');
 
     // -------- The cut-off: everybody's payslip for one period --------
-    Route::get('/hr/payroll', [\App\Http\Controllers\Hr\PayrollController::class, 'index'])->name('hr.payroll.index');
-    Route::post('/hr/payroll/run', [\App\Http\Controllers\Hr\PayrollController::class, 'run'])->name('hr.payroll.run');
-    Route::post('/hr/payroll/release', [\App\Http\Controllers\Hr\PayrollController::class, 'release'])->name('hr.payroll.release');
 
     // -------- The office side of the people --------
-    Route::get('/hr/employees', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'index'])->name('hr.employees.index');
     // Staff who were here before HR was. Hiring makes a record as part of
     // accepting an offer; this is the only way the rest ever get one.
-    Route::get('/hr/employees/new', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'create'])->name('hr.employees.create');
-    Route::post('/hr/employees', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'store'])->name('hr.employees.store');
-    Route::get('/hr/employees/{employee}', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'show'])
-        ->whereNumber('employee')->name('hr.employees.show');
-    Route::get('/hr/employees/{employee}/edit', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'edit'])
-        ->whereNumber('employee')->name('hr.employees.edit');
-    Route::put('/hr/employees/{employee}', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'update'])
-        ->whereNumber('employee')->name('hr.employees.update');
-    Route::post('/hr/employees/{employee}/payslips', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storePayslip'])
-        ->whereNumber('employee')->name('hr.payslips.store');
-    Route::post('/hr/payslips/{payslip}/release', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'releasePayslip'])
-        ->whereNumber('payslip')->name('hr.payslips.release');
-    Route::post('/hr/employees/{employee}/incidents', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storeIncident'])
-        ->whereNumber('employee')->name('hr.incidents.store');
-    Route::post('/hr/employees/{employee}/loans', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storeLoan'])
-        ->whereNumber('employee')->name('hr.loans.store');
-    Route::post('/hr/loans/{loan}/payments', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'storeLoanPayment'])
-        ->whereNumber('loan')->name('hr.loans.payments.store');
-    Route::post('/hr/requests/{hrRequest}/decide', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'decideRequest'])
-        ->whereNumber('hrRequest')->name('hr.requests.decide');
 
     // -------- Payslip cut-offs and government remittances --------
-    Route::get('/hr/deadlines', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'index'])->name('hr.deadlines.index');
-    Route::post('/hr/deadlines', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'store'])->name('hr.deadlines.store');
-    Route::post('/hr/deadlines/{deadline}/toggle', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'toggle'])
-        ->whereNumber('deadline')->name('hr.deadlines.toggle');
-    Route::post('/hr/deadlines/{deadline}/delete', [\App\Http\Controllers\Hr\HrDeadlineController::class, 'destroy'])
-        ->whereNumber('deadline')->name('hr.deadlines.destroy');
 
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');

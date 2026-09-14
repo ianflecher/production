@@ -75,7 +75,7 @@ class AnErrorPageSaysWhatHappenedTest extends TestCase
     public function test_a_refusal_still_explains_itself(): void
     {
         $this->actingAs($this->staff())
-            ->get(route('hr.employees.index'))
+            ->get('/finance')
             ->assertForbidden()
             ->assertSee('This one is not yours')
             ->assertSee('Go to my dashboard');

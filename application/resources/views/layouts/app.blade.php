@@ -234,48 +234,7 @@
             {{-- HR keeps its own section, the way it keeps its own tables and
                  its own /hr routes. The HR desk is not a leader of the floor,
                  so it cannot ride on the Management section below. --}}
-            @if (auth()->user()->canUseHr())
-                @php $hrNew = \App\Models\HrApplicant::newCount(); @endphp
-                <nav class="nav-section">
-                    <div class="nav-label">HR</div>
-                    {{-- No "HR overview" item: the dashboard is the overview
-                         now, and two links to the same thing is one too many. --}}
-                    <a href="{{ route('hr.applicants.index') }}" class="nav-item {{ request()->routeIs('hr.applicants.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/></svg>
-                        Applicants
-                        @if ($hrNew > 0)
-                            <span class="count-pill">{{ $hrNew }}</span>
-                        @endif
-                    </a>
-                    <a href="{{ route('hr.employees.index') }}" class="nav-item {{ request()->routeIs('hr.employees.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
-                        People
-                    </a>
-                    <a href="{{ route('hr.payroll.index') }}" class="nav-item {{ request()->routeIs('hr.payroll.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                        Cut-off
-                    </a>
-                    <a href="{{ route('hr.deadlines.index') }}" class="nav-item {{ request()->routeIs('hr.deadlines.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        {{-- No count here on purpose: it would be a query on
-                             every page the shop loads, for a number the HR
-                             overview already shows on the dashboard. --}}
-                        Deadlines
-                    </a>
-                </nav>
-            @endif
 
-            {{-- Everybody who has an employee record gets their own HR page —
-                 their payslips, their loans, what they have asked for. --}}
-            @if (\App\Models\HrEmployee::where('user_id', auth()->id())->exists())
-                <nav class="nav-section">
-                    <div class="nav-label">Me</div>
-                    <a href="{{ route('hr.my') }}" class="nav-item {{ request()->routeIs('hr.my*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                        My HR
-                    </a>
-                </nav>
-            @endif
 
             {{-- Supervisors are in this section too now. They run people, and
                  the page they were missing is the one that lists them: a
