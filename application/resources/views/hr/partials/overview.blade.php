@@ -4,6 +4,40 @@
      thing to DO — an applicant nobody has read, a round nobody has done —
      rather than a count, because a total nobody can act on gets ignored. --}}
 
+{{-- What the desk adds up to, and it renders even when every number is a
+     zero. Each block below appears only when it has something in it, so an
+     HR desk with nothing waiting used to show NOTHING AT ALL - a page with
+     no sign it was the HR desk's page, which reads as broken rather than as
+     clear. A quiet day should say it is a quiet day. --}}
+@php
+    $waiting = count($hr['newApplicants']) + count($hr['upcoming'])
+        + count($hr['requests']) + count($hr['deadlines']);
+@endphp
+
+<div class="card panel" style="margin-bottom: 1.1rem;">
+    <div class="officer-head">
+        <div>
+            <h2 style="margin:0;">HR</h2>
+            <p class="sub" style="margin:0.15rem 0 0;">
+                @if ($waiting === 0)
+                    Nothing is waiting on you today.
+                @else
+                    {{ $waiting }} {{ \Illuminate\Support\Str::plural('thing', $waiting) }} waiting on you.
+                @endif
+            </p>
+        </div>
+        <a href="{{ route('hr.applicants.index') }}" class="btn btn-ghost btn-sm">Open applicants</a>
+    </div>
+
+    <div class="dl-tally" style="margin:0.7rem 0 0;">
+        <span class="dl-tally-item"><strong>{{ count($hr['newApplicants']) }}</strong> to read</span>
+        <span class="dl-tally-item"><strong>{{ count($hr['upcoming']) }}</strong> interviews booked</span>
+        <span class="dl-tally-item"><strong>{{ count($hr['passed']) }}</strong> waiting on an offer</span>
+        <span class="dl-tally-item"><strong>{{ count($hr['requests']) }}</strong> requests</span>
+        <span class="dl-tally-item"><strong>{{ count($hr['deadlines']) }}</strong> dates due</span>
+    </div>
+</div>
+
 @if ($hr['mine']->isNotEmpty())
     <div class="card panel" style="margin-bottom: 1.1rem;">
         <h2>Your interviews</h2>

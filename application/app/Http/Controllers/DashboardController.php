@@ -101,7 +101,14 @@ class DashboardController extends Controller
         //
         // A week, and the newest handful of it. The whole board is a click
         // away; what belongs on a dashboard is what moved today.
-        view()->share('designBoard', \App\Support\DesignLog::rows(7)->take(8));
+        //
+        // Everybody except the HR desk. They are the one desk with no part in
+        // a design at any point - they hire the people, they do not draw, sell
+        // or print - so it was eight rows of somebody else's work sitting
+        // above their own. It also saves them the queries.
+        view()->share('designBoard', $user->isHr()
+            ? null
+            : \App\Support\DesignLog::rows(7)->take(8));
 
         $hour = (int) now()->format('G');
         $greeting = match (true) {
@@ -293,6 +300,36 @@ class DashboardController extends Controller
                     : 'Confirm what the officers have recorded — a job cannot start until its deposit is confirmed.'];
 
             return view('dashboard', compact('user', 'greeting', 'stats', 'desk', 'toConfirm'));
+        }
+
+        // ---- The HR desk --------------------------------------------------
+        // Without this she fell through to the branch below and was handed the
+        // MOVER's desk: production order counts, and a button to the floor. HR
+        // does not work the floor. Her work is who has applied, whose
+        // interview is booked, whose leave is unanswered and which of the
+        // desk's own dates is due.
+        if ($user->isHr()) {
+            $hr = \App\Support\HrOverview::for($user) ?? [];
+
+            $stats = [
+                ['label' => 'Applicants to read', 'value' => count($hr['newApplicants'] ?? []),
+                    'note' => 'Nobody has looked at these yet'],
+                ['label' => 'Interviews to do', 'value' => count($hr['upcoming'] ?? []),
+                    'note' => 'Booked and not done'],
+                ['label' => 'Requests waiting', 'value' => count($hr['requests'] ?? []),
+                    'note' => 'Each one is holding somebody up'],
+            ];
+
+            $desk = [
+                'url' => route('hr.applicants.index'),
+                'action' => 'Open applicants',
+                'title' => 'Hiring',
+                'text' => count($hr['newApplicants'] ?? []) > 0
+                    ? 'Somebody has applied and nobody has read it yet.'
+                    : 'Who has applied, who is being interviewed, and who is waiting on an offer.',
+            ];
+
+            return view('dashboard', compact('user', 'greeting', 'stats', 'desk'));
         }
 
         // ---- Desks that don't work from a task list ----------------------
