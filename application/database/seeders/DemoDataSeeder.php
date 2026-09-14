@@ -2,16 +2,24 @@
 
 namespace Database\Seeders;
 
+use App\Models\Attendance;
 use App\Models\Client;
 use App\Models\Expense;
 use App\Models\InventoryItem;
 use App\Models\JobOrder;
 use App\Models\Message;
+use App\Models\OrderDocument;
+use App\Models\Payment;
 use App\Models\ProductionOrder;
+use App\Models\ProductItem;
+use App\Models\ProductReceipt;
+use App\Models\StationSession;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\PricingService;
+use App\Services\Stations;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * A shop's worth of believable data for showing the system to someone.
@@ -20,9 +28,11 @@ use Illuminate\Support\Carbon;
  * rather than written straight into the tables, so the board, the approvals list
  * and the stock requests all line up the way they would in daily use.
  *
- * Safe to run more than once: it clears the business tables it fills first, and
- * never touches the staff accounts. See truncate-business-data.sql for the
- * heavier reset.
+ * Re-runnable: it clears the business tables it fills first, and never touches
+ * the staff accounts. "Clears" means exactly that - every order, client, task
+ * and stock movement in the database goes - so it refuses to run against the
+ * live one. See safeToWipe(), and truncate-business-data.sql for the heavier
+ * reset.
  */
 class DemoDataSeeder extends Seeder
 {
@@ -118,6 +128,10 @@ class DemoDataSeeder extends Seeder
             return;
         }
 
+        if (! $this->safeToWipe()) {
+            return;
+        }
+
         $this->wipe();
 
         // Attendance comes first: artist work is only handed to someone who is
@@ -137,7 +151,7 @@ class DemoDataSeeder extends Seeder
             'Demo data ready: %d clients, %d orders, %d payments, %d expenses, %d stock items.',
             count($clients),
             count($orders),
-            \App\Models\Payment::count(),
+            Payment::count(),
             Expense::count(),
             InventoryItem::count()
         ));
@@ -169,7 +183,58 @@ class DemoDataSeeder extends Seeder
             ->all();
     }
 
-    /** Clear only the business tables, so the seeder can be re-run freely. */
+    /**
+     * Refuse to run anywhere that is not a sandbox.
+     *
+     * wipe() below truncates twenty-two tables before seeding, and nothing
+     * stopped it doing that to the shop's own database. The seeder does not
+     * run on its own - DatabaseSeeder calls only the UserSeeder, so
+     * `php artisan db:seed` is safe - but it is one command away:
+     *
+     *     php artisan db:seed --class=DemoDataSeeder
+     *
+     * which is a thing somebody types meaning to fill the SAMPLE, from the
+     * wrong folder. Two near-identical checkouts sit side by side on this
+     * machine, so that is not a hypothetical mistake.
+     *
+     * Named rather than counted: the message says which database it found, so
+     * somebody who meant to seed the sample can see at a glance that they are
+     * standing in the wrong one.
+     */
+    private function safeToWipe(): bool
+    {
+        $connection = config('database.default');
+        $database = (string) config("database.connections.{$connection}.database");
+
+        if ($database === 'imprint_production') {
+            $this->command?->error(
+                "Refusing to run: this is the LIVE database ({$database}). "
+                .'This seeder clears the orders, clients, tasks and inventory before it fills them. '
+                .'Run it from the sample checkout instead.'
+            );
+
+            return false;
+        }
+
+        // A differently-named copy that is still somebody's real shop.
+        if (app()->environment('production')) {
+            $this->command?->error(
+                "Refusing to run: APP_ENV is production (database {$database}). "
+                .'This seeder clears the business tables before it fills them.'
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Clear only the business tables, so the seeder can be re-run freely.
+     *
+     * "Freely" is about the seeder, not the database: everything in these
+     * tables goes. Guarded by safeToWipe() above.
+     */
     private function wipe(): void
     {
         // Everything in truncate-business-data.sql except push_subscriptions —
@@ -217,7 +282,7 @@ class DemoDataSeeder extends Seeder
             }
 
             foreach ($staff as $person) {
-                \App\Models\Attendance::create([
+                Attendance::create([
                     'user_id' => $person->id,
                     'date' => $day->toDateString(),
                     // Today everyone is in, so work can be handed out; earlier
@@ -553,7 +618,7 @@ class DemoDataSeeder extends Seeder
             [$printType, $cutting, $addon, $addonPrice] = self::ROUTING[$i % count(self::ROUTING)];
 
             $qty = array_sum($sizes);
-            $quote = \App\Services\PricingService::quote($product, $qty);
+            $quote = PricingService::quote($product, $qty);
 
             $due = $plan[$i]['due'];
             $placed = $plan[$i]['placed'];
@@ -580,7 +645,7 @@ class DemoDataSeeder extends Seeder
             // Sometimes every piece, sometimes only part of the run.
             $backPocketQty = $backPocket ? ($i % 10 === 2 ? max(1, intdiv($qty, 2)) : $qty) : null;
             $pocketAmount = $backPocket
-                ? $backPocketQty * (float) \App\Services\PricingService::backPocketFee()
+                ? $backPocketQty * (float) PricingService::backPocketFee()
                 : 0.0;
 
             // A repeat the client already approved: no first sample, straight
@@ -665,7 +730,7 @@ class DemoDataSeeder extends Seeder
             $waiting = [2, 6, 20, 44, 3, 96, 11, 180, 30, 5, 260, 8][$i % 12];
 
             $order->tasks()
-                ->whereIn('status', \App\Services\Stations::RELEASED)
+                ->whereIn('status', Stations::RELEASED)
                 ->whereNotNull('released_at')
                 ->update(['released_at' => now()->subHours($waiting)]);
 
@@ -821,7 +886,7 @@ class DemoDataSeeder extends Seeder
     private function makeShopFloorRecords(array $orders, User $leader): void
     {
         $stations = array_values(array_filter(
-            array_keys(\App\Services\Stations::all()),
+            array_keys(Stations::all()),
             fn ($key) => str_starts_with($key, 'printer_') || str_starts_with($key, 'sewing_')
         ));
 
@@ -888,7 +953,7 @@ class DemoDataSeeder extends Seeder
                 $station = $stations[$i % count($stations)];
                 $started = ($order->created_at ?? now())->copy()->addDays(3)->setTime(8 + ($i % 6), 0);
 
-                \App\Models\StationSession::create([
+                StationSession::create([
                     'station' => $station,
                     'user_id' => $leader->id,
                     'operator_name' => $operators[$i % count($operators)],
@@ -903,9 +968,9 @@ class DemoDataSeeder extends Seeder
             // 3. The finished pieces, counted in at the inventory desk. Without
             //    this the products page is empty however much work has shipped.
             if ($order->status === 'complete') {
-                foreach (\App\Models\ProductReceipt::where('production_order_id', $order->id)
+                foreach (ProductReceipt::where('production_order_id', $order->id)
                     ->where('status', 'pending')->get() as $receipt) {
-                    $product = \App\Models\ProductItem::firstOrCreate(
+                    $product = ProductItem::firstOrCreate(
                         ['name' => $receipt->name],
                         ['unit' => $receipt->unit ?: 'pcs', 'quantity' => 0]
                     );
@@ -938,10 +1003,10 @@ class DemoDataSeeder extends Seeder
             //    quotation is not a delivered job anybody got paid for.
             if ($order->status === 'complete' && $i % 2 === 0) {
                 $type = $order->vat_inclusive
-                    ? \App\Models\OrderDocument::TYPE_PQ
-                    : \App\Models\OrderDocument::TYPE_DR;
+                    ? OrderDocument::TYPE_PQ
+                    : OrderDocument::TYPE_DR;
 
-                $defaults = \App\Models\OrderDocument::defaultsFor($order, $type);
+                $defaults = OrderDocument::defaultsFor($order, $type);
 
                 $order->documents()->create([
                     'type' => $type,
@@ -964,7 +1029,7 @@ class DemoDataSeeder extends Seeder
     {
         $path = 'task-files/demo-design.jpg';
 
-        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+        if (! Storage::disk('local')->exists($path)) {
             $img = imagecreatetruecolor(900, 900);
             imagefill($img, 0, 0, imagecolorallocate($img, 244, 246, 250));
 
@@ -980,10 +1045,10 @@ class DemoDataSeeder extends Seeder
             $bytes = (string) ob_get_clean();
             imagedestroy($img);
 
-            \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+            Storage::disk('local')->put($path, $bytes);
         }
 
-        return [$path, (int) \Illuminate\Support\Facades\Storage::disk('local')->size($path)];
+        return [$path, (int) Storage::disk('local')->size($path)];
     }
 
     /**
@@ -996,7 +1061,7 @@ class DemoDataSeeder extends Seeder
     {
         $path = 'payment-proofs/demo-proof.jpg';
 
-        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+        if (! Storage::disk('local')->exists($path)) {
             $img = imagecreatetruecolor(700, 900);
             imagefill($img, 0, 0, imagecolorallocate($img, 250, 250, 248));
 
@@ -1018,7 +1083,7 @@ class DemoDataSeeder extends Seeder
             $bytes = (string) ob_get_clean();
             imagedestroy($img);
 
-            \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+            Storage::disk('local')->put($path, $bytes);
         }
 
         return $path;
@@ -1032,7 +1097,7 @@ class DemoDataSeeder extends Seeder
             }
 
             $total = (float) $order->total_price;
-            $method = \App\Models\Payment::METHODS[array_rand(\App\Models\Payment::METHODS)];
+            $method = Payment::METHODS[array_rand(Payment::METHODS)];
 
             // Nothing is produced without a downpayment, so anything past layout has one.
             $started = $order->tasks()->where('stage', '>', 1)->where('status', 'complete')->exists();
@@ -1281,7 +1346,7 @@ class DemoDataSeeder extends Seeder
     private function brief(Client $client, string $product): string
     {
         $who = $client->company ?: $client->fullName();
-        $what = \App\Services\PricingService::label($product);
+        $what = PricingService::label($product);
 
         return "$what for $who. Logo in front, name at the back. Client sent the artwork by Viber.";
     }
