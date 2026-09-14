@@ -311,6 +311,47 @@ class Inquiry extends Model
         return $this->status === self::STATUS_OPEN;
     }
 
+    /**
+     * List one or more designs on this brief.
+     *
+     * Shared by the two buttons that can do it, because they used to be two
+     * rules that agreed by luck: "+ Add design" listed them, and "Send to
+     * artist" quietly made one of its own with none of the same fields. An
+     * officer who typed the notes into the add box and pressed Send got a
+     * design with no notes on it and no sign that anything had been dropped.
+     *
+     * Several at a time because a kit is listed in one go, and a numbered
+     * name for each so "Jersey" becomes "Jersey 1" and "Jersey 2" rather than
+     * two rows nobody can tell apart.
+     */
+    public function addDesigns(
+        ?string $label,
+        ?string $description,
+        ?\App\Models\User $artist,
+        int $howMany = 1
+    ): int {
+        $howMany = max(1, min(20, $howMany));
+
+        $next = (int) $this->designs()->max('position');
+        $next = $this->designs()->count() ? $next + 1 : 0;
+
+        for ($i = 0; $i < $howMany; $i++) {
+            $this->designs()->create([
+                'label' => $howMany > 1 && filled($label)
+                    ? $label.' '.($i + 1)
+                    : ($label ?: null),
+                'position' => $next + $i,
+                'artist_id' => $artist?->id,
+                'status' => InquiryDesign::STATUS_WITH_ARTIST,
+                'description' => filled($description) ? trim($description) : null,
+                // Already sent? Then this one is on their desk from now.
+                'sent_at' => $this->layout_sent_at ? now() : null,
+            ]);
+        }
+
+        return $howMany;
+    }
+
     /** Still being chased. */
     public function scopeOpen($query)
     {

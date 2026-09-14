@@ -92,24 +92,14 @@ class InquiryDesignController extends Controller
             ? User::find($data['artist_id'])
             : \App\Services\StaffAssigner::next(User::JOB_ARTIST);
 
-        $next = (int) $inquiry->designs()->max('position');
-        $next = $inquiry->designs()->count() ? $next + 1 : 0;
-
-        $howMany = (int) ($data['how_many'] ?? 1);
-
-        for ($i = 0; $i < $howMany; $i++) {
-            $inquiry->designs()->create([
-                'label' => $howMany > 1 && filled($data['label'] ?? null)
-                    ? $data['label'].' '.($i + 1)
-                    : ($data['label'] ?? null),
-                'position' => $next + $i,
-                'artist_id' => $artist?->id,
-                'status' => InquiryDesign::STATUS_WITH_ARTIST,
-                'description' => $data['description'] ?? null,
-                // Already sent? Then this one is on their desk from now.
-                'sent_at' => $inquiry->layout_sent_at ? now() : null,
-            ]);
-        }
+        // The same rule "Send to artist" uses when it lists the first design
+        // itself - see Inquiry::addDesigns.
+        $howMany = $inquiry->addDesigns(
+            $data['label'] ?? null,
+            $data['description'] ?? null,
+            $artist,
+            (int) ($data['how_many'] ?? 1)
+        );
 
         $inquiry->syncLayoutStatus();
 

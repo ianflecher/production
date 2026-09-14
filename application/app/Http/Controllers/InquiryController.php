@@ -402,12 +402,31 @@ class InquiryController extends Controller
             return redirect()->route('orders.create', ['inquiry' => $inquiry->id]);
         }
 
-        // Accepted only for old browser tabs and integrations. New briefs put
-        // the instruction on each design, where its artist can read it.
-        $data = $request->validate(['reference_note' => ['nullable', 'string', 'max:2000']]);
+        // reference_note is accepted only for old browser tabs and
+        // integrations. New briefs put the instruction on each design, where
+        // its artist can read it.
+        //
+        // The rest of these are the "add design" box's own fields, carried
+        // here because the button belongs to that form. An officer who typed
+        // the notes in and pressed Send without pressing "+ Add design" first
+        // used to lose every word of it: the two were separate forms, so
+        // pressing one abandoned the other, and the brief went to the artist
+        // with nothing on it. Nothing said so.
+        $data = $request->validate([
+            'reference_note' => ['nullable', 'string', 'max:2000'],
+            'label' => ['nullable', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'artist_id' => ['nullable', 'integer', 'exists:users,id'],
+            'how_many' => ['nullable', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        // What the officer typed, wherever they typed it.
+        $typed = filled($data['description'] ?? null)
+            ? trim($data['description'])
+            : (filled($data['reference_note'] ?? null) ? trim($data['reference_note']) : null);
 
         $hasOutput = collect($inquiry->layout_files ?? [])->contains(fn ($file) => ($file['kind'] ?? 'output') === 'output');
-        if ($inquiry->designs()->doesntExist() && ! $hasOutput && blank($data['reference_note'] ?? null)) {
+        if ($inquiry->designs()->doesntExist() && ! $hasOutput && blank($typed)) {
             return back()->withInput()->withErrors(['layout' => 'Add a design description or upload the ChatGPT design output before continuing.']);
         }
 
@@ -418,21 +437,24 @@ class InquiryController extends Controller
         $artist = $inquiry->layoutArtist ?: \App\Services\StaffAssigner::next(User::JOB_ARTIST);
 
         // A brief with no designs listed is one design: the officer who did
-        // not need the list should not have to use it.
+        // not need the list should not have to use it. It is listed with
+        // whatever they typed into the add box - the name, the count, the
+        // artist and the notes - through the same rule "+ Add design" uses,
+        // so the two buttons cannot drift apart again.
         if ($inquiry->designs()->doesntExist()) {
-            $inquiry->designs()->create([
-                'position' => 0,
-                'artist_id' => $artist?->id,
-                'status' => \App\Models\InquiryDesign::STATUS_WITH_ARTIST,
-                'description' => $data['reference_note'] ?? null,
-            ]);
+            $inquiry->addDesigns(
+                $data['label'] ?? null,
+                $typed,
+                isset($data['artist_id']) ? User::find($data['artist_id']) : $artist,
+                (int) ($data['how_many'] ?? 1)
+            );
         }
 
         // Preserve any old one-note submission by copying it only onto designs
         // that have not yet been given their own instructions.
-        if (filled($data['reference_note'] ?? null)) {
+        if (filled($typed)) {
             $inquiry->designs()->whereNull('description')->update([
-                'description' => trim($data['reference_note']),
+                'description' => $typed,
             ]);
         }
 

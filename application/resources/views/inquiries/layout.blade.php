@@ -588,7 +588,9 @@
     {{-- Adding them. Several at once, because a kit is listed in one go rather
          than six visits to this form. --}}
     @if ($officeControls)
-    <form method="POST" action="{{ route('inquiries.designs.store', $inquiry) }}"
+    {{-- Named, because the "Send to artist" button further down belongs to
+         THIS form rather than its own - see the button for why. --}}
+    <form id="addDesignForm" method="POST" action="{{ route('inquiries.designs.store', $inquiry) }}"
           style="display:flex; gap:.45rem; align-items:flex-end; flex-wrap:wrap; margin:.8rem 0 1rem;">
         @csrf
         <div class="field" style="margin:0;">
@@ -642,14 +644,20 @@
         </div>
     @else
         @if ($officeControls)
-        <form method="POST" action="{{ route('inquiries.layout.complete', $inquiry) }}" class="layout-pre-send">
-            @csrf
+        <div class="layout-pre-send">
             <strong style="display:block; font-size:.86rem;">Ready to send?</strong>
-            <span style="display:block; color:var(--ink-3); font-size:.76rem; margin:.18rem 0 .7rem;">Each design's notes are saved on its own card above, so the artist sees only the instructions for that design.</span>
+            <span style="display:block; color:var(--ink-3); font-size:.76rem; margin:.18rem 0 .7rem;">Each design's notes are saved on its own card above, so the artist sees only the instructions for that design. Anything still typed in the box above goes with it.</span>
             @error('layout')<div class="error" style="margin-bottom:.7rem;">{{ $message }}</div>@enderror
-            <button type="submit" class="btn btn-primary btn-sm">📤 Send to artist for layout</button>
+            {{-- This button belongs to the add-design form above and posts it
+                 somewhere else. Two separate forms meant pressing Send
+                 abandoned whatever was typed into the other one, and a brief
+                 went to the artist with the notes silently dropped. Owned by
+                 that form, the same press carries them. --}}
+            <button type="submit" form="addDesignForm"
+                    formaction="{{ route('inquiries.layout.complete', $inquiry) }}"
+                    class="btn btn-primary btn-sm">📤 Send to artist for layout</button>
             <span style="display:inline-block; color:var(--ink-3); font-size:.78rem; margin-left:.4rem;">The job order opens after client approval.</span>
-        </form>
+        </div>
         @endif
     @endif
     </section>
