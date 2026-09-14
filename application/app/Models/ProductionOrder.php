@@ -981,6 +981,103 @@ class ProductionOrder extends Model
     }
 
     /**
+     * Give a deadline to any step that has none, and touch nothing else.
+     *
+     * The schedule was written once, at the moment the downpayment cleared,
+     * and never again - so anything that changed the pipeline afterwards left
+     * steps with no date at all. Three kinds of job ended up like that: a
+     * sibling order created under a job number that already had clearance, so
+     * the one scheduling moment had already passed; a pipeline rebuilt after a
+     * tech pack changed, whose new steps are born blank; and a sponsored job
+     * waived rather than paid, which has no payment to confirm and so never
+     * reaches that moment at all. Eighty-two steps across the shop, carrying
+     * no date, unable to be late.
+     *
+     * Each blank is placed BETWEEN the dated steps either side of it, rather
+     * than at the position the full schedule would have given it. That
+     * matters: the first attempt spread them by position and put two steps
+     * after the ones that follow them - Pairing due before the cutting it
+     * waits on. Interpolating cannot do that, because a gap is only ever
+     * filled inside the space its neighbours leave.
+     *
+     * A run of blanks at the front anchors on the clock's start, and one at
+     * the end on the client's due date.
+     *
+     * Only the blanks. A date somebody typed into the pipeline is the whole
+     * point of that box being there, and filling gaps is no reason to argue
+     * with it.
+     *
+     * Does nothing until the job is cleared to run: an order still waiting on
+     * its downpayment has not started its clock, and dating it would hand it
+     * deadlines to be late against for work nobody has asked for yet.
+     */
+    public function fillMissingStepDeadlines(): int
+    {
+        if (! $this->hasDownpayment() || ! $this->due_date) {
+            return 0;
+        }
+
+        $steps = $this->tasks()
+            ->where('status', '!=', 'cancelled')
+            ->get()
+            ->sortBy([['stage', 'asc'], ['sequence', 'asc']])
+            ->values();
+
+        if ($steps->isEmpty() || $steps->every(fn (Task $step) => (bool) $step->due_at)) {
+            return 0;
+        }
+
+        $start = $this->firstConfirmedPaymentAt() ?? $this->created_at ?? now();
+        $end = $this->due_date->copy()->endOfDay();
+
+        if ($end->lessThanOrEqualTo($start)) {
+            $end = $start->copy()->endOfDay();
+        }
+
+        $filled = 0;
+        $i = 0;
+        $count = $steps->count();
+
+        while ($i < $count) {
+            if ($steps[$i]->due_at) {
+                $i++;
+
+                continue;
+            }
+
+            // The whole run of blanks, and the dated steps bracketing it.
+            $j = $i;
+            while ($j < $count && ! $steps[$j]->due_at) {
+                $j++;
+            }
+
+            $from = $i > 0 ? $steps[$i - 1]->due_at->copy() : $start->copy();
+            $to = $j < $count ? $steps[$j]->due_at->copy() : $end->copy();
+
+            // Neighbours already out of order, or no room between them: the
+            // blanks land on the later of the two rather than before the step
+            // they follow.
+            if ($to->lessThanOrEqualTo($from)) {
+                $to = $from->copy()->addMinute();
+            }
+
+            $gap = $j - $i;
+            $each = $from->diffInMinutes($to) / ($gap + 1);
+
+            for ($k = 0; $k < $gap; $k++) {
+                $steps[$i + $k]->update([
+                    'due_at' => $from->copy()->addMinutes((int) round($each * ($k + 1))),
+                ]);
+                $filled++;
+            }
+
+            $i = $j;
+        }
+
+        return $filled;
+    }
+
+    /**
      * Print type decides the default press and the cutting route.
      *
      * This used to sit in the artist's save, because the artist was the only
@@ -1449,7 +1546,15 @@ class ProductionOrder extends Model
             $order = self::create($attributes);
             $order->buildPipeline($decorationMethods, $cuttingType);
 
-            return $order;
+            // A job that is ALREADY cleared to run gets its dates now, because
+            // the moment that normally writes them has been and gone. That is
+            // the sibling order written under a job number whose downpayment
+            // cleared weeks ago, and the sponsored job whose deposit is
+            // waived: both were created with a due date and no schedule, and
+            // nothing was ever going to come back for them.
+            $order->refresh()->fillMissingStepDeadlines();
+
+            return $order->refresh();
         });
     }
 
@@ -1857,6 +1962,9 @@ class ProductionOrder extends Model
 
         $this->resequenceTasks();
         $this->refresh()->releaseNextReadyStage();
+        // Steps added here are born with no deadline, and the one scheduling
+        // moment is long past by the time a tech pack changes.
+        $this->refresh()->fillMissingStepDeadlines();
     }
 
     public function canEditRouting(): bool
@@ -1930,6 +2038,12 @@ class ProductionOrder extends Model
             $this->syncEmbroideryStep();
             $this->resequenceTasks();
         }
+
+        // Whatever this just added was born with no deadline, and the one
+        // moment that writes the schedule is long past by the time somebody
+        // changes a tech pack. Only the blanks - a date already in the
+        // pipeline stays exactly as it is.
+        $this->refresh()->fillMissingStepDeadlines();
 
         $this->releaseNextReadyStage();
     }
