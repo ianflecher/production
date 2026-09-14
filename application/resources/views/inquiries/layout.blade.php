@@ -324,12 +324,18 @@
     @endif
 
     @if (! $inquiry->layout_sent_at && $officeControls)
-        <div class="layout-upload">
+        <div class="layout-upload" data-paste-into-box>
             <label>ChatGPT design output</label>
-            <span class="hint">Choose an image and it uploads immediately. This is what the artist works from.</span>
+            <span class="hint">
+                <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste it straight in, drop it here, or choose a file.
+                It uploads immediately. This is what the artist works from.
+            </span>
             <form method="POST" action="{{ route('inquiries.layout.upload', $inquiry) }}" enctype="multipart/form-data">
                 @csrf
-                <input type="file" name="reference_files[]" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip" onchange="if(this.files.length){ this.form.submit(); }">
+                {{-- Pasted or chosen, it arrives the same way and this form
+                     uploads on change either way - see
+                     partials/paste-into-file-input. --}}
+                <input type="file" name="reference_files[]" multiple data-paste-into accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip" onchange="if(this.files.length){ this.form.submit(); }">
                 @if (count($files))
                     <span style="color:var(--success-ink); font-size:.78rem; font-weight:700;">✓ Uploaded and ready</span>
                 @else
@@ -686,4 +692,8 @@
     })();
 </script>
 </div>
+{{-- Pasting a reference straight in, for the officer who has just been
+     handed one. --}}
+@include('partials.paste-into-file-input')
+
 @endsection

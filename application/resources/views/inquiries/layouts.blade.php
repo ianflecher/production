@@ -131,11 +131,18 @@
                          the design returns to the artist carrying the note. --}}
                     @if (! $design->submitted())
                         <form method="POST" action="{{ route('inquiries.designs.submit', $design) }}" enctype="multipart/form-data"
-                              class="artist-layout-upload" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                              class="artist-layout-upload" data-paste-into-box
+                              style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
                             @csrf
+                            {{-- The drawing is in the clipboard the moment it is
+                                 finished. data-paste-into lets it go straight in -
+                                 see partials/paste-into-file-input. --}}
                             <input id="artistDesignFiles_{{ $design->id }}" type="file" name="files[]" multiple required
-                                   class="artist-layout-files"
+                                   class="artist-layout-files" data-paste-into
                                    accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+                            <span class="paste-drop-hint" style="flex-basis:100%; margin:0;">
+                                <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the drawing in, or drop it here. Paste again to add another.
+                            </span>
                             <div class="artist-layout-picked" aria-live="polite"
                                  style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
                             <button type="submit" class="btn btn-primary btn-sm">
@@ -154,6 +161,8 @@
         </div>
     @endforeach
 @endif
+
+@include('partials.paste-into-file-input')
 
 <script>
     document.querySelectorAll('.artist-layout-files').forEach(function (input) {
