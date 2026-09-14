@@ -54,11 +54,13 @@ class HrApplicantController extends Controller
         return view('hr.applicants.show', [
             'applicant' => $applicant->load('interviews.interviewer'),
             'statuses' => HrApplicant::STATUSES,
-            // Who may sit in on an interview: the desks that do the hiring.
-            // Anyone else on the floor is doing their own job.
+            // Who may sit in on an interview: the desks that do the hiring,
+            // plus the leaders and supervisors who interview the people who
+            // will work for them. Wider than who may READ these pages, and
+            // deliberately so — see User::canInterview.
             'interviewers' => \App\Models\User::where('is_active', true)
                 ->get()
-                ->filter(fn ($u) => $u->canUseHr() || $u->isArtistLead())
+                ->filter(fn ($u) => $u->canInterview())
                 ->sortBy('name')
                 ->values(),
         ]);

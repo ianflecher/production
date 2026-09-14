@@ -360,14 +360,34 @@ class User extends Authenticatable
     }
 
     /**
-     * May open the HR pages: the HR desk itself, and the people the shop
-     * already trusts with everybody's business - a leader, a supervisor, and
-     * Boss G. Hiring is a conversation between those desks, so all of them see
-     * who has applied.
+     * May open the HR pages: the HR desk, and Boss G.
+     *
+     * It used to take the leaders and the supervisors too, on the reasoning
+     * that hiring is a conversation between the desks that already carry
+     * everybody's business. But these pages are not the hiring conversation -
+     * they are the employment file. What a person earns, what they have
+     * borrowed, what has been written down about their conduct. That is the
+     * HR desk's and the owner's, and a leader runs the work rather than the
+     * file.
+     *
+     * Being named as the person doing an interview is a different question
+     * and a wider one - see canInterview().
      */
     public function canUseHr(): bool
     {
-        return $this->isHr() || $this->isSuperAdmin() || $this->isLeader();
+        return $this->isHr() || $this->isSuperAdmin();
+    }
+
+    /**
+     * May be put down as the person doing an interview.
+     *
+     * Wider than canUseHr on purpose: a supervisor interviews the sewer who
+     * will work for them, and the artist leader interviews an artist. None of
+     * that requires being able to read anybody's payslip.
+     */
+    public function canInterview(): bool
+    {
+        return $this->canUseHr() || $this->isLeader() || $this->isArtistLead();
     }
 
     /**
