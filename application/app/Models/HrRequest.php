@@ -18,13 +18,20 @@ class HrRequest extends Model
     use HasFactory, SoftDeletes;
 
     public const TYPE_LEAVE = 'leave';
+
+    public const TYPE_SICK = 'sick_leave';
+
     public const TYPE_SCHEDULE = 'schedule_change';
+
     public const TYPE_UNDERTIME = 'undertime';
+
     public const TYPE_OVERTIME = 'overtime';
+
     public const TYPE_OFFICIAL_BUSINESS = 'official_business';
 
     public const TYPES = [
-        self::TYPE_LEAVE => 'Leave',
+        self::TYPE_LEAVE => 'Vacation leave',
+        self::TYPE_SICK => 'Sick leave',
         self::TYPE_SCHEDULE => 'Change of schedule',
         self::TYPE_UNDERTIME => 'Undertime',
         self::TYPE_OVERTIME => 'Overtime',
@@ -34,8 +41,22 @@ class HrRequest extends Model
     /** The ones measured in hours rather than days. */
     public const HOURLY = [self::TYPE_UNDERTIME, self::TYPE_OVERTIME, self::TYPE_OFFICIAL_BUSINESS];
 
+    /**
+     * Days away from work, and which allowance each one draws on.
+     *
+     * The shop grants vacation and sick days separately, so they have to be
+     * counted separately. Sick leave was filed as plain leave until now,
+     * which quietly spent somebody's holiday on being ill.
+     */
+    public const DRAWS_ON = [
+        self::TYPE_LEAVE => 'vacation_credits',
+        self::TYPE_SICK => 'sick_credits',
+    ];
+
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_DECLINED = 'declined';
 
     public const STATUSES = [

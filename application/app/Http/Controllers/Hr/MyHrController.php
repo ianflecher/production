@@ -46,6 +46,8 @@ class MyHrController extends Controller
             // What they have left, so they can plan rather than file and hope.
             // Null when nobody has set them an allowance - see LeaveBalance.
             'leave' => $employee ? LeaveBalance::for($employee) : null,
+            // Counted apart from vacation. Being ill should not spend a holiday.
+            'sickLeave' => $employee ? LeaveBalance::sick($employee) : null,
             // Today's clock, so the page can offer the right button rather
             // than both of them.
             'today' => $this->todayFor($request),

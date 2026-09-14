@@ -183,20 +183,29 @@
 </div>
 
 {{-- ---------- What is left, so somebody can plan rather than file and hope ---------- --}}
-@if ($leave)
+@if ($leave || $sickLeave)
     <div class="card panel" style="margin-bottom: 1.1rem;">
         <h2>My leave</h2>
-        <p class="sub" style="margin:0 0 .6rem;">
-            Vacation leave for {{ now()->format('Y') }}. Only leave draws this down —
-            overtime, undertime and official business do not.
+        <p class="sub" style="margin:0 0 .7rem;">
+            For {{ now()->format('Y') }}. Vacation and sick days are counted apart —
+            being ill does not spend a holiday. Overtime, undertime, official business
+            and a change of schedule draw down neither.
         </p>
-        <div class="dl-tally" style="margin:0;">
-            <span class="dl-tally-item"><strong>{{ $leave['allowed'] }}</strong> allowed</span>
-            <span class="dl-tally-item"><strong>{{ $leave['taken'] }}</strong> taken</span>
-            <span class="dl-tally-item {{ $leave['left'] <= 0 ? 'is-orderlist' : '' }}">
-                <strong>{{ $leave['left'] }}</strong> left
-            </span>
-        </div>
+
+        @foreach ([['Vacation', $leave], ['Sick', $sickLeave]] as [$label, $b])
+            @if ($b)
+                <div style="margin-bottom:.5rem;">
+                    <div class="sub" style="margin:0 0 .25rem; font-weight:600;">{{ $label }}</div>
+                    <div class="dl-tally" style="margin:0;">
+                        <span class="dl-tally-item"><strong>{{ $b['allowed'] }}</strong> allowed</span>
+                        <span class="dl-tally-item"><strong>{{ $b['taken'] }}</strong> taken</span>
+                        <span class="dl-tally-item {{ $b['left'] <= 0 ? 'is-orderlist' : '' }}">
+                            <strong>{{ $b['left'] }}</strong> left
+                        </span>
+                    </div>
+                </div>
+            @endif
+        @endforeach
     </div>
 @endif
 

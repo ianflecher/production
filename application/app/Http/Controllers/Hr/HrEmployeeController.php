@@ -398,10 +398,13 @@ class HrEmployeeController extends Controller
         // funeral - but it should not be made without being told.
         if ($data['status'] === HrRequest::STATUS_APPROVED
             && LeaveBalance::wouldOverdraw($hrRequest->fresh())) {
-            $balance = LeaveBalance::for($hrRequest->employee);
+            // Named, because the two allowances are separate and the desk
+            // needs to know which one it just went past.
+            $kind = LeaveBalance::nameOf($hrRequest->type);
+            $balance = LeaveBalance::of($hrRequest->employee, $hrRequest->type);
 
             $said .= ' That is more leave than they had left — '
-                .$balance['taken'].' of '.$balance['allowed'].' days now used.';
+                .$balance['taken'].' of '.$balance['allowed'].' days of '.$kind.' now used.';
         }
 
         return back()->with('success', $said);

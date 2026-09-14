@@ -18,23 +18,33 @@
 </div>
 
 {{-- ---------- Leave allowance ---------- --}}
-@php $balance = \App\Support\LeaveBalance::for($employee); @endphp
+@php
+    $vacation = \App\Support\LeaveBalance::for($employee);
+    $sick = \App\Support\LeaveBalance::sick($employee);
+@endphp
 <div class="card panel" style="margin-bottom: 1.1rem;">
     <h2>Leave</h2>
-    @if ($balance)
-        <p class="sub" style="margin:0 0 .6rem;">
-            Vacation leave for {{ now()->format('Y') }}. Only leave draws this down.
+    @if ($vacation || $sick)
+        <p class="sub" style="margin:0 0 .7rem;">
+            For {{ now()->format('Y') }}. Vacation and sick days are counted apart.
         </p>
-        <div class="dl-tally" style="margin:0;">
-            <span class="dl-tally-item"><strong>{{ $balance['allowed'] }}</strong> allowed</span>
-            <span class="dl-tally-item"><strong>{{ $balance['taken'] }}</strong> taken</span>
-            <span class="dl-tally-item {{ $balance['left'] <= 0 ? 'is-orderlist' : '' }}">
-                <strong>{{ $balance['left'] }}</strong> left
-            </span>
-            @if ($employee->sick_credits !== null)
-                <span class="dl-tally-item"><strong>{{ $employee->sick_credits }}</strong> sick days allowed</span>
-            @endif
-        </div>
+
+        @foreach ([['Vacation', $vacation], ['Sick', $sick]] as [$label, $b])
+            <div style="margin-bottom:.5rem;">
+                <div class="sub" style="margin:0 0 .25rem; font-weight:600;">{{ $label }}</div>
+                @if ($b)
+                    <div class="dl-tally" style="margin:0;">
+                        <span class="dl-tally-item"><strong>{{ $b['allowed'] }}</strong> allowed</span>
+                        <span class="dl-tally-item"><strong>{{ $b['taken'] }}</strong> taken</span>
+                        <span class="dl-tally-item {{ $b['left'] <= 0 ? 'is-orderlist' : '' }}">
+                            <strong>{{ $b['left'] }}</strong> left
+                        </span>
+                    </div>
+                @else
+                    <p class="sub" style="margin:0;">No allowance set.</p>
+                @endif
+            </div>
+        @endforeach
     @else
         {{-- Not an allowance of none. Until somebody sets one they are shown
              no balance at all, and nothing can be refused for going over it. --}}
