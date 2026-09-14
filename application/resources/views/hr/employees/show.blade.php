@@ -211,7 +211,7 @@
                 @for ($i = 0; $i < 5; $i++)
                     <div style="display:flex; gap:0.5rem; margin-top:0.35rem;">
                         <input type="text" name="deductions[{{ $i }}][label]" maxlength="60"
-                               placeholder="{{ ['SSS','PhilHealth','Pag-IBIG','Loan','Late'][$i] }}" style="flex:1 1 220px;">
+                               placeholder="{{ ['Cash advance','Uniform','Breakage','Other',''][$i] }}" style="flex:1 1 220px;">
                         <input type="number" step="0.01" name="deductions[{{ $i }}][amount]" placeholder="0.00" style="flex:0 1 140px;">
                     </div>
                 @endfor
@@ -220,6 +220,31 @@
             <div>
                 <label for="pnote">Note</label>
                 <input type="text" id="pnote" name="note" maxlength="2000">
+            </div>
+
+            {{-- Worked out rather than typed. Each hidden input is what makes
+                 unticking mean something: an unticked box sends nothing at
+                 all, and the controller defaults these to on. --}}
+            <div style="display:grid; gap:.35rem;">
+                <strong style="font-size:0.82rem;">Work these out for me</strong>
+
+                <label style="display:flex; gap:0.4rem; align-items:center; font-size:0.85rem;">
+                    <input type="hidden" name="statutory" value="0">
+                    <input type="checkbox" name="statutory" value="1" checked style="width:auto;">
+                    SSS, PhilHealth, Pag-IBIG and withholding tax
+                </label>
+
+                <label style="display:flex; gap:0.4rem; align-items:center; font-size:0.85rem;">
+                    <input type="hidden" name="loans" value="0">
+                    <input type="checkbox" name="loans" value="1" checked style="width:auto;">
+                    Loan repayments due this cut-off
+                </label>
+
+                <label style="display:flex; gap:0.4rem; align-items:center; font-size:0.85rem;">
+                    <input type="hidden" name="attendance" value="0">
+                    <input type="checkbox" name="attendance" value="1" checked style="width:auto;">
+                    The clock — overtime both approved and worked, less late and undertime
+                </label>
             </div>
 
             <label style="display:flex; gap:0.4rem; align-items:center; font-weight:600; font-size:0.85rem;">

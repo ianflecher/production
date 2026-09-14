@@ -12,8 +12,10 @@ use App\Models\HrLoan;
 use App\Models\HrPayslip;
 use App\Models\HrRequest;
 use App\Models\User;
+use App\Support\AttendancePay;
 use App\Support\LeaveBalance;
 use App\Support\PayrollCalculator;
+use App\Support\Wage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -186,6 +188,7 @@ class HrEmployeeController extends Controller
             // cutoff is how a wrong keystroke becomes somebody's wage.
             'statutory' => ['nullable', 'boolean'],
             'loans' => ['nullable', 'boolean'],
+            'attendance' => ['nullable', 'boolean'],
         ]);
 
         $typed = HrPayslip::tidyLines($data['deductions'] ?? []);
@@ -193,9 +196,12 @@ class HrEmployeeController extends Controller
         // Worked out rather than typed: SSS, PhilHealth, Pag-IBIG and the
         // withholding tax, off this person's monthly salary and shared down
         // to the period this payslip covers.
+        // Wage::monthly, not the raw column: the statutory tables are written
+        // against a monthly figure, and a daily wage of 600 was being taxed
+        // as though it were 600 a month.
         $statutory = $request->boolean('statutory', true)
             ? PayrollCalculator::lines(
-                (float) $employee->salary,
+                Wage::monthly($employee),
                 $data['period_start'],
                 $data['period_end']
             )
@@ -208,15 +214,27 @@ class HrEmployeeController extends Controller
             ? $this->loanRepayments($employee)
             : [];
 
+        // What the clock says about this period: overtime both approved and
+        // worked, and the late and undertime it recorded. Stored and read by
+        // nothing until now - a person 419 minutes late got the same wage as
+        // one never late.
+        $clock = $request->boolean('attendance', true)
+            ? AttendancePay::for($employee, $data['period_start'], $data['period_end'])
+            : null;
+
         $payslip = new HrPayslip([
             'hr_employee_id' => $employee->id,
             'period_start' => $data['period_start'],
             'period_end' => $data['period_end'],
             'gross' => round((float) $data['gross'], 2),
-            'earnings' => HrPayslip::tidyLines($data['earnings'] ?? []),
+            'earnings' => array_merge(
+                HrPayslip::tidyLines($data['earnings'] ?? []),
+                $clock['earnings'] ?? []
+            ),
             'deductions' => array_merge(
                 $typed,
                 $statutory,
+                $clock['deductions'] ?? [],
                 array_map(fn ($r) => $r['line'], $repayments)
             ),
             'note' => $data['note'] ?? null,
@@ -249,7 +267,16 @@ class HrEmployeeController extends Controller
                 $payslip->period_start->format('M j').'–'.$payslip->period_end->format('M j'));
         }
 
-        return back()->with('success', 'Payslip recorded — net ₱'.number_format((float) $payslip->net, 2).'.');
+        $said = 'Payslip recorded — net ₱'.number_format((float) $payslip->net, 2).'.';
+
+        // Worked but never asked for. Not paid, and not silently dropped
+        // either: the desk may want to approve it and record the slip again.
+        if (($clock['overtime_unapproved'] ?? 0) > 0) {
+            $said .= ' '.Wage::sayMinutes($clock['overtime_unapproved'])
+                .' of overtime was clocked but never approved, so it is not paid.';
+        }
+
+        return back()->with('success', $said);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * Something a person asks the office for.
@@ -105,6 +106,30 @@ class HrRequest extends Model
     public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
+    }
+
+    /**
+     * How long an hourly request is, in minutes.
+     *
+     * Overtime, undertime and official business are arrangements about part
+     * of a working day, and the length is the whole point of them - an
+     * approved overtime with no number attached is a yes the payroll cannot
+     * act on. Null when it is not that kind of request, or when the times
+     * were left off.
+     */
+    public function minutes(): ?int
+    {
+        if (! $this->isHourly() || ! $this->starts_at || ! $this->ends_at) {
+            return null;
+        }
+
+        $day = ($this->starts_on ?? now())->toDateString();
+
+        $from = Carbon::parse($day)->setTimeFromTimeString($this->starts_at);
+        $to = Carbon::parse($day)->setTimeFromTimeString($this->ends_at);
+
+        // Backwards is a mistake, and a mistake should pay nobody.
+        return $to->gt($from) ? (int) round($from->diffInMinutes($to)) : 0;
     }
 
     public function isHourly(): bool
