@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Hr;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\HrEmployee;
 use App\Models\HrIncident;
 use App\Models\HrRequest;
+use App\Support\LeaveBalance;
+use App\Support\Shift;
+use App\Support\Workdays;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -41,8 +45,95 @@ class MyHrController extends Controller
             'hourly' => HrRequest::HOURLY,
             // What they have left, so they can plan rather than file and hope.
             // Null when nobody has set them an allowance - see LeaveBalance.
-            'leave' => $employee ? \App\Support\LeaveBalance::for($employee) : null,
+            'leave' => $employee ? LeaveBalance::for($employee) : null,
+            // Today's clock, so the page can offer the right button rather
+            // than both of them.
+            'today' => $this->todayFor($request),
+            // The fortnight behind them. Long enough to see a habit forming,
+            // short enough that nobody has to scroll to find this morning.
+            'recent' => Attendance::where('user_id', $request->user()->id)
+                ->whereDate('date', '>=', now()->subDays(13)->toDateString())
+                ->orderByDesc('date')
+                ->get(),
         ]);
+    }
+
+    /** Today's attendance row for the signed-in person, if there is one. */
+    private function todayFor(Request $request): ?Attendance
+    {
+        return Attendance::where('user_id', $request->user()->id)
+            ->whereDate('date', now()->toDateString())
+            ->first();
+    }
+
+    /**
+     * "I am here."
+     *
+     * Clocked by the person themselves rather than stamped by a leader:
+     * a leader marking a team at ten would record everybody as two hours
+     * late, which is worse than not knowing.
+     *
+     * Once only. A second press is somebody checking the page, not somebody
+     * arriving again, and letting it through would move an arrival later.
+     */
+    public function clockIn(Request $request): RedirectResponse
+    {
+        $this->me($request);
+
+        $today = $this->todayFor($request);
+
+        if ($today && $today->time_in) {
+            return back()->with('success', 'You already clocked in at '.$today->clockedIn().'.');
+        }
+
+        $at = now()->format('H:i:s');
+        $late = Shift::metrics($at, null, now()->toDateString())['late'];
+
+        // Clocking in IS being present, whatever a leader marked earlier.
+        // Lateness is the minutes, not the status - the status column only
+        // knows present and absent.
+        //
+        // The row found above is updated rather than matched again by
+        // updateOrCreate: `date` is cast, so a row written through Eloquent
+        // does not necessarily compare equal to a bare Y-m-d string, and the
+        // near miss is a unique-key violation rather than a second row.
+        $written = ['status' => 'present', 'time_in' => $at, 'late_minutes' => $late];
+
+        if ($today) {
+            $today->update($written);
+        } else {
+            Attendance::create($written + [
+                'user_id' => $request->user()->id,
+                'date' => now()->toDateString(),
+            ]);
+        }
+
+        return back()->with('success', $late > 0
+            ? 'Clocked in at '.now()->format('g:i A').' — '.$late.' minutes late.'
+            : 'Clocked in at '.now()->format('g:i A').'.');
+    }
+
+    /** "I am going." Recomputed against the arrival already on the row. */
+    public function clockOut(Request $request): RedirectResponse
+    {
+        $this->me($request);
+
+        $today = $this->todayFor($request);
+
+        if (! $today || ! $today->time_in) {
+            return back()->with('success', 'Clock in first — there is no arrival to close off.');
+        }
+
+        $at = now()->format('H:i:s');
+        $m = Shift::metrics($today->time_in, $at, $today->date?->toDateString());
+
+        $today->update([
+            'time_out' => $at,
+            'undertime_minutes' => $m['undertime'],
+            'overtime_minutes' => $m['overtime'],
+        ]);
+
+        return back()->with('success', 'Clocked out at '.now()->format('g:i A').'.');
     }
 
     /** File a leave, a change of schedule, undertime, overtime or an OB. */
@@ -69,7 +160,7 @@ class MyHrController extends Controller
         $countsInDays = ! in_array($data['type'], HrRequest::HOURLY, true);
 
         $workingDays = $countsInDays
-            ? \App\Support\Workdays::between(
+            ? Workdays::between(
                 $data['starts_on'],
                 $data['ends_on'] ?? $data['starts_on']
             )

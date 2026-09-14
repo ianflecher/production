@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Hr;
 
 use App\Http\Controllers\Controller;
 use App\Models\AppNotification;
+use App\Models\Attendance;
 use App\Models\HrEmployee;
 use App\Models\HrIncident;
 use App\Models\HrLoan;
 use App\Models\HrPayslip;
 use App\Models\HrRequest;
+use App\Support\LeaveBalance;
+use App\Support\PayrollCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -50,6 +53,12 @@ class HrEmployeeController extends Controller
         return view('hr.employees.show', [
             'employee' => $employee->load(['user', 'payslips', 'incidents', 'loans.payments', 'requests']),
             'kinds' => HrIncident::KINDS,
+            // The month behind them. HR is asked "is this person habitually
+            // late" and until now the only answer was somebody's impression.
+            'attendance' => Attendance::where('user_id', $employee->user_id)
+                ->whereDate('date', '>=', now()->subDays(29)->toDateString())
+                ->orderByDesc('date')
+                ->get(),
         ]);
     }
 
@@ -83,7 +92,7 @@ class HrEmployeeController extends Controller
         // withholding tax, off this person's monthly salary and shared down
         // to the period this payslip covers.
         $statutory = $request->boolean('statutory', true)
-            ? \App\Support\PayrollCalculator::lines(
+            ? PayrollCalculator::lines(
                 (float) $employee->salary,
                 $data['period_start'],
                 $data['period_end']
@@ -151,7 +160,7 @@ class HrEmployeeController extends Controller
      * A loan with no instalment set is one somebody is paying by hand, so it
      * is left alone.
      *
-     * @return array<int, array{loan: \App\Models\HrLoan, line: array{label: string, amount: float}}>
+     * @return array<int, array{loan: HrLoan, line: array{label: string, amount: float}}>
      */
     private function loanRepayments(HrEmployee $employee): array
     {
@@ -248,8 +257,7 @@ class HrEmployeeController extends Controller
         // balance is a sum, so an over-payment would just read as nothing
         // owing and the extra would vanish without anybody noticing.
         if (round((float) $data['amount'], 2) > $loan->balance()) {
-            return back()->withInput()->withErrors(['amount' =>
-                'Only ₱'.number_format($loan->balance(), 2).' is still owed on this loan.']);
+            return back()->withInput()->withErrors(['amount' => 'Only ₱'.number_format($loan->balance(), 2).' is still owed on this loan.']);
         }
 
         $loan->payments()->create($data + ['recorded_by' => $request->user()->id]);
@@ -287,8 +295,8 @@ class HrEmployeeController extends Controller
         // allowed to make - somebody with none left may still be let off for a
         // funeral - but it should not be made without being told.
         if ($data['status'] === HrRequest::STATUS_APPROVED
-            && \App\Support\LeaveBalance::wouldOverdraw($hrRequest->fresh())) {
-            $balance = \App\Support\LeaveBalance::for($hrRequest->employee);
+            && LeaveBalance::wouldOverdraw($hrRequest->fresh())) {
+            $balance = LeaveBalance::for($hrRequest->employee);
 
             $said .= ' That is more leave than they had left — '
                 .$balance['taken'].' of '.$balance['allowed'].' days now used.';

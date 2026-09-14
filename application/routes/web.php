@@ -131,6 +131,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->whereNumber('hrRequest')->name('hr.my.requests.withdraw');
     Route::post('/my-hr/incidents/{incident}/read', [\App\Http\Controllers\Hr\MyHrController::class, 'acknowledgeIncident'])
         ->whereNumber('incident')->name('hr.my.incidents.read');
+    // Clocked by the person themselves. A leader marking a team at ten would
+    // record the whole shop as two hours late.
+    Route::post('/my-hr/clock-in', [\App\Http\Controllers\Hr\MyHrController::class, 'clockIn'])->name('hr.my.clock-in');
+    Route::post('/my-hr/clock-out', [\App\Http\Controllers\Hr\MyHrController::class, 'clockOut'])->name('hr.my.clock-out');
 
     // -------- The office side of the people --------
     Route::get('/hr/employees', [\App\Http\Controllers\Hr\HrEmployeeController::class, 'index'])->name('hr.employees.index');

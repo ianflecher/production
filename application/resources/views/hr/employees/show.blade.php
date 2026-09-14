@@ -16,6 +16,49 @@
     <a href="{{ route('hr.employees.index') }}" class="btn btn-ghost btn-sm">← All people</a>
 </div>
 
+{{-- ---------- Timekeeping ---------- --}}
+@php
+    $lateDays = $attendance->filter->wasLate();
+    $overtime = $attendance->sum('overtime_minutes');
+@endphp
+<div class="card panel" style="margin-bottom: 1.1rem;">
+    <h2>Timekeeping</h2>
+    <p class="sub" style="margin:0 0 .6rem;">
+        The last 30 days, clocked by {{ $employee->user?->name ?? 'them' }} themselves.
+    </p>
+
+    @if ($attendance->isEmpty())
+        <p class="sub" style="margin:0;">Nothing clocked. Days marked present by a leader carry no times.</p>
+    @else
+        <div class="dl-tally" style="margin:0 0 .8rem;">
+            <span class="dl-tally-item"><strong>{{ $attendance->count() }}</strong> days recorded</span>
+            <span class="dl-tally-item {{ $lateDays->count() ? 'is-orderlist' : '' }}">
+                <strong>{{ $lateDays->count() }}</strong> late
+            </span>
+            <span class="dl-tally-item"><strong>{{ $lateDays->sum('late_minutes') }}</strong> min late in all</span>
+            <span class="dl-tally-item"><strong>{{ $overtime }}</strong> min overtime</span>
+        </div>
+
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead><tr><th>Day</th><th>In</th><th>Out</th><th>Late</th><th>Under</th><th>Over</th></tr></thead>
+                <tbody>
+                    @foreach ($attendance as $a)
+                        <tr>
+                            <td style="font-weight:600;">{{ $a->date->format('D, M j') }}</td>
+                            <td>{{ $a->clockedIn() }}</td>
+                            <td>{{ $a->clockedOut() }}</td>
+                            <td>{{ $a->late_minutes > 0 ? $a->late_minutes.' min' : '—' }}</td>
+                            <td>{{ $a->undertime_minutes > 0 ? $a->undertime_minutes.' min' : '—' }}</td>
+                            <td>{{ $a->overtime_minutes > 0 ? $a->overtime_minutes.' min' : '—' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+</div>
+
 {{-- ---------- Requests waiting on HR ---------- --}}
 @php $pending = $employee->requests->where('status', 'pending'); @endphp
 <div class="card panel" style="margin-bottom: 1.1rem;">

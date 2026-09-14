@@ -24,6 +24,77 @@
     </div>
 </div>
 
+{{-- ---------- Today's clock ---------- --}}
+<div class="card panel" style="margin-bottom: 1.1rem;">
+    <h2>My time today</h2>
+
+    @php
+        $in = $today?->time_in;
+        $out = $today?->time_out;
+    @endphp
+
+    <div class="dl-tally" style="margin:.2rem 0 .8rem;">
+        <span class="dl-tally-item">
+            <strong>{{ $today?->clockedIn() ?? '—' }}</strong> in
+        </span>
+        <span class="dl-tally-item">
+            <strong>{{ $today?->clockedOut() ?? '—' }}</strong> out
+        </span>
+        @if ($today?->wasLate())
+            <span class="dl-tally-item is-orderlist">
+                <strong>{{ $today->late_minutes }}</strong> min late
+            </span>
+        @endif
+        @if ($today && $today->overtime_minutes > 0)
+            <span class="dl-tally-item"><strong>{{ $today->overtime_minutes }}</strong> min over</span>
+        @endif
+        @if ($today && $today->undertime_minutes > 0)
+            <span class="dl-tally-item"><strong>{{ $today->undertime_minutes }}</strong> min under</span>
+        @endif
+    </div>
+
+    <p class="sub" style="margin:0 0 .7rem;">
+        The shift runs {{ \Illuminate\Support\Carbon::parse(config('shift.start'))->format('g:i A') }}
+        to {{ \Illuminate\Support\Carbon::parse(config('shift.end'))->format('g:i A') }},
+        with {{ config('shift.grace_minutes') }} minutes' grace.
+    </p>
+
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+        @if (! $in)
+            <form method="POST" action="{{ route('hr.my.clock-in') }}">
+                @csrf
+                <button class="btn btn-primary">Clock in</button>
+            </form>
+        @elseif (! $out)
+            <form method="POST" action="{{ route('hr.my.clock-out') }}">
+                @csrf
+                <button class="btn btn-primary">Clock out</button>
+            </form>
+        @else
+            <span class="sub">Your day is closed off. Nothing else to press.</span>
+        @endif
+    </div>
+
+    @if ($recent->isNotEmpty())
+        <div class="tbl-wrap" style="margin-top:1rem;">
+            <table class="tbl">
+                <thead><tr><th>Day</th><th>In</th><th>Out</th><th>Late</th><th>Over</th></tr></thead>
+                <tbody>
+                    @foreach ($recent as $a)
+                        <tr>
+                            <td style="font-weight:600;">{{ $a->date->format('D, M j') }}</td>
+                            <td>{{ $a->clockedIn() }}</td>
+                            <td>{{ $a->clockedOut() }}</td>
+                            <td>{{ $a->late_minutes > 0 ? $a->late_minutes.' min' : '—' }}</td>
+                            <td>{{ $a->overtime_minutes > 0 ? $a->overtime_minutes.' min' : '—' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+</div>
+
 {{-- ---------- File a request ---------- --}}
 <div class="card panel" style="margin-bottom: 1.1rem;">
     <h2>Ask the office for something</h2>
@@ -111,26 +182,26 @@
     @endif
 </div>
 
+{{-- ---------- What is left, so somebody can plan rather than file and hope ---------- --}}
+@if ($leave)
+    <div class="card panel" style="margin-bottom: 1.1rem;">
+        <h2>My leave</h2>
+        <p class="sub" style="margin:0 0 .6rem;">
+            Vacation leave for {{ now()->format('Y') }}. Only leave draws this down —
+            overtime, undertime and official business do not.
+        </p>
+        <div class="dl-tally" style="margin:0;">
+            <span class="dl-tally-item"><strong>{{ $leave['allowed'] }}</strong> allowed</span>
+            <span class="dl-tally-item"><strong>{{ $leave['taken'] }}</strong> taken</span>
+            <span class="dl-tally-item {{ $leave['left'] <= 0 ? 'is-orderlist' : '' }}">
+                <strong>{{ $leave['left'] }}</strong> left
+            </span>
+        </div>
+    </div>
+@endif
+
 {{-- ---------- Payslips ---------- --}}
 <div class="card panel" style="margin-bottom: 1.1rem;">
-    @if ($leave)
-        {{-- What is left, so somebody can plan rather than file and hope. --}}
-        <div class="card panel" style="margin-bottom:1.1rem;">
-            <h2>My leave</h2>
-            <p class="sub" style="margin:0 0 .6rem;">
-                Vacation leave for {{ now()->format('Y') }}. Only leave draws this down —
-                overtime, undertime and official business do not.
-            </p>
-            <div class="dl-tally" style="margin:0;">
-                <span class="dl-tally-item"><strong>{{ $leave['allowed'] }}</strong> allowed</span>
-                <span class="dl-tally-item"><strong>{{ $leave['taken'] }}</strong> taken</span>
-                <span class="dl-tally-item {{ $leave['left'] <= 0 ? 'is-orderlist' : '' }}">
-                    <strong>{{ $leave['left'] }}</strong> left
-                </span>
-            </div>
-        </div>
-    @endif
-
     <h2>My payslips</h2>
     @php $released = $employee->payslips->filter->isReleased(); @endphp
     @if ($released->isEmpty())
