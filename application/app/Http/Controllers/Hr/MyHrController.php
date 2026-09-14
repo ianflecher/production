@@ -150,16 +150,23 @@ class MyHrController extends Controller
             'starts_at' => ['nullable', 'date_format:H:i'],
             'ends_at' => ['nullable', 'date_format:H:i', 'after:starts_at'],
             'reason' => ['required', 'string', 'max:2000'],
+            // A medical certificate, a birth certificate, an enrolment
+            // letter. Never required: somebody off with flu on the morning
+            // cannot upload anything, and refusing the request over it would
+            // only push the whole conversation back onto chat.
+            'attachment' => ['nullable', 'file', 'max:8192', 'mimes:jpg,jpeg,png,webp,pdf'],
         ], [
             'reason.required' => 'Say why — the office decides on the reason.',
             'ends_on.after_or_equal' => 'The last day cannot be before the first.',
             'ends_at.after' => 'The end time has to be after the start.',
         ]);
 
-        // Only days AWAY from work are counted in days. Overtime, undertime
-        // and official business are arrangements about a working day, so they
-        // carry no day count and draw down no balance.
-        $countsInDays = ! in_array($data['type'], HrRequest::HOURLY, true);
+        // Only days AWAY from work are counted in days. Overtime, undertime,
+        // official business and a change of schedule are all arrangements
+        // ABOUT a working day rather than days off one, so they carry no day
+        // count. Asked positively now there are eight kinds of leave: the old
+        // "not hourly" reading quietly gave a change of schedule a day count.
+        $countsInDays = in_array($data['type'], HrRequest::DAYS_AWAY, true);
 
         $workingDays = $countsInDays
             ? Workdays::between(
@@ -167,6 +174,11 @@ class MyHrController extends Controller
                 $data['ends_on'] ?? $data['starts_on']
             )
             : null;
+
+        // Kept out of public/, like every other document here: a medical
+        // certificate is not something to leave on a guessable URL.
+        $attachment = $request->file('attachment');
+        $storedAt = $attachment?->store('hr/requests');
 
         $hrRequest = $employee->requests()->create([
             'type' => $data['type'],
@@ -181,6 +193,8 @@ class MyHrController extends Controller
             // working that out on paper every time, and nothing on the
             // request said which answer they had used.
             'working_days' => $workingDays,
+            'attachment_path' => $storedAt ?: null,
+            'attachment_name' => $attachment?->getClientOriginalName(),
         ]);
 
         return back()->with('success', HrRequest::TYPES[$data['type']].' filed. HR will answer it.');

@@ -152,6 +152,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/my-hr/clock-in', [\App\Http\Controllers\Hr\MyHrController::class, 'clockIn'])->name('hr.my.clock-in');
     Route::post('/my-hr/clock-out', [\App\Http\Controllers\Hr\MyHrController::class, 'clockOut'])->name('hr.my.clock-out');
 
+    // -------- Leave: every request in the shop, not one file at a time --------
+    Route::get('/hr/leave', [\App\Http\Controllers\Hr\HrLeaveController::class, 'index'])->name('hr.leave.index');
+    Route::get('/hr/leave/{hrRequest}/attachment', [\App\Http\Controllers\Hr\HrLeaveController::class, 'attachment'])
+        ->whereNumber('hrRequest')->name('hr.leave.attachment');
+
     // -------- The cut-off: everybody's payslip for one period --------
     Route::get('/hr/payroll', [\App\Http\Controllers\Hr\PayrollController::class, 'index'])->name('hr.payroll.index');
     Route::post('/hr/payroll/run', [\App\Http\Controllers\Hr\PayrollController::class, 'run'])->name('hr.payroll.run');

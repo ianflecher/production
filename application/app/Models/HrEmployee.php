@@ -71,6 +71,19 @@ class HrEmployee extends Model
         return $this->hasMany(HrRequest::class)->orderByDesc('starts_on');
     }
 
+    /**
+     * What to call them.
+     *
+     * Borrowed from the linked login for now, because that is the only place a
+     * name lives. When employees stop being logins - the shop's accounts are
+     * stations, and one may be shared by three people - this is the single
+     * place that has to change.
+     */
+    public function displayName(): string
+    {
+        return $this->user?->name ?: 'Employee';
+    }
+
     public function isCurrent(): bool
     {
         return $this->ended_on === null;

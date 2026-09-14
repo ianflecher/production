@@ -22,6 +22,18 @@ class HrRequest extends Model
 
     public const TYPE_SICK = 'sick_leave';
 
+    public const TYPE_EMERGENCY = 'emergency_leave';
+
+    public const TYPE_MATERNITY = 'maternity_leave';
+
+    public const TYPE_PATERNITY = 'paternity_leave';
+
+    public const TYPE_BEREAVEMENT = 'bereavement_leave';
+
+    public const TYPE_STUDY = 'study_leave';
+
+    public const TYPE_UNPAID = 'unpaid_leave';
+
     public const TYPE_SCHEDULE = 'schedule_change';
 
     public const TYPE_UNDERTIME = 'undertime';
@@ -33,10 +45,43 @@ class HrRequest extends Model
     public const TYPES = [
         self::TYPE_LEAVE => 'Vacation leave',
         self::TYPE_SICK => 'Sick leave',
+        self::TYPE_EMERGENCY => 'Emergency leave',
+        self::TYPE_MATERNITY => 'Maternity leave',
+        self::TYPE_PATERNITY => 'Paternity leave',
+        self::TYPE_BEREAVEMENT => 'Bereavement leave',
+        self::TYPE_STUDY => 'Study leave',
+        self::TYPE_UNPAID => 'Leave without pay',
         self::TYPE_SCHEDULE => 'Change of schedule',
         self::TYPE_UNDERTIME => 'Undertime',
         self::TYPE_OVERTIME => 'Overtime',
         self::TYPE_OFFICIAL_BUSINESS => 'Official business',
+    ];
+
+    /**
+     * Days away from work, whether or not an allowance pays for them.
+     *
+     * Everything here is counted in working days and shows on the employment
+     * file. What separates them is DRAWS_ON below: only two come off a
+     * balance the shop grants.
+     */
+    public const DAYS_AWAY = [
+        self::TYPE_LEAVE, self::TYPE_SICK, self::TYPE_EMERGENCY,
+        self::TYPE_MATERNITY, self::TYPE_PATERNITY, self::TYPE_BEREAVEMENT,
+        self::TYPE_STUDY, self::TYPE_UNPAID,
+    ];
+
+    /** The ones the shop does not pay for, so a payroll run can see them. */
+    public const UNPAID = [self::TYPE_UNPAID, self::TYPE_STUDY];
+
+    /**
+     * The ones that usually come with paper: a medical certificate, a birth
+     * certificate, a death certificate, an enrolment letter. Not enforced -
+     * somebody off with flu on the day cannot upload anything - but the form
+     * asks, because the desk was being sent photographs over chat instead.
+     */
+    public const WANTS_PAPER = [
+        self::TYPE_SICK, self::TYPE_MATERNITY,
+        self::TYPE_PATERNITY, self::TYPE_BEREAVEMENT, self::TYPE_STUDY,
     ];
 
     /** The ones measured in hours rather than days. */
@@ -52,6 +97,11 @@ class HrRequest extends Model
     public const DRAWS_ON = [
         self::TYPE_LEAVE => 'vacation_credits',
         self::TYPE_SICK => 'sick_credits',
+        // And nothing else. Maternity, paternity and bereavement are
+        // entitlements in their own right rather than something spent out of a
+        // holiday allowance, and study and unpaid leave are not paid for at
+        // all. Counting any of them against vacation would take a woman's
+        // holiday away for having a baby.
     ];
 
     public const STATUS_PENDING = 'pending';
@@ -68,6 +118,7 @@ class HrRequest extends Model
 
     protected $fillable = [
         'hr_employee_id', 'type', 'starts_on', 'ends_on', 'starts_at', 'ends_at', 'working_days',
+        'attachment_path', 'attachment_name',
         'reason', 'status', 'decision_note', 'decided_by', 'decided_at',
     ];
 
@@ -81,6 +132,24 @@ class HrRequest extends Model
             // every comparison against it is a guess about the driver.
             'working_days' => 'float',
         ];
+    }
+
+    /** Who answered it, for the shop-wide leave screen. */
+    public function decidedBy()
+    {
+        return $this->belongsTo(User::class, 'decided_by');
+    }
+
+    /** The paper that came with it, if any. */
+    public function hasAttachment(): bool
+    {
+        return filled($this->attachment_path);
+    }
+
+    /** Whether this kind is days off work rather than an arrangement about one. */
+    public function isDaysAway(): bool
+    {
+        return in_array($this->type, self::DAYS_AWAY, true);
     }
 
     public function employee()
