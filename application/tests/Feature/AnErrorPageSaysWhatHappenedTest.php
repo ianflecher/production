@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Tests\TestCase;
 
 /**
@@ -78,6 +79,63 @@ class AnErrorPageSaysWhatHappenedTest extends TestCase
             ->assertForbidden()
             ->assertSee('This one is not yours')
             ->assertSee('Go to my dashboard');
+    }
+
+    /* ---------------- 429 ---------------- */
+
+    /**
+     * Nearly every throttled route here is public - the client design
+     * questionnaires and the job application form - so the reader is as
+     * likely to be a client or an applicant as a member of staff.
+     */
+    public function test_the_throttle_page_assumes_nothing_about_who_is_reading(): void
+    {
+        $html = view('errors.429')->render();
+
+        $this->assertStringContainsString('Too many tries in a row', $html);
+        $this->assertStringNotContainsString('dashboard', $html);
+        $this->assertStringNotContainsString('nav-section', $html);
+    }
+
+    /**
+     * A real number, not "shortly". Somebody told to try again shortly presses
+     * the button immediately and earns themselves another 429.
+     */
+    public function test_the_throttle_page_says_how_long_to_wait(): void
+    {
+        $exception = new ThrottleRequestsException(
+            'Too Many Attempts.', null, ['Retry-After' => 45]
+        );
+
+        $html = view('errors.429', ['exception' => $exception])->render();
+
+        $this->assertStringContainsString('45 seconds', $html);
+    }
+
+    /** A long wait is said in minutes, because 900 seconds means nothing. */
+    public function test_a_long_wait_is_said_in_minutes(): void
+    {
+        $exception = new ThrottleRequestsException(
+            'Too Many Attempts.', null, ['Retry-After' => 900]
+        );
+
+        $html = view('errors.429', ['exception' => $exception])->render();
+
+        $this->assertStringContainsString('15 minutes', $html);
+    }
+
+    /** And it still renders when nothing said how long. */
+    public function test_the_throttle_page_renders_with_no_retry_header(): void
+    {
+        $html = view('errors.429')->render();
+
+        $this->assertStringContainsString('Wait a short while', $html);
+    }
+
+    /** Sending a form twice is the thing people do next, so it is addressed. */
+    public function test_the_throttle_page_warns_about_resending(): void
+    {
+        $this->assertStringContainsString('it may', view('errors.429')->render());
     }
 
     /* ---------------- 500 ---------------- */
