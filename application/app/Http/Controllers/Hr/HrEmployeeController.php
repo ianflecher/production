@@ -12,9 +12,8 @@ use App\Models\HrLoan;
 use App\Models\HrPayslip;
 use App\Models\HrRequest;
 use App\Models\User;
-use App\Support\AttendancePay;
 use App\Support\LeaveBalance;
-use App\Support\PayrollCalculator;
+use App\Support\PayslipDraft;
 use App\Support\Wage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -184,88 +183,44 @@ class HrEmployeeController extends Controller
             'deductions.*.amount' => ['nullable', 'numeric', 'min:-100000000', 'max:100000000'],
             'note' => ['nullable', 'string', 'max:2000'],
             'release' => ['nullable', 'boolean'],
-            // Both default to on. Typing SSS and PhilHealth from memory every
-            // cutoff is how a wrong keystroke becomes somebody's wage.
             'statutory' => ['nullable', 'boolean'],
             'loans' => ['nullable', 'boolean'],
             'attendance' => ['nullable', 'boolean'],
         ]);
 
-        $typed = HrPayslip::tidyLines($data['deductions'] ?? []);
+        // Assembled by PayslipDraft, which is also what the cut-off uses.
+        // Two code paths producing a wage is two chances to produce different
+        // ones from the same facts.
+        $draft = PayslipDraft::for(
+            employee: $employee,
+            start: $data['period_start'],
+            end: $data['period_end'],
+            gross: (float) $data['gross'],
+            include: [
+                // All three default to on. Typing SSS and PhilHealth from
+                // memory every cut-off is how a wrong keystroke becomes
+                // somebody's wage.
+                'statutory' => $request->boolean('statutory', true),
+                'loans' => $request->boolean('loans', true),
+                'attendance' => $request->boolean('attendance', true),
+            ],
+            typedEarnings: HrPayslip::tidyLines($data['earnings'] ?? []),
+            typedDeductions: HrPayslip::tidyLines($data['deductions'] ?? []),
+        );
 
-        // Worked out rather than typed: SSS, PhilHealth, Pag-IBIG and the
-        // withholding tax, off this person's monthly salary and shared down
-        // to the period this payslip covers.
-        // Wage::monthly, not the raw column: the statutory tables are written
-        // against a monthly figure, and a daily wage of 600 was being taxed
-        // as though it were 600 a month.
-        $statutory = $request->boolean('statutory', true)
-            ? PayrollCalculator::lines(
-                Wage::monthly($employee),
-                $data['period_start'],
-                $data['period_end']
-            )
-            : [];
-
-        // And what they are paying back this cutoff, never more than is left
-        // owing. hr_loans has carried a per_payslip figure since the day it
-        // was written and nothing has ever applied it.
-        $repayments = $request->boolean('loans', true)
-            ? $this->loanRepayments($employee)
-            : [];
-
-        // What the clock says about this period: overtime both approved and
-        // worked, and the late and undertime it recorded. Stored and read by
-        // nothing until now - a person 419 minutes late got the same wage as
-        // one never late.
-        $clock = $request->boolean('attendance', true)
-            ? AttendancePay::for($employee, $data['period_start'], $data['period_end'])
-            : null;
-
-        $payslip = new HrPayslip([
-            'hr_employee_id' => $employee->id,
-            'period_start' => $data['period_start'],
-            'period_end' => $data['period_end'],
-            'gross' => round((float) $data['gross'], 2),
-            'earnings' => array_merge(
-                HrPayslip::tidyLines($data['earnings'] ?? []),
-                $clock['earnings'] ?? []
-            ),
-            'deductions' => array_merge(
-                $typed,
-                $statutory,
-                $clock['deductions'] ?? [],
-                array_map(fn ($r) => $r['line'], $repayments)
-            ),
-            'note' => $data['note'] ?? null,
-            'created_by' => $request->user()->id,
-        ]);
-
-        $payslip->recomputeNet();
-
-        if ($request->boolean('release')) {
-            $payslip->released_at = now();
-        }
-
-        $payslip->save();
-
-        // The deduction is only half of a repayment. Without this the loan
-        // would be taken off the wage every cutoff for ever and the balance
-        // would never move.
-        foreach ($repayments as $repayment) {
-            $repayment['loan']->payments()->create([
-                'amount' => $repayment['line']['amount'],
-                'paid_on' => $payslip->period_end,
-                'note' => 'From the payslip for '
-                    .$payslip->period_start->format('M j').'–'.$payslip->period_end->format('M j, Y'),
-                'recorded_by' => $request->user()->id,
-            ]);
-        }
+        $payslip = PayslipDraft::commit(
+            $draft,
+            $request->user()->id,
+            $request->boolean('release'),
+            $data['note'] ?? null,
+        );
 
         if ($payslip->isReleased()) {
             $this->tell($employee, '🧾 Your payslip is ready',
                 $payslip->period_start->format('M j').'–'.$payslip->period_end->format('M j'));
         }
+
+        $clock = $draft['clock'];
 
         $said = 'Payslip recorded — net ₱'.number_format((float) $payslip->net, 2).'.';
 
@@ -277,44 +232,6 @@ class HrEmployeeController extends Controller
         }
 
         return back()->with('success', $said);
-    }
-
-    /**
-     * What this person is paying back this cutoff, per open loan.
-     *
-     * Never more than is left owing: a ₱500 instalment against ₱200
-     * outstanding takes ₱200 and settles it, rather than taking ₱500 and
-     * leaving the shop owing them ₱300 with nothing saying so.
-     *
-     * A loan with no instalment set is one somebody is paying by hand, so it
-     * is left alone.
-     *
-     * @return array<int, array{loan: HrLoan, line: array{label: string, amount: float}}>
-     */
-    private function loanRepayments(HrEmployee $employee): array
-    {
-        $out = [];
-
-        foreach ($employee->loans()->get() as $loan) {
-            $instalment = round((float) $loan->per_payslip, 2);
-            $left = $loan->balance();
-
-            if ($instalment <= 0 || $left <= 0) {
-                continue;
-            }
-
-            $take = min($instalment, $left);
-
-            $out[] = [
-                'loan' => $loan,
-                'line' => [
-                    'label' => 'Loan repayment'.($loan->reason ? ' ('.$loan->reason.')' : ''),
-                    'amount' => round($take, 2),
-                ],
-            ];
-        }
-
-        return $out;
     }
 
     /** Let them see it. Until this, a half-typed payslip stays in the office. */
