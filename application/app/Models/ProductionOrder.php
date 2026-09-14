@@ -18,6 +18,9 @@ class ProductionOrder extends Model
 
     public const STAGE_MOCKUP = 2;
 
+    /** Where the sample run ends and the batch run begins. */
+    public const STAGE_MASS_PRODUCTION = 10;
+
     /**
      * The two tech pack steps, spelled once.
      *
@@ -933,8 +936,8 @@ class ProductionOrder extends Model
         // A skip-sample order has only one run, so it keeps the full window.
         $sampleSteps = $this->skip_sample
             ? collect()
-            : $steps->filter(fn (Task $step) => $step->stage < 10)->values();
-        $massProductionSteps = $steps->filter(fn (Task $step) => $step->stage >= 10)->values();
+            : $steps->filter(fn (Task $step) => $step->stage < self::STAGE_MASS_PRODUCTION)->values();
+        $massProductionSteps = $steps->filter(fn (Task $step) => $step->stage >= self::STAGE_MASS_PRODUCTION)->values();
 
         if ($sampleSteps->isEmpty()) {
             $assignWindow($massProductionSteps, $start, $end);
@@ -1025,11 +1028,87 @@ class ProductionOrder extends Model
             return null;
         }
 
+        // The clock has to have started at all.
+        //
+        // Steps can end up dated on a job that was never cleared to run:
+        // scheduleStepDeadlines() falls back to now() when there is no
+        // confirmed payment, and something reached it. Reading those back
+        // would give the job a sample deadline for a clock that never
+        // started, which is the fault sampleOverdue() was written to avoid.
+        // hasDownpayment() is the same question the rest of the pipeline
+        // asks, and it counts a waived deposit and a job that owes nothing.
+        if (! $this->hasDownpayment()) {
+            return null;
+        }
+
+        // The pipeline's own answer, when it has one.
+        //
+        // These were two formulas for one date, and two formulas drift: this
+        // one read the bare constant once while the schedule read the method,
+        // and a jersey's badge and its steps disagreed by a day. They agree by
+        // construction now - the schedule pins its last sample step to exactly
+        // the date below - so reading it back changes nothing in the ordinary
+        // case and settles the two places they could still part company.
+        //
+        // A rush job, where the client's due date lands inside the sample
+        // window: the schedule clamps its steps to the client deadline and
+        // this did not, so the badge sat AFTER the promise and the sample was
+        // never called late until the whole job already was.
+        //
+        // And a deadline somebody moved by hand. A leader who pushes the last
+        // sample step back has said when the sample is wanted; the badge
+        // saying otherwise is the system arguing with the person who owns the
+        // decision.
+        if ($fromPipeline = $this->lastSampleStepDueAt()) {
+            return $fromPipeline;
+        }
+
         $start = $this->firstConfirmedPaymentAt();
 
         return $start
             ? $start->copy()->startOfDay()->addDays($this->sampleLeadDays())
             : null;
+    }
+
+    /**
+     * When the last step of the sample run is wanted, if it has been dated.
+     *
+     * Undated until the schedule runs, which is the same moment the sample
+     * date exists at all - both are written when the first payment is
+     * confirmed - so in practice this answers whenever there is anything to
+     * answer. It falls back rather than failing because an order with no
+     * client due date gets no step dates at all: scheduleStepDeadlines()
+     * gives up without one, and the sample still has a promise of its own.
+     *
+     * Read off the loaded tasks when they are there. The only page that asks
+     * loads them already, and asking again per order is how a list page turns
+     * into a query per row.
+     */
+    private function lastSampleStepDueAt(): ?\Carbon\CarbonInterface
+    {
+        if ($this->relationLoaded('tasks')) {
+            return $this->tasks
+                ->filter(fn (Task $step) => $step->stage < self::STAGE_MASS_PRODUCTION
+                    && $step->due_at
+                    && $step->status !== 'cancelled')
+                ->max('due_at');
+        }
+
+        // max() and not orderByDesc()->value(): the relation carries its own
+        // orderBy('sequence'), an order added here is APPENDED to that rather
+        // than replacing it, and sequence wins - so asking for the latest
+        // quietly returned the first step of the sample run instead of the
+        // last. An aggregate has no such argument with the ordering.
+        //
+        // The status test is written long because `!= 'cancelled'` is false
+        // for a row with no status at all, which would drop steps the
+        // collection branch above keeps.
+        $latest = $this->tasks()
+            ->where('stage', '<', self::STAGE_MASS_PRODUCTION)
+            ->where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'cancelled'))
+            ->max('due_at');
+
+        return $latest ? \Illuminate\Support\Carbon::parse($latest) : null;
     }
 
     /** Works out the sample date and writes it down, when it has changed. */
