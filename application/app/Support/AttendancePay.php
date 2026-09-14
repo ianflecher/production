@@ -22,6 +22,11 @@ use Illuminate\Support\Carbon;
  * clocked beyond it is reported so the desk can see it rather than silently
  * dropped.
  *
+ * Matched DAY BY DAY rather than on the period's totals. Comparing totals
+ * lets an hour approved on Monday and not worked be quietly satisfied by an
+ * hour worked on Thursday and never approved - each is wrong on its own, and
+ * summing them first hides both.
+ *
  * Late and undertime are deducted at the plain rate with no premium, which is
  * the whole of the shop's rule on them.
  */
@@ -52,8 +57,21 @@ class AttendancePay
         $undertime = (int) $clock->sum('undertime_minutes');
         $worked = (int) $clock->sum('overtime_minutes');
 
-        $approved = self::approvedOvertimeMinutes($employee, $from, $to);
-        $paid = min($worked, $approved);
+        $approvedByDay = self::approvedOvertimeByDay($employee, $from, $to);
+        $approved = array_sum($approvedByDay);
+
+        // Day by day, so neither side can borrow from the other.
+        $paid = 0;
+        $unapproved = 0;
+
+        foreach ($clock as $day) {
+            $on = $day->date?->toDateString();
+            $workedThatDay = (int) $day->overtime_minutes;
+            $allowedThatDay = $approvedByDay[$on] ?? 0;
+
+            $paid += min($workedThatDay, $allowedThatDay);
+            $unapproved += max(0, $workedThatDay - $allowedThatDay);
+        }
 
         $earnings = [];
         $deductions = [];
@@ -88,27 +106,48 @@ class AttendancePay
             'overtime_worked' => $worked,
             'overtime_approved' => $approved,
             'overtime_paid' => $paid,
-            'overtime_unapproved' => max(0, $worked - $paid),
+            'overtime_unapproved' => $unapproved,
             'earnings' => $earnings,
             'deductions' => $deductions,
         ];
     }
 
     /**
-     * Overtime the desk actually said yes to, in minutes.
+     * Overtime the desk actually said yes to, in minutes, keyed by the day.
      *
-     * Matched on the day the overtime was for rather than when it was filed,
-     * so a request approved after the cutoff still belongs to the period it
-     * was worked in.
+     * Keyed on the day the overtime was FOR rather than when it was filed, so
+     * a request approved after the cutoff still belongs to the period it was
+     * worked in. Two requests for the same day add up.
+     *
+     * @return array<string, int>
      */
-    public static function approvedOvertimeMinutes(HrEmployee $employee, $from, $to): int
+    public static function approvedOvertimeByDay(HrEmployee $employee, $from, $to): array
     {
-        return (int) $employee->requests()
+        $byDay = [];
+
+        $requests = $employee->requests()
             ->where('type', HrRequest::TYPE_OVERTIME)
             ->where('status', HrRequest::STATUS_APPROVED)
             ->whereDate('starts_on', '>=', Carbon::parse($from)->toDateString())
             ->whereDate('starts_on', '<=', Carbon::parse($to)->toDateString())
-            ->get()
-            ->sum(fn (HrRequest $r) => $r->minutes() ?? 0);
+            ->get();
+
+        foreach ($requests as $request) {
+            $day = $request->starts_on?->toDateString();
+
+            if ($day === null) {
+                continue;
+            }
+
+            $byDay[$day] = ($byDay[$day] ?? 0) + ($request->minutes() ?? 0);
+        }
+
+        return $byDay;
+    }
+
+    /** The same, totalled - for saying how much was authorised over a period. */
+    public static function approvedOvertimeMinutes(HrEmployee $employee, $from, $to): int
+    {
+        return (int) array_sum(self::approvedOvertimeByDay($employee, $from, $to));
     }
 }

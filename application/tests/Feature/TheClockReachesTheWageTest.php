@@ -185,6 +185,59 @@ class TheClockReachesTheWageTest extends TestCase
         $this->assertSame(0, AttendancePay::for($e, '2026-09-01', '2026-09-30')['overtime_paid']);
     }
 
+    /**
+     * Matched day by day, not on the period's totals.
+     *
+     * An hour approved on Monday and not worked must not be satisfied by an
+     * hour worked on Thursday and never approved. Each is wrong on its own,
+     * and totalling them first hides both - which is exactly what the first
+     * cut of this did, and what a real payslip in the sample caught.
+     */
+    public function test_one_days_approval_does_not_pay_for_another_days_overtime(): void
+    {
+        $e = $this->staff();
+
+        // Monday: an hour approved, five minutes actually worked.
+        $this->clocked($e, '2026-09-14', over: 5);
+        $this->approvedOvertime($e, '2026-09-14', '17:00', '18:00');   // 60 approved
+
+        // Thursday: two hours worked, none approved.
+        $this->clocked($e, '2026-09-17', over: 120);
+
+        $pay = AttendancePay::for($e, '2026-09-01', '2026-09-30');
+
+        $this->assertSame(125, $pay['overtime_worked']);
+        $this->assertSame(60, $pay['overtime_approved']);
+
+        // Five from Monday and nothing from Thursday. Totalling would pay 60.
+        $this->assertSame(5, $pay['overtime_paid'],
+            "one day's approval paid for another day's overtime");
+        $this->assertSame(120, $pay['overtime_unapproved']);
+    }
+
+    /** Two approvals for the same day add up. */
+    public function test_two_approvals_on_one_day_add_up(): void
+    {
+        $e = $this->staff();
+
+        $this->clocked($e, '2026-09-14', over: 180);
+        $this->approvedOvertime($e, '2026-09-14', '17:00', '18:00');
+        $this->approvedOvertime($e, '2026-09-14', '18:00', '19:30');
+
+        $this->assertSame(150, AttendancePay::for($e, '2026-09-01', '2026-09-30')['overtime_paid']);
+    }
+
+    /** Approval for a day nobody clocked pays nothing. */
+    public function test_approval_on_a_day_with_no_clock_pays_nothing(): void
+    {
+        $e = $this->staff();
+
+        $this->clocked($e, '2026-09-14', over: 0);
+        $this->approvedOvertime($e, '2026-09-16', '17:00', '19:00');   // no attendance row
+
+        $this->assertSame(0, AttendancePay::for($e, '2026-09-01', '2026-09-30')['overtime_paid']);
+    }
+
     /* ---------------- late and undertime ---------------- */
 
     public function test_late_and_undertime_come_off_at_the_plain_rate(): void
