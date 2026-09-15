@@ -335,6 +335,12 @@
 {{-- The month's expenses --}}
 <div class="card panel">
     <h2>Expenses — {{ $month->format('F Y') }}</h2>
+    @if ($search !== '')
+        <p class="sub" style="margin:0 0 .6rem;">
+            {{ $expenses->count() }} {{ Str::plural('expense', $expenses->count()) }}
+            matching “{{ $search }}”, out of ₱{{ number_format($expenseTotal, 2) }} for the month.
+        </p>
+    @endif
 
     @if ($expenses->isEmpty())
         <p class="muted" style="padding: 1.5rem 0; text-align: center;">
@@ -405,8 +411,10 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="4" class="bk-total-label">Total</td>
-                        <td class="num bk-total-value">₱{{ number_format($expenseTotal, 2) }}</td>
+                        <td colspan="4" class="bk-total-label">
+                            {{ $search !== '' ? 'Total shown' : 'Total' }}
+                        </td>
+                        <td class="num bk-total-value">₱{{ number_format($expenses->sum('amount'), 2) }}</td>
                         <td colspan="4"></td>
                     </tr>
                 </tfoot>
