@@ -173,6 +173,41 @@ class Inquiry extends Model
             ->values();
     }
 
+    /**
+     * The designs keeping this brief on the follow-up list.
+     *
+     * Exactly the rule scopeForFollowUp() puts a row on the list for, and
+     * deliberately the same one line of logic: any design that has not become
+     * a job. A design still being written up counts too - that unfinished
+     * work is the officer's own, and it is the client waiting either way.
+     *
+     * (The artist's queue and the design badge make the opposite call about a
+     * brief, and both are right: those ask "is this on the artist's desk",
+     * which it is not. This asks "is the office finished with this client",
+     * which it is not either.)
+     *
+     * The card showed none of this. A brief whose products ARE its designs
+     * usually has nothing typed in "what they want", so it came out as a name
+     * and a phone number with nothing to say why the name was still on the
+     * list or what to do about it - and the ones with four approved designs
+     * waiting to be written up looked exactly like the ones with none.
+     *
+     * Reads the loaded relations when it has them: this is asked once per row
+     * of the list, and asking the database twice a row is how a page of
+     * thirty names becomes sixty queries.
+     */
+    public function designsHoldingTheFollowUp(): \Illuminate\Support\Collection
+    {
+        $designs = $this->relationLoaded('designs') ? $this->designs : $this->designs()->get();
+
+        $written = ($this->relationLoaded('orders') ? $this->orders : $this->orders()->get())
+            ->pluck('inquiry_design_id')->filter()->all();
+
+        return $designs
+            ->reject(fn ($design) => in_array($design->id, $written, true))
+            ->values();
+    }
+
     /** Every design under this brief, in the order the officer listed them. */
     public function designs(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
@@ -369,23 +404,23 @@ class Inquiry extends Model
         return $query
             ->where(function ($visible) {
                 $visible->where('status', self::STATUS_OPEN)
-                    // A design that has not become a job yet, whatever stage it
-                    // is at. This asked for an APPROVED one, which quietly lost
+                    // A design that has not become a job yet - whatever stage
+                    // it is at, with no exceptions.
+                    //
+                    // This asked for an APPROVED one once, which quietly lost
                     // the client who has ordered before and come back: their
                     // inquiry is marked ordered, so the first half does not
                     // catch them, and a design still being drawn did not
-                    // satisfy the second. They fell off the list until the
-                    // client approved the drawing - and the officer chasing
-                    // that order had nowhere to see them in the meantime.
+                    // satisfy the second. Then it asked for the three states
+                    // that are "out of the officer's hands", which left the
+                    // same hole one status narrower: a design still being
+                    // written up took the name off the list, even though the
+                    // unfinished work was the officer's own.
                     //
-                    // A design still being written up ("brief") is not out of
-                    // anybody's hands yet and is left off.
+                    // The rule is now the one the class docblock has always
+                    // claimed - a name leaves this list by ordering, and only
+                    // by ordering. Gone means every design became a job.
                     ->orWhereHas('designs', fn ($designs) => $designs
-                        ->whereIn('status', [
-                            InquiryDesign::STATUS_WITH_ARTIST,
-                            InquiryDesign::STATUS_SUBMITTED,
-                            InquiryDesign::STATUS_APPROVED,
-                        ])
                         ->whereDoesntHave('order'));
             })
             ->orderBy('created_at');

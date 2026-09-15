@@ -64,6 +64,48 @@
                 <div class="follow-up-ask">{{ $inq->what_they_want }}</div>
             @endif
 
+            {{-- What is actually outstanding on this name.
+
+                 A brief whose products ARE its designs usually has nothing
+                 typed above, so the row was a name and a number: nothing said
+                 why it was still on the list, and one with four approved
+                 designs waiting to be written up looked like one with none.
+
+                 The approved count is the line that matters - those are jobs
+                 nobody has written yet, and writing them is the only way the
+                 name comes off this list. --}}
+            @php
+                $holding = $inq->designsHoldingTheFollowUp();
+                $awaitingOrder = $holding->where('status', \App\Models\InquiryDesign::STATUS_APPROVED);
+                $withClient = $holding->where('status', \App\Models\InquiryDesign::STATUS_SUBMITTED);
+                $beingDrawn = $holding->where('status', \App\Models\InquiryDesign::STATUS_WITH_ARTIST);
+                $notSentYet = $holding->where('status', \App\Models\InquiryDesign::STATUS_BRIEF);
+            @endphp
+
+            @if ($holding->isNotEmpty())
+                <div class="follow-up-designs">
+                    @if ($awaitingOrder->isNotEmpty())
+                        <span class="fu-design is-approved">
+                            &#10003; {{ $awaitingOrder->count() }} approved &mdash;
+                            {{ $awaitingOrder->count() === 1 ? 'needs an order' : 'need orders' }}
+                        </span>
+                    @endif
+                    @if ($withClient->isNotEmpty())
+                        <span class="fu-design is-waiting">{{ $withClient->count() }} with the client</span>
+                    @endif
+                    @if ($beingDrawn->isNotEmpty())
+                        <span class="fu-design is-drawing">{{ $beingDrawn->count() }} being drawn</span>
+                    @endif
+                    {{-- Still on the officer's own desk. Counted, and named
+                         rather than lumped in with the rest, because this one
+                         is the reader's own unfinished work and nobody else
+                         is going to move it. --}}
+                    @if ($notSentYet->isNotEmpty())
+                        <span class="fu-design is-unsent">{{ $notSentYet->count() }} not sent yet</span>
+                    @endif
+                </div>
+            @endif
+
             @if ($inq->followUps->isNotEmpty())
                 <ul class="follow-up-log">
                     @foreach ($inq->followUps->take(3) as $log)

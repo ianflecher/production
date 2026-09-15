@@ -149,10 +149,20 @@ class AReturningClientStaysOnTheFollowUpListTest extends TestCase
     }
 
     /**
-     * A design still being written up is nobody's work yet — it has not been
-     * given to an artist, so there is nothing to chase about it.
+     * A design still being written up KEEPS her on the list. Reversed on
+     * purpose.
+     *
+     * The old reading was that a brief is nobody's work yet, so there is
+     * nothing to chase — which is true of the artist's queue and true of the
+     * badge on the design, and both still say so. It is the wrong answer to
+     * the question THIS list asks, which is whether the office is finished
+     * with the client. Half-written work is the officer's own, nobody else is
+     * going to move it, and taking the name off the list is how it gets
+     * forgotten.
+     *
+     * A name leaves this list one way: every design became a job.
      */
-    public function test_a_design_still_being_written_up_does_not_count(): void
+    public function test_a_design_still_being_written_up_keeps_her_on_the_list(): void
     {
         $officer = $this->officer();
         $inquiry = $this->briefAlreadyOrdered($officer);
@@ -162,7 +172,8 @@ class AReturningClientStaysOnTheFollowUpListTest extends TestCase
             'status' => 'brief',
         ]);
 
-        $this->assertFalse($this->onTheList($inquiry->fresh()));
+        $this->assertTrue($this->onTheList($inquiry->fresh()),
+            'her half-written design took her off the list and nobody would chase it');
     }
 
     /** The page the officer actually reads, not just the query behind it. */

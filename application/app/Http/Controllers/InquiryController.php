@@ -65,7 +65,11 @@ class InquiryController extends Controller
             'team' => $team,
             // Loaded for the badge that says which kind each row is, and for
             // isRevision() underneath it — without it that is a query a row.
-            'followUps' => Inquiry::with(['client', 'officer', 'followUps.user', 'designs'])
+            // 'orders' joins 'designs' here: the card now says which designs
+            // are still holding each row, and that answer needs to know which
+            // of them have already been written up. Without it that is two
+            // queries a row.
+            'followUps' => Inquiry::with(['client', 'officer', 'followUps.user', 'designs', 'orders'])
                 // Whose brief it is does not narrow what the artist leader
                 // sees: any of them may be carrying a layout of his to move.
                 // visibleTo() is left alone — it is asked by other pages that
