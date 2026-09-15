@@ -111,8 +111,9 @@
 <div class="card panel">
     <h2>Petty cash</h2>
     <p class="sub">
-        The tin the shop spends small amounts from. Put money in here, then record an expense
-        with <strong>Petty cash</strong> as the method and it comes straight back out.
+        The tin the shop spends small amounts from. Money goes in two ways — topped up here, or
+        a client paying in <strong>cash</strong>, which lands in the same drawer. Record an expense
+        with <strong>Cash (Petty Cash Fund)</strong> as the method and it comes straight back out.
     </p>
 
     <div class="bk-stats" style="margin-bottom: 1.1rem;">
@@ -124,7 +125,15 @@
         <div class="card bk-stat">
             <div class="lbl">Put in</div>
             <div class="val">₱{{ number_format($pettyCashIn, 2) }}</div>
-            <div class="note">All top-ups, all time</div>
+            {{-- Broken down, because the two halves are reconciled against
+                 different things: a top-up against a bank withdrawal, client
+                 cash against the job it was paid on. --}}
+            <div class="note">
+                ₱{{ number_format($pettyCashToppedUp, 2) }} topped up
+                @if ($pettyCashFromClients > 0)
+                    &middot; ₱{{ number_format($pettyCashFromClients, 2) }} cash from clients
+                @endif
+            </div>
         </div>
         <div class="card bk-stat">
             <div class="lbl">Spent from it</div>
@@ -132,6 +141,23 @@
             <div class="note">Expenses paid with petty cash</div>
         </div>
     </div>
+
+    {{-- Cash Finance has not confirmed yet.
+
+         It is in the drawer, so the notes and the screen disagree by exactly
+         this much - and without saying so, that gap is found by somebody
+         counting the tin and assuming the system is broken. It is deliberately
+         NOT added to the balance: a payment is a claim until Finance agrees,
+         and the balance is what decides whether an expense may be recorded
+         against the tin. Counting a claim lets the shop spend money nobody
+         has been shown. --}}
+    @if ($pettyCashUnconfirmed > 0)
+        <div class="alert-warning" style="margin-bottom: 1.1rem;">
+            ⏳ ₱{{ number_format($pettyCashUnconfirmed, 2) }} of client cash is waiting for Finance to
+            confirm it. It is not counted in the tin until they do, so the drawer holds that much
+            more than the figure above.
+        </div>
+    @endif
 
     <form method="POST" action="{{ route('books.petty-cash.store') }}" class="bk-form">
         @csrf
@@ -206,6 +232,32 @@
                                     </div>
                                 </form>
                             </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
+    {{-- The month's client cash, so the tin's figure can be traced back to the
+         jobs it came off. Not editable here: a payment is Finance's record and
+         is corrected on the order it belongs to, not on this page. --}}
+    @if ($cashPayments->isNotEmpty())
+        <h3 style="font-size:0.82rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase;
+                   color:var(--ink-3); margin:1.3rem 0 0.5rem;">
+            Cash from clients — {{ $month->format('F Y') }}
+        </h3>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead><tr><th>Date</th><th>Amount</th><th>Job</th><th>Client</th><th>For</th></tr></thead>
+                <tbody>
+                    @foreach ($cashPayments as $p)
+                        <tr>
+                            <td>{{ $p->paid_at?->format('M j, Y') }}</td>
+                            <td>₱{{ number_format((float) $p->amount, 2) }}</td>
+                            <td>{{ $p->order?->order_number ?? '—' }}</td>
+                            <td>{{ $p->order?->clientName() ?? '—' }}</td>
+                            <td>{{ $p->kind === 'full' ? 'Full payment' : ucfirst((string) $p->kind) }}</td>
                         </tr>
                     @endforeach
                 </tbody>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Expense;
+use App\Models\Payment;
 use App\Models\PettyCashTopup;
 use App\Services\SpreadsheetExport;
 use Illuminate\Http\RedirectResponse;
@@ -87,6 +88,18 @@ class BookkeepingController extends Controller
             ->map(fn ($rows) => (float) $rows->sum('amount'))
             ->sortDesc();
 
+        // The tin, asked once each.
+        //
+        // balance() and totalIn() each re-run the sums underneath them, so
+        // calling all five straight out of the view data asked the same three
+        // questions nine times. They are cheap questions, but on a hosted
+        // database every one is a round trip, and this page has a budget.
+        $pettyCashToppedUp = PettyCashTopup::totalToppedUp();
+        $pettyCashFromClients = PettyCashTopup::cashFromClients();
+        $pettyCashSpent = PettyCashTopup::totalOut();
+        $pettyCashIn = round($pettyCashToppedUp + $pettyCashFromClients, 2);
+        $pettyCashBalance = round($pettyCashIn - $pettyCashSpent, 2);
+
         return view('finance.books', [
             'month' => $month,
             'monthValue' => $month->format('Y-m'),
@@ -103,9 +116,25 @@ class BookkeepingController extends Controller
             // it on the 31st is still in it on the 1st. So it is deliberately
             // NOT filtered by the month being looked at, while the top-ups
             // listed beside it are, like everything else on this page.
-            'pettyCash' => PettyCashTopup::balance(),
-            'pettyCashIn' => PettyCashTopup::totalIn(),
-            'pettyCashOut' => PettyCashTopup::totalOut(),
+            'pettyCash' => $pettyCashBalance,
+            'pettyCashIn' => $pettyCashIn,
+            'pettyCashOut' => $pettyCashSpent,
+            // Split out, because "put in" now means two different acts:
+            // somebody walking to the bank, and a client handing over notes.
+            // The two are reconciled against different things.
+            'pettyCashToppedUp' => $pettyCashToppedUp,
+            'pettyCashFromClients' => $pettyCashFromClients,
+            'pettyCashUnconfirmed' => PettyCashTopup::cashAwaitingConfirmation(),
+            // The month's cash, so the tin's figure can be traced back to the
+            // jobs it came off. The client is loaded because clientName()
+            // reads it; the recorder is not, because the row does not show
+            // one - every query on this page is a round trip in the shop.
+            'cashPayments' => Payment::with('order.client')
+                ->where('method', Payment::METHOD_CASH)
+                ->whereNotNull('confirmed_at')
+                ->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+                ->orderByDesc('paid_at')
+                ->get(),
             'pettyCashTopups' => PettyCashTopup::with('recorder')
                 ->whereBetween('occurred_at', [$from, $to])
                 ->orderByDesc('occurred_at')

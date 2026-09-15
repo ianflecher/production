@@ -9,8 +9,19 @@ class Payment extends Model
 {
     public const METHOD_OTHER_TRANSFER = 'Other transfer';
 
+    /**
+     * Named, because the petty cash tin matches on it.
+     *
+     * Cash a client hands over goes into the tin, so PettyCashTopup counts
+     * every confirmed payment with this method as money in. Spelled as a
+     * literal in both places, renaming one would leave the tin quietly
+     * counting nothing and nobody would see it until the drawer disagreed
+     * with the screen.
+     */
+    public const METHOD_CASH = 'Cash';
+
     public const METHODS = [
-        'Cash',
+        self::METHOD_CASH,
         'GCash',
         'Bank transfer – UnionBank',
         'Tayocash – EastWest',
