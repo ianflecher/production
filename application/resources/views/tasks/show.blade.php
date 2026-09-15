@@ -249,9 +249,25 @@
 @if ($task->team === \App\Models\User::JOB_ARTIST)
     {{-- The job order only reaches the artist once it's been filled and sent.
          On the layout step they work from the design/reference alone. --}}
-    @php $joSent = $task->order->jobOrder?->status === 'sent_to_artist'; @endphp
-    <div class="alert-success" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
-        <span>{{ $joSent ? '📋 Complete every manual field in this Tech Pack, then send it to the account officer.' : '🖼 The design to make for this order.' }}</span>
+    @php
+        $joSent = $task->order->jobOrder?->status === 'sent_to_artist';
+        // Only on the tech pack step itself. On the layout step there is no
+        // pack to wait for - the artist works from the design alone, and
+        // saying they are waiting for one would be inventing a hold-up.
+        $packWaitingOn = $task->isTechPackStep() ? $task->order->techPackWaitingOn() : null;
+    @endphp
+    <div class="{{ $packWaitingOn ? 'alert-warning' : 'alert-success' }}" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+        <span>
+            @if ($packWaitingOn)
+                {{-- Named, so the artist knows whose desk it is on rather than
+                     reading "the design to make" on a step that is not one. --}}
+                ⏳ Waiting for the account officer to send the tech pack — {{ $packWaitingOn }}.
+            @elseif ($joSent)
+                📋 Complete every manual field in this Tech Pack, then send it to the account officer.
+            @else
+                🖼 The design to make for this order.
+            @endif
+        </span>
         <span style="display:flex; gap:0.5rem; flex-wrap:wrap;">
             <a href="{{ route('tasks.references', $task->id) }}" class="btn btn-primary btn-sm">🖼 Design to make</a>
             @if ($joSent)

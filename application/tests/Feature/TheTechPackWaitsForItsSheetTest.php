@@ -134,7 +134,12 @@ class TheTechPackWaitsForItsSheetTest extends TestCase
 
         $said = session('errors')->get('tech_pack')[0];
 
-        $this->assertStringContainsString('has not sent the job order', $said);
+        // "the tech pack", not "the job order". The job order SHEET is gone -
+        // the officer fills their half of the tech pack and sends THAT - and
+        // this message was the last place still naming a document the artist
+        // cannot open, which left them waiting on a thing that does not exist.
+        // The artist's card already said "tech pack"; now they agree.
+        $this->assertStringContainsString('has not sent the tech pack', $said);
         $this->assertStringNotContainsString('downpayment', $said,
             'it sent the artist to chase a deposit that was already waived');
         $this->assertStringContainsString('Pack Client', $said,

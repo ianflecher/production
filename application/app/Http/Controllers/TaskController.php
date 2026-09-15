@@ -121,18 +121,10 @@ class TaskController extends Controller
         // the artist once the account officer has filled and sent it. Said in
         // words rather than as a status code: from where the artist sits this
         // is not an error, it is a job still sitting on somebody else's desk.
-        if ($order->jobOrder?->status !== 'sent_to_artist') {
-            // Say the one thing that is actually outstanding.
-            //
-            // This named the downpayment whatever the reason, so an artist on
-            // a job whose deposit was collected - or waived - was sent to
-            // chase money that had already been dealt with, while the thing
-            // really holding it up went unmentioned.
-            $waitingOn = match (true) {
-                ! $order->mockupApproved() => 'the final mockup has not been approved yet',
-                ! $order->hasDownpayment() => 'the downpayment has not been collected yet',
-                default => 'the account officer has not sent the job order yet',
-            };
+        if ($waitingOn = $order->techPackWaitingOn()) {
+            // Say the one thing that is actually outstanding, and say it from
+            // the order itself - the step page and the start button now give
+            // the same answer, which they did not when each had its own copy.
 
             // Named by client as well as number: several orders of one brief
             // share a job order number now, so the number alone no longer says
@@ -769,6 +761,22 @@ class TaskController extends Controller
     public function start(Request $request, int $taskId): RedirectResponse
     {
         $task = Task::where('assigned_to', $request->user()->id)->findOrFail($taskId);
+
+        // A tech pack cannot be started before the officer has sent it.
+        //
+        // The release gate in unlockStage() has held the step back for a
+        // while, but nothing guarded this end of it: a step that reached the
+        // artist by any other route - released before that gate existed, or
+        // sent back for revision - could still be started, and the pack then
+        // refused to open. The step read as in_progress on every board while
+        // the artist had nothing to work from, which is the worst of both:
+        // it is neither waiting where somebody would chase it nor moving.
+        if ($task->isTechPackStep() && ($waitingOn = $task->order->techPackWaitingOn())) {
+            return back()->withErrors([
+                'tech_pack' => 'The Tech Pack is not open yet — '.$waitingOn.'.',
+            ]);
+        }
+
         $task->start($request->user());
 
         if ($task->isTechPackStep()) {

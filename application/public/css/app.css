@@ -220,7 +220,7 @@
             box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
         }
         .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; }
-        .alert-error, .alert-success {
+        .alert-error, .alert-success, .alert-warning {
             display: flex; align-items: flex-start; gap: 0.55rem;
             border-radius: 10px; padding: 0.78rem 1rem; font-size: 0.88rem; margin-bottom: 1rem; font-weight: 500;
             animation: fadeUp .25s ease both;
@@ -233,6 +233,13 @@
             background: var(--success-soft); border: 1px solid var(--success-border); border-left: 4px solid #22c55e; color: var(--success-ink);
         }
         .content > .alert-success::before { content: '✓'; font-weight: 800; flex-shrink: 0; }
+        /* Amber. Nothing has gone wrong - a step is simply on somebody else's
+           desk - but it must not read as the green "this is yours to do now".
+           The class was already being referenced in one media query and
+           nowhere else, so it drew as an unstyled block. */
+        .alert-warning {
+            background: #fef3c7; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; color: #92400e;
+        }
         label { display: block; font-size: 0.83rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--ink-2); }
         input[type="email"], input[type="password"], input[type="text"], input[type="number"], input[type="date"], select, textarea {
             width: 100%;
@@ -1115,6 +1122,22 @@ input.is-suggested {
 .seg a[aria-current] { background: var(--brand); color: #fff; }
 .seg a[aria-current]:hover { background: var(--brand-hover); color: #fff; }
 .seg a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* What is still outstanding on a follow-up row.
+
+   The same three colours the design brief uses for the same three states, so
+   a green pill means the same thing on both pages. */
+.follow-up-designs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 0; }
+.fu-design {
+    display: inline-block;
+    font-size: 0.72rem; font-weight: 700; line-height: 1.3;
+    border-radius: 999px; padding: 0.15rem 0.55rem;
+    border: 1px solid transparent; white-space: nowrap;
+}
+.fu-design.is-approved { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
+.fu-design.is-waiting  { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+.fu-design.is-drawing  { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
+.fu-design.is-unsent   { color: #92400e; background: #fef3c7; border-color: #fde68a; }
 
 .follow-up-kind {
     display: inline-block;

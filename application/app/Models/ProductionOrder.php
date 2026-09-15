@@ -786,6 +786,37 @@ class ProductionOrder extends Model
     }
 
     /**
+     * Why the tech pack has not opened yet, in words - or null once it has.
+     *
+     * One answer, in one place, because three screens were each giving their
+     * own. The artist's step page said "This step is blocked", which names
+     * nobody and offers nothing to do; the pack itself named the downpayment
+     * whatever the real reason was; and the board simply showed the step.
+     *
+     * Worse than the wording: the step could be STARTED. Nothing stopped the
+     * Open Tech Pack button flipping it to in_progress, and the pack then
+     * refused to open - so the job read as being worked on by an artist who
+     * could not see it, and it sat there. Two orders on the live board were
+     * in exactly that state when this was written.
+     *
+     * The order asked here is the order the job actually runs in: the mockup
+     * is approved, the downpayment is confirmed, and only then does the
+     * account officer send the sheet.
+     */
+    public function techPackWaitingOn(): ?string
+    {
+        if ($this->jobOrder?->status === 'sent_to_artist') {
+            return null;
+        }
+
+        return match (true) {
+            ! $this->mockupApproved() => 'the final mockup has not been approved yet',
+            ! $this->hasDownpayment() => 'the downpayment has not been collected yet',
+            default => 'the account officer has not sent the tech pack yet',
+        };
+    }
+
+    /**
      * Has anything been paid on this order yet?
      *
      * A list that asks this per row should say so with withExists('payments'),

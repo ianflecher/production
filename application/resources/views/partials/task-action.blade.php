@@ -33,8 +33,26 @@
     </details>
 @endif
 
+{{-- A tech pack the officer has not sent yet is answered first, whatever
+     status the step is sitting at.
+
+     "This step is blocked" names nobody and offers nothing to do, and it was
+     not even the whole problem: the step could be STARTED, at which point
+     this partial offered a submit form for a pack that refuses to open. The
+     artist was looking at a job that read as theirs and in progress with
+     nothing behind it. --}}
+@php $techPackWaitingOn = $task->isTechPackStep() ? $task->order->techPackWaitingOn() : null; @endphp
+
 @if ($task->order->status !== 'active')
     <p class="muted">This order is <strong>{{ $task->order->statusLabel() }}</strong>.</p>
+@elseif ($techPackWaitingOn)
+    <p class="muted" style="margin-bottom:0.3rem;">
+        ⏳ <strong>Waiting for the account officer to send the tech pack.</strong>
+    </p>
+    <p class="muted" style="margin:0;">
+        Nothing to do here yet — {{ $techPackWaitingOn }}. It opens on this
+        page by itself once the pack is sent, and you will be told.
+    </p>
 @elseif ($task->status === 'todo')
     <p class="muted">This step is <strong>blocked</strong>.</p>
 @elseif ($task->status === 'ready')
