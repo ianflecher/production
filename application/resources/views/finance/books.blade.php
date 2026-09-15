@@ -8,14 +8,10 @@
     .bk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.9rem; margin-bottom: 1.4rem; }
     .bk-stat { padding: 1.15rem 1.25rem; position: relative; overflow: hidden; }
     .bk-stat::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: 4px 0 0 4px; background: var(--ink-3); }
-    .bk-stat.in::before   { background: #18A957; }
     .bk-stat.out::before  { background: #E31B23; }
-    .bk-stat.net::before  { background: #2D7FF0; }
     .bk-stat .lbl { font-size: 0.72rem; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.4rem; }
     .bk-stat .val { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
     .bk-stat .note { font-size: 0.74rem; color: var(--ink-3); margin-top: 0.35rem; }
-    .bk-loss { color: #b91c1c; }
-    .bk-gain { color: #15803d; }
     .bk-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
     .bk-cat { display: grid; grid-template-columns: 1fr auto; gap: 0.35rem 1rem; align-items: center; }
     .bk-cat .bar { grid-column: 1 / -1; height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; margin-bottom: 0.5rem; }
@@ -118,7 +114,7 @@
 <div class="page-head">
     <div class="grow">
         <h1>Bookkeeping</h1>
-        <p class="muted">Money in against money out for {{ $month->format('F Y') }}.</p>
+        <p class="muted">Everything the shop paid for in {{ $month->format('F Y') }}.</p>
     </div>
     <a href="{{ route('books.export', ['month' => $monthValue, 'q' => $search]) }}" class="btn btn-primary">⬇ Download Excel</a>
 </div>
@@ -144,23 +140,20 @@
     @endif
 </form>
 
+{{-- One figure, and it is the month's spending.
+
+     Money in and the profit that came off it used to sit here beside it.
+     They are a different question and a different ledger - client payments
+     are Finance's - and putting them on the expense book made this page look
+     like a profit statement it was never keeping. --}}
 <div class="bk-stats">
-    <div class="card bk-stat in">
-        <div class="lbl">Money in</div>
-        <div class="val">₱{{ number_format($income, 2) }}</div>
-        <div class="note">Client payments received</div>
-    </div>
     <div class="card bk-stat out">
         <div class="lbl">Money out</div>
         <div class="val">₱{{ number_format($expenseTotal, 2) }}</div>
-        <div class="note">{{ $expenses->count() }} expense{{ $expenses->count() === 1 ? '' : 's' }} recorded</div>
-    </div>
-    <div class="card bk-stat net">
-        <div class="lbl">{{ $profit < 0 ? 'Loss' : 'Profit' }}</div>
-        <div class="val {{ $profit < 0 ? 'bk-loss' : 'bk-gain' }}">
-            {{ $profit < 0 ? '−' : '' }}₱{{ number_format(abs($profit), 2) }}
+        <div class="note">
+            {{ $expenses->count() }} expense{{ $expenses->count() === 1 ? '' : 's' }}
+            in {{ $month->format('F Y') }}
         </div>
-        <div class="note">Money in minus money out</div>
     </div>
 </div>
 

@@ -116,11 +116,20 @@ class BookkeepingTest extends TestCase
 
     // ---- The profit picture ------------------------------------------------
 
-    public function test_the_books_show_income_minus_expenses(): void
+    /**
+     * The expense book totals expenses, and nothing else.
+     *
+     * It used to show money in beside money out and a profit off the
+     * difference. That is a different question and a different ledger -
+     * client payments are Finance's - and putting them here made the page
+     * look like a profit statement it was never keeping. A payment in the
+     * same month must now leave this page's figures alone.
+     */
+    public function test_the_books_total_expenses_only(): void
     {
         $user = $this->finance();
 
-        // Money in: a payment on an order this month.
+        // Money in, on an order this month.
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
         $this->actingAs($sales)->post('/orders', [
             'order_number' => 'IC2026-08080',
@@ -146,17 +155,13 @@ class BookkeepingTest extends TestCase
         $this->actingAs($user)->post('/books/expenses', $this->expensePayload(['amount' => 2500]));
 
         $response = $this->actingAs($user)->get('/books')->assertOk();
-        $response->assertViewHas('income', 10000.0);
+
         $response->assertViewHas('expenseTotal', 2500.0);
-        $response->assertViewHas('profit', 7500.0);
-    }
+        $response->assertViewMissing('income');
+        $response->assertViewMissing('profit');
 
-    public function test_a_month_with_more_out_than_in_reads_as_a_loss(): void
-    {
-        $user = $this->finance();
-        $this->actingAs($user)->post('/books/expenses', $this->expensePayload(['amount' => 5000]));
-
-        $this->actingAs($user)->get('/books')->assertOk()->assertViewHas('profit', -5000.0);
+        // And the ten thousand that came in is nowhere on the page.
+        $response->assertDontSee('10,000.00');
     }
 
     public function test_expenses_from_another_month_are_not_counted(): void

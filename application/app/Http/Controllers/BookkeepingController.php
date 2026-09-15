@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Expense;
-use App\Models\Payment;
 use App\Models\PettyCashTopup;
 use App\Services\SpreadsheetExport;
 use Illuminate\Http\RedirectResponse;
@@ -13,9 +12,13 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
- * The books: money in (payments) against money out (expenses), month by month.
- * FinanceController stays the payment ledger; this is the profit picture and
- * the only place expenses are recorded.
+ * The expense book: everything the shop paid for, month by month.
+ *
+ * Money coming IN is a separate question and lives with FinanceController,
+ * which is the payment ledger. This page used to show both and a profit
+ * figure off the difference, which made it look like a profit statement it
+ * was never actually keeping - the two halves are reconciled against
+ * different statements and read by different people.
  */
 class BookkeepingController extends Controller
 {
@@ -41,11 +44,6 @@ class BookkeepingController extends Controller
         $month = $this->month($request);
         $from = $month->toDateString();
         $to = $month->copy()->endOfMonth()->toDateString();
-
-        // Money in: payments are timestamped, so compare on the date part.
-        $income = (float) Payment::whereDate('paid_at', '>=', $from)
-            ->whereDate('paid_at', '<=', $to)
-            ->sum('amount');
 
         $expenseTotal = Expense::totalBetween($from, $to);
 
@@ -92,9 +90,7 @@ class BookkeepingController extends Controller
         return view('finance.books', [
             'month' => $month,
             'monthValue' => $month->format('Y-m'),
-            'income' => $income,
             'expenseTotal' => $expenseTotal,
-            'profit' => $income - $expenseTotal,
             'expenses' => $expenses,
             'byCategory' => $byCategory,
             'byGroup' => $byGroup,
