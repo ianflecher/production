@@ -23,6 +23,14 @@
     /* The expense rows carry a Remove button, so the last two columns need room
        of their own — without it the button sat on top of the recorder's name. */
     .bk-expenses .bk-by { font-size: 0.8rem; color: var(--ink-3); white-space: nowrap; }
+    /* No button on this table wraps.
+
+       The rows grew an Edit button, the table ran out of width, and the
+       column that gave it up was the receipt - so "View" was breaking across
+       two lines as "Vie / w". The narrow columns claim only what they need
+       and the description keeps the slack. */
+    .bk-expenses .btn { white-space: nowrap; }
+    .bk-expenses .bk-receipt { width: 1%; white-space: nowrap; }
     .bk-action { width: 1%; text-align: right; white-space: nowrap; }
     .bk-action form { margin: 0; }
     /* Edit beside Remove, not above it: a form is a block, and without this
@@ -303,7 +311,7 @@
                             </td>
                             <td class="num" style="font-weight: 700;">₱{{ number_format((float) $e->amount, 2) }}</td>
                             <td>{{ $e->method ?: '—' }}</td>
-                            <td>
+                            <td class="bk-receipt">
                                 @if ($e->hasReceipt())
                                     <a href="{{ route('books.expenses.receipt', $e) }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">View</a>
                                 @else
