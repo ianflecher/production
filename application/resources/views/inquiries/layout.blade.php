@@ -184,6 +184,9 @@
     .design-pill.is-approved { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
     .design-pill.is-waiting  { color: #92400e; background: #fef3c7; border-color: #fde68a; }
     .design-pill.is-drawing  { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
+    /* Amber, not red. Nothing has gone wrong - the brief simply is not
+       finished - but it must not read like the blue "with the artist" one. */
+    .design-pill.is-unsent   { color: #92400e; background: #fef3c7; border-color: #fde68a; }
 
     .design-card-actions {
         display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
@@ -424,6 +427,18 @@
                     <span class="design-pill is-approved">&#10003; Approved</span>
                 @elseif ($design->submitted())
                     <span class="design-pill is-waiting">With the client</span>
+                @elseif ($design->notSentYet())
+                    {{-- The one that was wrong. This used to fall into the
+                         "is drawing it" arm below, so a brief nobody had sent
+                         named an artist who had never heard of it - the
+                         officer read it as gone, the artist had an empty
+                         queue, and neither had any reason to check. --}}
+                    <span class="design-pill is-unsent">
+                        Not sent yet
+                        @if ($design->artist)
+                            &middot; for {{ $design->artist->name }}
+                        @endif
+                    </span>
                 @else
                     <span class="design-pill is-drawing">
                         {{ $design->artist?->name ?? 'An artist' }} is drawing it

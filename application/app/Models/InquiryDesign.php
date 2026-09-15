@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Collection;
 
 /**
  * One design under an enquiry's brief.
@@ -21,6 +23,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class InquiryDesign extends Model
 {
     use HasFactory;
+
+    /**
+     * Still being written up, and on nobody's desk.
+     *
+     * The column defaults to with_artist, so this arrives only from the
+     * backfill that split one enquiry's layout into designs - it copied the
+     * enquiry's own layout_status, and "brief" is one of those. It was a
+     * status the model did not name, which is how a design sitting in it came
+     * to be labelled "Port is drawing it" on the officer's screen while Port
+     * had nothing at all.
+     */
+    public const STATUS_BRIEF = 'brief';
 
     /** The same three states a layout has always had, one design at a time. */
     public const STATUS_WITH_ARTIST = 'with_artist';
@@ -53,7 +67,7 @@ class InquiryDesign extends Model
     }
 
     /** The job order written for this design, once somebody writes it. */
-    public function order(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function order(): HasOne
     {
         return $this->hasOne(ProductionOrder::class, 'inquiry_design_id');
     }
@@ -72,6 +86,21 @@ class InquiryDesign extends Model
     public function name(): string
     {
         return filled($this->label) ? $this->label : 'Design '.($this->position + 1);
+    }
+
+    /**
+     * Has this actually been handed over?
+     *
+     * The design's own status is not enough to answer it. A design is created
+     * as with_artist the moment an officer adds it, which is before the brief
+     * has been sent - the sending is a separate press that locks the brief,
+     * notifies the artist and stamps layout_sent_at. That stamp is the only
+     * honest record of a handover, so it is what this asks.
+     */
+    public function notSentYet(): bool
+    {
+        return $this->status === self::STATUS_BRIEF
+            || $this->inquiry?->layout_sent_at === null;
     }
 
     public function withArtist(): bool
@@ -99,7 +128,6 @@ class InquiryDesign extends Model
         return max(0, self::REVISION_LIMIT - (int) $this->revision_count);
     }
 
-
     /**
      * The drawing as it stands — not every version it has ever been.
      *
@@ -115,7 +143,7 @@ class InquiryDesign extends Model
      * Keys are the position in the stored array, because that position IS the
      * file's address — see InquiryDesignController::file.
      */
-    public function drawings(): \Illuminate\Support\Collection
+    public function drawings(): Collection
     {
         $files = collect($this->files ?? [])
             // "revision" is the client's markup saying what to change;

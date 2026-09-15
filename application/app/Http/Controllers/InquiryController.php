@@ -2,13 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppNotification;
 use App\Models\Client;
 use App\Models\Inquiry;
+use App\Models\InquiryDesign;
 use App\Models\User;
+use App\Services\DesignBrief;
+use App\Services\PublicUrl;
+use App\Services\StaffAssigner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -280,14 +286,14 @@ class InquiryController extends Controller
             $inquiry->regenerateBriefLink();
         }
 
-        $questions = \App\Services\DesignBrief::questions();
+        $questions = DesignBrief::questions();
         $answers = $inquiry->design_brief ?? [];
         $prompt = null;
         if ($answers) {
             $lines = ['You are a senior apparel graphic designer. Create a custom apparel design concept using this client brief:'];
             foreach ($answers as $key => $value) {
                 if (isset($questions[$key])) {
-                    $lines[] = '- '.$questions[$key]['label'].' '.(\App\Services\DesignBrief::answerLabel($key, $value) ?? $value);
+                    $lines[] = '- '.$questions[$key]['label'].' '.(DesignBrief::answerLabel($key, $value) ?? $value);
                 }
             }
             $prompt = implode("\n", $lines);
@@ -300,8 +306,8 @@ class InquiryController extends Controller
             'questions' => $questions,
             'answers' => $answers,
             'prompt' => $prompt,
-            'clientLink' => \App\Services\PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry)),
-            'clientLinkIsPrivate' => \App\Services\PublicUrl::isPrivate(\App\Services\PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry))),
+            'clientLink' => PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry)),
+            'clientLinkIsPrivate' => PublicUrl::isPrivate(PublicUrl::rewrite(route('client.inquiry-design-brief', $inquiry))),
             'clientLinkExpiresAt' => $inquiry->brief_expires_at,
             'clientSubmittedAt' => $inquiry->client_brief_submitted_at,
             'briefExpired' => $inquiry->briefExpired(),
@@ -312,7 +318,7 @@ class InquiryController extends Controller
     {
         $this->assertAccess($request);
         $this->assertMine($request, $inquiry);
-        $questions = \App\Services\DesignBrief::questions();
+        $questions = DesignBrief::questions();
         $data = $request->validate([
             'brief' => ['nullable', 'array'],
             'brief.*' => ['nullable', 'string', 'max:2000'],
@@ -434,7 +440,7 @@ class InquiryController extends Controller
         // leaves this page knowing whose desk it landed on. The same person is
         // then handed the layout task itself — a name shown here and a
         // different artist actually doing it would be worse than showing none.
-        $artist = $inquiry->layoutArtist ?: \App\Services\StaffAssigner::next(User::JOB_ARTIST);
+        $artist = $inquiry->layoutArtist ?: StaffAssigner::next(User::JOB_ARTIST);
 
         // A brief with no designs listed is one design: the officer who did
         // not need the list should not have to use it. It is listed with
@@ -479,7 +485,7 @@ class InquiryController extends Controller
         $inquiry->designs()
             ->where('status', Inquiry::LAYOUT_BRIEF)
             ->whereNotNull('sent_at')
-            ->update(['status' => \App\Models\InquiryDesign::STATUS_WITH_ARTIST]);
+            ->update(['status' => InquiryDesign::STATUS_WITH_ARTIST]);
 
         // Anyone left without a name takes whoever is in today, so a brief sent
         // on a quiet morning does not sit on nobody's desk.
@@ -501,10 +507,10 @@ class InquiryController extends Controller
         $inquiry->load('designs.artist');
 
         foreach ($inquiry->designs->groupBy('artist_id') as $artistId => $theirs) {
-            \App\Models\AppNotification::toUser((int) $artistId,
+            AppNotification::toUser((int) $artistId,
                 '🎨 A layout brief for you',
                 $inquiry->client->fullName().' — '.$theirs->count().' '
-                    .\Illuminate\Support\Str::plural('design', $theirs->count()).' to draw.',
+                    .Str::plural('design', $theirs->count()).' to draw.',
                 route('inquiries.layouts'));
         }
 
@@ -513,7 +519,7 @@ class InquiryController extends Controller
 
         return redirect()->route('orders.create', ['inquiry' => $inquiry->id])
             ->with('success', $names
-                ? 'Brief sent — '.$count.' '.\Illuminate\Support\Str::plural('design', $count)
+                ? 'Brief sent — '.$count.' '.Str::plural('design', $count)
                     .' with '.$names.'. Complete the new job order.'
                 : 'Brief saved. No artist is in today, so the designs will be handed out when somebody is.');
     }
@@ -555,18 +561,18 @@ class InquiryController extends Controller
         // approved goes across, and what the client has already said yes to
         // stays with whoever drew it.
         $inquiry->designs()
-            ->where('status', '!=', \App\Models\InquiryDesign::STATUS_APPROVED)
+            ->where('status', '!=', InquiryDesign::STATUS_APPROVED)
             ->update(['artist_id' => $artist->id]);
 
         // Both of them need to know: one has work that is no longer theirs, the
         // other has work they have not been told about.
-        \App\Models\AppNotification::toUser($artist->id,
+        AppNotification::toUser($artist->id,
             '🎨 A layout was handed to you',
             $inquiry->client?->fullName().' — '.($inquiry->what_they_want ?: 'layout'),
             route('inquiries.layouts'));
 
         if ($previous) {
-            \App\Models\AppNotification::toUser($previous->id,
+            AppNotification::toUser($previous->id,
                 '↪ A layout moved off your queue',
                 $inquiry->client?->fullName().' is with '.$artist->name.' now.',
                 route('inquiries.layouts'));
@@ -626,15 +632,20 @@ class InquiryController extends Controller
         // DESIGNS, not enquiries. One brief can carry six of them split
         // between two artists, and each person's queue is the designs on their
         // own desk - not every brief they appear somewhere inside.
-        $designs = \App\Models\InquiryDesign::query()
+        $designs = InquiryDesign::query()
             ->with(['inquiry.client', 'inquiry.officer', 'artist'])
-            ->when(! $user->isLeader(), fn ($q) => $q->drawnBy($user))
+            // Only briefs that have actually been sent. A design is created
+            // as with_artist the moment it is added, so without this an
+            // artist saw work the officer was still writing up - and could
+            // start drawing from instructions that were about to change.
+            ->when(! $user->isLeader(), fn ($q) => $q->drawnBy($user)
+                ->whereHas('inquiry', fn ($i) => $i->whereNotNull('layout_sent_at')))
             ->when($user->isLeader(), fn ($q) => $q
                 ->whereIn('status', [
-                    \App\Models\InquiryDesign::STATUS_WITH_ARTIST,
-                    \App\Models\InquiryDesign::STATUS_SUBMITTED,
+                    InquiryDesign::STATUS_WITH_ARTIST,
+                    InquiryDesign::STATUS_SUBMITTED,
                 ])
-                ->whereHas('inquiry', fn ($i) => $i->open()))
+                ->whereHas('inquiry', fn ($i) => $i->open()->whereNotNull('layout_sent_at')))
             ->when($search !== '', fn ($q) => $q->whereHas('inquiry', fn ($i) => $i
                 ->where('what_they_want', 'like', "%{$search}%")
                 ->orWhereHas('client', fn ($c) => $c
@@ -643,7 +654,7 @@ class InquiryController extends Controller
                     ->orWhere('company', 'like', "%{$search}%"))))
             ->get()
             ->sortBy([
-                fn ($a, $b) => optional($a->inquiry->layout_sent_at)<=>optional($b->inquiry->layout_sent_at),
+                fn ($a, $b) => optional($a->inquiry->layout_sent_at) <=> optional($b->inquiry->layout_sent_at),
                 fn ($a, $b) => $a->position <=> $b->position,
             ]);
 
@@ -678,14 +689,13 @@ class InquiryController extends Controller
         $mine = $inquiry->designs()
             ->when(! $user->isLeader(), fn ($q) => $q->where('artist_id', $user->id))
             ->whereIn('status', [
-                \App\Models\InquiryDesign::STATUS_WITH_ARTIST,
-                \App\Models\InquiryDesign::STATUS_SUBMITTED,
+                InquiryDesign::STATUS_WITH_ARTIST,
+                InquiryDesign::STATUS_SUBMITTED,
             ])
             ->get();
 
         if ($mine->isEmpty()) {
-            return back()->withErrors(['layout_files' =>
-                'There is nothing on this brief waiting for you to draw.']);
+            return back()->withErrors(['layout_files' => 'There is nothing on this brief waiting for you to draw.']);
         }
 
         $files = [];
@@ -709,7 +719,7 @@ class InquiryController extends Controller
         foreach ($mine as $design) {
             $design->update([
                 'files' => array_merge($design->files ?? [], $files),
-                'status' => \App\Models\InquiryDesign::STATUS_SUBMITTED,
+                'status' => InquiryDesign::STATUS_SUBMITTED,
                 'submitted_at' => now(),
                 'revision_note' => null,
             ]);
@@ -722,7 +732,7 @@ class InquiryController extends Controller
 
         $inquiry->syncLayoutStatus();
 
-        \App\Models\AppNotification::toUser($inquiry->created_by,
+        AppNotification::toUser($inquiry->created_by,
             '🎨 Layout ready for the client',
             $inquiry->client->fullName().' — '.$user->name.' has finished the layout.',
             route('inquiries.layout', $inquiry));
@@ -743,9 +753,9 @@ class InquiryController extends Controller
         // one at a time is the per-design endpoint; this is the officer who
         // has the client on the phone about the lot.
         $inquiry->designs()
-            ->where('status', \App\Models\InquiryDesign::STATUS_SUBMITTED)
+            ->where('status', InquiryDesign::STATUS_SUBMITTED)
             ->update([
-                'status' => \App\Models\InquiryDesign::STATUS_APPROVED,
+                'status' => InquiryDesign::STATUS_APPROVED,
                 'approved_at' => now(),
             ]);
 
@@ -766,8 +776,7 @@ class InquiryController extends Controller
         // it back a fourth time — giving a round away is a decision somebody
         // makes, not something the form should quietly allow everybody.
         if ($inquiry->revisionsUsedUp() && ! $request->user()->isLeader()) {
-            return back()->withErrors(['layout_revision_note' =>
-                'This layout has already had its '.Inquiry::LAYOUT_REVISION_LIMIT
+            return back()->withErrors(['layout_revision_note' => 'This layout has already had its '.Inquiry::LAYOUT_REVISION_LIMIT
                 .' revisions. A leader can send it back again.']);
         }
 
@@ -797,9 +806,9 @@ class InquiryController extends Controller
         // Everything waiting on the client goes back. Sending ONE design back
         // while the others stand is the per-design endpoint - this is the
         // officer whose client rejected the lot.
-        foreach ($inquiry->designs()->where('status', \App\Models\InquiryDesign::STATUS_SUBMITTED)->get() as $design) {
+        foreach ($inquiry->designs()->where('status', InquiryDesign::STATUS_SUBMITTED)->get() as $design) {
             $design->update([
-                'status' => \App\Models\InquiryDesign::STATUS_WITH_ARTIST,
+                'status' => InquiryDesign::STATUS_WITH_ARTIST,
                 'revision_note' => $data['layout_revision_note'],
                 // Counted even when a leader goes past the limit: the number is
                 // a record of what the job actually cost, not just a gate.
@@ -818,9 +827,9 @@ class InquiryController extends Controller
         $inquiry->syncLayoutStatus();
 
         if ($inquiry->layout_artist_id) {
-            \App\Models\AppNotification::toUser($inquiry->layout_artist_id,
+            AppNotification::toUser($inquiry->layout_artist_id,
                 '↩ Layout needs changing',
-                $inquiry->client->fullName().' — '.\Illuminate\Support\Str::limit($data['layout_revision_note'], 90),
+                $inquiry->client->fullName().' — '.Str::limit($data['layout_revision_note'], 90),
                 route('inquiries.layouts'));
         }
 
