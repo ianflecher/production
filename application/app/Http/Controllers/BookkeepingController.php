@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Models\PettyCashTopup;
+use App\Services\SpreadsheetExport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -47,15 +49,43 @@ class BookkeepingController extends Controller
 
         $expenseTotal = Expense::totalBetween($from, $to);
 
+        // Searched across everything the bookkeeper might remember about a
+        // row - the supplier, the invoice number, the account title, who
+        // ordered it - because "find the Divisoria fabric one" is how the
+        // question actually arrives, and only one of those is the description.
+        $search = trim((string) $request->query('q', ''));
+
         $expenses = Expense::with('recorder')
             ->whereBetween('spent_at', [$from, $to])
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%'.$search.'%';
+
+                $q->where(fn ($w) => $w
+                    ->where('description', 'like', $like)
+                    ->orWhere('account_title', 'like', $like)
+                    ->orWhere('supplier', 'like', $like)
+                    ->orWhere('reference', 'like', $like)
+                    ->orWhere('si_cr_no', 'like', $like)
+                    ->orWhere('ordered_by', 'like', $like)
+                    ->orWhere('tin', 'like', $like)
+                    ->orWhere('method', 'like', $like)
+                    ->orWhere('note', 'like', $like));
+            })
             ->orderByDesc('spent_at')
             ->orderByDesc('id')
             ->get();
 
-        // Where the money went, biggest bucket first.
+        // Where the money went, biggest first. Grouped by the account title
+        // now, which is the line the books are kept in.
         $byCategory = $expenses
-            ->groupBy('category')
+            ->groupBy('account_title')
+            ->map(fn ($rows) => (float) $rows->sum('amount'))
+            ->sortDesc();
+
+        // And the same money rolled up to the four groups, which is the
+        // shape the bookkeeper reads a month in.
+        $byGroup = $expenses
+            ->groupBy(fn (Expense $e) => Expense::groupOf($e->account_title) ?? 'Unfiled')
             ->map(fn ($rows) => (float) $rows->sum('amount'))
             ->sortDesc();
 
@@ -67,16 +97,20 @@ class BookkeepingController extends Controller
             'profit' => $income - $expenseTotal,
             'expenses' => $expenses,
             'byCategory' => $byCategory,
-            'categories' => Expense::CATEGORIES,
+            'byGroup' => $byGroup,
+            'search' => $search,
+            'accountTitles' => Expense::ACCOUNT_TITLES,
+            'referenceTypes' => Expense::REFERENCE_TYPES,
+            'vatStatuses' => Expense::VAT_STATUSES,
             'methods' => Expense::METHODS,
             // The tin is a running balance, not a monthly one: money left in
             // it on the 31st is still in it on the 1st. So it is deliberately
             // NOT filtered by the month being looked at, while the top-ups
             // listed beside it are, like everything else on this page.
-            'pettyCash' => \App\Models\PettyCashTopup::balance(),
-            'pettyCashIn' => \App\Models\PettyCashTopup::totalIn(),
-            'pettyCashOut' => \App\Models\PettyCashTopup::totalOut(),
-            'pettyCashTopups' => \App\Models\PettyCashTopup::with('recorder')
+            'pettyCash' => PettyCashTopup::balance(),
+            'pettyCashIn' => PettyCashTopup::totalIn(),
+            'pettyCashOut' => PettyCashTopup::totalOut(),
+            'pettyCashTopups' => PettyCashTopup::with('recorder')
                 ->whereBetween('occurred_at', [$from, $to])
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
@@ -93,7 +127,7 @@ class BookkeepingController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
-        \App\Models\PettyCashTopup::create([
+        PettyCashTopup::create([
             'amount' => round((float) $data['amount'], 2),
             'occurred_at' => $data['occurred_at'],
             'note' => $data['note'] ?? null,
@@ -103,31 +137,47 @@ class BookkeepingController extends Controller
         return redirect()
             ->route('books.index', ['month' => Carbon::parse($data['occurred_at'])->format('Y-m')])
             ->with('success', '₱'.number_format((float) $data['amount'], 2).' added to petty cash. '
-                .'The tin now holds ₱'.number_format(\App\Models\PettyCashTopup::balance(), 2).'.');
+                .'The tin now holds ₱'.number_format(PettyCashTopup::balance(), 2).'.');
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'category' => ['required', 'in:'.implode(',', array_keys(Expense::CATEGORIES))],
+            // The three the books cannot do without.
+            'account_title' => ['required', 'in:'.implode(',', Expense::accountTitles())],
             'description' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:100000000'],
             'spent_at' => ['required', 'date'],
+
+            // Paid on a different day from ordered, often weeks later, and
+            // never before it was ordered.
+            'paid_at' => ['nullable', 'date', 'after_or_equal:spent_at'],
+
+            'ordered_by' => ['nullable', 'string', 'max:120'],
             'method' => ['nullable', 'in:'.implode(',', Expense::METHODS)],
+            'reference_type' => ['nullable', 'in:'.implode(',', Expense::REFERENCE_TYPES)],
             'reference' => ['nullable', 'string', 'max:255'],
+            'si_cr_no' => ['nullable', 'string', 'max:255'],
+            'supplier' => ['nullable', 'string', 'max:255'],
+            'tin' => ['nullable', 'string', 'max:40'],
+            'business_address' => ['nullable', 'string', 'max:255'],
+            'vat_status' => ['nullable', 'in:'.implode(',', Expense::VAT_STATUSES)],
             'note' => ['nullable', 'string', 'max:2000'],
             'receipt' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:512000'],
+        ], [
+            'account_title.required' => 'Pick the account title this belongs to.',
+            'account_title.in' => 'That is not one of the shop account titles.',
+            'paid_at.after_or_equal' => 'It cannot have been paid before it was ordered.',
         ]);
 
         // A tin cannot pay out more than it holds. Without this the balance
         // goes negative and stops meaning anything - the point of counting a
         // tin is that the number matches the notes inside it.
         if (($data['method'] ?? null) === Expense::METHOD_PETTY_CASH) {
-            $balance = \App\Models\PettyCashTopup::balance();
+            $balance = PettyCashTopup::balance();
 
             if (round((float) $data['amount'], 2) > $balance) {
-                return back()->withInput()->withErrors(['amount' =>
-                    'Petty cash only holds ₱'.number_format($balance, 2)
+                return back()->withInput()->withErrors(['amount' => 'Petty cash only holds ₱'.number_format($balance, 2)
                     .'. Add money to the tin first, or pay this one another way.']);
             }
         }
@@ -141,12 +191,20 @@ class BookkeepingController extends Controller
         }
 
         Expense::create([
-            'category' => $data['category'],
+            'account_title' => $data['account_title'],
             'description' => $data['description'],
             'amount' => round((float) $data['amount'], 2),
             'spent_at' => $data['spent_at'],
+            'paid_at' => $data['paid_at'] ?? null,
+            'ordered_by' => $data['ordered_by'] ?? null,
             'method' => $data['method'] ?? null,
+            'reference_type' => $data['reference_type'] ?? null,
             'reference' => $data['reference'] ?? null,
+            'si_cr_no' => $data['si_cr_no'] ?? null,
+            'supplier' => $data['supplier'] ?? null,
+            'tin' => $data['tin'] ?? null,
+            'business_address' => $data['business_address'] ?? null,
+            'vat_status' => $data['vat_status'] ?? null,
             'note' => $data['note'] ?? null,
             'receipt_path' => $receiptPath,
             'receipt_name' => $receiptName,
@@ -180,41 +238,80 @@ class BookkeepingController extends Controller
     }
 
     /** The month's expenses as a CSV for the accountant. */
+    /**
+     * The month, in the shape the bookkeeper reads.
+     *
+     * Column for column and in the order of the sheet finance already works
+     * from, so a month can be pasted straight in rather than rearranged by
+     * hand every time. The search carries through: what is on the screen is
+     * what comes out of the file.
+     */
     public function export(Request $request)
     {
         $month = $this->month($request);
+        $search = trim((string) $request->query('q', ''));
+
         $expenses = Expense::with('recorder')
             ->whereBetween('spent_at', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%'.$search.'%';
+
+                $q->where(fn ($w) => $w
+                    ->where('description', 'like', $like)
+                    ->orWhere('account_title', 'like', $like)
+                    ->orWhere('supplier', 'like', $like)
+                    ->orWhere('reference', 'like', $like)
+                    ->orWhere('si_cr_no', 'like', $like)
+                    ->orWhere('ordered_by', 'like', $like)
+                    ->orWhere('tin', 'like', $like)
+                    ->orWhere('method', 'like', $like)
+                    ->orWhere('note', 'like', $like));
+            })
             ->orderBy('spent_at')
             ->get();
 
         $rows = $expenses->map(fn (Expense $e) => [
             $e->spent_at,
-            $e->categoryLabel(),
+            $e->ordered_by ?? '',
+            // "PO-0042" rather than two columns: the reference reads as one
+            // thing on paper, and it is stored as two so it can be sorted.
+            trim(($e->reference_type ? $e->reference_type.'-' : '').($e->reference ?? ''), '-'),
+            $e->paid_at,
+            $e->si_cr_no ?? '',
+            $e->tin ?? '',
+            $e->business_address ?? '',
+            $e->supplier ?? '',
             $e->description,
+            $e->account_title ?? '',
             (float) $e->amount,
             $e->method ?? '',
-            $e->reference ?? '',
-            $e->hasReceipt() ? ($e->receipt_name ?: 'yes') : 'none',
+            $e->vat_status ?? '',
             $e->recorder?->name ?? '',
         ]);
 
-        return \App\Services\SpreadsheetExport::download(
+        return SpreadsheetExport::download(
             'expenses-'.$month->format('Y-m').'.xlsx',
             'Expenses '.$month->format('F Y'),
             [
-                ['Date', \App\Services\SpreadsheetExport::DATE],
-                ['Category', \App\Services\SpreadsheetExport::TEXT],
-                ['Description', \App\Services\SpreadsheetExport::TEXT],
-                ['Amount', \App\Services\SpreadsheetExport::MONEY],
-                ['Method', \App\Services\SpreadsheetExport::TEXT],
-                ['Reference', \App\Services\SpreadsheetExport::TEXT],
-                ['Receipt', \App\Services\SpreadsheetExport::TEXT],
-                ['Recorded by', \App\Services\SpreadsheetExport::TEXT],
+                ['Order Date', SpreadsheetExport::DATE],
+                ['Ordered By', SpreadsheetExport::TEXT],
+                ['Reference', SpreadsheetExport::TEXT],
+                ['Date Paid', SpreadsheetExport::DATE],
+                ['SI/CR No.', SpreadsheetExport::TEXT],
+                ['TIN', SpreadsheetExport::TEXT],
+                ['Busines Address', SpreadsheetExport::TEXT],
+                ['Supplier/Vendor', SpreadsheetExport::TEXT],
+                ['Description', SpreadsheetExport::TEXT],
+                ['Account Titles', SpreadsheetExport::TEXT],
+                ['Amount', SpreadsheetExport::MONEY],
+                ['Payment Method', SpreadsheetExport::TEXT],
+                ['VAT/N-VAT', SpreadsheetExport::TEXT],
+                ['Recorded by', SpreadsheetExport::TEXT],
             ],
             $rows,
             totalOf: ['Amount'],
-            subtitle: $expenses->count().' expense(s)',
+            subtitle: $expenses->count().' expense(s)'
+                .($search !== '' ? ' matching "'.$search.'"' : ''),
         );
     }
 }

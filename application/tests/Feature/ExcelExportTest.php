@@ -210,14 +210,16 @@ class ExcelExportTest extends TestCase
     {
         $finance = User::factory()->create(['job_role' => User::ROLE_FINANCE, 'is_active' => true]);
         \App\Models\Expense::create([
-            'category' => 'rent', 'description' => 'Shop rent', 'amount' => 22000,
-            'spent_at' => now(), 'method' => 'Bank Transfer', 'recorded_by' => $finance->id,
+            'account_title' => 'Rent Expense - Antipolo Bldg.', 'description' => 'Shop rent', 'amount' => 22000,
+            'spent_at' => now(), 'method' => 'Bank Tranfer (AUB)', 'recorded_by' => $finance->id,
         ]);
 
         $sheet = $this->sheetFrom($finance, '/books/export');
 
-        $this->assertIsFloat($sheet->getCell('D5')->getValue());
-        $this->assertStringStartsWith('=SUM(', (string) $sheet->getCell('D'.$sheet->getHighestRow())->getValue());
+        // Amount is column K now - the export follows the bookkeeper's own
+        // column order, which puts eight identifying columns before the money.
+        $this->assertIsFloat($sheet->getCell('K5')->getValue());
+        $this->assertStringStartsWith('=SUM(', (string) $sheet->getCell('K'.$sheet->getHighestRow())->getValue());
     }
 
     public function test_an_export_with_nothing_in_it_still_opens(): void

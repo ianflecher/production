@@ -51,14 +51,25 @@
         <h1>Bookkeeping</h1>
         <p class="muted">Money in against money out for {{ $month->format('F Y') }}.</p>
     </div>
-    <a href="{{ route('books.export', ['month' => $monthValue]) }}" class="btn btn-primary">⬇ Download Excel</a>
+    <a href="{{ route('books.export', ['month' => $monthValue, 'q' => $search]) }}" class="btn btn-primary">⬇ Download Excel</a>
 </div>
 
 {{-- Month picker --}}
 <form method="GET" action="{{ route('books.index') }}" class="bk-toolbar">
     <label for="month" style="font-size:0.8rem; font-weight:600; color:var(--ink-2);">Month</label>
     <input type="month" id="month" name="month" value="{{ $monthValue }}" style="max-width: 190px;">
+    {{-- Searched across the supplier, the invoice number, the account title
+         and who ordered it, not just the description - "find the Divisoria
+         fabric one" is how the question actually arrives, and the answer is
+         as likely to be the supplier as the words somebody typed. --}}
+    <label for="q" style="font-size:0.8rem; font-weight:600; color:var(--ink-2);">Find</label>
+    <input type="search" id="q" name="q" value="{{ $search }}" class="no-caps"
+           placeholder="Supplier, account title, SI no., who ordered…" style="min-width:0; flex:1 1 220px;">
+
     <button type="submit" class="btn btn-ghost btn-sm">Show</button>
+    @if ($search !== '')
+        <a href="{{ route('books.index', ['month' => $monthValue]) }}" class="btn btn-ghost btn-sm">Clear</a>
+    @endif
     @if ($monthValue !== now()->format('Y-m'))
         <a href="{{ route('books.index') }}" class="btn btn-ghost btn-sm">This month</a>
     @endif
@@ -159,9 +170,22 @@
     <div class="card panel">
         <h2>Where the money went</h2>
         <p class="sub">{{ $month->format('F Y') }}, biggest first.</p>
+        {{-- The four groups first, because that is the shape a month is read
+             in, then every title under them. --}}
+        <div class="bk-cat" style="margin-bottom:1rem;">
+            @foreach ($byGroup as $group => $amount)
+                <div class="nm" style="font-weight:700;">{{ $group }}</div>
+                <div class="amt">₱{{ number_format($amount, 2) }}
+                    <span style="color:var(--ink-3);">({{ $expenseTotal > 0 ? round($amount / $expenseTotal * 100) : 0 }}%)</span>
+                </div>
+                <div class="bar"><span style="width: {{ $expenseTotal > 0 ? max(2, round($amount / $expenseTotal * 100)) : 0 }}%;"></span></div>
+            @endforeach
+        </div>
+
+        <p class="sub" style="margin:0 0 .4rem;">By account title</p>
         <div class="bk-cat">
             @foreach ($byCategory as $key => $amount)
-                <div class="nm">{{ $categories[$key] ?? $key }}</div>
+                <div class="nm">{{ $key ?: '—' }}</div>
                 <div class="amt">₱{{ number_format($amount, 2) }}
                     <span style="color:var(--ink-3);">({{ $expenseTotal > 0 ? round($amount / $expenseTotal * 100) : 0 }}%)</span>
                 </div>
@@ -180,18 +204,42 @@
         @csrf
 
         <div>
-            <label for="spent_at">Date *</label>
+            <label for="spent_at">Order date *</label>
             <input type="date" id="spent_at" name="spent_at" required
                    value="{{ old('spent_at', now()->format('Y-m-d')) }}">
         </div>
 
         <div>
-            <label for="category">Category *</label>
-            <select id="category" name="category" required>
-                @foreach ($categories as $key => $label)
-                    <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
+            <label for="paid_at">Date paid</label>
+            <input type="date" id="paid_at" name="paid_at" value="{{ old('paid_at') }}">
+            <div class="bk-hint">Leave blank until it is actually paid.</div>
+        </div>
+
+        <div>
+            <label for="ordered_by">Ordered by</label>
+            <input type="text" id="ordered_by" name="ordered_by" maxlength="120"
+                   value="{{ old('ordered_by') }}" placeholder="Who asked for it">
+        </div>
+
+        {{-- Seventy-eight titles is too many to scroll, so the box above the
+             list filters it as you type. The list itself is a real <select>
+             with the four groups intact, so it still validates and still
+             works with the keyboard if the script never runs. --}}
+        <div class="full">
+            <label for="accountTitleFilter">Account title *</label>
+            <input type="search" id="accountTitleFilter" class="no-caps"
+                   placeholder="Type to filter — fabric, BIR, rent…" autocomplete="off">
+            <select id="account_title" name="account_title" size="8" required
+                    style="margin-top:.35rem;">
+                @foreach ($accountTitles as $group => $titles)
+                    <optgroup label="{{ $group }}">
+                        @foreach ($titles as $title)
+                            <option value="{{ $title }}" @selected(old('account_title') === $title)>{{ $title }}</option>
+                        @endforeach
+                    </optgroup>
                 @endforeach
             </select>
+            <div class="bk-hint" id="accountTitleCount"></div>
         </div>
 
         <div>
@@ -201,11 +249,21 @@
         </div>
 
         <div>
-            <label for="method">Paid with</label>
+            <label for="method">Payment method</label>
             <select id="method" name="method">
                 <option value="">— not specified —</option>
                 @foreach ($methods as $m)
                     <option value="{{ $m }}" @selected(old('method') === $m)>{{ $m }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div>
+            <label for="vat_status">VAT / N-VAT</label>
+            <select id="vat_status" name="vat_status">
+                <option value="">— neither —</option>
+                @foreach ($vatStatuses as $v)
+                    <option value="{{ $v }}" @selected(old('vat_status') === $v)>{{ $v }}</option>
                 @endforeach
             </select>
         </div>
@@ -217,15 +275,50 @@
         </div>
 
         <div>
-            <label for="reference">Reference / OR no.</label>
+            <label for="supplier">Supplier / vendor</label>
+            <input type="text" id="supplier" name="supplier" maxlength="255"
+                   value="{{ old('supplier') }}">
+        </div>
+
+        <div>
+            <label for="tin">Their TIN</label>
+            <input type="text" id="tin" name="tin" maxlength="40" class="no-caps"
+                   value="{{ old('tin') }}" placeholder="000-000-000-000">
+        </div>
+
+        <div class="full">
+            <label for="business_address">Their business address</label>
+            <input type="text" id="business_address" name="business_address" maxlength="255"
+                   value="{{ old('business_address') }}">
+        </div>
+
+        <div>
+            <label for="reference_type">Reference type</label>
+            <select id="reference_type" name="reference_type">
+                <option value="">— none —</option>
+                @foreach ($referenceTypes as $t)
+                    <option value="{{ $t }}" @selected(old('reference_type') === $t)>{{ $t }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div>
+            <label for="reference">Reference no.</label>
             <input type="text" id="reference" name="reference" maxlength="255"
                    class="no-caps" value="{{ old('reference') }}">
+            <div class="bk-hint">Comes out as PO-0042 on the sheet.</div>
+        </div>
+
+        <div>
+            <label for="si_cr_no">SI / CR no.</label>
+            <input type="text" id="si_cr_no" name="si_cr_no" maxlength="255"
+                   class="no-caps" value="{{ old('si_cr_no') }}">
         </div>
 
         <div>
             <label for="receipt">Receipt *</label>
             <input type="file" id="receipt" name="receipt" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
-            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — image or PDF receipt.</div>
+            <div class="bk-hint">Required — image or PDF receipt.</div>
         </div>
 
         <div class="full">
@@ -252,9 +345,10 @@
             <table class="tbl bk-expenses">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Category</th>
+                        <th>Order date</th>
+                        <th>Account title</th>
                         <th>Description</th>
+                        <th>Supplier</th>
                         <th class="num">Amount</th>
                         <th>Method</th>
                         <th>Receipt</th>
@@ -266,14 +360,27 @@
                     @foreach ($expenses as $e)
                         <tr>
                             <td style="white-space: nowrap;">{{ $e->spent_at?->format('M j') }}</td>
-                            <td>{{ $e->categoryLabel() }}</td>
+                            <td>
+                                {{ $e->account_title ?: '—' }}
+                                @if ($e->vat_status)
+                                    <div class="bk-by">{{ $e->vat_status }}</div>
+                                @endif
+                            </td>
                             <td>
                                 {{ $e->description }}
-                                @if ($e->reference)
-                                    <div style="font-size: 0.74rem; color: var(--ink-3);">Ref: {{ $e->reference }}</div>
+                                @if ($e->reference || $e->reference_type)
+                                    <div style="font-size: 0.74rem; color: var(--ink-3);">
+                                        Ref: {{ trim(($e->reference_type ? $e->reference_type.'-' : '').$e->reference, '-') }}
+                                    </div>
                                 @endif
                                 @if ($e->note)
                                     <div style="font-size: 0.74rem; color: var(--ink-3);">{{ $e->note }}</div>
+                                @endif
+                            </td>
+                            <td>
+                                {{ $e->supplier ?: '—' }}
+                                @if ($e->si_cr_no)
+                                    <div class="bk-by">SI/CR {{ $e->si_cr_no }}</div>
                                 @endif
                             </td>
                             <td class="num" style="font-weight: 700;">₱{{ number_format((float) $e->amount, 2) }}</td>
@@ -298,7 +405,7 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="3" class="bk-total-label">Total</td>
+                        <td colspan="4" class="bk-total-label">Total</td>
                         <td class="num bk-total-value">₱{{ number_format($expenseTotal, 2) }}</td>
                         <td colspan="4"></td>
                     </tr>
@@ -307,4 +414,70 @@
         </div>
     @endif
 </div>
+
+{{-- Filtering seventy-eight account titles.
+
+     Plain DOM on a real <select>: the options and their four groups are in
+     the HTML, so the field validates, submits and works with the keyboard
+     whether or not this runs. All the script does is hide what does not
+     match, which is why an empty box puts everything back rather than
+     needing a reset.
+
+     Matching is done on a lower-cased haystack of the title AND its group,
+     so typing "admin" finds the AE lines even though none of them contain
+     the word, and "cos" finds the cost of sales ones. --}}
+<script>
+    (function () {
+        var box = document.getElementById('accountTitleFilter');
+        var list = document.getElementById('account_title');
+        var count = document.getElementById('accountTitleCount');
+
+        if (!box || !list) { return; }
+
+        var options = Array.prototype.map.call(list.querySelectorAll('option'), function (opt) {
+            var group = opt.parentNode.tagName === 'OPTGROUP' ? opt.parentNode.label : '';
+            return { el: opt, group: opt.parentNode, hay: (opt.textContent + ' ' + group).toLowerCase() };
+        });
+
+        var total = options.length;
+
+        function apply() {
+            var needle = box.value.trim().toLowerCase();
+            var shown = 0;
+
+            options.forEach(function (o) {
+                var hit = needle === '' || o.hay.indexOf(needle) !== -1;
+                o.el.hidden = !hit;
+                if (hit) { shown++; }
+            });
+
+            // A group whose every option is hidden should go too, or the
+            // list reads as four headings above nothing.
+            Array.prototype.forEach.call(list.querySelectorAll('optgroup'), function (g) {
+                var any = Array.prototype.some.call(g.querySelectorAll('option'), function (o) { return !o.hidden; });
+                g.hidden = !any;
+            });
+
+            count.textContent = needle === ''
+                ? total + ' account titles'
+                : shown + ' of ' + total + ' match';
+
+            // One left and nothing chosen yet: pick it, so the common case is
+            // type-three-letters-and-move-on.
+            if (shown === 1 && needle !== '') {
+                options.forEach(function (o) { if (!o.el.hidden) { o.el.selected = true; } });
+            }
+        }
+
+        box.addEventListener('input', apply);
+
+        // Enter in the filter box would otherwise submit the whole form
+        // while the person is still choosing.
+        box.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); }
+        });
+
+        apply();
+    })();
+</script>
 @endsection

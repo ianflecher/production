@@ -1146,31 +1146,34 @@ class DemoDataSeeder extends Seeder
     {
         // Kept a little under what the orders bring in, so the books show a
         // working shop rather than one running at a loss.
+        // Account titles from the shop's own chart of accounts, not the ten
+        // homemade buckets this used to carry - demo data that cannot be
+        // recorded through the form is demo data nobody can learn from.
         $recurring = [
-            ['rent', 'Shop rent', 22000, 1],
-            ['salaries', 'Staff payroll', 24000, 15],
-            ['salaries', 'Staff payroll', 24000, 28],
-            ['utilities', 'Meralco', 9800, 8],
-            ['utilities', 'Water district', 1150, 8],
-            ['utilities', 'Converge fibre', 2699, 5],
-            ['taxes', 'BIR monthly percentage tax', 2400, 20],
+            ['Rent Expense - Antipolo Bldg.', 'Shop rent', 22000, 1],
+            ['ERE - Salaries and Wages (Basic)', 'Staff payroll', 24000, 15],
+            ['ERE - Salaries and Wages (Basic)', 'Staff payroll', 24000, 28],
+            ['Electricity and Water (Antipolo HQ)', 'Meralco', 9800, 8],
+            ['Electricity and Water (Antipolo HQ)', 'Water district', 1150, 8],
+            ['Internet and Communication Exp.', 'Converge fibre', 2699, 5],
+            ['AE - BIR (Form 2550Q - VAT)', 'BIR monthly percentage tax', 2400, 20],
         ];
 
         $occasional = [
-            ['raw_materials', 'Sublimation paper, 5 rolls', 8500],
-            ['raw_materials', 'Cotton shirt stock — assorted sizes', 16400],
-            ['raw_materials', 'DTF film and hot melt powder', 6200],
-            ['raw_materials', 'Polo shirt stock restock', 12900],
-            ['supplies', 'Packaging plastic and tape', 1300],
-            ['supplies', 'Thermal paper for labels', 850],
-            ['equipment', 'Heat press maintenance', 2500],
-            ['equipment', 'Atexco printhead cleaning kit', 3400],
-            ['equipment', 'Sewing machine servicing', 1800],
-            ['delivery', 'Lalamove — client deliveries', 1750],
-            ['delivery', 'Fuel, shop van', 2200],
-            ['marketing', 'Facebook ads boost', 3000],
-            ['marketing', 'Tarpaulin and flyers', 1600],
-            ['other', 'Office pantry and supplies', 1400],
+            ['COS - Sublimation Paper', 'Sublimation paper, 5 rolls', 8500],
+            ['COS - Shirt', 'Cotton shirt stock — assorted sizes', 16400],
+            ['COS - Printing Supplies', 'DTF film and hot melt powder', 6200],
+            ['COS - Polo Shirt', 'Polo shirt stock restock', 12900],
+            ['COS - Packaging Supplies', 'Packaging plastic and tape', 1300],
+            ['Office Supplies Expense', 'Thermal paper for labels', 850],
+            ['Repair & Maintenance - Other Machine', 'Heat press maintenance', 2500],
+            ['Repair & Maintenance - Printer', 'Atexco printhead cleaning kit', 3400],
+            ['Repair & Maintenance - Sewing Machine', 'Sewing machine servicing', 1800],
+            ['Courier Fees/Shipping Fee', 'Lalamove — client deliveries', 1750],
+            ['Fuel and Oil', 'Fuel, shop van', 2200],
+            ['Marketing Exp. - Event/Others', 'Facebook ads boost', 3000],
+            ['Marketing Exp. - Event/Others', 'Tarpaulin and flyers', 1600],
+            ['Other Expense', 'Office pantry and supplies', 1400],
         ];
 
         // Costs run as far back as the order history does, so the books compare
@@ -1181,36 +1184,39 @@ class DemoDataSeeder extends Seeder
         for ($monthsAgo = $months; $monthsAgo >= 0; $monthsAgo--) {
             $month = now()->subMonths($monthsAgo);
 
-            foreach ($recurring as [$category, $what, $amount, $day]) {
+            foreach ($recurring as [$title, $what, $amount, $day]) {
                 $when = $month->copy()->day(min($day, $month->daysInMonth));
                 if ($when->isFuture()) {
                     continue;
                 }
 
                 Expense::create([
-                    'category' => $category,
+                    'account_title' => $title,
                     'description' => $what.' — '.$when->format('F Y'),
                     'amount' => $amount,
                     'spent_at' => $when,
-                    'method' => $category === 'salaries' ? 'Cash' : 'Bank Transfer',
+                    // Payroll leaves the tin; everything else leaves a bank.
+                    'method' => str_starts_with($title, 'ERE')
+                        ? 'Cash (Petty Cash Fund)'
+                        : 'Bank Tranfer (AUB)',
                     'recorded_by' => $finance->id,
                 ]);
             }
 
             // A handful of one-off purchases scattered through the month.
             foreach (array_rand($occasional, 5) as $pick) {
-                [$category, $what, $amount] = $occasional[$pick];
+                [$title, $what, $amount] = $occasional[$pick];
                 $when = $month->copy()->day(rand(1, min(28, $month->daysInMonth)));
                 if ($when->isFuture()) {
                     continue;
                 }
 
                 Expense::create([
-                    'category' => $category,
+                    'account_title' => $title,
                     'description' => $what,
                     'amount' => $amount + rand(-500, 500),
                     'spent_at' => $when,
-                    'method' => ['Cash', 'GCash', 'Bank Transfer'][rand(0, 2)],
+                    'method' => Expense::METHODS[rand(0, count(Expense::METHODS) - 1)],
                     'recorded_by' => $finance->id,
                 ]);
             }

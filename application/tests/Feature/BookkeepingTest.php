@@ -30,11 +30,14 @@ class BookkeepingTest extends TestCase
     private function expensePayload(array $o = []): array
     {
         return array_merge([
-            'category' => 'raw_materials',
+            'account_title' => 'COS - Direct Supplies/Materials',
             'description' => '20 yards cotton fabric',
             'amount' => 1500.50,
             'spent_at' => now()->toDateString(),
-            'method' => 'Cash',
+            // Deliberately NOT the petty cash tin: that method is guarded
+            // against paying out more than the tin holds, and every test
+            // reusing this payload would have to top the tin up first.
+            'method' => 'Bank Tranfer (AUB)',
             'receipt' => UploadedFile::fake()->image('receipt.jpg'),
         ], $o);
     }
@@ -48,7 +51,7 @@ class BookkeepingTest extends TestCase
         $this->actingAs($user)->post('/books/expenses', $this->expensePayload())->assertRedirect();
 
         $this->assertDatabaseHas('expenses', [
-            'category' => 'raw_materials',
+            'account_title' => 'COS - Direct Supplies/Materials',
             'description' => '20 yards cotton fabric',
             'recorded_by' => $user->id,
         ]);
@@ -58,16 +61,16 @@ class BookkeepingTest extends TestCase
     public function test_expense_requires_its_core_fields(): void
     {
         $this->actingAs($this->finance())->post('/books/expenses', [])
-            ->assertInvalid(['category', 'description', 'amount', 'spent_at', 'receipt']);
+            ->assertInvalid(['account_title', 'description', 'amount', 'spent_at', 'receipt']);
 
         $this->assertSame(0, Expense::count());
     }
 
-    public function test_expense_category_must_be_a_known_one(): void
+    public function test_expense_account_title_must_be_a_known_one(): void
     {
         $this->actingAs($this->finance())
-            ->post('/books/expenses', $this->expensePayload(['category' => 'lamborghini']))
-            ->assertInvalid(['category']);
+            ->post('/books/expenses', $this->expensePayload(['account_title' => 'lamborghini']))
+            ->assertInvalid(['account_title']);
     }
 
     public function test_expense_amount_must_be_positive(): void
@@ -133,7 +136,7 @@ class BookkeepingTest extends TestCase
         Payment::create([
             'production_order_id' => $order->id,
             'amount' => 10000,
-            'method' => 'GCash',
+            'method' => 'GCash (iPhone)',
             'kind' => 'downpayment',
             'paid_at' => now(),
             'recorded_by' => $sales->id,
