@@ -634,18 +634,13 @@ class InquiryController extends Controller
         // own desk - not every brief they appear somewhere inside.
         $designs = InquiryDesign::query()
             ->with(['inquiry.client', 'inquiry.officer', 'artist'])
-            // Only briefs that have actually been sent. A design is created
-            // as with_artist the moment it is added, so without this an
-            // artist saw work the officer was still writing up - and could
-            // start drawing from instructions that were about to change.
-            ->when(! $user->isLeader(), fn ($q) => $q->drawnBy($user)
-                ->whereHas('inquiry', fn ($i) => $i->whereNotNull('layout_sent_at')))
+            ->when(! $user->isLeader(), fn ($q) => $q->drawnBy($user))
             ->when($user->isLeader(), fn ($q) => $q
                 ->whereIn('status', [
                     InquiryDesign::STATUS_WITH_ARTIST,
                     InquiryDesign::STATUS_SUBMITTED,
                 ])
-                ->whereHas('inquiry', fn ($i) => $i->open()->whereNotNull('layout_sent_at')))
+                ->whereHas('inquiry', fn ($i) => $i->open()))
             ->when($search !== '', fn ($q) => $q->whereHas('inquiry', fn ($i) => $i
                 ->where('what_they_want', 'like', "%{$search}%")
                 ->orWhereHas('client', fn ($c) => $c

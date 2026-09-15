@@ -10,22 +10,24 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * A brief nobody has sent says so, and reaches nobody's desk.
+ * A design still in the brief says so, rather than naming an artist.
  *
- * An officer prepared a brief, named the artist, attached the file and the
- * notes - and never pressed send. The officer's screen read "Port is drawing
- * it", because that badge was the else-arm and caught anything that was not
- * approved or submitted. Port's queue was empty. Neither of them had any
- * reason to check, and the job sat there.
+ * An officer prepared a brief and it sat at STATUS_BRIEF. The artist's queue
+ * skips that status, so it was on nobody's desk - but the officer's screen
+ * read "Port is drawing it", because that badge was the else-arm of the chain
+ * and caught anything that was not approved or submitted. Neither of them had
+ * a reason to check, and the job sat there.
  *
- * The other half of the same omission pointed the opposite way: a design is
- * created as with_artist the moment it is added, so an artist could ALSO see
- * work an officer was still writing up, and start drawing from instructions
- * that were about to change.
+ * The model had three status constants and the database had a fourth,
+ * "brief", left by the migration that split one enquiry's layout into
+ * designs. A state nothing names is a state nothing can report.
  *
- * Both come from nothing consulting layout_sent_at, which is the only honest
- * record of a handover: it is the press that locks the brief, notifies the
- * artist and stamps the time.
+ * Deliberately NOT asked here: the enquiry's layout_sent_at. That looked like
+ * the better question - it is the press that locks the brief and notifies the
+ * artist - but the shop does not work that way. The live database has layouts
+ * two revisions deep with files attached whose brief was never formally sent,
+ * because a design is visible to its artist the moment it is added. Asking
+ * layout_sent_at would call those unsent and take live work off a queue.
  */
 class AnUnsentBriefSaysSoTest extends TestCase
 {
@@ -41,8 +43,12 @@ class AnUnsentBriefSaysSoTest extends TestCase
         return User::factory()->create(['job_role' => User::JOB_ARTIST, 'is_active' => true]);
     }
 
-    private function brief(User $officer, User $artist, bool $sent, string $status = InquiryDesign::STATUS_WITH_ARTIST): InquiryDesign
-    {
+    private function design(
+        User $officer,
+        User $artist,
+        string $status = InquiryDesign::STATUS_WITH_ARTIST,
+        bool $sent = true,
+    ): InquiryDesign {
         $client = Client::create([
             'name' => 'Joanne', 'last_name' => 'Lu', 'contact_number' => '0917-000-0000',
             'created_by' => $officer->id,
@@ -65,12 +71,14 @@ class AnUnsentBriefSaysSoTest extends TestCase
 
     /* ---------------- what the officer is told ---------------- */
 
-    /** The bug itself: an unsent brief claimed the artist was drawing it. */
-    public function test_an_unsent_brief_does_not_claim_the_artist_is_drawing_it(): void
+    /** The bug itself. */
+    public function test_a_design_still_in_the_brief_does_not_claim_the_artist_is_drawing_it(): void
     {
         $officer = $this->officer();
         $artist = $this->artist();
-        $design = $this->brief($officer, $artist, sent: false);
+        $design = $this->design($officer, $artist, InquiryDesign::STATUS_BRIEF);
+
+        $this->assertTrue($design->fresh()->notSentYet());
 
         $this->actingAs($officer)
             ->get(route('inquiries.layout', $design->inquiry))
@@ -80,11 +88,11 @@ class AnUnsentBriefSaysSoTest extends TestCase
     }
 
     /** It still says who it is FOR, so the choice made is not lost. */
-    public function test_an_unsent_brief_still_names_who_it_is_for(): void
+    public function test_it_still_names_who_the_brief_is_for(): void
     {
         $officer = $this->officer();
         $artist = $this->artist();
-        $design = $this->brief($officer, $artist, sent: false);
+        $design = $this->design($officer, $artist, InquiryDesign::STATUS_BRIEF);
 
         $this->actingAs($officer)
             ->get(route('inquiries.layout', $design->inquiry))
@@ -92,27 +100,12 @@ class AnUnsentBriefSaysSoTest extends TestCase
             ->assertSee('for '.$artist->name);
     }
 
-    /** A design left at the old "brief" status reads the same way. */
-    public function test_the_legacy_brief_status_reads_as_unsent(): void
+    /** Once it is with the artist, it says what it always said. */
+    public function test_a_design_with_the_artist_says_the_artist_is_drawing_it(): void
     {
         $officer = $this->officer();
         $artist = $this->artist();
-        $design = $this->brief($officer, $artist, sent: false, status: InquiryDesign::STATUS_BRIEF);
-
-        $this->assertTrue($design->fresh()->notSentYet());
-
-        $this->actingAs($officer)
-            ->get(route('inquiries.layout', $design->inquiry))
-            ->assertOk()
-            ->assertSee('Not sent yet');
-    }
-
-    /** And once it HAS been sent, it says what it always said. */
-    public function test_a_sent_brief_says_the_artist_is_drawing_it(): void
-    {
-        $officer = $this->officer();
-        $artist = $this->artist();
-        $design = $this->brief($officer, $artist, sent: true);
+        $design = $this->design($officer, $artist);
 
         $this->actingAs($officer)
             ->get(route('inquiries.layout', $design->inquiry))
@@ -122,23 +115,80 @@ class AnUnsentBriefSaysSoTest extends TestCase
     }
 
     /**
-     * A design added AFTER the brief went out is a different case, and must
-     * not be caught by any of this.
+     * The correction that matters most.
      *
-     * The brief has already been handed over - layout_sent_at is stamped -
-     * and adding another design to it announces itself to the artist on the
-     * spot. So it is genuinely with them from the moment it is added, and
-     * saying "not sent yet" would be the same lie in reverse.
+     * A brief the officer never formally sent, whose design IS with the
+     * artist and has been worked on, must keep reading as with the artist -
+     * that is a real shape on the live database, and calling it "not sent
+     * yet" would be the same lie in reverse.
      */
-    public function test_a_design_added_after_the_brief_went_out_is_with_the_artist(): void
+    public function test_work_under_way_on_a_never_formally_sent_brief_still_reads_as_with_the_artist(): void
     {
         $officer = $this->officer();
         $artist = $this->artist();
 
-        // The brief, already sent.
-        $first = $this->brief($officer, $artist, sent: true);
+        $design = $this->design($officer, $artist, InquiryDesign::STATUS_WITH_ARTIST, sent: false);
+        $design->update(['revision_count' => 2]);
 
-        // And another design on the same brief, added later.
+        $this->assertFalse($design->fresh()->notSentYet());
+
+        $this->actingAs($officer)
+            ->get(route('inquiries.layout', $design->inquiry))
+            ->assertOk()
+            ->assertSee($artist->name.' is drawing it')
+            ->assertDontSee('Not sent yet');
+    }
+
+    /* ---------------- what the artist is given ---------------- */
+
+    /** A design still in the brief is on nobody's queue. */
+    public function test_an_artist_is_not_given_a_design_still_in_the_brief(): void
+    {
+        $officer = $this->officer();
+        $artist = $this->artist();
+        $this->design($officer, $artist, InquiryDesign::STATUS_BRIEF);
+
+        $this->actingAs($artist)
+            ->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertDontSee('Joanne');
+    }
+
+    public function test_an_artist_is_given_it_once_it_is_with_them(): void
+    {
+        $officer = $this->officer();
+        $artist = $this->artist();
+        $this->design($officer, $artist);
+
+        $this->actingAs($artist)
+            ->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertSee('Joanne');
+    }
+
+    /**
+     * And the queue does NOT ask about layout_sent_at - work already under
+     * way on a brief nobody formally sent must stay on the artist's desk.
+     */
+    public function test_the_queue_keeps_work_on_a_never_formally_sent_brief(): void
+    {
+        $officer = $this->officer();
+        $artist = $this->artist();
+        $this->design($officer, $artist, InquiryDesign::STATUS_WITH_ARTIST, sent: false);
+
+        $this->actingAs($artist)
+            ->get(route('inquiries.layouts'))
+            ->assertOk()
+            ->assertSee('Joanne');
+    }
+
+    /** A design added after the brief went out is with the artist too. */
+    public function test_a_design_added_later_is_with_the_artist(): void
+    {
+        $officer = $this->officer();
+        $artist = $this->artist();
+        $first = $this->design($officer, $artist);
+
         $later = InquiryDesign::create([
             'inquiry_id' => $first->inquiry_id,
             'position' => 2,
@@ -152,56 +202,5 @@ class AnUnsentBriefSaysSoTest extends TestCase
             ->get(route('inquiries.layout', $first->inquiry))
             ->assertOk()
             ->assertDontSee('Not sent yet');
-
-        // And the artist has both of them.
-        $this->actingAs($artist)
-            ->get(route('inquiries.layouts'))
-            ->assertOk()
-            ->assertSee('Joanne');
-
-        $this->assertSame(2, InquiryDesign::where('inquiry_id', $first->inquiry_id)
-            ->where('artist_id', $artist->id)->count());
-    }
-
-    /* ---------------- what the artist is given ---------------- */
-
-    /** The other half: work still being written up is on nobody's desk. */
-    public function test_an_artist_is_not_given_a_brief_that_was_never_sent(): void
-    {
-        $officer = $this->officer();
-        $artist = $this->artist();
-        $this->brief($officer, $artist, sent: false);
-
-        $this->actingAs($artist)
-            ->get(route('inquiries.layouts'))
-            ->assertOk()
-            ->assertDontSee('Joanne');
-    }
-
-    public function test_an_artist_is_given_it_once_it_is_sent(): void
-    {
-        $officer = $this->officer();
-        $artist = $this->artist();
-        $this->brief($officer, $artist, sent: true);
-
-        $this->actingAs($artist)
-            ->get(route('inquiries.layouts'))
-            ->assertOk()
-            ->assertSee('Joanne');
-    }
-
-    /** The leader's whole-shop view follows the same rule. */
-    public function test_the_leaders_queue_leaves_unsent_briefs_out_too(): void
-    {
-        $officer = $this->officer();
-        $artist = $this->artist();
-        $leader = User::factory()->create(['job_role' => User::ROLE_LEADER, 'is_active' => true]);
-
-        $this->brief($officer, $artist, sent: false);
-
-        $this->actingAs($leader)
-            ->get(route('inquiries.layouts'))
-            ->assertOk()
-            ->assertDontSee('Joanne');
     }
 }

@@ -89,18 +89,22 @@ class InquiryDesign extends Model
     }
 
     /**
-     * Has this actually been handed over?
+     * Is this still in the brief, on nobody's desk?
      *
-     * The design's own status is not enough to answer it. A design is created
-     * as with_artist the moment an officer adds it, which is before the brief
-     * has been sent - the sending is a separate press that locks the brief,
-     * notifies the artist and stamps layout_sent_at. That stamp is the only
-     * honest record of a handover, so it is what this asks.
+     * The design's own status, and NOT the enquiry's layout_sent_at. That
+     * looked like the better question - it is the press that locks the brief
+     * and notifies the artist - but the shop does not work that way: a design
+     * is visible to its artist the moment it is added, and the live data has
+     * layouts two revisions deep with two files attached whose brief was
+     * never formally sent. Asking layout_sent_at would call those unsent and
+     * take live work off an artist's queue.
+     *
+     * What actually bit was narrower: a design left at STATUS_BRIEF is on
+     * nobody's queue, and the officer's screen still named an artist for it.
      */
     public function notSentYet(): bool
     {
-        return $this->status === self::STATUS_BRIEF
-            || $this->inquiry?->layout_sent_at === null;
+        return $this->status === self::STATUS_BRIEF;
     }
 
     public function withArtist(): bool
