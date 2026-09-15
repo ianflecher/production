@@ -131,7 +131,10 @@ class InventoryController extends Controller
     {
         $this->assertAccess();
 
-        $movements = \App\Models\StockMovement::with(['item', 'user', 'order'])
+        $movements = \App\Models\StockMovement::with([
+            'item', 'user',
+            'order' => fn ($q) => $q->withExists('jobOrder'),
+        ])
             ->when($request->integer('item'), fn ($q, $id) => $q->where('inventory_item_id', $id))
             ->when($request->query('direction'), fn ($q, $d) => $q->where('direction', $d))
             ->latest('id')
@@ -557,14 +560,29 @@ class InventoryController extends Controller
                 ->where('order_number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%"))));
 
-        $pending = MaterialRequest::with('order')
+        // withExists rather than with('order.jobOrder'): the number on each row
+        // links to the package, and all that decides is whether a sheet is
+        // there. Loading the whole sheet for every row to ask a yes/no would
+        // be a query and a record per request.
+        // order.items because sizeQuantities() below reads them, and without it
+        // that is a query for every distinct order on the page. Pre-existing,
+        // found while wiring the number to the package: the comment under
+        // $sizeCounts says "looked up once for the orders actually on the page",
+        // which was true of the mapping and not of the rows behind it.
+        $pending = MaterialRequest::with([
+            'order' => fn ($q) => $q->withExists('jobOrder'),
+            'order.items',
+        ])
             ->where('status', 'pending')
             ->tap($matching)
             ->orderBy('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
-        $decided = MaterialRequest::with(['order', 'item', 'decider'])
+        $decided = MaterialRequest::with([
+            'order' => fn ($q) => $q->withExists('jobOrder'),
+            'order.items', 'item', 'decider',
+        ])
             ->where('status', '!=', 'pending')
             ->tap($matching)
             ->orderByDesc('decided_at')->limit(25)->get();

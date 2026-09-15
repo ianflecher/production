@@ -82,7 +82,10 @@
                             <td style="font-size:0.82rem; color:var(--ink-2);">
                                 <strong>{{ ucfirst($m->reason) }}</strong>
                                 @if ($m->order)
-                                    · <a href="{{ route('orders.show', $m->order) }}">{{ $m->order->order_number }}</a>
+                                    {{-- The same number on the same desk, so it
+                                         goes to the same place as on the
+                                         requests page. --}}
+                                    · <a href="{{ $m->order->sheetUrl() }}">{{ $m->order->order_number }}</a>
                                 @endif
                                 @if ($m->note)<div style="font-size:0.76rem; color:var(--ink-3);">{{ $m->note }}</div>@endif
                             </td>

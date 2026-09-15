@@ -686,6 +686,42 @@ class ProductionOrder extends Model
         return $this->client?->fullName() ?: (string) $this->customer_name;
     }
 
+    /** Is there a sheet behind this job yet? */
+    public function hasSheet(): bool
+    {
+        if ($this->relationLoaded('jobOrder')) {
+            return (bool) $this->jobOrder;
+        }
+
+        // withExists('jobOrder') on the list that fetched it, so a page of
+        // rows answers this without a query each.
+        if (array_key_exists('job_order_exists', $this->attributes)) {
+            return (bool) $this->attributes['job_order_exists'];
+        }
+
+        return $this->jobOrder()->exists();
+    }
+
+    /**
+     * Where the job order number on a working list should go.
+     *
+     * The package - the approved mockup, template, job order and production
+     * details - is what somebody clicking a job number off a working list is
+     * actually after. The supply desk issuing materials wants the sheet in
+     * front of them, not the order's admin page; they were landing on the
+     * admin page and hunting for the document from there.
+     *
+     * An order with no sheet yet has no package to open and that route
+     * answers 404, so those keep the old destination. A dead link is worse
+     * than a plain one.
+     */
+    public function sheetUrl(): string
+    {
+        return $this->hasSheet()
+            ? route('orders.package', $this)
+            : route('orders.show', $this);
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class)->orderBy('id');

@@ -39,7 +39,11 @@
                             @endif
                         </h2>
                         <p class="muted" style="font-size: 0.85rem;">
-                            for <a href="{{ route('orders.show', $req->order) }}" style="font-weight: 600;">{{ $req->order->order_number }}</a>
+                            {{-- Straight to the package. The desk issuing the
+                                 materials is reading the sheet, not the order's
+                                 admin page - they were landing there and hunting
+                                 for the document from it. --}}
+                            for <a href="{{ $req->order->sheetUrl() }}" style="font-weight: 600;">{{ $req->order->order_number }}</a>
                             · {{ $req->order->clientName() }}
                             {{-- The pieces this line covers, not the whole run: a
                                  request for the larges is answered by how many
@@ -170,7 +174,7 @@
                                     <div style="font-size: 0.72rem; font-weight: 500; color: var(--ink-3);">size {{ $d->size }}</div>
                                 @endif
                             </td>
-                            <td><a href="{{ route('orders.show', $d->order) }}">{{ $d->order->order_number }}</a></td>
+                            <td><a href="{{ $d->order->sheetUrl() }}">{{ $d->order->order_number }}</a></td>
                             <td>
                                 @if ($d->status === 'approved')
                                     <span class="badge" style="background: #f0fdf4; color: #15803d;">APPROVED</span>
