@@ -421,6 +421,17 @@ Route::middleware(['auth', 'active'])->group(function () {
         // Money into the petty cash tin. What comes out is an ordinary expense
         // paid with "Petty cash", so there is no matching withdrawal route.
         Route::post('/books/petty-cash', [BookkeepingController::class, 'topUpPettyCash'])->name('books.petty-cash.store');
+        // A top-up typed wrong makes every figure on the page wrong, so it
+        // can be corrected or taken back out - neither below what the tin
+        // has already paid out.
+        Route::post('/books/petty-cash/{topup}', [BookkeepingController::class, 'updatePettyCash'])
+            ->whereNumber('topup')->name('books.petty-cash.update');
+        Route::post('/books/petty-cash/{topup}/delete', [BookkeepingController::class, 'destroyPettyCash'])
+            ->whereNumber('topup')->name('books.petty-cash.destroy');
+        Route::get('/books/expenses/{expense}/edit', [BookkeepingController::class, 'edit'])
+            ->whereNumber('expense')->name('books.expenses.edit');
+        Route::post('/books/expenses/{expense}', [BookkeepingController::class, 'update'])
+            ->whereNumber('expense')->name('books.expenses.update');
         Route::post('/books/expenses/{expense}/delete', [BookkeepingController::class, 'destroy'])
             ->whereNumber('expense')->name('books.expenses.destroy');
         Route::get('/books/expenses/{expense}/receipt', [BookkeepingController::class, 'receipt'])

@@ -136,7 +136,81 @@ class BookkeepingController extends Controller
                 .'The tin now holds ₱'.number_format(PettyCashTopup::balance(), 2).'.');
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * Fix a top-up: the wrong amount, the wrong day, a note left off.
+     *
+     * The tin is counted by adding these up and taking the expenses off, so
+     * a top-up typed as 5,000 when 500 went in makes every figure on the
+     * page wrong until it is corrected - and there was no way to correct it.
+     */
+    public function updatePettyCash(Request $request, PettyCashTopup $topup): RedirectResponse
+    {
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:100000000'],
+            'occurred_at' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        // The tin cannot be told it holds less than has already been spent
+        // out of it. Lowering a ₱5,000 top-up to ₱500 after ₱3,000 of it has
+        // gone would leave a negative balance, and a tin whose number does
+        // not match the notes inside it is not worth counting.
+        $withoutThisOne = PettyCashTopup::balance() - (float) $topup->amount;
+        $after = round($withoutThisOne + round((float) $data['amount'], 2), 2);
+
+        if ($after < 0) {
+            return back()
+                ->with('reopenTopup', $topup->id)
+                ->withErrors(['amount' => 'That would leave petty cash at ₱'.number_format($after, 2)
+                    .'. ₱'.number_format(PettyCashTopup::totalOut(), 2).' has already been spent out of the tin, '
+                    .'so remove or lower those expenses first.']);
+        }
+
+        $topup->update([
+            'amount' => round((float) $data['amount'], 2),
+            'occurred_at' => $data['occurred_at'],
+            'note' => $data['note'] ?? null,
+        ]);
+
+        return redirect()
+            ->route('books.index', ['month' => Carbon::parse($data['occurred_at'])->format('Y-m')])
+            ->with('success', 'Top-up updated. The tin now holds ₱'.number_format(PettyCashTopup::balance(), 2).'.');
+    }
+
+    /** Take a top-up back out - money counted twice, or never actually put in. */
+    public function destroyPettyCash(PettyCashTopup $topup): RedirectResponse
+    {
+        $month = $topup->occurred_at?->format('Y-m');
+        $after = round(PettyCashTopup::balance() - (float) $topup->amount, 2);
+
+        if ($after < 0) {
+            return back()->withErrors(['amount' => 'That top-up cannot be removed: ₱'
+                .number_format(PettyCashTopup::totalOut(), 2).' has been spent out of the tin and removing it '
+                .'would leave the balance at ₱'.number_format($after, 2).'.']);
+        }
+
+        $topup->delete(); // soft delete, like an expense
+
+        return redirect()
+            ->route('books.index', ['month' => $month])
+            ->with('success', 'Top-up removed. The tin now holds ₱'.number_format(PettyCashTopup::balance(), 2).'.');
+    }
+
+    /**
+     * Everything a row holds, checked.
+     *
+     * Recording one and fixing one ask the same questions, so they ask them
+     * in one place. Kept as two lists they would drift the first time a
+     * field was added, and an edit form quietly missing a rule is how a rule
+     * stops applying without anybody deciding it should.
+     *
+     * The receipt is the only difference: required when there is no row yet,
+     * optional when the row already has a file and somebody is only
+     * correcting the spelling of a supplier.
+     *
+     * @return array<string, mixed>
+     */
+    private function expenseData(Request $request, ?Expense $expense = null): array
     {
         $data = $request->validate([
             // The three the books cannot do without.
@@ -159,24 +233,12 @@ class BookkeepingController extends Controller
             'business_address' => ['nullable', 'string', 'max:255'],
             'vat_status' => ['nullable', 'in:'.implode(',', Expense::VAT_STATUSES)],
             'note' => ['nullable', 'string', 'max:2000'],
-            'receipt' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:512000'],
+            'receipt' => [$expense ? 'nullable' : 'required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:512000'],
         ], [
             'account_title.required' => 'Pick the account title this belongs to.',
             'account_title.in' => 'That is not one of the shop account titles.',
             'paid_at.after_or_equal' => 'It cannot have been paid before it was ordered.',
         ]);
-
-        // A tin cannot pay out more than it holds. Without this the balance
-        // goes negative and stops meaning anything - the point of counting a
-        // tin is that the number matches the notes inside it.
-        if (($data['method'] ?? null) === Expense::METHOD_PETTY_CASH) {
-            $balance = PettyCashTopup::balance();
-
-            if (round((float) $data['amount'], 2) > $balance) {
-                return back()->withInput()->withErrors(['amount' => 'Petty cash only holds ₱'.number_format($balance, 2)
-                    .'. Add money to the tin first, or pay this one another way.']);
-            }
-        }
 
         // The form shows the type inside the reference box - pick PO and it
         // reads "PO-0042" - but the two are stored apart so the column can be
@@ -197,15 +259,20 @@ class BookkeepingController extends Controller
             $data['reference'] = null;
         }
 
-        $receiptPath = null;
-        $receiptName = null;
-        if ($request->hasFile('receipt')) {
-            $file = $request->file('receipt');
-            $receiptName = $file->getClientOriginalName();
-            $receiptPath = $file->store('expense-receipts', 'local');
-        }
+        return $data;
+    }
 
-        Expense::create([
+    /**
+     * The columns, from checked input. Not recorded_by: that is set once,
+     * when the row is first written, and an edit must not rewrite it into
+     * whoever happened to fix the typo.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function expenseFields(array $data): array
+    {
+        return [
             'account_title' => $data['account_title'],
             'description' => $data['description'],
             'amount' => round((float) $data['amount'], 2),
@@ -221,14 +288,115 @@ class BookkeepingController extends Controller
             'business_address' => $data['business_address'] ?? null,
             'vat_status' => $data['vat_status'] ?? null,
             'note' => $data['note'] ?? null,
-            'receipt_path' => $receiptPath,
-            'receipt_name' => $receiptName,
-            'recorded_by' => $request->user()->id,
-        ]);
+        ];
+    }
+
+    /**
+     * What the tin can pay out for this one expense.
+     *
+     * A tin cannot pay out more than it holds - without that guard the
+     * balance goes negative and stops meaning anything, because the point of
+     * counting a tin is that the number matches the notes inside it.
+     *
+     * Editing needs one more thing than recording does. balance() has
+     * already counted the expense's current amount as gone, so an expense
+     * already paid from the tin must be measured against a tin that still
+     * has its own money in it - otherwise correcting ₱300 to ₱320 is refused
+     * by a balance that is subtracting the ₱300 twice.
+     */
+    private function pettyCashAvailableFor(?Expense $expense = null): float
+    {
+        $balance = PettyCashTopup::balance();
+
+        if ($expense && $expense->method === Expense::METHOD_PETTY_CASH) {
+            $balance += (float) $expense->amount;
+        }
+
+        return round($balance, 2);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $this->expenseData($request);
+
+        if (($data['method'] ?? null) === Expense::METHOD_PETTY_CASH) {
+            $available = $this->pettyCashAvailableFor();
+
+            if (round((float) $data['amount'], 2) > $available) {
+                return back()->withInput()->withErrors(['amount' => 'Petty cash only holds ₱'.number_format($available, 2)
+                    .'. Add money to the tin first, or pay this one another way.']);
+            }
+        }
+
+        $fields = $this->expenseFields($data);
+        $fields['recorded_by'] = $request->user()->id;
+        $fields['receipt_path'] = null;
+        $fields['receipt_name'] = null;
+
+        if ($request->hasFile('receipt')) {
+            $file = $request->file('receipt');
+            $fields['receipt_name'] = $file->getClientOriginalName();
+            $fields['receipt_path'] = $file->store('expense-receipts', 'local');
+        }
+
+        Expense::create($fields);
 
         return redirect()
             ->route('books.index', ['month' => Carbon::parse($data['spent_at'])->format('Y-m')])
             ->with('success', 'Expense recorded (₱'.number_format((float) $data['amount'], 2).').');
+    }
+
+    /** The same form, filled in. */
+    public function edit(Expense $expense): View
+    {
+        return view('finance.expense-edit', [
+            'expense' => $expense,
+            'accountTitles' => Expense::ACCOUNT_TITLES,
+            'referenceTypes' => Expense::REFERENCE_TYPES,
+            'vatStatuses' => Expense::VAT_STATUSES,
+            'methods' => Expense::METHODS,
+        ]);
+    }
+
+    /**
+     * Fix a row that was written down wrong.
+     *
+     * A month leaves here as one sheet the bookkeeper reconciles against
+     * statements, so a supplier misspelt or an amount out by a peso has to
+     * be correctable. The only way before was to remove the row and type all
+     * fifteen fields again, which lost who recorded it and when, and which
+     * nobody does at five o'clock - so the wrong figure went to the books.
+     */
+    public function update(Request $request, Expense $expense): RedirectResponse
+    {
+        $data = $this->expenseData($request, $expense);
+
+        if (($data['method'] ?? null) === Expense::METHOD_PETTY_CASH) {
+            $available = $this->pettyCashAvailableFor($expense);
+
+            if (round((float) $data['amount'], 2) > $available) {
+                return back()->withInput()->withErrors(['amount' => 'Petty cash only holds ₱'.number_format($available, 2)
+                    .'. Add money to the tin first, or pay this one another way.']);
+            }
+        }
+
+        $fields = $this->expenseFields($data);
+
+        // A new receipt replaces the one the row points at. The old file is
+        // left on disk, the same way a removed expense keeps its receipt:
+        // the paper is the evidence, and a row no longer pointing at it is
+        // not a reason to destroy it.
+        if ($request->hasFile('receipt')) {
+            $file = $request->file('receipt');
+            $fields['receipt_name'] = $file->getClientOriginalName();
+            $fields['receipt_path'] = $file->store('expense-receipts', 'local');
+        }
+
+        $expense->update($fields);
+
+        return redirect()
+            ->route('books.index', ['month' => Carbon::parse($data['spent_at'])->format('Y-m')])
+            ->with('success', 'Expense updated (₱'.number_format((float) $data['amount'], 2).').');
     }
 
     public function destroy(Request $request, Expense $expense): RedirectResponse
