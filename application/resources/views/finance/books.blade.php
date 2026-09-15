@@ -381,7 +381,7 @@
             <label for="reference">Reference no.</label>
             <input type="text" id="reference" name="reference" maxlength="255"
                    class="no-caps" value="{{ old('reference') }}">
-            <div class="bk-hint">Comes out as PO-0042.</div>
+            <div class="bk-hint" id="referenceHint">Pick a type and it fills in here.</div>
         </div>
 
         <div class="c3">
@@ -573,6 +573,74 @@
 
         apply();
         showPicked();
+    })();
+</script>
+
+{{-- Choosing a reference type writes it into the reference box.
+
+     The two are stored apart - the type in its own column so it can be
+     sorted and counted - but they are ONE thing on paper, and typing "PO-"
+     before every number is the sort of small friction that ends with the
+     type being left blank. So the box shows "PO-" the moment the type is
+     chosen, with the caret after it, and the server strips the prefix back
+     off when it saves.
+
+     Changing the type rewrites the prefix rather than stacking a second one,
+     and clearing it takes the prefix away and leaves the number. --}}
+<script>
+    (function () {
+        var type = document.getElementById('reference_type');
+        var ref = document.getElementById('reference');
+        var hint = document.getElementById('referenceHint');
+
+        if (!type || !ref) { return; }
+
+        // Every prefix this could already be carrying, longest first, so
+        // "Others-" is matched before anything that starts the same way.
+        var prefixes = Array.prototype.map.call(type.options, function (o) { return o.value; })
+            .filter(Boolean)
+            .sort(function (a, b) { return b.length - a.length; })
+            .map(function (v) { return v.toUpperCase() + '-'; });
+
+        function bareNumber() {
+            var v = ref.value.trim();
+
+            for (var i = 0; i < prefixes.length; i++) {
+                if (v.toUpperCase().indexOf(prefixes[i]) === 0) {
+                    return v.slice(prefixes[i].length);
+                }
+            }
+
+            return v;
+        }
+
+        function sync(focus) {
+            var number = bareNumber();
+
+            if (!type.value) {
+                ref.value = number;
+                hint.textContent = 'Pick a type and it fills in here.';
+                return;
+            }
+
+            ref.value = type.value + '-' + number;
+            hint.textContent = 'Type the number after ' + type.value + '-';
+
+            if (focus) {
+                ref.focus();
+                // After the prefix, not before it, or the number lands in
+                // front of the type.
+                ref.setSelectionRange(ref.value.length, ref.value.length);
+            }
+        }
+
+        type.addEventListener('change', function () { sync(true); });
+
+        // Somebody who types over the prefix by hand gets it put back when
+        // they leave the box, so what is on screen matches what is saved.
+        ref.addEventListener('blur', function () { sync(false); });
+
+        sync(false);
     })();
 </script>
 @endsection

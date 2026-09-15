@@ -182,6 +182,25 @@ class BookkeepingController extends Controller
             }
         }
 
+        // The form shows the type inside the reference box - pick PO and it
+        // reads "PO-0042" - but the two are stored apart so the column can be
+        // sorted. Strip the prefix back off here rather than in the script,
+        // because a reference typed by hand, pasted, or sent with the script
+        // disabled must come out the same way. Without this the export joins
+        // the type on a second time and reads PO-PO-0042.
+        if (filled($data['reference'] ?? null) && filled($data['reference_type'] ?? null)) {
+            $prefix = $data['reference_type'].'-';
+
+            if (str_starts_with(strtoupper($data['reference']), strtoupper($prefix))) {
+                $data['reference'] = substr($data['reference'], strlen($prefix));
+            }
+        }
+
+        // A type and nothing else is not a reference.
+        if (blank($data['reference'] ?? null)) {
+            $data['reference'] = null;
+        }
+
         $receiptPath = null;
         $receiptName = null;
         if ($request->hasFile('receipt')) {

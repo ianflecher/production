@@ -241,6 +241,95 @@ class ExpensesMatchTheBooksTest extends TestCase
             ->assertSee('Bond paper');
     }
 
+    /* ---------------- the reference and its type ---------------- */
+
+    /**
+     * The form shows the type inside the reference box, so what arrives is
+     * "PO-0042". The two are stored apart - the type in its own column so it
+     * can be sorted and counted - and without stripping the prefix back off
+     * the export would join the type on a second time and read PO-PO-0042.
+     */
+    public function test_a_reference_sent_with_its_prefix_is_stored_once(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->finance())
+            ->post(route('books.expenses.store'), $this->validExpense([
+                'reference_type' => 'PO',
+                'reference' => 'PO-0042',
+            ]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $e = Expense::firstOrFail();
+
+        $this->assertSame('PO', $e->reference_type);
+        $this->assertSame('0042', $e->reference);
+    }
+
+    /** Typed lower case by somebody in a hurry. */
+    public function test_the_prefix_is_stripped_whatever_its_case(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->finance())
+            ->post(route('books.expenses.store'), $this->validExpense([
+                'reference_type' => 'RFP',
+                'reference' => 'rfp-0008',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('0008', Expense::firstOrFail()->reference);
+    }
+
+    /** And a bare number, from somebody whose script never ran, is left alone. */
+    public function test_a_bare_reference_number_is_kept_as_it_is(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->finance())
+            ->post(route('books.expenses.store'), $this->validExpense([
+                'reference_type' => 'PCF',
+                'reference' => '0011',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('0011', Expense::firstOrFail()->reference);
+    }
+
+    /** A type with no number behind it is not a reference. */
+    public function test_a_prefix_on_its_own_is_not_a_reference(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->finance())
+            ->post(route('books.expenses.store'), $this->validExpense([
+                'reference_type' => 'PO',
+                'reference' => 'PO-',
+            ]))
+            ->assertRedirect();
+
+        $e = Expense::firstOrFail();
+
+        $this->assertSame('PO', $e->reference_type);
+        $this->assertNull($e->reference);
+    }
+
+    /** A reference that happens to start with another type is not mangled. */
+    public function test_only_its_own_prefix_is_taken_off(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->finance())
+            ->post(route('books.expenses.store'), $this->validExpense([
+                'reference_type' => 'PO',
+                'reference' => 'RFP-0008',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('RFP-0008', Expense::firstOrFail()->reference);
+    }
+
     /* ---------------- the export ---------------- */
 
     /** The bookkeeper's own columns, in the bookkeeper's own order. */
