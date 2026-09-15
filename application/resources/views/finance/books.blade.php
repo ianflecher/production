@@ -22,9 +22,78 @@
     .bk-cat .bar span { display: block; height: 100%; background: #E31B23; border-radius: 99px; }
     .bk-cat .nm { font-size: 0.85rem; font-weight: 600; }
     .bk-cat .amt { font-size: 0.85rem; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+    /* Twelve columns rather than auto-fit.
+
+       The form has fifteen fields now, and auto-fit packed them wherever they
+       happened to land - a date next to a TIN next to an amount, at whatever
+       width was left over. Every field below says how many columns it wants,
+       so things that belong together sit together and a narrow one stays
+       narrow. */
     .bk-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+
+    /* Only the expense form. The petty cash form beside it is four fields and
+       was perfectly happy with auto-fit; handing it twelve columns squeezed
+       every box to eighty pixels. */
+    .bk-form.bk-form-wide { grid-template-columns: repeat(12, 1fr); gap: 0.75rem 0.8rem; }
     .bk-form .full { grid-column: 1 / -1; }
+    .bk-form .c2 { grid-column: span 2; }
+    .bk-form .c3 { grid-column: span 3; }
+    .bk-form .c4 { grid-column: span 4; }
+    .bk-form .c6 { grid-column: span 6; }
     .bk-form label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+    .bk-form input, .bk-form select, .bk-form textarea { width: 100%; }
+
+    /* A heading every few fields. Fifteen boxes in a row is a wall; the same
+       fifteen under "Who supplied it" and "The paper" is a form. */
+    .bk-form .bk-leg {
+        grid-column: 1 / -1;
+        margin: 0.5rem 0 -0.15rem;
+        font-size: 0.72rem; font-weight: 800; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--ink-3);
+        border-top: 1px solid var(--border); padding-top: 0.8rem;
+    }
+    .bk-form .bk-leg:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+
+    .bk-hint { font-size: 0.72rem; color: var(--ink-3); margin-top: 0.25rem; line-height: 1.35; }
+
+    /* The account title picker.
+
+       A filter box and a list, drawn as ONE control - the input's bottom edge
+       is the list's top edge - so it reads as a searchable field rather than
+       as a text box that happens to sit above a scrolling list box. */
+    .bk-picker {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        overflow: hidden;
+    }
+    .bk-picker:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+    .bk-picker input[type="search"] {
+        border: 0; border-bottom: 1px solid var(--border); border-radius: 0;
+        padding: 0.6rem 0.75rem; font-size: 0.9rem;
+    }
+    .bk-picker input[type="search"]:focus { outline: none; box-shadow: none; }
+    .bk-picker select {
+        border: 0; border-radius: 0; height: 190px; padding: 0.35rem 0.25rem;
+        font-size: 0.86rem; background: #fff;
+    }
+    .bk-picker select:focus { outline: none; box-shadow: none; }
+    .bk-picker optgroup { font-size: 0.74rem; letter-spacing: 0.04em; color: var(--ink-3); }
+    .bk-picker option { padding: 0.18rem 0.5rem; color: var(--ink); }
+    .bk-picker option:checked { background: var(--brand-soft); color: var(--ink); font-weight: 700; }
+
+    .bk-picked {
+        display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+        border-top: 1px solid var(--border); padding: 0.45rem 0.75rem;
+        font-size: 0.8rem; background: #fafbfd;
+    }
+    .bk-picked strong { color: var(--ink); }
+
+    @media (max-width: 760px) {
+        /* One field per row on a phone. Twelve columns of 30px is not a form. */
+        .bk-form.bk-form-wide { grid-template-columns: 1fr; }
+        .bk-form .c2, .bk-form .c3, .bk-form .c4, .bk-form .c6 { grid-column: 1 / -1; }
+    }
     .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
     /* The expense rows carry a Remove button, so the last two columns need room
@@ -200,66 +269,74 @@
     <h2>Record an expense</h2>
     <p class="sub">Anything the business paid for — materials, wages, rent, power, delivery.</p>
 
-    <form method="POST" action="{{ route('books.expenses.store') }}" enctype="multipart/form-data" class="bk-form">
+    <form method="POST" action="{{ route('books.expenses.store') }}" enctype="multipart/form-data" class="bk-form bk-form-wide">
         @csrf
 
-        <div>
+        <div class="bk-leg">When, and who asked</div>
+
+        <div class="c3">
             <label for="spent_at">Order date *</label>
             <input type="date" id="spent_at" name="spent_at" required
                    value="{{ old('spent_at', now()->format('Y-m-d')) }}">
         </div>
 
-        <div>
+        <div class="c3">
             <label for="paid_at">Date paid</label>
             <input type="date" id="paid_at" name="paid_at" value="{{ old('paid_at') }}">
-            <div class="bk-hint">Leave blank until it is actually paid.</div>
+            <div class="bk-hint">Blank until it is actually paid.</div>
         </div>
 
-        <div>
+        <div class="c6">
             <label for="ordered_by">Ordered by</label>
             <input type="text" id="ordered_by" name="ordered_by" maxlength="120"
                    value="{{ old('ordered_by') }}" placeholder="Who asked for it">
         </div>
 
-        {{-- Seventy-eight titles is too many to scroll, so the box above the
-             list filters it as you type. The list itself is a real <select>
-             with the four groups intact, so it still validates and still
-             works with the keyboard if the script never runs. --}}
-        <div class="full">
+        <div class="bk-leg">What it was</div>
+
+        {{-- Seventy-eight titles is too many to scroll, so the box at the top
+             filters the list under it as you type. It is a real <select> with
+             the four groups intact, so the field validates, submits and works
+             with the keyboard whether or not the script runs. --}}
+        <div class="c6">
             <label for="accountTitleFilter">Account title *</label>
-            <input type="search" id="accountTitleFilter" class="no-caps"
-                   placeholder="Type to filter — fabric, BIR, rent…" autocomplete="off">
-            <select id="account_title" name="account_title" size="8" required
-                    style="margin-top:.35rem;">
-                @foreach ($accountTitles as $group => $titles)
-                    <optgroup label="{{ $group }}">
-                        @foreach ($titles as $title)
-                            <option value="{{ $title }}" @selected(old('account_title') === $title)>{{ $title }}</option>
-                        @endforeach
-                    </optgroup>
-                @endforeach
-            </select>
-            <div class="bk-hint" id="accountTitleCount"></div>
+            <div class="bk-picker">
+                <input type="search" id="accountTitleFilter" class="no-caps"
+                       placeholder="Type to filter — fabric, BIR, rent…" autocomplete="off">
+                <select id="account_title" name="account_title" size="8" required>
+                    @foreach ($accountTitles as $group => $titles)
+                        <optgroup label="{{ $group }}">
+                            @foreach ($titles as $title)
+                                <option value="{{ $title }}" @selected(old('account_title') === $title)>{{ $title }}</option>
+                            @endforeach
+                        </optgroup>
+                    @endforeach
+                </select>
+                <div class="bk-picked">
+                    <span id="accountTitlePicked">Nothing chosen yet</span>
+                    <span id="accountTitleCount" style="color:var(--ink-3);"></span>
+                </div>
+            </div>
         </div>
 
-        <div>
-            <label for="amount">Amount (₱) *</label>
+        <div class="c6">
+            <label for="description">What was it for? *</label>
+            <input type="text" id="description" name="description" required maxlength="255"
+                   placeholder="e.g. 20 yards cotton fabric from Divisoria" value="{{ old('description') }}">
+
+            <label for="amount" style="margin-top:.8rem;">Amount (₱) *</label>
             <input type="number" id="amount" name="amount" step="0.01" min="0.01" required
                    placeholder="0.00" value="{{ old('amount') }}">
-        </div>
 
-        <div>
-            <label for="method">Payment method</label>
+            <label for="method" style="margin-top:.8rem;">Payment method</label>
             <select id="method" name="method">
                 <option value="">— not specified —</option>
                 @foreach ($methods as $m)
                     <option value="{{ $m }}" @selected(old('method') === $m)>{{ $m }}</option>
                 @endforeach
             </select>
-        </div>
 
-        <div>
-            <label for="vat_status">VAT / N-VAT</label>
+            <label for="vat_status" style="margin-top:.8rem;">VAT / N-VAT</label>
             <select id="vat_status" name="vat_status">
                 <option value="">— neither —</option>
                 @foreach ($vatStatuses as $v)
@@ -268,32 +345,30 @@
             </select>
         </div>
 
-        <div class="full">
-            <label for="description">What was it for? *</label>
-            <input type="text" id="description" name="description" required maxlength="255"
-                   placeholder="e.g. 20 yards cotton fabric from Divisoria" value="{{ old('description') }}">
-        </div>
+        <div class="bk-leg">Who supplied it</div>
 
-        <div>
+        <div class="c5" style="grid-column: span 5;">
             <label for="supplier">Supplier / vendor</label>
             <input type="text" id="supplier" name="supplier" maxlength="255"
                    value="{{ old('supplier') }}">
         </div>
 
-        <div>
+        <div class="c3">
             <label for="tin">Their TIN</label>
             <input type="text" id="tin" name="tin" maxlength="40" class="no-caps"
                    value="{{ old('tin') }}" placeholder="000-000-000-000">
         </div>
 
-        <div class="full">
+        <div style="grid-column: span 4;">
             <label for="business_address">Their business address</label>
             <input type="text" id="business_address" name="business_address" maxlength="255"
                    value="{{ old('business_address') }}">
         </div>
 
-        <div>
-            <label for="reference_type">Reference type</label>
+        <div class="bk-leg">The paper</div>
+
+        <div class="c2">
+            <label for="reference_type">Ref. type</label>
             <select id="reference_type" name="reference_type">
                 <option value="">— none —</option>
                 @foreach ($referenceTypes as $t)
@@ -302,23 +377,23 @@
             </select>
         </div>
 
-        <div>
+        <div class="c3">
             <label for="reference">Reference no.</label>
             <input type="text" id="reference" name="reference" maxlength="255"
                    class="no-caps" value="{{ old('reference') }}">
-            <div class="bk-hint">Comes out as PO-0042 on the sheet.</div>
+            <div class="bk-hint">Comes out as PO-0042.</div>
         </div>
 
-        <div>
+        <div class="c3">
             <label for="si_cr_no">SI / CR no.</label>
             <input type="text" id="si_cr_no" name="si_cr_no" maxlength="255"
                    class="no-caps" value="{{ old('si_cr_no') }}">
         </div>
 
-        <div>
+        <div class="c4">
             <label for="receipt">Receipt *</label>
             <input type="file" id="receipt" name="receipt" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
-            <div class="bk-hint">Required — image or PDF receipt.</div>
+            <div class="bk-hint">Required — image or PDF.</div>
         </div>
 
         <div class="full">
@@ -467,8 +542,8 @@
             });
 
             count.textContent = needle === ''
-                ? total + ' account titles'
-                : shown + ' of ' + total + ' match';
+                ? total + ' titles'
+                : shown + ' of ' + total;
 
             // One left and nothing chosen yet: pick it, so the common case is
             // type-three-letters-and-move-on.
@@ -477,7 +552,18 @@
             }
         }
 
-        box.addEventListener('input', apply);
+        // What is chosen, spelled out under the list. A highlighted row
+        // scrolled out of view is not an answer to "which one did I pick".
+        var picked = document.getElementById('accountTitlePicked');
+
+        function showPicked() {
+            picked.innerHTML = list.value
+                ? 'Chosen: <strong>' + list.value.replace(/[<>&]/g, '') + '</strong>'
+                : 'Nothing chosen yet';
+        }
+
+        list.addEventListener('change', showPicked);
+        box.addEventListener('input', function () { apply(); showPicked(); });
 
         // Enter in the filter box would otherwise submit the whole form
         // while the person is still choosing.
@@ -486,6 +572,7 @@
         });
 
         apply();
+        showPicked();
     })();
 </script>
 @endsection
