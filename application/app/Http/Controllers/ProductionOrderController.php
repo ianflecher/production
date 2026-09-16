@@ -168,6 +168,10 @@ class ProductionOrderController extends Controller
         // the standard one.
         $list = \App\Services\PricingService::listFor(auth()->user());
 
+        // Does this brief already carry a job number? Asked the same way
+        // store() asks it, so the form cannot show one thing and save another.
+        $openJob = ProductionOrder::openJobFor($inquiry?->id);
+
         return view('orders.create', [
             // The design being ordered, so the form can say which of the five
             // this one is and carry it through to the order.
@@ -180,7 +184,19 @@ class ProductionOrderController extends Controller
             'products' => \App\Services\PricingService::products($list),
             'priceList' => $list,
             'backPocketFee' => \App\Services\PricingService::backPocketFee(),
-            'nextNumber' => ProductionOrder::nextOrderNumber(),
+            // The number this order will ACTUALLY be saved with.
+            //
+            // store() already sets aside whatever is typed when the brief has
+            // an open job - one brief, one job number, because the floor runs
+            // its designs as one job. The form went on offering the next free
+            // number anyway, so the second and third designs of a brief showed
+            // a number that was never going to be used, and the officer
+            // retyped the sibling's number by hand every time to make the
+            // screen agree with what the save was going to do regardless.
+            'nextNumber' => $openJob?->order_number ?? ProductionOrder::nextOrderNumber(),
+            // Typing here does nothing once the brief has a number, so the
+            // box says so rather than inviting the work.
+            'numberIsInherited' => (bool) $openJob,
         ]);
     }
 

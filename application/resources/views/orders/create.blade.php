@@ -77,14 +77,25 @@
         <h2>Job order number</h2>
         <div class="field" style="max-width: 300px;">
             <label for="order_number">Job order #</label>
-            {{-- The next number in the shop's own sequence, filled in and
-                 changeable. It was locked because typing over it was how two
-                 jobs once shared a number — the database keeps that from
-                 happening now, so the box is open for the times the sequence
-                 needs correcting by hand. --}}
+            {{-- The number this order will actually be saved with.
+
+                 A brief that already has a job keeps its number: its designs
+                 are parts of one job and the floor runs them together, so
+                 store() sets aside whatever is in this box. Offering the next
+                 free number here meant the box disagreed with the save, and
+                 the officer retyped the sibling's number every time to settle
+                 an argument that was never going to happen. --}}
             <input id="order_number" type="text" name="order_number" maxlength="50"
-                   value="{{ old('order_number', $nextNumber) }}">
-            <span class="hint" style="font-size: 0.78rem;">The next one in order. Change it only if you need to — no two jobs may share a number.</span>
+                   value="{{ old('order_number', $nextNumber) }}"
+                   @if ($numberIsInherited ?? false) readonly style="background: var(--surface-2); cursor: not-allowed;" @endif>
+            @if ($numberIsInherited ?? false)
+                <span class="hint" style="font-size: 0.78rem;">
+                    This brief already has a job number, and every design on it shares one.
+                    Nothing to change — this design joins {{ $nextNumber }}.
+                </span>
+            @else
+                <span class="hint" style="font-size: 0.78rem;">The next one in order. Change it only if you need to — no two jobs may share a number.</span>
+            @endif
             @error('order_number')<span class="error">{{ $message }}</span>@enderror
         </div>
     </div>
