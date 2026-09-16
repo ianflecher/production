@@ -480,6 +480,27 @@ class TechPack extends Model
     }
 
     /**
+     * Does this sheet describe the one-of-each sample, or the whole batch?
+     *
+     * NOT the same question as isSample(), which says which row this is.
+     *
+     * An order that skips the sample has only one sheet - the steps are built
+     * that way deliberately, "its one sheet is the one it has been filling in
+     * all along" - and techPackPhase() calls that sheet a sample purely
+     * because it is not the mass-production STEP, which such an order never
+     * gets. So the single sheet the floor cuts and presses from was printing
+     * one of each size for a job of a hundred and eleven: IC2026-00009 read
+     * S/M/L/XL = 1, total 4, against real sizes of 20/34/39/18.
+     *
+     * The phase is left alone on purpose. It is the storage key for the row,
+     * and rewriting it would orphan every sheet already filled in.
+     */
+    public function showsTheSampleRun(ProductionOrder $order): bool
+    {
+        return $this->isSample() && ! $order->skip_sample;
+    }
+
+    /**
      * The batch's size list: what the order asked for, less the pieces the
      * sample already used up.
      *

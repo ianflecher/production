@@ -302,7 +302,9 @@
     </header>
 
     @php $sampleBoxes = $tp->sampleBoxes(); @endphp
-    <section class="tp-ref-flats"><div class="tp-ref-black-title">Sample</div><div class="tp-ref-flat-grid">
+    {{-- "Sample" is a lie on a job that never makes one. The boxes are the
+         same flats either way; only the word changes. --}}
+    <section class="tp-ref-flats"><div class="tp-ref-black-title">{{ $order->skip_sample ? 'Flats' : 'Sample' }}</div><div class="tp-ref-flat-grid">
         @php
             $sampleLabels = ['front_flat' => 'Front flat', 'back_flat' => 'Back flat'];
         @endphp
@@ -318,7 +320,10 @@
 
     <section class="tp-ref-materials"><div class="tp-ref-black-title">Size list and quantity</div>
         <div class="tp-ref-sizelist">
-            @if ($tp->isSample())
+            {{-- Asked of the ORDER, not of the row. A job that skips the
+                 sample has one sheet and it is the batch sheet; asking
+                 isSample() alone printed one of each size on it. --}}
+            @if ($tp->showsTheSampleRun($order))
                 {{-- A sample is ONE of each size. The order's breakdown - 830
                      pieces across five sizes - belongs to the batch, and
                      printing it here told the floor to cut the whole job.
