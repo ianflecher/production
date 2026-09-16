@@ -154,6 +154,26 @@ class JobOrder extends Model
         return $this->hasMany(JobOrderFile::class)->orderBy('id');
     }
 
+    /**
+     * The files that ARE the design, as the artist should see them.
+     *
+     * The ChatGPT output when the officer has tagged one, and everything on
+     * the order when nobody has. A brief with no file marked "output" is not
+     * a brief with no design — it is one where nobody said which file was the
+     * design — and showing the artist an empty box would be the wrong answer
+     * to that. Every live job order today is in exactly that state.
+     *
+     * Reads the loaded relation, so a page that eager-loads referenceFiles
+     * pays nothing for asking.
+     */
+    public function designFiles(): \Illuminate\Support\Collection
+    {
+        $all = $this->referenceFiles;
+        $tagged = $all->where('kind', 'output');
+
+        return ($tagged->isNotEmpty() ? $tagged : $all)->values();
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

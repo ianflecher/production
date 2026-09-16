@@ -6,21 +6,20 @@
 @section('content')
 @php
     $all = $order->jobOrder?->referenceFiles ?? collect();
-    // The ChatGPT design output is what the artist works from. Logo files are
-    // needed to reproduce logos exactly; everything else is background context.
-    $design = $all->where('kind', 'output');
-    $logos = $all->where('kind', 'logo');
-    $other = $all->filter(fn ($f) => ! in_array($f->kind, ['output', 'logo'], true));
     $note = $order->jobOrder?->reference_note;
 
-    // If no ChatGPT design was tagged, don't bury the files — show everything as
-    // the design so the artist never lands on a page with nothing to work from.
-    $noDesignYet = $design->isEmpty();
-    if ($noDesignYet) {
-        $design = $all;
-        $logos = collect();
-        $other = collect();
-    }
+    // What counts as "the design" is decided in one place — the step page
+    // shows the same files, and two screens disagreeing about which file the
+    // artist is meant to copy is the one thing neither of them may do.
+    $design = $order->jobOrder?->designFiles() ?? collect();
+
+    // Nothing tagged? designFiles() then shows everything, so the logo and
+    // background lists would only repeat it.
+    $noDesignYet = $all->where('kind', 'output')->isEmpty();
+
+    // Logo files are needed to reproduce logos exactly; the rest is context.
+    $logos = $noDesignYet ? collect() : $all->where('kind', 'logo');
+    $other = $noDesignYet ? collect() : $all->filter(fn ($f) => ! in_array($f->kind, ['output', 'logo'], true));
 @endphp
 
 <div class="page-head">

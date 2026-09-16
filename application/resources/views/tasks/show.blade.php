@@ -47,20 +47,31 @@
      (e.g. the approved layout while making the final mockup). --}}
 @if ($task->team === \App\Models\User::JOB_ARTIST)
     @php
+        // The drawing a finished step left behind: this round's files, or
+        // whatever it has when the round numbers do not line up.
+        $drawingsOf = function ($pt) {
+            $imgs = $pt->files->where('round', $pt->revision_count + 1)->filter(fn ($f) => $f->isImage());
+
+            return $imgs->isEmpty() ? $pt->files->filter(fn ($f) => $f->isImage()) : $imgs;
+        };
+
+        // Only the steps that actually left one. A step marked complete with
+        // nothing uploaded was counted here too, and the card then rendered as
+        // a heading with empty space under it — "Approved design to work
+        // from", and no design under it. Stephanie Moto's Final mockup is
+        // exactly that: the Layout step above it was completed with no file.
         $priorDesign = $task->order->tasks
             ->where('team', \App\Models\User::JOB_ARTIST)
             ->where('sequence', '<', $task->sequence)
             ->where('status', 'complete')
-            ->sortBy('sequence');
+            ->sortBy('sequence')
+            ->filter(fn ($pt) => $drawingsOf($pt)->isNotEmpty());
     @endphp
     @if ($priorDesign->isNotEmpty())
         <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--success-ink);">
             <h2>Approved design to work from</h2>
             @foreach ($priorDesign as $pt)
-                @php
-                    $imgs = $pt->files->where('round', $pt->revision_count + 1)->filter(fn ($f) => $f->isImage());
-                    if ($imgs->isEmpty()) { $imgs = $pt->files->filter(fn ($f) => $f->isImage()); }
-                @endphp
+                @php $imgs = $drawingsOf($pt); @endphp
                 @if ($imgs->isNotEmpty())
                     <div style="font-size: 0.8rem; color: var(--ink-3); font-weight: 600; margin: 0.4rem 0;">✓ {{ $pt->department }}</div>
                     <div style="display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 0.6rem;">
@@ -275,6 +286,30 @@
             @endif
         </span>
     </div>
+
+    {{-- The design itself, on the page the artist is working on.
+
+         It was a button to somewhere else. The artist opened the step, read
+         "the design to make for this order", and had to leave the page to see
+         what that design was — then come back to do the work.
+
+         The button stays. That page carries full size, the logo files and the
+         client's other attachments; this is the design alone. --}}
+    @php $designFiles = $task->order->jobOrder?->designFiles() ?? collect(); @endphp
+
+    @if ($designFiles->isNotEmpty())
+        <div class="card panel" style="margin-bottom: 1.4rem;">
+            <h2>The design to make</h2>
+            <p class="sub" style="margin-bottom: 1rem;">
+                Tap an image to open it full size, or <strong>Download</strong> to save it.
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 1.2rem;">
+                @foreach ($designFiles as $ref)
+                    @include('partials.reference-file', ['ref' => $ref, 'width' => 220])
+                @endforeach
+            </div>
+        </div>
+    @endif
 
     @if (filled($task->order->jobOrder?->reference_note))
         <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--accent);">
