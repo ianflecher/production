@@ -2318,6 +2318,97 @@ class ProductionOrder extends Model
      * order; the design sample itself is only released once that job order is
      * SENT to the artist (the artist needs the JO to know what to make).
      */
+    /**
+     * Every job written under this same job number, including this one.
+     *
+     * One brief becomes one job number and as many orders as it has designs -
+     * a client who wants three shirts gets three orders that all say
+     * IC2026-01232, because the floor runs them as one job. Money, though, is
+     * per order: each carries its own total and its own balance.
+     *
+     * Cancelled ones are left out. Nobody is paying for those.
+     *
+     * @return \Illuminate\Support\Collection<int, self>
+     */
+    public function siblingOrders(): \Illuminate\Support\Collection
+    {
+        return self::where('order_number', $this->order_number)
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * How to name one job among several that share a number.
+     *
+     * They all say IC2026-01232, so the number cannot tell three of them
+     * apart - the design is what the officer recognises. Used wherever a
+     * message has to point at one of the siblings and be understood.
+     */
+    public function designLabelForPayment(): string
+    {
+        $label = $this->inquiryDesign?->label;
+
+        if (filled($label)) {
+            return $label;
+        }
+
+        return $this->productLabel() ?: 'Job #'.$this->id;
+    }
+
+    /** Is this job number carrying more than one order? */
+    public function sharesItsNumber(): bool
+    {
+        return $this->siblingOrders()->count() > 1;
+    }
+
+    /**
+     * Divide one payment between orders, by what each still owes.
+     *
+     * A client with three designs under one number pays once, for all three.
+     * Recorded against a single order it opened one job and left the other
+     * two waiting for money that had already arrived - hasDownpayment() is
+     * per order and nothing anywhere adds payments up across a job number.
+     *
+     * Proportional to the BALANCE, not the total: an order that has already
+     * had something paid on it should take less of what comes next.
+     *
+     * The last share absorbs the rounding, so the parts add up to exactly
+     * what the client handed over rather than drifting a few centavos short -
+     * the same way splitAcrossSizes() divides a material.
+     *
+     * @param  \Illuminate\Support\Collection<int, self>  $orders
+     * @return array<int, float>  order id => its share
+     */
+    public static function splitPaymentAcross(float $amount, \Illuminate\Support\Collection $orders): array
+    {
+        $amount = round($amount, 2);
+        $owed = $orders->mapWithKeys(fn (self $o) => [$o->id => (float) ($o->balance() ?? 0)]);
+        $total = round($owed->sum(), 2);
+
+        if ($total <= 0) {
+            return [];
+        }
+
+        $shares = [];
+        $running = 0.0;
+        $last = $orders->last()->id;
+
+        foreach ($orders as $order) {
+            if ($order->id === $last) {
+                $shares[$order->id] = round($amount - $running, 2);
+
+                continue;
+            }
+
+            $share = round($amount * ($owed[$order->id] / $total), 2);
+            $shares[$order->id] = $share;
+            $running = round($running + $share, 2);
+        }
+
+        return $shares;
+    }
+
     public function recordPayment(array $data): Payment
     {
         $wasFirst = ! $this->hasDownpayment();

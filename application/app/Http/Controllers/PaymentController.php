@@ -32,6 +32,8 @@ class PaymentController extends Controller
             'method' => ['required', 'in:'.implode(',', \App\Models\Payment::METHODS)],
             'other_transfer' => ['nullable', 'string', 'max:100', 'required_if:method,'.\App\Models\Payment::METHOD_OTHER_TRANSFER],
             'reference' => ['required', 'string', 'max:255'],
+            // One payment for every job under this number.
+            'covers_all' => ['nullable', 'boolean'],
             // Proof is mandatory — no payment is recorded without it.
             // Images/PDF only, never executables. No app-side size cap; PHP's
             // upload_max_filesize (40M) is the practical ceiling.
@@ -39,6 +41,36 @@ class PaymentController extends Controller
         ], [
             'proof.required' => 'A picture/screenshot of the payment proof is required before the payment can be recorded.',
         ]);
+
+        // Does this cover the whole job number?
+        //
+        // Money is per order - hasDownpayment() asks one order about its own
+        // payments and nothing adds them up across a number - so a client who
+        // pays once for three designs had that recorded against one of them,
+        // and the other two sat waiting for money that had already arrived.
+        $covering = $request->boolean('covers_all') ? $order->siblingOrders() : collect([$order]);
+
+        if ($covering->count() > 1) {
+            // Every one of them has to be ready, and the refusal has to name
+            // which is not - "something is wrong" sends somebody hunting
+            // through three orders.
+            foreach ($covering as $sibling) {
+                if ($sibling->total_price === null) {
+                    return back()->withErrors(['payment' => $sibling->designLabelForPayment()
+                        .' has no price yet. Price every job under this number before recording one payment for all of them.']);
+                }
+
+                if (! $sibling->layoutApproved()) {
+                    return back()->withErrors(['payment' => $sibling->designLabelForPayment()
+                        .' has not had its layout approved yet, so there is nothing to pay for on it.']);
+                }
+
+                if ($sibling->hasPaymentAwaitingFinance()) {
+                    return back()->withErrors(['payment' => $sibling->designLabelForPayment()
+                        .' already has a payment waiting for Finance. Wait for that before recording another.']);
+                }
+            }
+        }
 
         if ($order->total_price === null) {
             return back()->withErrors(['payment' => 'Set a price first (Edit order) before recording a payment.']);
@@ -50,9 +82,11 @@ class PaymentController extends Controller
             return back()->withErrors(['payment' => 'Record the downpayment after the client approves the layout.']);
         }
 
-        $total = (float) $order->total_price;
-        $balance = $order->balance() ?? 0;
-        $wasFirst = ! $order->hasDownpayment();
+        // The figures the portion buttons mean. One order or all of them, the
+        // arithmetic is the same - it is just summed over more rows.
+        $total = round($covering->sum(fn ($o) => (float) $o->total_price), 2);
+        $balance = round($covering->sum(fn ($o) => $o->balance() ?? 0), 2);
+        $wasFirst = $covering->every(fn ($o) => ! $o->hasDownpayment());
 
         // Partial top-ups are only allowed after a downpayment has been recorded.
         if ($data['portion'] === 'partial' && $wasFirst) {
@@ -101,23 +135,45 @@ class PaymentController extends Controller
             $method .= ' — '.trim($data['other_transfer']);
         }
 
-        $order->recordPayment([
-            'amount' => $amount,
-            'method' => $method,
-            'reference' => trim($data['reference']),
-            'proof_path' => $proofPath,
-            'proof_name' => $proofName,
-            'kind' => $kind,
-            'recorded_by' => $request->user()->id,
-        ]);
+        // One row per order, so each carries its own share and opens its own
+        // gate. The reference and the proof are the SAME on every row - it
+        // was one transfer, and that is what Finance reconciles against the
+        // statement.
+        $shares = $covering->count() > 1
+            ? ProductionOrder::splitPaymentAcross($amount, $covering)
+            : [$order->id => $amount];
+
+        foreach ($covering as $sibling) {
+            $share = $shares[$sibling->id] ?? 0.0;
+
+            // A sibling that owes nothing takes no share, and a zero-peso
+            // payment row is not a record of anything.
+            if ($share <= 0) {
+                continue;
+            }
+
+            $sibling->recordPayment([
+                'amount' => $share,
+                'method' => $method,
+                'reference' => trim($data['reference']),
+                'proof_path' => $proofPath,
+                'proof_name' => $proofName,
+                'kind' => $sibling->hasDownpayment() ? 'payment' : $kind,
+                'recorded_by' => $request->user()->id,
+            ]);
+        }
 
         // Safety net: the draft job order is normally created at inquiry, but make
         // sure one exists before the officer fills it in.
-        if ($wasFirst && ! $order->jobOrder) {
-            $order->jobOrder()->create([
-                'status' => 'draft',
-                'created_by' => $request->user()->id,
-            ]);
+        if ($wasFirst) {
+            foreach ($covering as $sibling) {
+                if (! $sibling->jobOrder) {
+                    $sibling->jobOrder()->create([
+                        'status' => 'draft',
+                        'created_by' => $request->user()->id,
+                    ]);
+                }
+            }
         }
 
         // Flow: layout approved → downpayment → FINANCE CONFIRMS → artist
@@ -128,15 +184,24 @@ class PaymentController extends Controller
         // what the client says they have sent; Finance watches the account and
         // says whether it arrived, and the shop draws on that answer. See
         // FinanceController::confirm, which is where the mockup is unlocked.
+        // Say how it was divided, and over what. A figure split three ways
+        // without being told is a figure somebody checks by hand.
+        $split = $covering->count() > 1
+            ? ' Split across '.$covering->count().' jobs under '.$order->order_number.': '
+                .$covering->filter(fn ($o) => ($shares[$o->id] ?? 0) > 0)
+                    ->map(fn ($o) => $o->designLabelForPayment().' ₱'.number_format($shares[$o->id], 2))
+                    ->implode(', ').'.'
+            : '';
+
         if ($wasFirst) {
             return redirect()->route('orders.show', $order)->with(
                 'success',
-                'Downpayment recorded (₱'.number_format($amount, 2).'). '
+                'Downpayment recorded (₱'.number_format($amount, 2).').'.$split.' '
                 .'It goes to Finance to confirm — the artist starts the mockup once they have.'
             );
         }
 
-        return back()->with('success', 'Payment recorded (₱'.number_format($amount, 2).').');
+        return back()->with('success', 'Payment recorded (₱'.number_format($amount, 2).').'.$split);
     }
 
     /** Serve a payment proof file — only to signed-in sales/leaders/admins. */

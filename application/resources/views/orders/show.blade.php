@@ -427,6 +427,32 @@
                                 <input id="other_transfer" type="text" name="other_transfer" maxlength="100" placeholder="e.g. Maya, BDO, Metrobank">
                             </div>
 
+                            {{-- One payment, every job under this number.
+
+                                 Money is per order, so a client who pays once
+                                 for three designs had it recorded against one
+                                 of them and the other two sat waiting for
+                                 money that had already arrived. Ticked, the
+                                 amount is split between them by what each
+                                 still owes, with this same reference and proof
+                                 on every row - it was one transfer, and that
+                                 is what Finance reconciles against. --}}
+                            @php $siblings = $order->siblingOrders(); @endphp
+                            @if ($siblings->count() > 1)
+                                @php $combined = $siblings->sum(fn ($o) => $o->balance() ?? 0); @endphp
+                                <label style="display:flex; gap:0.5rem; align-items:flex-start; margin-top:0.6rem; font-weight:600;">
+                                    <input type="checkbox" name="covers_all" value="1" style="margin-top:0.2rem;">
+                                    <span>
+                                        This one payment covers all {{ $siblings->count() }} jobs under {{ $order->order_number }}
+                                        <span style="display:block; font-weight:400; font-size:0.72rem; color:var(--ink-3); margin-top:0.2rem;">
+                                            Together they still owe ₱{{ number_format($combined, 2) }}.
+                                            The amount is split between them by what each owes, so every job opens.
+                                            Leave it unticked to pay only this one.
+                                        </span>
+                                    </span>
+                                </label>
+                            @endif
+
                             <label style="margin-top:0.5rem;">Reference number <span style="color: var(--danger-ink);">*</span></label>
                             <input type="text" name="reference" placeholder="Receipt / txn no." required>
                             <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — receipt, transaction, or official reference number.</div>
