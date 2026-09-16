@@ -272,6 +272,21 @@ class JobOrder extends Model
             return 'embroidery';
         }
 
+        // Or the Printer box says so.
+        //
+        // That box only learned to say "Embroidery" recently, and nothing
+        // else in the shop was listening. So a job could be an embroidery job
+        // in its product type, in its imported sheet and in the box the
+        // officer had just answered - and still have no Embroidery step,
+        // because this asked the PRINT TYPE and only the print type. The work
+        // then appeared at no station and waited for nobody.
+        //
+        // IC2026-00009 is the one that showed it: "Embro Print Only",
+        // printer = embroidery, needs_embroidery = 0, no embroidery step.
+        if ($this->printer === 'embroidery') {
+            return 'embroidery';
+        }
+
         return $config['press'] ?? null;
     }
 
