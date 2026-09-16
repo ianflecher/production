@@ -1172,6 +1172,19 @@ class ProductionOrder extends Model
             $this->update(['cutting_type' => $config['cutting']]);
         }
 
+        // The printer, the same way and for the same reason. It was the one
+        // routing field this method left alone, so a pack could reach the
+        // artist with the box empty - and the box is one of the seventeen
+        // that must be answered before the pack can be submitted, so the job
+        // stopped on a question nobody had been asked. An imported pack made
+        // it worse: that page hides the whole sheet, so there was nowhere on
+        // it to answer.
+        //
+        // Only when empty. Whatever the officer chose stays chosen.
+        if (! $jobOrder->fresh()->printer) {
+            $jobOrder->update(['printer' => $jobOrder->fresh()->defaultPrinter()]);
+        }
+
         if (! $jobOrder->fresh()->fabric_press) {
             $fabricPress = $jobOrder->fresh()->defaultFabricPress();
             $jobOrder->update([

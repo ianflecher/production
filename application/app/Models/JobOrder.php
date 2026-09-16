@@ -234,6 +234,25 @@ class JobOrder extends Model
         return null;
     }
 
+    /**
+     * The printer a job falls back to when nobody has said.
+     *
+     * Atexco: it is the shop's workhorse and what every job on the board is
+     * actually running. This is a FALLBACK, not a decision - the officer's
+     * own choice always wins, and this only ever fills a box that is empty.
+     *
+     * Asked of the print type first, so it is not blindly Atexco: an
+     * embroidery job resolves to Embroidery, DTF to the DTF printer. Only a
+     * job with no print type at all, or one whose print type nobody
+     * recognises - two live packs say "N/A" - lands on the fallback.
+     */
+    public const PRINTER_FALLBACK = 'atexco';
+
+    public function defaultPrinter(): string
+    {
+        return self::printTypeConfig($this->print_type)['printer'] ?? self::PRINTER_FALLBACK;
+    }
+
     /** The press this print type normally uses (null = no press). */
     public function defaultPress(): ?string
     {
