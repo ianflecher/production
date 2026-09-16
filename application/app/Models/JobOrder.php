@@ -157,11 +157,23 @@ class JobOrder extends Model
     /**
      * The files that ARE the design, as the artist should see them.
      *
-     * The ChatGPT output when the officer has tagged one, and everything on
-     * the order when nobody has. A brief with no file marked "output" is not
-     * a brief with no design — it is one where nobody said which file was the
-     * design — and showing the artist an empty box would be the wrong answer
-     * to that. Every live job order today is in exactly that state.
+     * The "layout" ones: the drawing the artist handed back and the client
+     * approved. See InquiryController::submitLayout — "this is the drawing,
+     * that was the reference". The "output" ones are the officer's own brief
+     * material, uploaded on the INQUIRY and copied onto every order of the
+     * brief, so on Gian Lasam's two windbreakers the output file is the same
+     * pasted screenshot on both, while the drawing that tells CATALYST from
+     * CATANIS is the layout one.
+     *
+     * Read the other way round — which the references page did — the artist
+     * is shown one screenshot shared by every order of the brief, and their
+     * own approved drawing is filed under "Other files from the client",
+     * inside a box that starts collapsed. 21 of the 25 live job orders carry
+     * both kinds, so that is nearly all of them.
+     *
+     * Nothing drawn yet — the Layout step itself — falls back to everything on
+     * the order: a job with no drawing on it is not a job with nothing to work
+     * from.
      *
      * Reads the loaded relation, so a page that eager-loads referenceFiles
      * pays nothing for asking.
@@ -169,9 +181,9 @@ class JobOrder extends Model
     public function designFiles(): \Illuminate\Support\Collection
     {
         $all = $this->referenceFiles;
-        $tagged = $all->where('kind', 'output');
+        $drawn = $all->where('kind', 'layout');
 
-        return ($tagged->isNotEmpty() ? $tagged : $all)->values();
+        return ($drawn->isNotEmpty() ? $drawn : $all)->values();
     }
 
     public function createdBy(): BelongsTo

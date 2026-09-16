@@ -103,7 +103,7 @@ class TheDesignIsOnTheStepPageTest extends TestCase
         Storage::fake('local');
         $artist = $this->artist('Cristal');
         $order = $this->order($this->sales());
-        $design = $this->file($order, 'output', 'the-design.jpg');
+        $design = $this->file($order, 'layout', 'the-drawing.jpg');
 
         $step = $this->step($order, $artist);
         $this->assertSame($artist->id, $step->assigned_to);
@@ -122,7 +122,7 @@ class TheDesignIsOnTheStepPageTest extends TestCase
         Storage::fake('local');
         $artist = $this->artist('Cristal');
         $order = $this->order($this->sales());
-        $this->file($order, 'output', 'the-design.jpg');
+        $this->file($order, 'layout', 'the-drawing.jpg');
 
         $step = $this->step($order, $artist);
 
@@ -132,39 +132,73 @@ class TheDesignIsOnTheStepPageTest extends TestCase
     }
 
     /**
-     * Nothing tagged "output" is the state every live job order is in today,
-     * so this is the case that actually renders on the floor. It shows what is
-     * there rather than an empty box.
+     * Nothing drawn yet is the Layout step's own state: there is no approved
+     * drawing to work from, so everything the officer put on the order shows
+     * rather than an empty box.
      */
-    public function test_an_order_with_nothing_tagged_still_shows_its_files(): void
+    public function test_an_order_with_nothing_drawn_still_shows_its_files(): void
     {
         Storage::fake('local');
         $artist = $this->artist('Cristal');
         $order = $this->order($this->sales());
-        $layout = $this->file($order, 'layout', 'EVO COTTON SHIRT 1.jpg');
+        $brief = $this->file($order, 'output', 'pasted-20260916-021908.png');
 
         $step = $this->step($order, $artist);
 
         $this->actingAs($artist)
             ->get(route('tasks.show', $step->id))
-            ->assertSee($this->imageTag($layout), false);
+            ->assertSee($this->imageTag($brief), false);
     }
 
-    /** Once one IS tagged, it is the design and the pegs are not. */
-    public function test_a_tagged_design_is_shown_without_the_rest(): void
+    /**
+     * The one that matters, and the one the first cut of this got backwards.
+     *
+     * "output" is the officer's brief material, uploaded on the INQUIRY and
+     * copied onto every order of the brief. "layout" is the artist's own
+     * drawing, per order. Gian Lasam's two windbreakers carry the same pasted
+     * screenshot as their output file; the drawing that tells CATALYST from
+     * CATANIS is the layout one. Show the output and both orders look
+     * identical on the step that has to tell them apart.
+     */
+    public function test_the_drawing_wins_over_the_officers_brief_material(): void
     {
         Storage::fake('local');
         $artist = $this->artist('Cristal');
         $order = $this->order($this->sales());
-        $design = $this->file($order, 'output', 'the-design.jpg');
+        $shared = $this->file($order, 'output', 'pasted-20260916-021908.png');
+        $drawing = $this->file($order, 'layout', 'Windbreaker 1 - CATALYST.jpg');
         $peg = $this->file($order, 'peg', 'a-peg.jpg');
 
         $step = $this->step($order, $artist);
         $html = $this->actingAs($artist)
             ->get(route('tasks.show', $step->id))->getContent();
 
-        $this->assertStringContainsString($this->imageTag($design), $html);
+        $this->assertStringContainsString($this->imageTag($drawing), $html);
+        $this->assertStringNotContainsString($this->imageTag($shared), $html);
         $this->assertStringNotContainsString($this->imageTag($peg), $html);
+    }
+
+    /**
+     * And the same answer on the page behind the button, which used to file
+     * the approved drawing under "Other files from the client".
+     */
+    public function test_the_references_page_leads_with_the_drawing_too(): void
+    {
+        Storage::fake('local');
+        $artist = $this->artist('Cristal');
+        $order = $this->order($this->sales());
+        $this->file($order, 'output', 'pasted-20260916-021908.png');
+        $drawing = $this->file($order, 'layout', 'Windbreaker 1 - CATALYST.jpg');
+
+        $step = $this->step($order, $artist);
+        $html = $this->actingAs($artist)
+            ->get(route('tasks.references', $step->id))->getContent();
+
+        $this->assertStringContainsString('The design to make', $html);
+        $this->assertStringContainsString($this->imageTag($drawing), $html);
+        // The drawing is the design, not "other files from the client".
+        $this->assertStringNotContainsString(
+            'Other files from the client (2)', $html);
     }
 
     /** An order with nothing on it shows no box at all. */

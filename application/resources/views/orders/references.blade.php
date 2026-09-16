@@ -13,13 +13,14 @@
     // artist is meant to copy is the one thing neither of them may do.
     $design = $order->jobOrder?->designFiles() ?? collect();
 
-    // Nothing tagged? designFiles() then shows everything, so the logo and
+    // Nothing drawn yet? designFiles() then shows everything, so the logo and
     // background lists would only repeat it.
-    $noDesignYet = $all->where('kind', 'output')->isEmpty();
+    $nothingDrawnYet = $all->where('kind', 'layout')->isEmpty();
 
-    // Logo files are needed to reproduce logos exactly; the rest is context.
-    $logos = $noDesignYet ? collect() : $all->where('kind', 'logo');
-    $other = $noDesignYet ? collect() : $all->filter(fn ($f) => ! in_array($f->kind, ['output', 'logo'], true));
+    // Logo files are needed to reproduce logos exactly; the rest — including
+    // the officer's own brief material — is context for the drawing above.
+    $logos = $nothingDrawnYet ? collect() : $all->where('kind', 'logo');
+    $other = $nothingDrawnYet ? collect() : $all->filter(fn ($f) => ! in_array($f->kind, ['layout', 'logo'], true));
 @endphp
 
 <div class="page-head">
@@ -55,10 +56,10 @@
 
 @if ($design->isNotEmpty())
     <div class="card panel" style="margin-bottom: 1.4rem;">
-        <h2>{{ $noDesignYet ? 'Files for this order' : 'The design to make' }}</h2>
+        <h2>{{ $nothingDrawnYet ? 'Files for this order' : 'The design to make' }}</h2>
         <p class="sub" style="margin-bottom: 1rem;">
-            @if ($noDesignYet)
-                The account officer hasn't marked a final design yet — check the notes above and ask them if unsure.
+            @if ($nothingDrawnYet)
+                No approved drawing on this order yet, so everything the officer put on it is here — check the notes above and ask them if unsure.
             @endif
             ⬇ Tap <strong>Download</strong> under an image to save it to your device.
         </p>
