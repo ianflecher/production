@@ -263,6 +263,42 @@ class OnePaymentCoversTheWholeJobNumberTest extends TestCase
         $this->assertStringContainsString('DESIGN 3 ₱750.00', $said);
     }
 
+    /**
+     * The buttons say what they will record.
+     *
+     * They were written from this one job while the tick made the server work
+     * off every job under the number, so "Half downpayment - PHP2,250" booked
+     * PHP6,800 across three. Both figures are on the page now and the tick
+     * swaps which is shown.
+     */
+    public function test_the_buttons_carry_both_the_single_and_the_combined_figure(): void
+    {
+        [$officer, $orders] = $this->threeJobsOnOneNumber([4500, 3000, 1500]);
+
+        $html = $this->actingAs($officer)
+            ->get(route('orders.show', $orders->first()))
+            ->assertOk()
+            ->getContent();
+
+        // Half of this job (4,500) and half of all three (9,000).
+        $this->assertStringContainsString('data-one="2,250.00"', $html);
+        $this->assertStringContainsString('data-all="4,500.00"', $html);
+
+        // Full: this job, and the combined total.
+        $this->assertStringContainsString('data-all="9,000.00"', $html);
+    }
+
+    /** And what it records matches the combined figure the button shows. */
+    public function test_half_records_half_of_everything_under_the_number(): void
+    {
+        [$officer, $orders] = $this->threeJobsOnOneNumber([4500, 3000, 1500]);
+
+        $this->pay($officer, $orders->first(), ['covers_all' => 1]);
+
+        $this->assertSame(4500.0, (float) Payment::sum('amount'),
+            'the button says half of the combined total; this is what was booked');
+    }
+
     /** The box is only offered when there is more than one job to cover. */
     public function test_the_box_is_offered_only_when_the_number_is_shared(): void
     {

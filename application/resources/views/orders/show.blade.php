@@ -437,11 +437,16 @@
                                  still owes, with this same reference and proof
                                  on every row - it was one transfer, and that
                                  is what Finance reconciles against. --}}
-                            @php $siblings = $order->siblingOrders(); @endphp
+                            @php
+                                $siblings = $order->siblingOrders();
+                                // Both sets of figures, because the buttons
+                                // below have to say the truth either way.
+                                $combined = $siblings->sum(fn ($o) => $o->balance() ?? 0);
+                                $combinedTotal = $siblings->sum(fn ($o) => (float) $o->total_price);
+                            @endphp
                             @if ($siblings->count() > 1)
-                                @php $combined = $siblings->sum(fn ($o) => $o->balance() ?? 0); @endphp
                                 <label style="display:flex; gap:0.5rem; align-items:flex-start; margin-top:0.6rem; font-weight:600;">
-                                    <input type="checkbox" name="covers_all" value="1" style="margin-top:0.2rem;">
+                                    <input type="checkbox" name="covers_all" value="1" id="covers_all" style="margin-top:0.2rem;">
                                     <span>
                                         This one payment covers all {{ $siblings->count() }} jobs under {{ $order->order_number }}
                                         <span style="display:block; font-weight:400; font-size:0.72rem; color:var(--ink-3); margin-top:0.2rem;">
@@ -471,19 +476,52 @@
 
                             <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.8rem;">
                                 @if (! $order->hasDownpayment())
-                                    <button type="submit" name="portion" value="half" class="btn btn-primary btn-sm" style="width:100%;">Half downpayment — ₱{{ number_format($order->total_price / 2, 2) }}</button>
+                                    {{-- Every figure here is written twice: what
+                                         this one job costs, and what all the jobs
+                                         under the number cost together. Ticking
+                                         the box swaps them, because the amount
+                                         the button RECORDS swaps with it - a
+                                         button reading 2,250 that books 6,800 is
+                                         worse than no button at all. --}}
+                                    <button type="submit" name="portion" value="half" class="btn btn-primary btn-sm" style="width:100%;"
+                                            data-pay-label="Half downpayment — ₱"
+                                            data-one="{{ number_format($order->total_price / 2, 2) }}"
+                                            data-all="{{ number_format($combinedTotal / 2, 2) }}">Half downpayment — ₱{{ number_format($order->total_price / 2, 2) }}</button>
                                     <div style="display:flex; gap:0.4rem; align-items:stretch; margin-top:0.15rem;">
-                                        <input type="number" step="0.01" min="{{ number_format($order->total_price / 2, 2, '.', '') }}" max="{{ $order->total_price }}" name="amount" placeholder="50% or more (₱)" class="no-caps" style="flex:1; min-width:0;">
+                                        <input type="number" step="0.01" id="pay_amount" name="amount"
+                                               min="{{ number_format($order->total_price / 2, 2, '.', '') }}"
+                                               max="{{ number_format((float) $order->total_price, 2, '.', '') }}"
+                                               data-one-min="{{ number_format($order->total_price / 2, 2, '.', '') }}"
+                                               data-one-max="{{ number_format((float) $order->total_price, 2, '.', '') }}"
+                                               data-all-min="{{ number_format($combinedTotal / 2, 2, '.', '') }}"
+                                               data-all-max="{{ number_format($combinedTotal, 2, '.', '') }}"
+                                               placeholder="50% or more (₱)" class="no-caps" style="flex:1; min-width:0;">
                                         <button type="submit" name="portion" value="custom_downpayment" class="btn btn-ghost btn-sm" style="white-space:nowrap;">Record amount</button>
                                     </div>
-                                    <div style="font-size:0.72rem;color:var(--ink-3);">Custom downpayment must be at least ₱{{ number_format($order->total_price / 2, 2) }} (50%).</div>
-                                    <button type="submit" name="portion" value="full" class="btn btn-success btn-sm" style="width:100%;">Full payment — ₱{{ number_format($order->total_price, 2) }}</button>
+                                    <div style="font-size:0.72rem;color:var(--ink-3);"
+                                         data-pay-label="Custom downpayment must be at least ₱"
+                                         data-pay-suffix=" (50%)."
+                                         data-one="{{ number_format($order->total_price / 2, 2) }}"
+                                         data-all="{{ number_format($combinedTotal / 2, 2) }}">Custom downpayment must be at least ₱{{ number_format($order->total_price / 2, 2) }} (50%).</div>
+                                    <button type="submit" name="portion" value="full" class="btn btn-success btn-sm" style="width:100%;"
+                                            data-pay-label="Full payment — ₱"
+                                            data-one="{{ number_format($order->total_price, 2) }}"
+                                            data-all="{{ number_format($combinedTotal, 2) }}">Full payment — ₱{{ number_format($order->total_price, 2) }}</button>
                                 @else
-                                    <button type="submit" name="portion" value="balance" class="btn btn-success btn-sm" style="width:100%;">Pay remaining balance — ₱{{ number_format($bal, 2) }}</button>
+                                    <button type="submit" name="portion" value="balance" class="btn btn-success btn-sm" style="width:100%;"
+                                            data-pay-label="Pay remaining balance — ₱"
+                                            data-one="{{ number_format($bal, 2) }}"
+                                            data-all="{{ number_format($combined, 2) }}">Pay remaining balance — ₱{{ number_format($bal, 2) }}</button>
 
                                     {{-- Partial top-ups are only offered once a downpayment exists. --}}
                                     <div style="display:flex; gap:0.4rem; align-items:stretch; margin-top:0.15rem;">
-                                        <input type="number" step="0.01" min="1" max="{{ $bal }}" name="amount" placeholder="Other amount (₱)" class="no-caps" style="flex:1; min-width:0;">
+                                        <input type="number" step="0.01" min="1" id="pay_amount" name="amount"
+                                               max="{{ number_format((float) $bal, 2, '.', '') }}"
+                                               data-one-min="1"
+                                               data-one-max="{{ number_format((float) $bal, 2, '.', '') }}"
+                                               data-all-min="1"
+                                               data-all-max="{{ number_format((float) $combined, 2, '.', '') }}"
+                                               placeholder="Other amount (₱)" class="no-caps" style="flex:1; min-width:0;">
                                         <button type="submit" name="portion" value="partial" class="btn btn-ghost btn-sm" style="white-space:nowrap;">Record partial</button>
                                     </div>
                                 @endif
@@ -514,6 +552,46 @@
                             }
 
                             method.addEventListener('change', sync);
+                            sync();
+                        })();
+                        </script>
+
+                        {{-- Ticking "covers all the jobs" changes what the
+                             buttons RECORD, so it has to change what they SAY.
+
+                             Every amount is on the element twice - data-one is
+                             this job, data-all is every job under the number -
+                             and this only swaps which one is shown. Both
+                             figures come from the server, so a page with the
+                             script dead still shows real money rather than a
+                             blank, and the server works the total out again
+                             from the tick either way. --}}
+                        <script>
+                        (function () {
+                            var box = document.getElementById('covers_all');
+                            if (!box) { return; }
+
+                            var labels = document.querySelectorAll('[data-pay-label]');
+                            var amount = document.getElementById('pay_amount');
+
+                            function sync() {
+                                var all = box.checked;
+
+                                labels.forEach(function (el) {
+                                    var figure = all ? el.getAttribute('data-all') : el.getAttribute('data-one');
+                                    if (figure === null) { return; }
+                                    el.textContent = el.getAttribute('data-pay-label')
+                                        + figure
+                                        + (el.getAttribute('data-pay-suffix') || '');
+                                });
+
+                                if (amount) {
+                                    amount.min = amount.getAttribute(all ? 'data-all-min' : 'data-one-min');
+                                    amount.max = amount.getAttribute(all ? 'data-all-max' : 'data-one-max');
+                                }
+                            }
+
+                            box.addEventListener('change', sync);
                             sync();
                         })();
                         </script>
