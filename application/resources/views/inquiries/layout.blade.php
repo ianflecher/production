@@ -148,6 +148,14 @@
         .layout-file-preview { min-height: 120px; }
         .layout-file-preview img { height: 145px; }
     }
+    /* A file that arrived after the brief went out. Amber, because nothing
+       has gone wrong - it is simply newer than the rest. */
+    .layout-file-late {
+        display: block; margin-top: .25rem;
+        font-size: .68rem; font-weight: 700; letter-spacing: .03em;
+        color: #92400e; background: #fef3c7; border: 1px solid #fde68a;
+        border-radius: 999px; padding: .1rem .45rem; text-align: center;
+    }
 </style>
 @endpush
 
@@ -310,6 +318,13 @@
                         <span class="layout-file-name">{{ $file['original_name'] }}</span>
                     </a>
 
+                    {{-- Which of these the artist has not had from the start.
+                         A file that appears silently on a brief somebody is
+                         already drawing from is a file nobody looks at. --}}
+                    @if (filled($file['added_at'] ?? null))
+                        <span class="layout-file-late">Added {{ \Illuminate\Support\Carbon::parse($file['added_at'])->diffForHumans() }}</span>
+                    @endif
+
                     @if (! $inquiry->layout_sent_at && $officeControls)
                         <form method="POST" action="{{ route('inquiries.layout.file.delete', [$inquiry, 'index' => $index]) }}"
                               class="layout-file-remove" onsubmit="return confirm('Remove this design file?');">
@@ -326,12 +341,27 @@
         </div>
     @endif
 
-    @if (! $inquiry->layout_sent_at && $officeControls)
+    {{-- Open after the brief has been sent, too.
+
+         The client does not stop sending things when the artist starts
+         drawing - a photo of the logo, the right shade, the spelling of a
+         name. With nowhere to put them these went somewhere the system cannot
+         see and the artist kept working from the older brief.
+
+         Only ADDING. The remove button above stays gone once the brief is
+         sent, which is what the lock is for: a file arriving alongside what
+         the artist already has takes nothing away, a file disappearing does. --}}
+    @if ($officeControls)
         <div class="layout-upload" data-paste-into-box>
-            <label>ChatGPT design output</label>
+            <label>{{ $inquiry->layout_sent_at ? 'Add another design file' : 'ChatGPT design output' }}</label>
             <span class="hint">
                 <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste it straight in, drop it here, or choose a file.
-                It uploads immediately. This is what the artist works from.
+                It uploads immediately.
+                @if ($inquiry->layout_sent_at)
+                    The brief is already with the artist, so this is added to it and they are told.
+                @else
+                    This is what the artist works from.
+                @endif
             </span>
             <form method="POST" action="{{ route('inquiries.layout.upload', $inquiry) }}" enctype="multipart/form-data">
                 @csrf
@@ -339,7 +369,9 @@
                      uploads on change either way - see
                      partials/paste-into-file-input. --}}
                 <input type="file" name="reference_files[]" multiple data-paste-into accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip" onchange="if(this.files.length){ this.form.submit(); }">
-                @if (count($files))
+                @if ($inquiry->layout_sent_at)
+                    <span style="color:var(--success-ink); font-size:.78rem; font-weight:700;">✓ Design sent to the artist</span>
+                @elseif (count($files))
                     <span style="color:var(--success-ink); font-size:.78rem; font-weight:700;">✓ Uploaded and ready</span>
                 @else
                     <span style="color:var(--danger-ink); font-size:.78rem; font-weight:700;">Required unless the notes are complete</span>

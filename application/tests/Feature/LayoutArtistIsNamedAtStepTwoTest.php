@@ -145,9 +145,20 @@ class LayoutArtistIsNamedAtStepTwoTest extends TestCase
             ->assertOk()
             ->assertSee('with Maru', false)
             ->assertSee('still to be approved', false)
-            ->assertDontSee('name="reference_files[]"', false)
+            // The upload box STAYS. Reversed deliberately: the client does
+            // not stop sending things when the artist starts drawing, and
+            // with nowhere to put them they went somewhere the system cannot
+            // see while the artist kept working from the older brief.
+            // Adding is safe; removing is what the lock is for, and the
+            // remove buttons are still gone (below).
+            ->assertSee('name="reference_files[]"', false)
+            ->assertSee('Add another design file', false)
             ->assertDontSee('Send to artist for layout', false)
             ->assertDontSee('Create the job order', false);
+
+        // The brief is still locked in the way that matters.
+        $this->actingAs($officer)->get(route('inquiries.layout', $inquiry))
+            ->assertDontSee('Remove wrong file', false);
     }
 
     public function test_a_wrong_design_file_can_be_removed_before_sending(): void

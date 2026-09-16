@@ -227,21 +227,38 @@ class InquiryController extends Controller
         return back()->with('success', 'Client name updated.');
     }
 
+    /**
+     * Add a design file to the brief - before OR after it has been sent.
+     *
+     * Sending used to shut this box, and the client does not stop sending
+     * things when the artist starts drawing: a photo of the logo, the right
+     * shade, the spelling of a name. With nowhere to put them the officer
+     * sent them somewhere the system cannot see, and the artist kept drawing
+     * from the older brief.
+     *
+     * ADDING only. Removing stays shut after sending, and that is what the
+     * lock is for - an artist halfway through must not have a file taken out
+     * from under them. A file arriving alongside what they already have takes
+     * nothing away; a file disappearing does.
+     *
+     * A late file is no use sitting there unseen, so the artists drawing this
+     * brief are told, the same way they were told it was sent at all.
+     */
     public function uploadLayout(Request $request, Inquiry $inquiry): RedirectResponse
     {
         $this->assertAccess($request);
         $this->assertMine($request, $inquiry);
-
-        if ($inquiry->layout_sent_at) {
-            return back()->withErrors(['layout' => 'Design files cannot be changed after the brief is sent to the artist.']);
-        }
 
         $request->validate([
             'reference_files' => ['required', 'array'],
             'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
         ]);
 
+        $afterSending = filled($inquiry->layout_sent_at);
+
         $files = $inquiry->layout_files ?? [];
+        $added = 0;
+
         foreach ($request->file('reference_files') as $file) {
             $files[] = [
                 'path' => $file->store('inquiry-layouts', 'local'),
@@ -250,11 +267,36 @@ class InquiryController extends Controller
                 'size' => $file->getSize(),
                 'uploaded_by' => $request->user()->id,
                 'kind' => 'output',
+                // Stamped only when it arrives late, so the artist can tell
+                // which files they have not had from the start.
+                'added_at' => $afterSending ? now()->toDateTimeString() : null,
             ];
+            $added++;
         }
+
         $inquiry->update(['layout_files' => $files]);
 
-        return back()->with('success', 'Design uploaded — it will be attached to the new job order.');
+        if (! $afterSending) {
+            return back()->with('success', 'Design uploaded — it will be attached to the new job order.');
+        }
+
+        // Told once each, however many designs they are drawing - the same
+        // rule sendLayout() uses when the brief first goes out.
+        $inquiry->load('designs.artist');
+        $artists = $inquiry->designs->whereNotNull('artist_id')->groupBy('artist_id');
+
+        foreach ($artists as $artistId => $theirs) {
+            AppNotification::toUser((int) $artistId,
+                '📎 A file added to a brief you are drawing',
+                $inquiry->client->fullName().' — '.$added.' new '
+                    .Str::plural('file', $added).' on the design brief.',
+                route('inquiries.layouts'));
+        }
+
+        $names = $inquiry->designs->pluck('artist.name')->filter()->unique()->implode(' and ');
+
+        return back()->with('success', $added.' '.Str::plural('file', $added).' added to the brief'
+            .($names !== '' ? '. '.$names.' notified.' : '.'));
     }
 
     /** Remove one mistaken design upload while the brief is still a draft. */
