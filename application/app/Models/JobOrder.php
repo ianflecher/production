@@ -26,7 +26,7 @@ class JobOrder extends Model
         'dtf'              => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => null],
         'eco_solvent'      => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
         'vinyl'            => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
-        'embroidery'       => ['label' => 'Embroidery',      'printer' => 'manual',            'cutting' => 'manual', 'press' => null],
+        'embroidery'       => ['label' => 'Embroidery',      'printer' => 'embroidery',        'cutting' => 'manual', 'press' => null],
         'silkscreen'       => ['label' => 'Silkscreen',      'printer' => 'epson',             'cutting' => 'manual', 'press' => 'small_press'],
     ];
 
@@ -164,9 +164,37 @@ class JobOrder extends Model
         return $this->belongsTo(User::class, 'sent_to_artist_by');
     }
 
+    /**
+     * What may go in the tech pack's Printer box.
+     *
+     * The real printers, plus Embroidery. An embroidered job has no printer,
+     * and the sheet has to say something true: the box is one of the
+     * seventeen that must be answered before a pack can be submitted, so the
+     * officer's only options were to leave it blank and be refused, or pick a
+     * machine that is not making this job. Picking "Embroidery" as the print
+     * type used to default it to the Sticker Printer, which is how a sheet
+     * ends up naming the wrong machine to the floor.
+     *
+     * Exactly the reasoning pressOptions() already uses - the client
+     * sometimes wants embroidery instead of a press - said about the printer.
+     *
+     * Deliberately NOT added to PRINTERS. That list builds the station board:
+     * Stations::all() turns every entry into a printer_<key> tile in the
+     * Printing group running the Printer and Mass production departments. The
+     * shop already HAS an Embroidery station, in Add-ons, running the
+     * Embroidery department. A second one is not a machine anybody owns, and
+     * it would land on the printer operators' board.
+     *
+     * @return array<string, string>
+     */
+    public static function printerOptions(): array
+    {
+        return self::PRINTERS + ['embroidery' => 'Embroidery'];
+    }
+
     public function printerLabel(): ?string
     {
-        return self::PRINTERS[$this->printer] ?? $this->printer;
+        return self::printerOptions()[$this->printer] ?? $this->printer;
     }
 
     /** key => label, for a picker. PRINT_TYPES carries the routing with it. */

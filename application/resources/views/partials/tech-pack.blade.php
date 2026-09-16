@@ -296,7 +296,7 @@
             <tr><th>Client</th><td>{{ $val($order->clientName()) }}</td><th>Design name</th><td>{!! $fill('design_name','Design name') !!}</td></tr>
             <tr><th>Account officer</th><td>{{ $val($order->creator?->name) }}</td><th>Fitting</th><td>{!! $fill('fitting','Original fit',60) !!}</td></tr>
             <tr><th>Type / style</th><td>{!! $canType('item_style')?$fill('item_style','Cotton shirt',100):e($val($tp->item_style?:$order->productLabel())) !!}</td><th>Print type</th><td>{!! $canType('print_type')?$fill('print_type','DTF',60,$jo):e($val($jo?->printTypeLabel())) !!}</td></tr>
-            <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::PRINTERS as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{!! $dateFill('pack_created_date', $order->created_at?->toDateString()) !!}</td></tr>
+            <tr><th>Printer</th><td>@if($canType('printer'))<select class="tp-in" name="printer"><option value="">Choose printer</option>@foreach(\App\Models\JobOrder::printerOptions() as $key=>$label)<option value="{{ $key }}" @selected($jo?->printer===$key)>{{ $label }}</option>@endforeach</select>@else{{ $val($jo?->printerLabel()) }}@endif</td><th>Date created</th><td>{!! $dateFill('pack_created_date', $order->created_at?->toDateString()) !!}</td></tr>
             <tr><th>Fabric</th><td>{!! $fill('fabric','Cotton blend',255,$jo) !!}</td><th>Delivery date</th><td>{!! $dateFill('pack_delivery_date', $order->due_date?->toDateString()) !!}</td></tr>
         </table>
     </header>

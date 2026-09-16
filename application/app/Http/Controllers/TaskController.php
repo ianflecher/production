@@ -337,7 +337,7 @@ class TaskController extends Controller
             'packaging' => ['nullable', 'string', 'max:120'],
             'free_logo_sticker' => ['nullable', 'string', 'max:120'],
             'print_type' => ['nullable', 'string', 'max:60'],
-            'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::PRINTERS))],
+            'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::printerOptions()))],
         ]);
 
         // The artist remains the author until the leader's final approval. A

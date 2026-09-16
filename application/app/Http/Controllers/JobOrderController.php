@@ -102,7 +102,7 @@ class JobOrderController extends Controller
             'fitting' => ['nullable', 'string', 'max:60'],
             'item_style' => ['nullable', 'string', 'max:100'],
             'print_type' => ['nullable', 'string', 'max:60'],
-            'printer' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(JobOrder::PRINTERS))],
+            'printer' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(JobOrder::printerOptions()))],
             'fabric' => ['nullable', 'string', 'max:255'],
             // The rest of the spec. The officer takes all of it from the
             // client; the artist was retyping it under a picture.
