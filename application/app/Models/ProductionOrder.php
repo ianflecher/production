@@ -2188,16 +2188,25 @@ class ProductionOrder extends Model
         // The embroidery steps run on the sewn garment (stages 7 & 13) and appear
         // only when embroidery is set. There is no artist export step — the
         // tech pack's file location covers the embroidery file too.
-        $steps = [[7, $label, User::JOB_PRODUCTION], [13, $label, User::JOB_PRODUCTION]];
+        //
+        // Stage 7 is the SAMPLE sewing line. A job that skips the sample has
+        // no stage 7 at all - the step builder leaves the whole phase out for
+        // exactly that reason - so adding one here put a lone Embroidery step
+        // in a stage nothing else occupies, on a job that runs 3 -> 10. The
+        // batch's embroidery, beside stage 13's Sewing, is the real one.
+        $stages = $this->skip_sample ? [13] : [7, 13];
 
-        foreach ($steps as [$stage, $dept, $team]) {
-            $existing = $this->tasks()->where('stage', $stage)->where('department', $dept)->first();
+        foreach ([7, 13] as $stage) {
+            $existing = $this->tasks()->where('stage', $stage)->where('department', $label)->first();
+            $wanted = $needs && in_array($stage, $stages, true);
 
-            if ($needs && ! $existing) {
+            if ($wanted && ! $existing) {
                 $seq = (int) $this->tasks()->max('sequence');
                 $add = $this->taskAdder($seq);
-                $add($stage, $dept, $team);
-            } elseif (! $needs && $existing && $existing->status === 'todo') {
+                $add($stage, $label, User::JOB_PRODUCTION);
+            } elseif (! $wanted && $existing && $existing->status === 'todo') {
+                // Only an untouched one. Work somebody has started is never
+                // taken off them by a rebuild.
                 $existing->delete();
             }
         }

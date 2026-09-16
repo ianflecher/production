@@ -28,7 +28,7 @@ class AnEmbroideredJobGetsAnEmbroideryStepTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function order(array $jobOrderFields = []): ProductionOrder
+    private function order(array $jobOrderFields = [], bool $skipSample = false): ProductionOrder
     {
         $officer = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
 
@@ -40,6 +40,7 @@ class AnEmbroideredJobGetsAnEmbroideryStepTest extends TestCase
             'due_date' => now()->addWeeks(2),
             'created_by' => $officer->id,
             'status' => 'active',
+            'skip_sample' => $skipSample,
         ]);
 
         $order->jobOrder()->create(array_merge([
@@ -130,6 +131,65 @@ class AnEmbroideredJobGetsAnEmbroideryStepTest extends TestCase
 
         $this->assertFalse((bool) $order->fresh()->jobOrder->needs_embroidery);
         $this->assertFalse($this->hasEmbroideryStep($order->fresh()));
+    }
+
+    /* ---------------- and it lands in the right stages ---------------- */
+
+    /**
+     * Stage 7 is the SAMPLE sewing line. A job that skips the sample has no
+     * stage 7 at all — the step builder leaves the whole phase out for that
+     * reason — so putting an Embroidery step there leaves a lone task in a
+     * stage nothing else occupies, on a job that runs 3 -> 10.
+     */
+    public function test_a_job_that_skips_the_sample_gets_only_the_batch_step(): void
+    {
+        $order = $this->order(['printer' => 'embroidery'], skipSample: true);
+
+        $order->applyPrintTypeRouting();
+
+        $stages = $order->fresh()->tasks()
+            ->where('department', 'like', '%mbroider%')
+            ->pluck('stage')->all();
+
+        $this->assertSame([13], $stages,
+            "a job with no sample was given the sample line's embroidery step");
+    }
+
+    /** A job that DOES make a sample gets both. */
+    public function test_a_sampled_job_gets_both_steps(): void
+    {
+        $order = $this->order(['printer' => 'embroidery']);
+
+        $order->applyPrintTypeRouting();
+
+        $stages = $order->fresh()->tasks()
+            ->where('department', 'like', '%mbroider%')
+            ->pluck('stage')->sort()->values()->all();
+
+        $this->assertSame([7, 13], $stages);
+    }
+
+    /** An already-stranded step is taken back out when the routing re-runs. */
+    public function test_a_stranded_sample_step_is_cleaned_up(): void
+    {
+        $order = $this->order(['printer' => 'embroidery'], skipSample: true);
+
+        \App\Models\Task::create([
+            'production_order_id' => $order->id,
+            'department' => 'Embroidery',
+            'team' => User::JOB_PRODUCTION,
+            'stage' => 7,
+            'sequence' => 99,
+            'status' => 'todo',
+        ]);
+
+        $order->fresh()->applyPrintTypeRouting();
+
+        $stages = $order->fresh()->tasks()
+            ->where('department', 'like', '%mbroider%')
+            ->pluck('stage')->all();
+
+        $this->assertSame([13], $stages);
     }
 
     /**
