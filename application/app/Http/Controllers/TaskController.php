@@ -196,25 +196,49 @@ class TaskController extends Controller
         $pack = $order->techPackFor($task->techPackPhase());
         $jobOrder = $order->jobOrder;
 
-        $required = [
-            [$pack, 'design_name', 'Design name'],
-            [$pack, 'fitting', 'Fitting'],
-            [$pack, 'item_style', 'Type / style'],
-            [$jobOrder, 'print_type', 'Print type'],
-            [$jobOrder, 'printer', 'Printer'],
-            [$jobOrder, 'fabric', 'Fabric'],
-            [$jobOrder, 'neck', 'Neck type'],
-            [$jobOrder, 'cuff_arm_sleeves', 'Cuff / arm sleeve'],
-            [$jobOrder, 'neck_label', 'Neck label'],
-            [$pack, 'tshirt_color', 'T-shirt color'],
-            [$pack, 'thread_color', 'Thread color'],
-            [$jobOrder, 'packaging', 'Packaging'],
-            [$pack, 'zipper_type', 'Zipper type'],
-            [$jobOrder, 'bottom_hem', 'Bottom hem'],
-            [$pack, 'lip_pocket_color', 'Lip pocket color'],
-            [$jobOrder, 'free_logo_sticker', 'Sticker / extra'],
-            [$pack, 'file_location_notes', 'File location'],
-        ];
+        // An imported pack IS the sheet.
+        //
+        // When the supplier already made the whole tech pack as an image, that
+        // image replaces the built-in sheet - the page hides it entirely - so
+        // there is nowhere to answer these seventeen questions. Asking them
+        // anyway was a door with no handle: the submit was refused, naming
+        // fields the reader could not see.
+        //
+        // What people did instead is on the live board. Two imported packs have
+        // fifteen of the seventeen typed as "N/A" - the only way through was to
+        // fill every box with nothing. That is worse than not asking: it puts
+        // false answers on the record and teaches everyone the list means
+        // nothing.
+        //
+        // The one thing left is the file location, for the reason the import
+        // panel already gives on screen: the printer opens the print-ready
+        // files from that path, and nothing can read it off a flattened
+        // picture. Everything else is IN the picture.
+        if (filled($pack?->imported_pack_path)) {
+            $required = [
+                [$pack, 'file_location_notes', 'File location'],
+            ];
+        } else {
+            $required = [
+                [$pack, 'design_name', 'Design name'],
+                [$pack, 'fitting', 'Fitting'],
+                [$pack, 'item_style', 'Type / style'],
+                [$jobOrder, 'print_type', 'Print type'],
+                [$jobOrder, 'printer', 'Printer'],
+                [$jobOrder, 'fabric', 'Fabric'],
+                [$jobOrder, 'neck', 'Neck type'],
+                [$jobOrder, 'cuff_arm_sleeves', 'Cuff / arm sleeve'],
+                [$jobOrder, 'neck_label', 'Neck label'],
+                [$pack, 'tshirt_color', 'T-shirt color'],
+                [$pack, 'thread_color', 'Thread color'],
+                [$jobOrder, 'packaging', 'Packaging'],
+                [$pack, 'zipper_type', 'Zipper type'],
+                [$jobOrder, 'bottom_hem', 'Bottom hem'],
+                [$pack, 'lip_pocket_color', 'Lip pocket color'],
+                [$jobOrder, 'free_logo_sticker', 'Sticker / extra'],
+                [$pack, 'file_location_notes', 'File location'],
+            ];
+        }
 
         // The artist's own half of the sheet. Everything else on the list is
         // the account officer's - see $officerFields in partials/tech-pack.
