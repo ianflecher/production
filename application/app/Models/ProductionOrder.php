@@ -2275,6 +2275,17 @@ class ProductionOrder extends Model
      *
      * Only while the work is live. A brief whose job is delivered or cancelled
      * is finished with; anything written from it afterwards starts again.
+     *
+     * The number MOST of the brief's live orders carry, not simply the first
+     * one written. Those are the same answer until somebody moves a single
+     * design onto a job number of its own, which is allowed and sometimes
+     * right - and if the one they moved happened to be the earliest, taking
+     * the first row handed its new number to every design written afterwards.
+     * The design that left would have quietly taken the brief's default with
+     * it while the ones that stayed kept the old number.
+     *
+     * A tie goes to the earliest, which is the old behaviour and the only
+     * sensible answer when there is no majority to follow.
      */
     public static function openJobFor(?int $inquiryId): ?self
     {
@@ -2282,9 +2293,20 @@ class ProductionOrder extends Model
             return null;
         }
 
-        return self::where('inquiry_id', $inquiryId)
+        $live = self::where('inquiry_id', $inquiryId)
             ->whereIn('status', ['active', 'on_hold'])
             ->orderBy('id')
+            ->get();
+
+        if ($live->isEmpty()) {
+            return null;
+        }
+
+        // groupBy keeps the order they were fetched in and sortByDesc is
+        // stable, so the biggest group wins and the earliest of equals does.
+        return $live->groupBy('order_number')
+            ->sortByDesc(fn ($sharing) => $sharing->count())
+            ->first()
             ->first();
     }
 

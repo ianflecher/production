@@ -142,6 +142,53 @@ class TheJobNumberFillsItselfInTest extends TestCase
             ->assertViewHas('numberIsInherited', false);
     }
 
+    /* ---------------- moving one design out ---------------- */
+
+    /**
+     * A design moved onto its own number must not take the brief's default
+     * with it.
+     *
+     * Splitting is done on the order's own Edit page, not here - writing a
+     * new one always joins the brief, which is what OneInquiryOneJobOrderNumberTest
+     * protects. But once a design HAS been moved out, openJobFor() decides what
+     * the next one is offered, and it used to take the first row: renumber the
+     * earliest of three and its new number became the brief's default, while
+     * the two that stayed kept the old one. It follows the majority now.
+     */
+    public function test_renumbering_the_earliest_design_does_not_move_the_default(): void
+    {
+        $officer = $this->officer();
+        $inquiry = $this->brief($officer);
+        $group = 'IC'.now()->format('Y').'-01233';
+
+        $first = $this->orderOn($inquiry, $group, $officer);
+        $this->orderOn($inquiry, $group, $officer);
+        $this->orderOn($inquiry, $group, $officer);
+
+        $first->update(['order_number' => 'IC'.now()->format('Y').'-09090']);
+
+        $this->assertSame($group, ProductionOrder::openJobFor($inquiry->id)->order_number,
+            "the design that left took the brief's number with it");
+
+        $this->actingAs($officer)
+            ->get(route('orders.create', ['inquiry' => $inquiry->id]))
+            ->assertOk()
+            ->assertViewHas('nextNumber', $group);
+    }
+
+    /** With no majority to follow, the earliest still wins - the old answer. */
+    public function test_a_tie_goes_to_the_earliest(): void
+    {
+        $officer = $this->officer();
+        $inquiry = $this->brief($officer);
+        $first = 'IC'.now()->format('Y').'-01233';
+
+        $this->orderOn($inquiry, $first, $officer);
+        $this->orderOn($inquiry, 'IC'.now()->format('Y').'-09090', $officer);
+
+        $this->assertSame($first, ProductionOrder::openJobFor($inquiry->id)->order_number);
+    }
+
     /**
      * A delivered or cancelled job is finished with, so a brief that comes
      * back gets a number of its own rather than joining a closed one — the
