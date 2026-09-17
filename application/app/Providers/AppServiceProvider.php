@@ -60,8 +60,24 @@ class AppServiceProvider extends ServiceProvider
             if ($user && $user->isArtist()) {
                 // What is waiting to be drawn — the layouts sit before any job
                 // order exists, so nothing else in the nav counts them.
-                $view->with('layoutsToDraw', \App\Models\Inquiry::drawnBy($user)
-                    ->where('layout_status', \App\Models\Inquiry::LAYOUT_WITH_ARTIST)
+                //
+                // DESIGNS, counted the way the Layouts page lists them, because
+                // that is the page this badge points at.
+                //
+                // It counted INQUIRIES through Inquiry::drawnBy, which reads
+                // layout_artist_id — the column from when a brief had one
+                // artist and one layout. A brief now carries designs and each
+                // design carries its own artist, so an artist handed designs on
+                // a brief that is not in their name matched nothing here. Mick
+                // had three to draw and no badge at all, and the number was
+                // wrong for six of the seven artists.
+                //
+                // "To draw" rather than everything on the page: a design already
+                // handed back is waiting on the client and there is nothing to
+                // pick up. The page prints "to draw" against exactly these, so
+                // the badge and the row it points at say the same thing.
+                $view->with('layoutsToDraw', \App\Models\InquiryDesign::drawnBy($user)
+                    ->where('status', \App\Models\InquiryDesign::STATUS_WITH_ARTIST)
                     ->count());
 
                 // Orders on the bench, counted the same way My Tasks groups
