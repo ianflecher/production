@@ -57,7 +57,19 @@
                     {{-- Supervisors work only their assigned part of the floor.
                          The Station board below supplies the appropriate
                          stations: sewing only for a Sewing Supervisor, or the
-                         production line for a Supervisor. --}}
+                         production line for a Supervisor.
+
+                         Except the one whose part is not the floor. The account
+                         officers' supervisor runs the order desk, so the orders
+                         ARE her slice rather than somebody else's — and the
+                         route already admitted her, so the page was hers all
+                         along with no way to reach it from here. --}}
+                    @if (auth()->user()->supervisorScope() === 'design')
+                        <a href="{{ route('orders.index') }}" class="nav-item {{ request()->routeIs('orders.*') ? 'active' : '' }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+                            Production Orders
+                        </a>
+                    @endif
                 @elseif (auth()->user()->isLeader())
                     <a href="{{ route('orders.index') }}" class="nav-item {{ request()->routeIs('orders.*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>

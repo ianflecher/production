@@ -56,6 +56,18 @@ class User extends Authenticatable
     public const JOB_SEWING_SUPERVISOR = 'sewing supervisor';
 
     /**
+     * The account officers' supervisor. She runs the order desk, not the
+     * floor, so her slice is "design" — the agents and the artists.
+     *
+     * supervisorScope() has documented that slice since it was written and
+     * there was no way to hold it: every supervisor came out as "production"
+     * whatever they actually ran, and the only route to "design" was a line
+     * matching one person by name. Maam Ann supervises the agents and the
+     * system had her supervising the printers.
+     */
+    public const JOB_AGENT_SUPERVISOR = 'agent supervisor';
+
+    /**
      * The HR desk: hiring, payslips, incidents, loans and the people's own
      * requests. Their pages are all under /hr and their data in hr_ tables,
      * kept apart from the shop floor system on purpose.
@@ -131,6 +143,11 @@ class User extends Authenticatable
             self::ROLE_SALES => 'Account Officer',
             self::ROLE_FINANCE => 'Finance',
             self::JOB_SUPERVISOR => 'Supervisor',
+            // A desk, not a bench. Offered here rather than under Supervision
+            // on the floor list, because every position on that list has to
+            // map to a station - an account with none signs in and sees
+            // nothing - and hers is the order desk. See StaffPositionsTest.
+            self::JOB_AGENT_SUPERVISOR => 'Account Officers\' Supervisor',
             self::JOB_ARTIST_LEAD => 'Artist Leader',
             self::ROLE_LEADER => 'Leader',
             self::ROLE_SUPER_ADMIN => 'Super Admin',
@@ -267,7 +284,8 @@ class User extends Authenticatable
             // isLeader() said true — the `role:` middleware trusts this value,
             // so every leader page (approvals, users, orders, calendar) 403'd
             // even though UserController already scopes the user list for them.
-            'supervisor', self::JOB_SEWING_SUPERVISOR, 'sewer supervisor' => self::ROLE_LEADER,
+            'supervisor', self::JOB_SEWING_SUPERVISOR, self::JOB_AGENT_SUPERVISOR,
+            'sewer supervisor' => self::ROLE_LEADER,
             // The mover walks the floor chasing progress, so she needs to READ
             // every job order and see where each one is stuck. She gets the
             // viewing pages only — nothing that changes an order.
@@ -299,6 +317,7 @@ class User extends Authenticatable
         return in_array(strtolower(trim((string) $this->job_role)), [
             self::JOB_SUPERVISOR,
             self::JOB_SEWING_SUPERVISOR,
+            self::JOB_AGENT_SUPERVISOR,
             'sewer supervisor',
         ], true);
     }
@@ -317,9 +336,17 @@ class User extends Authenticatable
 
         $role = strtolower(trim((string) $this->job_role));
 
-        return in_array($role, [self::JOB_SEWING_SUPERVISOR, 'sewer supervisor'], true)
-            ? 'sewing'
-            : 'production';
+        if (in_array($role, [self::JOB_SEWING_SUPERVISOR, 'sewer supervisor'], true)) {
+            return 'sewing';
+        }
+
+        // The order desk, not the floor. Written into the docblock above from
+        // the start and unreachable until now.
+        if ($role === self::JOB_AGENT_SUPERVISOR) {
+            return 'design';
+        }
+
+        return 'production';
     }
 
     /**
@@ -397,7 +424,7 @@ class User extends Authenticatable
     {
         $r = strtolower(trim((string) $role));
 
-        if (in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_FINANCE, 'supervisor', self::JOB_SEWING_SUPERVISOR, 'sewer supervisor'], true)) {
+        if (in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_FINANCE, 'supervisor', self::JOB_SEWING_SUPERVISOR, self::JOB_AGENT_SUPERVISOR, 'sewer supervisor'], true)) {
             return 'admin';
         }
 
@@ -455,10 +482,6 @@ class User extends Authenticatable
         // The artist leader's staff are the artists.
         if ($this->isArtistLead()) {
             return 'artist';
-        }
-
-        if (str_contains(strtolower((string) $this->name), 'carla')) {
-            return 'design';
         }
 
         if ($this->isSupervisor()) {
