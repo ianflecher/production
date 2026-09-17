@@ -11,7 +11,16 @@
     $peso = fn ($n) => '₱'.number_format((float) $n, 2);
     // Total Balance = this sheet's gross minus what's actually been paid on the
     // order (never below zero). Computed, not typed, so it's always correct.
-    $docPaid = (float) $order->payments()->sum('amount');
+    // Every order this sheet prices, keyed by id, so a line can be drawn under
+    // the garment it belongs to - and so the money below is the brief's.
+    // each->loadMissing, not ->load: an order with no brief behind it comes
+    // back as a plain collection of one, and a plain collection has no load().
+    $covered = $order->quotationOrders();
+    $covered->each->loadMissing(['payments', 'tasks.files']);
+    $covered = $covered->keyBy('id');
+    $sharedSheet = $covered->count() > 1;
+
+    $docPaid = (float) $covered->sum(fn ($o) => (float) $o->payments->sum('amount'));
     $docBalance = max(0, round($t['net'] - $docPaid, 2));
     $rows = collect($doc->items ?? [])->values();
     $hasJobOrder = filled($f('print_type')) || filled($f('materials'));
@@ -25,24 +34,10 @@
     // Pick the TASK first, then its files. Filtering to images while choosing
     // meant a layout uploaded as a PDF looked like "no design at all", so the
     // page fell back to nothing and still called itself the mockup.
-    $pickFiles = function (?\App\Models\Task $task) {
-        if (! $task) {
-            return collect();
-        }
+    $designLabel = $order->documentDesignLabel();
+    $designFiles = $order->documentDesignFiles();
 
-        $latest = $task->files->where('round', ($task->revision_count ?? 0) + 1);
 
-        return $latest->isNotEmpty() ? $latest : $task->files;
-    };
-
-    $mockupTask = $order->tasks->firstWhere('department', 'Final mockup');
-    $layoutTask = $order->tasks->firstWhere('department', 'Layout');
-
-    $usingMockup = $mockupTask && $mockupTask->files->isNotEmpty();
-    $designTask = $usingMockup ? $mockupTask : $layoutTask;
-
-    $designLabel = $usingMockup ? 'Mockup' : 'Layout';
-    $designFiles = $pickFiles($designTask);
 
     // The flatlay photo shown beside the mockup in the header.
     $flatlay = $doc->flatlay;
@@ -313,15 +308,41 @@
                     <th style="width:12%;">Total Net Price</th>
                 @endif
             </tr>
+            @php $shownGroup = null; @endphp
             @foreach ($rows as $i => $row)
                 @php
                     $q = (float) ($row['quantity'] ?? 0); $u = (float) ($row['unit_price'] ?? 0);
                     $amt = $q * $u; $rowVat = $isPq ? $amt * 0.12 : 0;
+
+                    // A shared sheet prices several garments, so each one is
+                    // headed by its own drawing — the client reads down the
+                    // page and sees what they are paying for beside the price,
+                    // which is how the office has always typed it out.
+                    $groupHere = $sharedSheet && ($row['group'] ?? null) !== null
+                        && ($row['group'] ?? null) !== $shownGroup;
+                    if ($groupHere) { $shownGroup = $row['group']; }
+                    $groupOrder = $groupHere ? $covered->get($row['order_id'] ?? null) : null;
+                    $groupFile = $groupOrder?->documentDesignFiles()->first();
                 @endphp
+                @if ($groupHere)
+                    <tr class="group-row">
+                        <td colspan="{{ $isPq ? 7 : 5 }}" style="background:#f3f4f6; padding:0.25rem 0.4rem;">
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                @if ($groupFile)
+                                    <img src="{{ route('tasks.file.view', $groupFile) }}" alt="{{ $shownGroup }}"
+                                         style="height:54px; width:auto; max-width:120px; object-fit:contain; border:1px solid #d1d5db; background:#fff;">
+                                @endif
+                                <strong style="font-size:0.78rem; letter-spacing:0.02em;">{{ $shownGroup }}</strong>
+                            </div>
+                        </td>
+                    </tr>
+                @endif
                 <tr>
                     <td>
                         <input type="text" name="items[{{ $i }}][description]" value="{{ $row['description'] ?? '' }}">
                         @if (! empty($row['addon']))<input type="hidden" name="items[{{ $i }}][addon]" value="1">@endif
+                        @if (isset($row['order_id']))<input type="hidden" name="items[{{ $i }}][order_id]" value="{{ $row['order_id'] }}">@endif
+                        @if (isset($row['group']))<input type="hidden" name="items[{{ $i }}][group]" value="{{ $row['group'] }}">@endif
                     </td>
                     <td><input type="text" name="items[{{ $i }}][size]" value="{{ $row['size'] ?? '' }}" style="text-align:center;"></td>
                     <td><input type="number" step="1" min="0" name="items[{{ $i }}][quantity]" value="{{ $row['quantity'] ?? '' }}" class="num"></td>

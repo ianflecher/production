@@ -21,10 +21,23 @@ class OrderDocumentController extends Controller
      * from the order; everything else is typed by the account officer.
      * Available before AND after payment.
      */
-    public function document(ProductionOrder $order, string $type): View
+    public function document(ProductionOrder $order, string $type): View|RedirectResponse
     {
         $this->assertOrderVisible($order);
         abort_unless(array_key_exists($type, \App\Models\OrderDocument::TYPES), 404);
+
+        // One brief, one quotation. Every order written from the same brief
+        // shares a sheet, and the sheet is kept on the first of them D open it
+        // from any of the others and you are sent to the one copy.
+        //
+        // Without this each sibling grew its own: the officer corrected a
+        // price on the shirt's sheet, and whoever opened the job from the
+        // hoodie was reading a quotation that still had the old one.
+        $anchor = $order->quotationAnchor();
+
+        if ($anchor->id !== $order->id) {
+            return redirect()->route('orders.document', [$anchor, $type]);
+        }
 
         $defaults = \App\Models\OrderDocument::defaultsFor($order, $type);
         $doc = $order->documents()->firstWhere('type', $type);
@@ -81,6 +94,11 @@ class OrderDocumentController extends Controller
             // away on every save, which put the undiscounted total back.
             'items.*.unit_price' => ['nullable', 'numeric', 'min:-10000000', 'max:10000000'],
             'items.*.addon' => ['nullable', 'boolean'],
+            // Which garment on a shared sheet the line prices. Carried through
+            // the save so a corrected price stays under its own drawing
+            // instead of the row jumping to whatever product came first.
+            'items.*.order_id' => ['nullable', 'integer'],
+            'items.*.group' => ['nullable', 'string', 'max:120'],
         ]);
 
         // Drop rows with nothing on them.

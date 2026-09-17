@@ -2361,6 +2361,104 @@ class ProductionOrder extends Model
     }
 
     /**
+     * The orders one price quotation covers: everything written from the same
+     * brief.
+     *
+     * A client who asks for shirts, polos and hoodies is quoted ONCE, on one
+     * sheet, the way the office has always typed it into Excel. The sheet was
+     * built from a single order, so that client got three separate quotations
+     * — Stephanie Moto's brief would have made four and Gian Lasam's eight —
+     * and no sheet in the system ever showed the job the client actually
+     * asked for.
+     *
+     * By brief rather than by number: the number is normally the same answer,
+     * but a design deliberately moved onto a number of its own is still part
+     * of what this client is buying.
+     */
+    public function quotationOrders(): \Illuminate\Support\Collection
+    {
+        if (! $this->inquiry_id) {
+            return collect([$this]);
+        }
+
+        $covered = self::where('inquiry_id', $this->inquiry_id)
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('id')
+            ->get();
+
+        return $covered->isEmpty() ? collect([$this]) : $covered;
+    }
+
+    /**
+     * How one product is headed on a shared quotation.
+     *
+     * The design's own name when it has one, because that is what the officer
+     * called it and what the client recognises; the garment otherwise. Three
+     * lines reading "Cotton shirt" on one sheet tell nobody which drawing is
+     * being priced.
+     */
+    public function quotationGroupLabel(): string
+    {
+        $label = trim((string) ($this->inquiryDesign?->label ?? ''));
+
+        return $label !== '' ? $label : ($this->productLabel() ?: $this->order_number);
+    }
+
+    /**
+     * The order the shared sheet is stored on: the first one written.
+     *
+     * One sheet, so it has to live somewhere. Opening the quotation from any
+     * of the siblings lands on this one — otherwise each sibling keeps its own
+     * copy, the officer edits a line on one of them, and the next person to
+     * open the job from a different design is reading a different quotation.
+     */
+    public function quotationAnchor(): self
+    {
+        return $this->quotationOrders()->first() ?? $this;
+    }
+
+    /**
+     * The design the client is paying for: the final mockup once it exists,
+     * otherwise the layout they approved.
+     *
+     * Pick the TASK first, then its files. Filtering to images while choosing
+     * meant a layout uploaded as a PDF looked like "no design at all", so the
+     * sheet fell back to nothing and still called itself the mockup.
+     *
+     * Lifted out of orders/document.blade.php so the header picture and the
+     * per-product pictures cannot disagree about which drawing is the design.
+     */
+    public function documentDesignFiles(): \Illuminate\Support\Collection
+    {
+        $task = $this->documentDesignTask();
+
+        if (! $task) {
+            return collect();
+        }
+
+        $latest = $task->files->where('round', ($task->revision_count ?? 0) + 1);
+
+        return $latest->isNotEmpty() ? $latest : $task->files;
+    }
+
+    /** "Mockup" once one has been handed in, "Layout" until then. */
+    public function documentDesignLabel(): string
+    {
+        return $this->documentDesignTask()?->department === 'Final mockup' ? 'Mockup' : 'Layout';
+    }
+
+    private function documentDesignTask(): ?Task
+    {
+        $this->loadMissing('tasks.files');
+
+        $mockup = $this->tasks->firstWhere('department', 'Final mockup');
+
+        return $mockup && $mockup->files->isNotEmpty()
+            ? $mockup
+            : $this->tasks->firstWhere('department', 'Layout');
+    }
+
+    /**
      * How to name one job among several that share a number.
      *
      * They all say IC2026-01232, so the number cannot tell three of them

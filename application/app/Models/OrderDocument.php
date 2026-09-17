@@ -94,86 +94,119 @@ class OrderDocument extends Model
     {
         $order->loadMissing(['client', 'creator', 'items', 'jobOrder', 'tasks.assignee', 'payments']);
 
+        // Every order written from the same brief, because the client is
+        // quoted once for the job they asked for — shirts, polos and hoodies
+        // on one sheet rather than three sheets that never mention each other.
+        $covered = $order->quotationOrders();
+        $covered->each->loadMissing(['items', 'jobOrder', 'tasks.assignee', 'tasks.files', 'payments', 'inquiryDesign']);
+
         $artist = $order->tasks->first(fn ($t) => $t->team === User::JOB_ARTIST && $t->assignee)?->assignee?->name;
-        $paid = (float) $order->payments->sum('amount');
-        $down = (float) ($order->payments->firstWhere('kind', 'downpayment')?->amount ?? 0);
+        $paid = (float) $covered->sum(fn ($o) => (float) $o->payments->sum('amount'));
+        $down = (float) $covered->sum(fn ($o) => (float) ($o->payments->firstWhere('kind', 'downpayment')?->amount ?? 0));
         $pb = $order->pricingBreakdown();
 
+        $items = [];
+
+        foreach ($covered as $part) {
+            $items = array_merge($items, self::linesFor($part, $covered->count() > 1));
+        }
+
+        return [
+            'number' => self::numberFor($order, $type),
+            'items' => $items,
+            'fields' => self::fieldsFor($order, $covered, $type, $artist, $paid, $down, $pb),
+        ];
+    }
+
+    /**
+     * The lines one order contributes to the sheet.
+     *
+     * Tagged with the order they came from so the sheet can show each product
+     * under its own drawing, and so a line the officer edits stays attached to
+     * the garment it prices.
+     */
+    private static function linesFor(ProductionOrder $order, bool $grouped): array
+    {
+        $pb = $order->pricingBreakdown();
+        $stamp = fn (array $row) => $grouped
+            ? $row + ['order_id' => $order->id, 'group' => $order->quotationGroupLabel()]
+            : $row;
+
         // One line per size on the order; the officer can edit or add rows.
-        $items = $order->itemsInSizeOrder()->map(fn ($i) => [
+        $items = $order->itemsInSizeOrder()->map(fn ($i) => $stamp([
             'description' => $i->description ?: ($order->productLabel() ?? ''),
             'size' => $i->size,
             'quantity' => $i->quantity,
             'unit_price' => $order->unit_price !== null ? (float) $order->unit_price : null,
-        ])->values()->all();
+        ]))->values()->all();
 
         // Back pocket gets its own line so the garment price stays clean. It's an
         // "addon" — its quantity does not count toward the garment piece total.
         if ($order->backPocketCount() > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => 'Back pocket',
                 'size' => '',
                 'quantity' => $order->backPocketCount(),
                 'unit_price' => (float) \App\Services\PricingService::backPocketFee(),
                 'addon' => true,
-            ];
+            ]);
         }
 
         // The Step 4 add-on (embroidery / sublimated / reflectorized / others)
         // is charged as one line, same as the back pocket.
         if ($order->addonAmount() > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => $order->addonLabel() ?: 'Add-on',
                 'size' => '',
                 'quantity' => 1,
                 'unit_price' => $order->addonAmount(),
                 'addon' => true,
-            ];
+            ]);
         }
 
         // A rush job carries its own agreed fee, shown as its own line so the
         // client can see what the rush cost them.
         if ($order->rushAmount() > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => 'Rush fee',
                 'size' => '',
                 'quantity' => 1,
                 'unit_price' => $order->rushAmount(),
                 'addon' => true,
-            ];
+            ]);
         }
 
         if ($order->shippingAmount() > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => 'Shipping cost',
                 'size' => '',
                 'quantity' => 1,
                 'unit_price' => $order->shippingAmount(),
                 'addon' => true,
-            ];
+            ]);
         }
 
         // The layout is charged on every quotation. At 24 pieces, the same
         // amount is credited back so the client can see why it is free rather
         // than wondering why the fee silently disappeared.
         if ($pb['layout_fee'] > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => 'Layout fee',
                 'size' => '',
                 'quantity' => 1,
                 'unit_price' => ProductionOrder::LAYOUT_FEE,
                 'addon' => true,
-            ];
+            ]);
         }
 
         if ($pb['layout_fee_refund'] > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => 'Layout fee refund (24+ pcs)',
                 'size' => '',
                 'quantity' => 1,
                 'unit_price' => -1 * (float) $pb['layout_fee_refund'],
                 'addon' => true,
-            ];
+            ]);
         }
 
         // The discount the order was given, as its own line.
@@ -189,19 +222,34 @@ class OrderDocument extends Model
         // Capped at the gross by pricingBreakdown(), so it can never turn the
         // sheet into a negative amount.
         if ($pb['discount'] > 0) {
-            $items[] = [
+            $items[] = $stamp([
                 'description' => 'Discount'.($order->discount_note ? ' — '.$order->discount_note : ''),
                 'size' => '',
                 'quantity' => 1,
                 'unit_price' => -1 * (float) $pb['discount'],
                 'addon' => true,
-            ];
+            ]);
         }
 
+        return $items;
+    }
+
+    /**
+     * The typed part of the sheet: who it is for, the job details, the money.
+     *
+     * Taken from the order the sheet is anchored to, except the money, which
+     * is the whole brief's — one quotation, one balance.
+     */
+    private static function fieldsFor(
+        ProductionOrder $order,
+        \Illuminate\Support\Collection $covered,
+        string $type,
+        ?string $artist,
+        float $paid,
+        float $down,
+        array $pb
+    ): array {
         return [
-            'number' => self::numberFor($order, $type),
-            'items' => $items,
-            'fields' => [
                 // Bill to
                 'bill_name' => $order->client?->fullName() ?: $order->customer_name,
                 'company_name' => $order->client?->company,
@@ -221,13 +269,15 @@ class OrderDocument extends Model
                 // Money
                 'downpayment' => $down ?: null,
                 'full_payment' => $paid ?: null,
-                'total_balance' => $order->balance(),
+                // The brief's balance, not one design's: this sheet prices
+                // every order on it, so a balance covering only one of them
+                // would contradict its own totals.
+                'total_balance' => round($covered->sum(fn ($o) => (float) $o->balance()), 2),
                 'total_vat' => $type === self::TYPE_PQ ? $pb['vat'] : null,
                 'withholding_tax' => $type === self::TYPE_PQ && $pb['withholding'] > 0 ? $pb['withholding'] : null,
                 // Signatures
                 'prepared_by' => $order->creator?->name,
                 'date_prepared' => now()->format('Y-m-d'),
-            ],
         ];
     }
 
