@@ -41,6 +41,10 @@ class FullShopWalkthroughTest extends TestCase
             'artist' => User::JOB_ARTIST,
             'leader' => User::ROLE_LEADER,
             'supply' => 'Raw Materials',
+            // Issuing against a job is the supervisor's, not the desk's: she
+            // decides what comes off which shelf. The desk below still counts
+            // its own stock and reads the pack.
+            'materials supervisor' => User::JOB_RAW_MATERIALS_SUPERVISOR,
             'printer' => 'printer',
             // The finished-goods desk: the materials desk issues cloth, this
             // one counts garments in and hands them over.
@@ -303,7 +307,7 @@ class FullShopWalkthroughTest extends TestCase
             'the amount follows the pieces, and the sizes still add up to 55');
 
         foreach ($requests as $request) {
-            $this->actingAs($this->staff['supply'])
+            $this->actingAs($this->staff['materials supervisor'])
                 ->post(route('inventory.requests.approve', $request), [
                     'inventory_item_id' => $item->id,
                     'quantity' => 100,               // a stale tab, or a slip

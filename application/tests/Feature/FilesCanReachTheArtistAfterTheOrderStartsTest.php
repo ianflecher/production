@@ -173,6 +173,105 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
         $this->assertCount(0, $order->jobOrder->fresh()->filesAddedAfterSending());
     }
 
+    /* ---------------- and the message with them ---------------- */
+
+    /**
+     * A photo of a logo with no word attached is a photo the artist has to
+     * guess at — is this the logo, the placement, the colour, the thing to
+     * avoid? The message rides with the files it was sent with.
+     */
+    public function test_the_officer_can_say_what_the_files_are_for(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        Storage::fake('local');
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'reference_files' => [UploadedFile::fake()->image('logo.jpg')],
+            'note' => 'Use this logo on the left chest, not the back.',
+        ])->assertSessionHasNoErrors();
+
+        $task = $order->tasks()->where('assigned_to', $cristal->id)->firstOrFail();
+
+        $this->actingAs($cristal)->get(route('tasks.show', $task->id))
+            ->assertOk()
+            ->assertSee('Use this logo on the left chest, not the back.')
+            ->assertSee('What the account officer said');
+    }
+
+    /** The box is on the order page, not something only the API knows about. */
+    public function test_the_order_page_offers_the_message_box(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->actingAs($officer)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee('Message for the artist');
+    }
+
+    /** Every file of one upload carries the same message — one batch, one thing said. */
+    public function test_the_message_is_kept_on_each_file_of_the_batch(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        Storage::fake('local');
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'reference_files' => [
+                UploadedFile::fake()->image('front.jpg'),
+                UploadedFile::fake()->image('back.jpg'),
+            ],
+            'note' => 'Front and back of the same jersey.',
+        ]);
+
+        $files = $order->jobOrder->fresh()->referenceFiles;
+
+        $this->assertCount(2, $files);
+        $this->assertTrue($files->every(fn ($f) => $f->note === 'Front and back of the same jersey.'));
+    }
+
+    /** Files sent without a word are still shown, just without a message block. */
+    public function test_files_sent_with_no_message_still_arrive(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        $this->send($officer, $order);
+
+        $task = $order->tasks()->where('assigned_to', $cristal->id)->firstOrFail();
+
+        $this->actingAs($cristal)->get(route('tasks.show', $task->id))
+            ->assertOk()
+            ->assertSee('sent after you were given this')
+            ->assertDontSee('What the account officer said');
+    }
+
+    /** Two separate sends keep their own messages rather than merging. */
+    public function test_each_send_keeps_its_own_message(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        Storage::fake('local');
+
+        foreach ([['a.jpg', 'The logo goes on the sleeve.'], ['b.jpg', 'Ignore the first one, use this.']] as [$name, $note]) {
+            $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+                'reference_files' => [UploadedFile::fake()->image($name)],
+                'note' => $note,
+            ]);
+        }
+
+        $task = $order->tasks()->where('assigned_to', $cristal->id)->firstOrFail();
+
+        $this->actingAs($cristal)->get(route('tasks.show', $task->id))
+            ->assertSee('The logo goes on the sleeve.')
+            ->assertSee('Ignore the first one, use this.');
+    }
+
     /* ---------------- who may ---------------- */
 
     /** Another officer's order is not theirs to add to. */

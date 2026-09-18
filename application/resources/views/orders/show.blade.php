@@ -840,6 +840,16 @@
             <div style="font-size:0.72rem; color:var(--ink-3); margin-top:0.25rem;">
                 Images, PDFs or design files, up to 500MB each.
             </div>
+
+            <label for="artistMessage" style="display:block; margin-top:0.7rem; font-size:0.8rem; font-weight:600;">
+                Message for the artist
+            </label>
+            <textarea id="artistMessage" name="note" rows="2" maxlength="2000"
+                      placeholder="What are these for? e.g. use this logo on the left chest, this is the correct red"
+                      style="width:100%;"></textarea>
+            <div style="font-size:0.72rem; color:var(--ink-3); margin-top:0.25rem;">
+                Optional, but a photo with no word attached is one the artist has to guess at.
+            </div>
             <button type="submit" class="btn btn-primary btn-sm" style="margin-top:0.6rem;">Send to the artist</button>
         </form>
 

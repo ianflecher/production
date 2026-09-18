@@ -42,6 +42,7 @@ class WholePipelineTest extends TestCase
             'finance' => User::ROLE_FINANCE,
             'artist' => User::JOB_ARTIST,
             'supply' => User::JOB_SUPPLY_CHAIN,
+            'materials supervisor' => User::JOB_RAW_MATERIALS_SUPERVISOR,
         ] as $key => $role) {
             $this->staff[$key] = User::factory()->create([
                 'job_role' => $role,
@@ -451,9 +452,16 @@ class WholePipelineTest extends TestCase
             // Raw materials are the supply-chain desk's, not the leader's -
             // canManageInventory() admits that desk and the admin, nobody
             // else. Checked under the desk that owns them rather than dropped.
+            //
+            // The material REQUESTS are no longer theirs: they belong to the
+            // raw materials supervisor, who decides what goes out against a
+            // job. The desk still counts its own shelves, which is what it is
+            // walked through here.
             'supply' => [
-                'material requests' => '/material-requests',
                 'inventory' => '/inventory',
+            ],
+            'materials supervisor' => [
+                'material requests' => '/material-requests',
             ],
             'sales' => [
                 'quotation' => "/orders/$id/document/pq",

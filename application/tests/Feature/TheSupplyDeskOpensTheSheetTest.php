@@ -27,7 +27,7 @@ class TheSupplyDeskOpensTheSheetTest extends TestCase
 
     private function supplyDesk(): User
     {
-        return User::factory()->create(['job_role' => User::JOB_SUPPLY_CHAIN, 'is_active' => true]);
+        return User::factory()->create(['job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true]);
     }
 
     private function order(bool $withSheet = true): ProductionOrder

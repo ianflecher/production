@@ -54,6 +54,10 @@ class OrderReferenceFileController extends Controller
             'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
             // "output" = the design saved from ChatGPT (what the artist works from).
             'kind' => ['nullable', 'in:peg,logo,output'],
+            // What the officer wants to say about them. A photo of a logo with
+            // no word attached is a photo the artist has to guess at — is this
+            // the logo, the placement, the colour, the thing to avoid?
+            'note' => ['nullable', 'string', 'max:2000'],
         ], [
             'reference_files.required' => 'Choose at least one file to upload.',
         ]);
@@ -63,6 +67,9 @@ class OrderReferenceFileController extends Controller
                 'path' => $file->store('job-order-refs', 'local'),
                 'original_name' => $file->getClientOriginalName(),
                 'kind' => $data['kind'] ?? null,
+                // The same message on every file of one upload: one batch,
+                // one thing the officer was saying about it.
+                'note' => filled($data['note'] ?? null) ? trim($data['note']) : null,
                 'mime' => $file->getClientMimeType(),
                 'size' => $file->getSize(),
                 'uploaded_by' => $request->user()->id,

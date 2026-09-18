@@ -736,6 +736,22 @@ class User extends Authenticatable
      * The raw-materials inventory belongs to Super Admin and the supply-chain
      * desk. Leaders and supervisors do not get this tab or its routes.
      */
+    /**
+     * Who hands the materials out.
+     *
+     * The raw materials supervisor, and nobody else. The requests used to sit
+     * on the raw materials desk's own page, which is the ready-made stock —
+     * the caps, the boxes, the tapes — and a queue somebody can act on but is
+     * not theirs to decide is a queue two people work and neither owns.
+     *
+     * The desk keeps its inventory. Only the requests moved.
+     */
+    public function canDecideMaterialRequests(): bool
+    {
+        return $this->isSuperAdmin()
+            || strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR;
+    }
+
     public function canManageInventory(): bool
     {
         if ($this->isSuperAdmin()) {

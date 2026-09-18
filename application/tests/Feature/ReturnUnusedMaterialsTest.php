@@ -27,7 +27,7 @@ class ReturnUnusedMaterialsTest extends TestCase
     private function issued(float $qty = 100): array
     {
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
-        $desk = User::factory()->create(['job_role' => 'Raw materials', 'is_active' => true, 'name' => 'Supply Desk']);
+        $desk = User::factory()->create(['job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true, 'name' => 'Supply Desk']);
 
         $order = ProductionOrder::create([
             'order_number' => 'IC2026-0'.random_int(1000, 9999), 'customer_name' => 'Overdrawn Co',
@@ -133,7 +133,7 @@ class ReturnUnusedMaterialsTest extends TestCase
     public function test_nothing_can_be_returned_against_a_rejected_request(): void
     {
         $sales = User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
-        $desk = User::factory()->create(['job_role' => 'Raw materials', 'is_active' => true]);
+        $desk = User::factory()->create(['job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true]);
 
         $order = ProductionOrder::create([
             'order_number' => 'IC2026-07777', 'customer_name' => 'Nothing Co',

@@ -251,7 +251,7 @@
             // conversation about the job.
             $u->isMover() => [route('messages.show', $order), 'messages'],
             $u->canUseStations() => [route('stations.index'), 'stations'],
-            $u->canManageInventory() => [route('inventory.requests'), 'material requests'],
+            $u->canDecideMaterialRequests() => [route('inventory.requests'), 'material requests'],
             $u->canManageProducts() => [route('products.index'), 'inventory'],
             default => [route('orders.job-order', $order), 'tech pack'],
         };

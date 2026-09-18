@@ -20,6 +20,18 @@ class InventoryController extends Controller
     }
 
     /**
+     * The material requests are the supervisor's, not the desk's.
+     *
+     * Narrower than assertAccess on purpose: the raw materials desk still
+     * counts its own shelves, it just no longer decides what goes out against
+     * a job order.
+     */
+    private function assertDecidesRequests(): void
+    {
+        abort_unless(auth()->user()->canDecideMaterialRequests(), 403);
+    }
+
+    /**
      * The raw-materials desk works this stage from here, not the station board.
      * Once every material this order asked for has been issued or rejected, the
      * "Raw materials" step is finished and the order moves on.
@@ -549,7 +561,7 @@ class InventoryController extends Controller
 
     public function requests(Request $request): View
     {
-        $this->assertAccess();
+        $this->assertDecidesRequests();
 
         // Same box as every other list: find a material, or the job it is for.
         $search = trim((string) $request->query('q', ''));
@@ -609,7 +621,7 @@ class InventoryController extends Controller
 
     public function approve(Request $request, MaterialRequest $materialRequest): RedirectResponse
     {
-        $this->assertAccess();
+        $this->assertDecidesRequests();
         // A pending request can be approved; a REJECTED one can be re-approved
         // once the material has been restocked.
         abort_unless(in_array($materialRequest->status, ['pending', 'rejected'], true), 403);
@@ -706,7 +718,7 @@ class InventoryController extends Controller
 
     public function reject(Request $request, MaterialRequest $materialRequest): RedirectResponse
     {
-        $this->assertAccess();
+        $this->assertDecidesRequests();
         abort_unless($materialRequest->status === 'pending', 403);
 
         $data = $request->validate([
@@ -743,7 +755,7 @@ class InventoryController extends Controller
      */
     public function returnToStock(Request $request, MaterialRequest $materialRequest): RedirectResponse
     {
-        $this->assertAccess();
+        $this->assertDecidesRequests();
         abort_unless($materialRequest->status === 'approved', 403);
         abort_unless($materialRequest->item, 404);
 

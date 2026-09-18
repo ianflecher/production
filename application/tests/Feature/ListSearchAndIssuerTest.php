@@ -62,7 +62,7 @@ class ListSearchAndIssuerTest extends TestCase
 
     public function test_issuing_records_the_person_not_the_shared_account(): void
     {
-        $desk = User::factory()->create(['job_role' => 'Raw materials', 'is_active' => true, 'name' => 'Supply Desk']);
+        $desk = User::factory()->create(['job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true, 'name' => 'Supply Desk']);
         $order = $this->order('IC2026-44444', 'Fabric Co');
         $item = InventoryItem::create(['name' => 'Cotton combed 24s', 'unit' => 'kg', 'quantity' => 50]);
         $req = MaterialRequest::create([

@@ -329,16 +329,31 @@
             <p class="sub" style="margin-bottom: 1rem;">
                 From the account officer, after the pack went out. Check these against what you are drawing.
             </p>
-            <div style="display: flex; flex-wrap: wrap; gap: 1.2rem;">
-                @foreach ($lateFiles as $ref)
-                    <div style="text-align:center;">
-                        @include('partials.reference-file', ['ref' => $ref, 'width' => 200])
-                        <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.2rem;">
-                            arrived {{ $ref->created_at?->diffForHumans() }}
+            {{-- Grouped by what was said about them, so a message sits with
+                 the files it came with rather than above all of them. --}}
+            @foreach ($lateFiles->groupBy(fn ($f) => $f->note ?? '') as $said => $batch)
+                <div style="margin-bottom: 1.1rem;">
+                    @if (filled($said))
+                        <div style="background: var(--surface-2); border-left: 3px solid var(--accent);
+                                    padding: 0.55rem 0.7rem; border-radius: 0 8px 8px 0; margin-bottom: 0.7rem;">
+                            <div style="font-size: 0.72rem; color: var(--ink-3); font-weight: 600; margin-bottom: 0.2rem;">
+                                📝 What the account officer said
+                            </div>
+                            <div style="white-space: pre-line;">{{ $said }}</div>
                         </div>
+                    @endif
+                    <div style="display: flex; flex-wrap: wrap; gap: 1.2rem;">
+                        @foreach ($batch as $ref)
+                            <div style="text-align:center;">
+                                @include('partials.reference-file', ['ref' => $ref, 'width' => 200])
+                                <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.2rem;">
+                                    arrived {{ $ref->created_at?->diffForHumans() }}
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
-                @endforeach
-            </div>
+                </div>
+            @endforeach
         </div>
     @endif
 

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class JobOrderFile extends Model
 {
     protected $fillable = [
-        'job_order_id', 'path', 'original_name', 'kind', 'mime', 'size', 'uploaded_by',
+        'job_order_id', 'path', 'original_name', 'kind', 'note', 'mime', 'size', 'uploaded_by',
     ];
 
     public function jobOrder(): BelongsTo
