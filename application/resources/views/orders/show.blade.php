@@ -848,6 +848,19 @@
                 Images, PDFs or design files, up to 500MB each.
             </div>
 
+            <label for="artistLink" style="display:block; margin-top:0.7rem; font-size:0.8rem; font-weight:600;">
+                Or paste a link
+            </label>
+            <input id="artistLink" type="url" name="link" maxlength="2000"
+                   placeholder="https://drive.google.com/... or a Facebook post"
+                   value="{{ old('link') }}" style="width:100%;">
+            <div style="font-size:0.72rem; color:var(--ink-3); margin-top:0.25rem;">
+                A Drive folder, a post, a board of pegs — anything the client sent as a
+                link rather than a file. The artist can open it or copy it.
+            </div>
+            @error('link')<div class="error" style="margin-top:0.3rem;">{{ $message }}</div>@enderror
+            @error('reference_files')<div class="error" style="margin-top:0.3rem;">{{ $message }}</div>@enderror
+
             <label for="artistMessage" style="display:block; margin-top:0.7rem; font-size:0.8rem; font-weight:600;">
                 Message for the artist
             </label>
@@ -867,9 +880,10 @@
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:0.6rem;">
                     @foreach ($lateFiles as $ref)
-                        <a href="{{ route('job-order-files.view', $ref) }}" target="_blank"
+                        <a href="{{ $ref->isExternal() ? $ref->external_path : route('job-order-files.view', $ref) }}"
+                           target="_blank" rel="noopener"
                            style="font-size:0.75rem; border:1px solid var(--border); border-radius:8px; padding:0.35rem 0.55rem;">
-                            {{ $ref->original_name }}
+                            {{ $ref->isExternal() ? '🔗' : '📄' }} {{ $ref->original_name }}
                             <span style="color:var(--ink-3);">— {{ $ref->created_at?->format('M j') }}</span>
                         </a>
                     @endforeach

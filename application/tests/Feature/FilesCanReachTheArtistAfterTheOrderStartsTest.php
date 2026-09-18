@@ -290,6 +290,100 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
             ->assertSee('to paste a screenshot straight in');
     }
 
+    /* ---------------- a link is a reference too ---------------- */
+
+    /**
+     * Half of what a client sends is a link — a Drive folder, a Facebook post,
+     * a board of pegs. Uploading that meant downloading it first, or pasting
+     * the address into a chat the system cannot see.
+     */
+    public function test_a_link_can_be_sent_instead_of_a_file(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'link' => 'https://drive.google.com/drive/folders/abc123',
+            'note' => 'The whole folder the client sent.',
+        ])->assertSessionHasNoErrors();
+
+        $ref = $order->jobOrder->fresh()->referenceFiles->first();
+
+        $this->assertTrue($ref->isExternal());
+        $this->assertTrue($ref->isWebLink());
+        $this->assertFalse($ref->isImage(), 'a link is not drawn as a picture');
+        $this->assertSame('https://drive.google.com/drive/folders/abc123', $ref->external_path);
+    }
+
+    /** The artist gets the address itself, and a way to copy it. */
+    public function test_the_artist_can_open_and_copy_the_link(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'link' => 'https://www.facebook.com/post/123',
+        ]);
+
+        $task = $order->tasks()->where('assigned_to', $cristal->id)->firstOrFail();
+
+        $this->actingAs($cristal)->get(route('tasks.show', $task->id))
+            ->assertOk()
+            ->assertSee('https://www.facebook.com/post/123', false)
+            ->assertSee('Copy link');
+    }
+
+    /** And is told about it, the same as a file. */
+    public function test_the_artist_is_told_about_a_link(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'link' => 'https://drive.google.com/x',
+        ]);
+
+        $this->assertSame(1, AppNotification::where('user_id', $cristal->id)->count());
+    }
+
+    /** The officer can paste the link in; the box is on the page. */
+    public function test_the_order_page_offers_a_link_box(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->actingAs($officer)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee('Or paste a link')
+            ->assertSee('name="link"', false);
+    }
+
+    /** Something that is not a link is refused rather than saved as one. */
+    public function test_a_line_of_text_is_not_a_link(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'link' => 'ask the client for the folder',
+        ])->assertSessionHasErrors('link');
+
+        $this->assertCount(0, $order->jobOrder->fresh()->referenceFiles);
+    }
+
+    /** Sending nothing at all says so, rather than looking like it worked. */
+    public function test_sending_neither_a_file_nor_a_link_is_refused(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->actingAs($officer)->post(route('job-orders.reference', $order), [])
+            ->assertSessionHasErrors('reference_files');
+    }
+
     /* ---------------- who may ---------------- */
 
     /** Another officer's order is not theirs to add to. */

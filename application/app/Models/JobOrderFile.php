@@ -8,8 +8,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class JobOrderFile extends Model
 {
     protected $fillable = [
-        'job_order_id', 'path', 'original_name', 'kind', 'note', 'mime', 'size', 'uploaded_by',
+        'job_order_id', 'path', 'external_path', 'original_name', 'kind', 'note', 'mime', 'size', 'uploaded_by',
     ];
+
+    /**
+     * A reference that lives somewhere else — a Drive folder, a Facebook
+     * post, a board of pegs — rather than a file uploaded here.
+     *
+     * Named the way task_files names the same idea, so the two read alike.
+     */
+    public function isExternal(): bool
+    {
+        return filled($this->external_path);
+    }
+
+    /** True when that somewhere else is a clickable web address. */
+    public function isWebLink(): bool
+    {
+        return $this->isExternal() && preg_match('#^https?://#i', (string) $this->external_path) === 1;
+    }
 
     public function jobOrder(): BelongsTo
     {
@@ -23,7 +40,9 @@ class JobOrderFile extends Model
 
     public function isImage(): bool
     {
-        return str_starts_with((string) $this->mime, 'image/');
+        // A link has no mime and is never drawn as a picture, whatever it
+        // points at — the page has not fetched it and will not guess.
+        return ! $this->isExternal() && str_starts_with((string) $this->mime, 'image/');
     }
 
     public function sizeForHumans(): string

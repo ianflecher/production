@@ -50,8 +50,12 @@ class OrderReferenceFileController extends Controller
         abort_unless($order->jobOrder, 404);
 
         $data = $request->validate([
-            'reference_files' => ['required', 'array'],
+            // Files OR a link, or both: half of what a client sends arrives as
+            // a Drive folder or a Facebook post, and uploading that meant
+            // downloading it first.
+            'reference_files' => ['nullable', 'array'],
             'reference_files.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,pdf,ai,psd,eps,cdr,zip', 'max:512000'],
+            'link' => ['nullable', 'url', 'max:2000'],
             // "output" = the design saved from ChatGPT (what the artist works from).
             'kind' => ['nullable', 'in:peg,logo,output'],
             // What the officer wants to say about them. A photo of a logo with
@@ -59,10 +63,19 @@ class OrderReferenceFileController extends Controller
             // the logo, the placement, the colour, the thing to avoid?
             'note' => ['nullable', 'string', 'max:2000'],
         ], [
-            'reference_files.required' => 'Choose at least one file to upload.',
+            'link.url' => 'That does not look like a link — it should start with http:// or https://',
         ]);
 
-        foreach ($request->file('reference_files') as $file) {
+        $link = trim((string) ($data['link'] ?? ''));
+        $files = $request->file('reference_files') ?? [];
+
+        if (! $files && $link === '') {
+            return back()->withInput()->withErrors([
+                'reference_files' => 'Choose a file or paste a link — there is nothing to send.',
+            ]);
+        }
+
+        foreach ($files as $file) {
             $order->jobOrder->referenceFiles()->create([
                 'path' => $file->store('job-order-refs', 'local'),
                 'original_name' => $file->getClientOriginalName(),
@@ -76,7 +89,19 @@ class OrderReferenceFileController extends Controller
             ]);
         }
 
-        $count = count($request->file('reference_files'));
+        if ($link !== '') {
+            $order->jobOrder->referenceFiles()->create([
+                'external_path' => $link,
+                // Shown in place of a filename, so a row of links does not read
+                // as a row of blanks.
+                'original_name' => \Illuminate\Support\Str::limit(preg_replace('#^https?://(www\.)?#i', '', $link), 60),
+                'kind' => $data['kind'] ?? null,
+                'note' => filled($data['note'] ?? null) ? trim($data['note']) : null,
+                'uploaded_by' => $request->user()->id,
+            ]);
+        }
+
+        $count = count($files) + ($link !== '' ? 1 : 0);
 
         // A late file nobody is told about is a file nobody opens.
         //
@@ -91,6 +116,7 @@ class OrderReferenceFileController extends Controller
 
         return back()->with('success', match (true) {
             ($data['kind'] ?? null) === 'output' => 'Design uploaded — this is what the artist will work from.',
+            $told->isNotEmpty() && $link !== '' && ! $files => 'Link sent to '.$told->implode(' and ').'.',
             $told->isNotEmpty() => \Illuminate\Support\Str::plural('File', $count).' sent to '.$told->implode(' and ').'.',
             default => 'File uploaded.',
         });
