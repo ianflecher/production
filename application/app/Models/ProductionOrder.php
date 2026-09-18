@@ -2667,8 +2667,14 @@ class ProductionOrder extends Model
             ->each(fn ($mr) => $mr->delete());
 
         if ($new > 0) {
+            // The raw materials supervisor, not the supply-chain desk.
+            //
+            // Every material request goes to her now: she is the one who
+            // decides what comes off which shelf. The desk still reads the
+            // same queue — canManageInventory() admits both — it just no
+            // longer gets the alert for work that is hers to hand out.
             AppNotification::toRole(
-                User::JOB_SUPPLY_CHAIN,
+                User::JOB_RAW_MATERIALS_SUPERVISOR,
                 '📦 New material request',
                 "{$this->order_number} — {$new} material request(s) to fulfil.",
                 route('inventory.requests'),

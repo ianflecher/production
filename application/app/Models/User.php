@@ -68,6 +68,16 @@ class User extends Authenticatable
     public const JOB_AGENT_SUPERVISOR = 'agent supervisor';
 
     /**
+     * The raw materials supervisor. She holds the fabric — the bolts, by the
+     * kilo — while the raw materials desk holds the ready-made stock, the caps
+     * and boxes and tapes that come in finished.
+     *
+     * Named for raw materials on purpose: canManageInventory() admits any role
+     * that is, so the desk and its supervisor read the same shelves.
+     */
+    public const JOB_RAW_MATERIALS_SUPERVISOR = 'raw materials supervisor';
+
+    /**
      * The HR desk: hiring, payslips, incidents, loans and the people's own
      * requests. Their pages are all under /hr and their data in hr_ tables,
      * kept apart from the shop floor system on purpose.
@@ -143,6 +153,7 @@ class User extends Authenticatable
             self::ROLE_SALES => 'Account Officer',
             self::ROLE_FINANCE => 'Finance',
             self::JOB_SUPERVISOR => 'Supervisor',
+            self::JOB_RAW_MATERIALS_SUPERVISOR => 'Raw Materials Supervisor',
             // A desk, not a bench. Offered here rather than under Supervision
             // on the floor list, because every position on that list has to
             // map to a station - an account with none signs in and sees
@@ -735,8 +746,11 @@ class User extends Authenticatable
         // materials). Finished products are a separate desk — canManageProducts().
         $role = strtolower((string) $this->job_role);
 
-        return in_array($role, [self::JOB_SUPPLY_CHAIN, 'raw materials'], true)
-            || str_contains($role, 'raw material');
+        return in_array($role, [
+            self::JOB_SUPPLY_CHAIN,
+            'raw materials',
+            self::JOB_RAW_MATERIALS_SUPERVISOR,
+        ], true) || str_contains($role, 'raw material');
     }
 
     /**
