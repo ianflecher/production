@@ -31,6 +31,14 @@ class InventoryController extends Controller
         abort_unless(auth()->user()->canDecideMaterialRequests(), 403);
     }
 
+    /** One request is only this person's if it asks from their shelf. */
+    private function assertTheirShelf(MaterialRequest $request): void
+    {
+        $shelf = auth()->user()->inventoryShelf();
+
+        abort_unless($shelf === null || $request->kind === $shelf, 403);
+    }
+
     /**
      * The raw-materials desk works this stage from here, not the station board.
      * Once every material this order asked for has been issued or rejected, the
@@ -141,7 +149,10 @@ class InventoryController extends Controller
             'totalCount' => InventoryItem::when($shelf !== null, fn ($w) => $w->where('kind', $shelf))->count(),
             'outCount' => InventoryItem::when($shelf !== null, fn ($w) => $w->where('kind', $shelf))
                 ->where('quantity', '<=', 0)->count(),
-            'pendingCount' => MaterialRequest::where('status', 'pending')->count(),
+            // Their own shelf's queue, so the tile and the page behind it
+            // count the same thing.
+            'pendingCount' => MaterialRequest::when($shelf !== null, fn ($w) => $w->where('kind', $shelf))
+                ->where('status', 'pending')->count(),
         ]);
     }
 
@@ -600,10 +611,15 @@ class InventoryController extends Controller
         // found while wiring the number to the package: the comment under
         // $sizeCounts says "looked up once for the orders actually on the page",
         // which was true of the mapping and not of the rows behind it.
+        // Her fabric or the desk's ready-made stock. The two keepers were
+        // reading past each other's work to find their own.
+        $shelf = $request->user()->inventoryShelf();
+
         $pending = MaterialRequest::with([
             'order' => fn ($q) => $q->withExists('jobOrder'),
             'order.items',
         ])
+            ->when($shelf !== null, fn ($q) => $q->where('kind', $shelf))
             ->where('status', 'pending')
             ->tap($matching)
             ->orderBy('id')
@@ -641,6 +657,7 @@ class InventoryController extends Controller
     public function approve(Request $request, MaterialRequest $materialRequest): RedirectResponse
     {
         $this->assertDecidesRequests();
+        $this->assertTheirShelf($materialRequest);
         // A pending request can be approved; a REJECTED one can be re-approved
         // once the material has been restocked.
         abort_unless(in_array($materialRequest->status, ['pending', 'rejected'], true), 403);
@@ -738,6 +755,7 @@ class InventoryController extends Controller
     public function reject(Request $request, MaterialRequest $materialRequest): RedirectResponse
     {
         $this->assertDecidesRequests();
+        $this->assertTheirShelf($materialRequest);
         abort_unless($materialRequest->status === 'pending', 403);
 
         $data = $request->validate([
@@ -775,6 +793,7 @@ class InventoryController extends Controller
     public function returnToStock(Request $request, MaterialRequest $materialRequest): RedirectResponse
     {
         $this->assertDecidesRequests();
+        $this->assertTheirShelf($materialRequest);
         abort_unless($materialRequest->status === 'approved', 403);
         abort_unless($materialRequest->item, 404);
 

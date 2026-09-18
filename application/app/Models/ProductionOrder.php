@@ -2633,19 +2633,30 @@ class ProductionOrder extends Model
         $new = 0;
         $wanted = [];
 
+        // Counted per shelf, because the two go to two different people.
+        $raised = [InventoryItem::KIND_FABRIC => 0, InventoryItem::KIND_READY_MADE => 0];
+
         foreach ($materials as $material) {
             $needs = $this->jobOrder?->rawMaterialQuantity($material);
+            $kind = $this->jobOrder?->rawMaterialKind($material) ?? InventoryItem::KIND_FABRIC;
 
             foreach (self::splitAcrossSizes($needs, $sizes) as $size => $share) {
                 $wanted[] = $material.'|'.$size;
 
                 $mr = MaterialRequest::firstOrCreate(
                     ['production_order_id' => $this->id, 'material' => $material, 'size' => $size],
-                    ['status' => 'pending', 'requested_quantity' => $share]
+                    ['status' => 'pending', 'requested_quantity' => $share, 'kind' => $kind]
                 );
+
+                // The officer can change their mind about which shelf a
+                // material comes off while it is still waiting.
+                if ($mr->status === 'pending' && $mr->kind !== $kind) {
+                    $mr->update(['kind' => $kind]);
+                }
 
                 if ($mr->wasRecentlyCreated) {
                     $new++;
+                    $raised[$kind]++;
                 } elseif ($mr->status === 'pending' && (float) $mr->requested_quantity !== (float) $share) {
                     // The job order was corrected before the desk got to it.
                     $mr->update(['requested_quantity' => $share]);
@@ -2666,17 +2677,24 @@ class ProductionOrder extends Model
             ->reject(fn ($mr) => in_array($mr->material.'|'.$mr->size, $wanted, true))
             ->each(fn ($mr) => $mr->delete());
 
-        if ($new > 0) {
-            // The raw materials supervisor, not the supply-chain desk.
-            //
-            // Every material request goes to her now: she is the one who
-            // decides what comes off which shelf. The desk still reads the
-            // same queue — canManageInventory() admits both — it just no
-            // longer gets the alert for work that is hers to hand out.
+        // Each shelf's keeper is told about their own, and only when there is
+        // something for them. The fabric is the supervisor's, by the kilo; the
+        // ready-made stock is the desk's, by the piece. One alert to both was
+        // each of them reading past the other's work to find their own.
+        foreach ([
+            InventoryItem::KIND_FABRIC => User::JOB_RAW_MATERIALS_SUPERVISOR,
+            InventoryItem::KIND_READY_MADE => 'raw materials',
+        ] as $kind => $role) {
+            if ($raised[$kind] < 1) {
+                continue;
+            }
+
             AppNotification::toRole(
-                User::JOB_RAW_MATERIALS_SUPERVISOR,
+                $role,
                 '📦 New material request',
-                "{$this->order_number} — {$new} material request(s) to fulfil.",
+                "{$this->order_number} — {$raised[$kind]} "
+                    .($kind === InventoryItem::KIND_FABRIC ? 'fabric' : 'ready-made')
+                    .' request(s) to fulfil.',
                 route('inventory.requests'),
             );
         }

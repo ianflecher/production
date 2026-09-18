@@ -766,10 +766,27 @@ class User extends Authenticatable
             : \App\Models\InventoryItem::KIND_READY_MADE;
     }
 
+    /**
+     * Who may read the shop calendar.
+     *
+     * What is due and when is the question a supervisor answers all day,
+     * whichever part of the shop is theirs. The calendar sat in a route group
+     * for sales, leaders, admins and the mover, and the raw materials
+     * supervisor is none of those — she reads as an agent — so she was
+     * answered 403 by a page that tells her nothing she should not see.
+     */
+    public function canSeeCalendar(): bool
+    {
+        return $this->isSales()
+            || $this->isLeader()
+            || $this->isSupervisor()
+            || $this->role === self::ROLE_MOVER
+            || strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR;
+    }
+
     public function canDecideMaterialRequests(): bool
     {
-        return $this->isSuperAdmin()
-            || strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR;
+        return $this->canManageInventory();
     }
 
     public function canManageInventory(): bool

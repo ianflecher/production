@@ -445,7 +445,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/inquiries/{inquiry}/messages', [\App\Http\Controllers\InquiryMessageController::class, 'store'])
         ->whereNumber('inquiry')->name('inquiries.messages.store');
 
-    // -------- Order viewing + calendar: Sales, Leader, Super Admin, Mover --------
+    // The calendar is wider than the group below: every supervisor reads what
+    // is due and when, and the raw materials supervisor reads as an agent.
+    Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
+
+    // -------- Order viewing: Sales, Leader, Super Admin, Mover --------
     // The mover reads job orders to chase progress round the floor. Read-only:
     // creating, editing, payments and approvals all live in other groups.
     Route::middleware('role:sales,leader,super_admin,mover')->group(function () {
@@ -454,7 +458,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         // The whole package as one document (mockup, template, job order, production details).
         Route::get('/orders/{order}/mockup', [ProductionOrderController::class, 'mockup'])->whereNumber('order')->name('orders.mockup');
         Route::get('/orders/{order}/reference', [ProductionOrderController::class, 'references'])->whereNumber('order')->name('orders.references');
-        Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
+        // (the calendar is its own route below - every supervisor reads it)
         Route::get('/payments/{payment}/proof', [PaymentController::class, 'proof'])
             ->whereNumber('payment')->name('payments.proof');
     });

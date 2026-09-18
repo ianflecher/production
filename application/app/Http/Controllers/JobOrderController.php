@@ -293,6 +293,10 @@ class JobOrderController extends Controller
             // nobody said, and the desk is not held to a number.
             'raw_material_qty' => ['nullable', 'array'],
             'raw_material_qty.*' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+            // Which shelf each material comes off: the supervisor's fabric or
+            // the desk's ready-made stock.
+            'raw_material_kind' => ['nullable', 'array'],
+            'raw_material_kind.*' => ['nullable', 'in:fabric,ready_made'],
             'cutting_type' => ['nullable', 'in:'.implode(',', array_keys(ProductionOrder::CUTTING_TYPES))],
             // Fabric press (required, merges the print onto the fabric) and the
             // decoration — a checkbox toggle; when on it's a press OR embroidery.
@@ -340,6 +344,7 @@ class JobOrderController extends Controller
         // that reads rawMaterialsList() still reads a plain list of names.
         $materialNames = [];
         $materialQty = [];
+        $materialKind = [];
         foreach (($data['raw_materials'] ?? []) as $i => $name) {
             if (blank($name)) {
                 continue;
@@ -351,11 +356,19 @@ class JobOrderController extends Controller
             if (is_numeric($amount) && (float) $amount > 0) {
                 $materialQty[$name] = round((float) $amount, 2);
             }
+
+            // Fabric unless the officer said ready-made. Kept beside the names
+            // rather than inside them, so everything reading rawMaterialsList()
+            // still reads a plain list of names.
+            $materialKind[$name] = ($data['raw_material_kind'][$i] ?? null) === 'ready_made'
+                ? \App\Models\InventoryItem::KIND_READY_MADE
+                : \App\Models\InventoryItem::KIND_FABRIC;
         }
 
         $order->jobOrder->update([
             'raw_materials' => $materialNames,
             'raw_material_quantities' => $materialQty ?: null,
+            'raw_material_kinds' => $materialKind ?: null,
             'fabric_press' => $fabricPress,
             'press' => $decoPress,
             'addon' => $addon,

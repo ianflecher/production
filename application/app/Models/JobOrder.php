@@ -52,6 +52,7 @@ class JobOrder extends Model
         'fabric',
         'raw_materials',
         'raw_material_quantities',
+        'raw_material_kinds',
         'sewing_log',
         'free_logo_sticker',
         // Sewing (yellow) — the four headline seams, each with its size/thread
@@ -117,6 +118,7 @@ class JobOrder extends Model
             'raw_materials' => 'array',
             'sewing_log' => 'array',
             'raw_material_quantities' => 'array',
+            'raw_material_kinds' => 'array',
             'design_brief' => 'array',
             'sent_to_artist_at' => 'datetime',
             'client_brief_submitted_at' => 'datetime',
@@ -135,6 +137,24 @@ class JobOrder extends Model
      * Kept beside the name list rather than inside it, so everything that
      * already reads rawMaterialsList() keeps reading a plain list of names.
      */
+    /**
+     * Which shelf one material comes off: the supervisor's fabric, or the
+     * desk's ready-made stock.
+     *
+     * Fabric unless the officer said otherwise, because that is the larger
+     * half of what a garment job asks for, and because an unanswered line has
+     * to land somewhere rather than nowhere.
+     */
+    public function rawMaterialKind(string $material): string
+    {
+        $map = (array) $this->raw_material_kinds;
+        $kind = $map[$material] ?? null;
+
+        return $kind === InventoryItem::KIND_READY_MADE
+            ? InventoryItem::KIND_READY_MADE
+            : InventoryItem::KIND_FABRIC;
+    }
+
     public function rawMaterialQuantity(string $material): ?float
     {
         $map = (array) $this->raw_material_quantities;

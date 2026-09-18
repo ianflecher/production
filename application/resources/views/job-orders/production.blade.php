@@ -13,6 +13,10 @@
         }
     }
     $rawMaterials = old('raw_materials', $jobOrder->rawMaterialsList());
+    // What each line was last said to be. Kept beside the names rather than
+    // inside them, so everything that reads the list keeps reading names.
+    $rawKinds = old('raw_material_kind', collect($jobOrder->rawMaterialsList())
+        ->map(fn ($m) => $jobOrder->rawMaterialKind($m))->all());
     $rawMaterials = array_values(array_filter((array) $rawMaterials, fn ($v) => filled($v)));
     // How much of each, in the same order as the names.
     $rawQty = old('raw_material_qty', array_map(
@@ -53,13 +57,19 @@
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Raw materials <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">(one per item, and how much of it)</span></h2>
         <p class="muted" style="font-size: 0.8rem; margin: -0.3rem 0 0.7rem;">
-            The amount is what the materials desk is allowed to issue. Leave it blank
-            and the desk can issue any amount, the way it worked before.
+            Say which shelf each one comes off: <strong>Fabric</strong> goes to the raw
+            materials supervisor, <strong>Ready-made</strong> to the raw materials desk —
+            the caps, boxes and tapes that arrive finished. The amount is what they are
+            allowed to issue; leave it blank and they can issue any amount.
         </p>
-        <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 480px;">
+        <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 640px;">
             @foreach ($rawMaterials as $i => $rm)
                 <div class="raw-row" style="display: flex; gap: 0.4rem;">
                     <input type="text" name="raw_materials[]" list="dl_raw_materials" maxlength="255" value="{{ $rm }}" placeholder="e.g. lanyard, cloth, ribbing" style="flex: 1;">
+                    <select name="raw_material_kind[]" style="width: 130px;" aria-label="Which shelf this comes off">
+                        <option value="fabric" @selected(($rawKinds[$i] ?? 'fabric') === 'fabric')>Fabric</option>
+                        <option value="ready_made" @selected(($rawKinds[$i] ?? 'fabric') === 'ready_made')>Ready-made</option>
+                    </select>
                     <input type="number" name="raw_material_qty[]" min="0" step="0.01" value="{{ $rawQty[$i] ?? '' }}"
                            placeholder="How many" style="width: 110px;" aria-label="How much of this material">
                     <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('.raw-row').remove()">✕</button>
@@ -257,6 +267,8 @@
         row.className = 'raw-row';
         row.style.cssText = 'display: flex; gap: 0.4rem;';
         row.innerHTML = '<input type="text" name="raw_materials[]" list="dl_raw_materials" maxlength="255" placeholder="e.g. lanyard, cloth, ribbing" style="flex: 1;">'
+            + '<select name="raw_material_kind[]" style="width: 130px;" aria-label="Which shelf this comes off">'
+            + '<option value="fabric">Fabric</option><option value="ready_made">Ready-made</option></select>'
             + '<input type="number" name="raw_material_qty[]" min="0" step="0.01" placeholder="How many" style="width: 110px;" aria-label="How much of this material">'
             + '<button type="button" class="btn btn-ghost btn-sm">✕</button>';
         row.querySelector('button').addEventListener('click', () => row.remove());

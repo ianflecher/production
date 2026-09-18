@@ -111,30 +111,19 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
         $this->assertTrue($desk->canManageInventory());
     }
 
-    public function test_the_desk_does_not_get_the_queue(): void
+    /**
+     * The desk is not shut out either.
+     *
+     * Both keepers work a queue; each sees only their own shelf. That split is
+     * covered by FabricAndReadyMadeGoToDifferentDesksTest - what matters here
+     * is that the desk still has a page at all.
+     */
+    public function test_the_desk_still_has_its_own_queue(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
 
-        $this->assertFalse($desk->canDecideMaterialRequests());
-        $this->actingAs($desk)->get(route('inventory.requests'))->assertForbidden();
-    }
-
-    /** Nor the way in, nor the count of it. */
-    public function test_the_desk_is_shown_neither_the_button_nor_the_badge(): void
-    {
-        $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
-        $supervisor = User::factory()->create([
-            'job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true,
-        ]);
-
-        $this->orderNeedingMaterials($this->sales());
-
-        $deskPage = $this->actingAs($desk)->get(route('inventory.index'))->assertOk()->getContent();
-        $this->assertStringNotContainsString('Material requests', $deskPage);
-        $this->assertStringNotContainsString('awaiting action', $deskPage);
-
-        $hers = $this->actingAs($supervisor)->get(route('inventory.index'))->assertOk()->getContent();
-        $this->assertStringContainsString('Material requests', $hers);
+        $this->assertTrue($desk->canDecideMaterialRequests());
+        $this->actingAs($desk)->get(route('inventory.requests'))->assertOk();
     }
 
     /** The sidebar badge counts the queue for whoever works it. */
@@ -153,7 +142,8 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
             $m
         ) ? (int) $m[1] : 0;
 
-        $this->assertSame(0, $pill($desk), 'the desk wore a badge for a queue it cannot open');
+        // The order's materials are unclassified, so they are fabric: hers.
+        $this->assertSame(0, $pill($desk), 'the desk wore a badge for fabric it does not hold');
         $this->assertGreaterThan(0, $pill($supervisor));
     }
 

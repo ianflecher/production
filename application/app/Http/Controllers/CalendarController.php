@@ -14,6 +14,10 @@ class CalendarController extends Controller
 
     public function index(Request $request): View
     {
+        // Its own gate now, because the calendar is wider than the order pages
+        // it used to share a route group with.
+        abort_unless($request->user()->canSeeCalendar(), 403);
+
         /*
          * Determine which month to display.
          *
