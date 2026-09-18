@@ -21,6 +21,25 @@
     $sharedSheet = $covered->count() > 1;
 
     $docPaid = (float) $covered->sum(fn ($o) => (float) $o->payments->sum('amount'));
+
+    // A printed sheet per garment that has a drawing, in the order they are
+    // priced. One brief is quoted on one sheet now, so one drawing behind it
+    // showed the client a page headed "Mockup" for the shirt and nothing at
+    // all for the polo and the hoodie they are also paying for.
+    //
+    // The first page keeps the original design_rotated key, so an orientation
+    // saved before the sheet covered the whole brief still applies to it.
+    $designPages = $covered->values()
+        ->map(fn ($part) => [
+            'order' => $part,
+            'files' => $part->documentDesignFiles(),
+            'label' => $part->documentDesignLabel(),
+        ])
+        ->filter(fn ($page) => $page['files']->isNotEmpty())
+        ->values()
+        ->map(fn ($page, $n) => $page + [
+            'key' => $n === 0 ? 'design_rotated' : 'design_rotated_'.$page['order']->id,
+        ]);
     $docBalance = max(0, round($t['net'] - $docPaid, 2));
     $rows = collect($doc->items ?? [])->values();
     $hasJobOrder = filled($f('print_type')) || filled($f('materials'));
@@ -146,8 +165,10 @@
 
     <div class="doc-actions no-print">
         <button type="submit" class="btn btn-primary btn-sm">💾 Save</button>
-        @if ($designFiles->isNotEmpty())
-            <a href="#designPage" class="btn btn-ghost btn-sm">🖼 {{ $designLabel }} page</a>
+        @if ($designPages->isNotEmpty())
+            <a href="#designPage0" class="btn btn-ghost btn-sm">
+                🖼 {{ $designPages->count() > 1 ? $designPages->count().' mockup pages' : $designLabel.' page' }}
+            </a>
         @endif
         @if ($flatlay)
             <a href="#flatlayPage" class="btn btn-ghost btn-sm">📸 Flatlay page</a>
@@ -520,8 +541,11 @@
             @endfor
         </table>
     </div>
-    {{-- Kept inside the form so 💾 Save stores the design-page orientation. --}}
-    <input type="hidden" name="fields[design_rotated]" id="designRotated" value="{{ $f('design_rotated', '1') }}">
+    {{-- Kept inside the form so 💾 Save stores each design page's orientation. --}}
+    @foreach ($designPages as $n => $page)
+        <input type="hidden" name="fields[{{ $page['key'] }}]" id="designRotated{{ $n }}"
+               value="{{ $f($page['key'], '1') }}">
+    @endforeach
     <input type="hidden" name="fields[flatlay_rotated]" id="flatlayRotated" value="{{ $f('flatlay_rotated', '0') }}">
 </form>
 
@@ -534,12 +558,21 @@
            onchange="this.form.submit();">
 </form>
 
-{{-- PAGE 2 — the design, on its own printed sheet (both DR and PQ). --}}
-@if ($designFiles->isNotEmpty())
-    <div class="design-page {{ $f('design_rotated', '1') === '0' ? '' : 'is-rotated' }}" id="designPage">
-        <h2>{{ $designLabel }}</h2>
+{{-- PAGE 2 ONWARDS — one garment's drawing per printed sheet, in the order
+     they are priced above (both DR and PQ). --}}
+@foreach ($designPages as $n => $page)
+    @php
+        $pageOrder = $page['order'];
+        $designLabel = $page['label'];
+        $designFiles = $page['files'];
+    @endphp
+    <div class="design-page {{ $f($page['key'], '1') === '0' ? '' : 'is-rotated' }}"
+         id="designPage{{ $n }}" data-rotate-store="designRotated{{ $n }}">
+        <h2>
+            {{ $designLabel }}@if ($sharedSheet) — {{ $pageOrder->quotationGroupLabel() }}@endif
+        </h2>
         <div class="no-print" style="margin-bottom:0.6rem;">
-            <button type="button" id="rotateBtn" class="btn btn-ghost btn-sm" style="font-size:0.7rem;">⟳ Turn sideways</button>
+            <button type="button" class="rotate-btn btn btn-ghost btn-sm" style="font-size:0.7rem;">⟳ Turn sideways</button>
             <span style="font-size:0.7rem; color:#888; margin-left:0.3rem;">Affects the printed page</span>
         </div>
         <div class="rot-wrap">
@@ -565,12 +598,12 @@
             @endforeach
         </div>
         <div style="font-size:0.7rem; color:#666;">
-            {{ $order->order_number }} · {{ $order->clientName() }}
+            {{ $pageOrder->order_number }} · {{ $order->clientName() }}@if ($sharedSheet) · {{ $n + 1 }} of {{ $designPages->count() }}@endif
         </div>
     </div>
-@endif
+@endforeach
 
-{{-- PAGE 3 — the flatlay photo, on its own printed sheet (both DR and PQ). --}}
+{{-- LAST PAGE — the flatlay photo, on its own printed sheet (both DR and PQ). --}}
 @if ($flatlay)
     <div class="design-page {{ $f('flatlay_rotated', '0') === '0' ? '' : 'is-rotated' }}" id="flatlayPage">
         <h2>Flatlay</h2>
@@ -723,13 +756,15 @@
         window.print();
     }
 
-    /* Turn the design page's image sideways (landscape) or upright. Remembered
-       on Save via the hidden design_rotated field. */
-    (function () {
-        var btn = document.getElementById('rotateBtn');
-        var page = document.getElementById('designPage');
-        var store = document.getElementById('designRotated');
-        if (!btn || !page) return;
+    /* Turn a design page's image sideways (landscape) or upright. Remembered
+       on Save via that page's hidden design_rotated field.
+
+       Once per page: a brief with four garments prints four of these, and one
+       handler bound to a single id turned the first sheet and left the rest. */
+    document.querySelectorAll('.design-page[data-rotate-store]').forEach(function (page) {
+        var btn = page.querySelector('.rotate-btn');
+        var store = document.getElementById(page.dataset.rotateStore);
+        if (!btn) return;
 
         function sync() {
             var on = page.classList.contains('is-rotated');
@@ -743,7 +778,7 @@
         });
 
         sync();
-    })();
+    });
 
     /* Same rotate control for the flatlay page. */
     (function () {
