@@ -768,7 +768,8 @@ class User extends Authenticatable
 
     public function canDecideMaterialRequests(): bool
     {
-        return $this->canManageInventory();
+        return $this->isSuperAdmin()
+            || strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR;
     }
 
     public function canManageInventory(): bool

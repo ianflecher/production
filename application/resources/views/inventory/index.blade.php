@@ -37,18 +37,28 @@
             </div>
             <div>
                 <h1>Raw materials inventory</h1>
-                <p class="muted">Manage stock levels, material requests, and CSV imports in one place.</p>
+                {{-- Built as a value, NOT with @if inline: Blade does not
+                     compile a directive written flush against a word, so
+                     "levels@if (...)" printed the directive to the page. --}}
+                @php
+                    $blurb = auth()->user()->canDecideMaterialRequests()
+                        ? 'Manage stock levels, material requests, and CSV imports in one place.'
+                        : 'Manage stock levels and CSV imports in one place.';
+                @endphp
+                <p class="muted">{{ $blurb }}</p>
             </div>
         </div>
 
         <div class="inv-actions">
-            <a href="{{ route('inventory.requests') }}" class="btn btn-sm inv-action {{ $pendingCount > 0 ? 'inv-action-primary' : 'btn-ghost' }}">
+            @if (auth()->user()->canDecideMaterialRequests())
+                <a href="{{ route('inventory.requests') }}" class="btn btn-sm inv-action {{ $pendingCount > 0 ? 'inv-action-primary' : 'btn-ghost' }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Material requests
                 @if ($pendingCount > 0)
                     <span class="count-pill">{{ $pendingCount }}</span>
                 @endif
-            </a>
+                </a>
+            @endif
 
             <a href="{{ route('inventory.history') }}" class="btn btn-sm inv-action inv-action-history">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
@@ -95,6 +105,7 @@
             </div>
         </a>
 
+        @if (auth()->user()->canDecideMaterialRequests())
         <article class="inv-kpi inv-kpi-orange">
             <div class="inv-kpi-label">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H6l-2 2V4z"/><path d="M8 9h8M8 13h5"/></svg>
@@ -103,6 +114,7 @@
             <div class="inv-kpi-value">{{ number_format($pendingCount) }}</div>
             <div class="inv-kpi-note">Material requests awaiting action</div>
         </article>
+        @endif
     </section>
 
     <section class="inv-tools-grid">

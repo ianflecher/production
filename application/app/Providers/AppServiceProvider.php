@@ -122,7 +122,10 @@ class AppServiceProvider extends ServiceProvider
                     ->count());
             }
 
-            if ($user && $user->canManageInventory()) {
+            // The count of a queue, to the person who works that queue. The
+            // desk was wearing a red 11 for requests it cannot open: a badge
+            // that disagrees with the page it points at is worse than none.
+            if ($user && $user->canDecideMaterialRequests()) {
                 $view->with('pendingMaterials', \App\Models\MaterialRequest::where('status', 'pending')->count());
             }
         });

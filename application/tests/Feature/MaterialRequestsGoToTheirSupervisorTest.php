@@ -96,12 +96,12 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
     }
 
     /**
-     * The desk is not shut out.
+     * The desk keeps its shelves and does not keep the queue.
      *
-     * Only the ALERT moved: she is the one told when new requests are raised,
-     * because she decides what comes off which shelf. The desk still counts
-     * its own stock and still works the queue - taking the page away from
-     * people who were using it is not what "send them to her" meant.
+     * Every request raised today is fabric - QA700, cotton hoodie - and
+     * fabric is the supervisor's shelf. The desk holds the ready-made stock,
+     * so it was being shown a queue of materials it does not hold and cannot
+     * issue, with a red badge on the sidebar to match.
      */
     public function test_the_raw_materials_desk_keeps_its_inventory(): void
     {
@@ -111,33 +111,61 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
         $this->assertTrue($desk->canManageInventory());
     }
 
-    public function test_the_raw_materials_desk_still_works_the_queue(): void
+    public function test_the_desk_does_not_get_the_queue(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
 
-        $this->assertTrue($desk->canDecideMaterialRequests());
-        $this->actingAs($desk)->get(route('inventory.requests'))->assertOk();
+        $this->assertFalse($desk->canDecideMaterialRequests());
+        $this->actingAs($desk)->get(route('inventory.requests'))->assertForbidden();
     }
 
-    /** And the way in is still on their page. */
-    public function test_the_desk_is_still_offered_the_requests(): void
+    /** Nor the way in, nor the count of it. */
+    public function test_the_desk_is_shown_neither_the_button_nor_the_badge(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
+        $supervisor = User::factory()->create([
+            'job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true,
+        ]);
 
-        $this->actingAs($desk)->get(route('inventory.index'))
-            ->assertOk()->assertSee('Material requests');
+        $this->orderNeedingMaterials($this->sales());
+
+        $deskPage = $this->actingAs($desk)->get(route('inventory.index'))->assertOk()->getContent();
+        $this->assertStringNotContainsString('Material requests', $deskPage);
+        $this->assertStringNotContainsString('awaiting action', $deskPage);
+
+        $hers = $this->actingAs($supervisor)->get(route('inventory.index'))->assertOk()->getContent();
+        $this->assertStringContainsString('Material requests', $hers);
     }
 
-    /** Issuing against a job is still theirs to do. */
-    public function test_the_desk_can_still_issue_against_a_job(): void
+    /** The sidebar badge counts the queue for whoever works it. */
+    public function test_the_badge_follows_the_queue(): void
+    {
+        $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
+        $supervisor = User::factory()->create([
+            'job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true,
+        ]);
+
+        $this->orderNeedingMaterials($this->sales());
+
+        $pill = fn ($user) => preg_match(
+            '#Raw Materials\s*<span class="count-pill">(\d+)</span>#',
+            $this->actingAs($user)->get(route('inventory.index'))->getContent(),
+            $m
+        ) ? (int) $m[1] : 0;
+
+        $this->assertSame(0, $pill($desk), 'the desk wore a badge for a queue it cannot open');
+        $this->assertGreaterThan(0, $pill($supervisor));
+    }
+
+    /** And issuing against a job is hers. */
+    public function test_the_desk_cannot_issue_against_a_job(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
         $order = $this->orderNeedingMaterials($this->sales());
         $mr = $order->materialRequests()->firstOrFail();
 
-        $this->actingAs($desk)->post(route('inventory.requests.reject', $mr), [
-            'operator_name' => 'Desk',
-        ])->assertRedirect();
+        $this->actingAs($desk)->post(route('inventory.requests.approve', $mr))->assertForbidden();
+        $this->actingAs($desk)->post(route('inventory.requests.reject', $mr))->assertForbidden();
     }
 
     /** And she is not handed the finished-goods shelves, which are another desk. */
