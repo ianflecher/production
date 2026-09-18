@@ -17,6 +17,24 @@ class InventoryItem extends Model
      * used as the stored value too, which keeps the import and the database
      * readable without a lookup table.
      */
+    /**
+     * Which shelf this belongs to.
+     *
+     * The raw materials desk holds the ready-made stock — shirts, caps,
+     * boxes, tapes — counted in pieces. The raw materials supervisor holds
+     * the fabric: bolts, by the kilo. Same act either way (count it, issue it
+     * against a job, log the movement), so it is one table told apart by this
+     * rather than two tables doing the same work twice.
+     */
+    public const KIND_READY_MADE = 'ready_made';
+
+    public const KIND_FABRIC = 'fabric';
+
+    public const KINDS = [
+        self::KIND_READY_MADE => 'Ready-made stock',
+        self::KIND_FABRIC => 'Fabric',
+    ];
+
     public const CATEGORIES = [
         'BOND PAPER HARD COPY' => 'Bond paper (hard copy)',
         'BOX' => 'Box',
@@ -52,7 +70,7 @@ class InventoryItem extends Model
     ];
 
     protected $fillable = [
-        'name', 'category', 'code', 'photo', 'size', 'color',
+        'name', 'category', 'kind', 'code', 'photo', 'size', 'color',
         'unit', 'quantity', 'beginning_stock',
     ];
 

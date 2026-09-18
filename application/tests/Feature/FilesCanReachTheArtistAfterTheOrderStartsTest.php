@@ -272,6 +272,24 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
             ->assertSee('Ignore the first one, use this.');
     }
 
+    /**
+     * Pasted, dropped or chosen, it arrives the same way.
+     *
+     * The officer has the reference the moment the client sends it. Saving it
+     * to the desktop and finding it again in a file dialog is three steps for
+     * something already in the clipboard.
+     */
+    public function test_a_screenshot_can_be_pasted_straight_in(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->actingAs($officer)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee('data-paste-into', false)
+            ->assertSee('to paste a screenshot straight in');
+    }
+
     /* ---------------- who may ---------------- */
 
     /** Another officer's order is not theirs to add to. */

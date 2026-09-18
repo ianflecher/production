@@ -833,11 +833,18 @@
             @endif
         </p>
 
-        <form method="POST" action="{{ route('job-orders.reference', $order) }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('job-orders.reference', $order) }}" enctype="multipart/form-data"
+              data-paste-into-box>
             @csrf
-            <input type="file" name="reference_files[]" multiple
+            {{-- Pasted, dropped or chosen, it arrives the same way — see
+                 partials/paste-into-file-input. NOT uploaded on change, unlike
+                 the brief's box: there is a message to type underneath, and a
+                 form that sends itself the moment a file lands would take the
+                 files without the words. --}}
+            <input type="file" name="reference_files[]" multiple data-paste-into
                    accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
             <div style="font-size:0.72rem; color:var(--ink-3); margin-top:0.25rem;">
+                <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste a screenshot straight in, drop files here, or choose them.
                 Images, PDFs or design files, up to 500MB each.
             </div>
 
@@ -1245,4 +1252,8 @@
         setTimeout(jump, 250);
     })();
 </script>
+
+{{-- Lets the officer paste a screenshot straight into "Send files to the
+     artist" rather than saving it to the desktop and finding it again. --}}
+@include('partials.paste-into-file-input')
 @endsection

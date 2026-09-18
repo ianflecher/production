@@ -83,7 +83,12 @@ class InventoryController extends Controller
 
         // The stock sheet reaches thousands of rows on a full inventory, so it
         // is searched and filtered in the database and shown a page at a time.
+        // Her shelf or theirs. Applied to the rows, the filter options AND the
+        // counts, so the page cannot say 1,670 at the top and list 164.
+        $shelf = $request->user()->inventoryShelf();
+
         $filtered = fn ($q) => $q
+            ->when($shelf !== null, fn ($w) => $w->where('kind', $shelf))
             ->when($search !== '', fn ($w) => $w->where(fn ($s) => $s
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('color', 'like', "%{$search}%")
@@ -113,6 +118,7 @@ class InventoryController extends Controller
         // picking BOND PAPER shouldn't leave you scrolling past shirt colours
         // and shirt sizes that can never match.
         $inCategory = fn () => InventoryItem::query()
+            ->when($shelf !== null, fn ($w) => $w->where('kind', $shelf))
             ->when($category !== '', fn ($w) => $w->where('category', $category));
 
         $distinct = fn (string $column) => $inCategory()
@@ -132,13 +138,15 @@ class InventoryController extends Controller
             'colorOptions' => $distinct('color'),
             'sizeOptions' => $distinct('size'),
             // Counted across the whole sheet, so these don't shift as you page.
-            'totalCount' => InventoryItem::count(),
-            'outCount' => InventoryItem::where('quantity', '<=', 0)->count(),
+            'totalCount' => InventoryItem::when($shelf !== null, fn ($w) => $w->where('kind', $shelf))->count(),
+            'outCount' => InventoryItem::when($shelf !== null, fn ($w) => $w->where('kind', $shelf))
+                ->where('quantity', '<=', 0)->count(),
             'pendingCount' => MaterialRequest::where('status', 'pending')->count(),
         ]);
     }
 
     /** Who added stock and who took it out, newest first. */
+
     public function history(Request $request): View
     {
         $this->assertAccess();
@@ -187,6 +195,10 @@ class InventoryController extends Controller
         $fields = [
             'name' => $data['name'],
             'category' => $data['category'],
+            // Onto the shelf the person adding it works: a fabric she enters
+            // by hand belongs with her fabric, not among the caps. The admin,
+            // who is on neither shelf, adds to the ready-made one.
+            'kind' => $request->user()->inventoryShelf() ?? \App\Models\InventoryItem::KIND_READY_MADE,
             'code' => $data['code'] ?? null,
             'size' => $data['size'] ?? null,
             'color' => $data['color'] ?? null,
@@ -359,7 +371,14 @@ class InventoryController extends Controller
                 $item = $existing[$key] ?? null;
 
                 if (! $item) {
-                    $item = InventoryItem::create(['name' => $name, 'unit' => $unit, 'quantity' => 0]);
+                    $item = InventoryItem::create([
+                        'name' => $name,
+                        'unit' => $unit,
+                        'quantity' => 0,
+                        // auth(), not $request: this runs inside a closure
+                        // that does not capture the request.
+                        'kind' => auth()->user()?->inventoryShelf() ?? \App\Models\InventoryItem::KIND_READY_MADE,
+                    ]);
                     $existing[$key] = $item;   // a file naming it twice updates it twice, not two rows
                 }
 

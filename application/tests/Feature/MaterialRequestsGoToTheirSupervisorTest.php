@@ -96,12 +96,12 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
     }
 
     /**
-     * The desk keeps its shelves and loses the queue.
+     * The desk is not shut out.
      *
-     * The requests sat on the raw materials desk's own page, which is the
-     * ready-made stock — the caps, the boxes, the tapes. A queue two people
-     * can act on and neither owns is a queue that gets worked twice or not at
-     * all, so it belongs to the one who decides what goes out.
+     * Only the ALERT moved: she is the one told when new requests are raised,
+     * because she decides what comes off which shelf. The desk still counts
+     * its own stock and still works the queue - taking the page away from
+     * people who were using it is not what "send them to her" meant.
      */
     public function test_the_raw_materials_desk_keeps_its_inventory(): void
     {
@@ -111,39 +111,33 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
         $this->assertTrue($desk->canManageInventory());
     }
 
-    /** …but the requests are not theirs to decide. */
-    public function test_the_raw_materials_desk_no_longer_gets_the_requests(): void
+    public function test_the_raw_materials_desk_still_works_the_queue(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
 
-        $this->assertFalse($desk->canDecideMaterialRequests());
-        $this->actingAs($desk)->get(route('inventory.requests'))->assertForbidden();
+        $this->assertTrue($desk->canDecideMaterialRequests());
+        $this->actingAs($desk)->get(route('inventory.requests'))->assertOk();
     }
 
-    /** And the way in is not offered to them either. */
-    public function test_the_desk_is_not_shown_a_button_it_cannot_press(): void
+    /** And the way in is still on their page. */
+    public function test_the_desk_is_still_offered_the_requests(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
-        $supervisor = User::factory()->create([
-            'job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true,
-        ]);
 
         $this->actingAs($desk)->get(route('inventory.index'))
-            ->assertOk()->assertDontSee('Material requests');
-
-        $this->actingAs($supervisor)->get(route('inventory.index'))
             ->assertOk()->assertSee('Material requests');
     }
 
-    /** Deciding one is hers too, not only reading the list. */
-    public function test_the_desk_cannot_issue_against_a_job(): void
+    /** Issuing against a job is still theirs to do. */
+    public function test_the_desk_can_still_issue_against_a_job(): void
     {
         $desk = User::factory()->create(['job_role' => 'raw materials', 'is_active' => true]);
         $order = $this->orderNeedingMaterials($this->sales());
         $mr = $order->materialRequests()->firstOrFail();
 
-        $this->actingAs($desk)->post(route('inventory.requests.approve', $mr))->assertForbidden();
-        $this->actingAs($desk)->post(route('inventory.requests.reject', $mr))->assertForbidden();
+        $this->actingAs($desk)->post(route('inventory.requests.reject', $mr), [
+            'operator_name' => 'Desk',
+        ])->assertRedirect();
     }
 
     /** And she is not handed the finished-goods shelves, which are another desk. */

@@ -746,10 +746,29 @@ class User extends Authenticatable
      *
      * The desk keeps its inventory. Only the requests moved.
      */
+    /**
+     * Which shelf this person's inventory page shows.
+     *
+     * The raw materials supervisor holds the fabric; the desk holds the
+     * ready-made stock. Showing her 1,670 rows of shorts and caps and hiding
+     * her own 164 fabrics behind them is showing her somebody else's job.
+     *
+     * null for the admin, who is not on either shelf and answers for both.
+     */
+    public function inventoryShelf(): ?string
+    {
+        if ($this->isSuperAdmin()) {
+            return null;
+        }
+
+        return strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR
+            ? \App\Models\InventoryItem::KIND_FABRIC
+            : \App\Models\InventoryItem::KIND_READY_MADE;
+    }
+
     public function canDecideMaterialRequests(): bool
     {
-        return $this->isSuperAdmin()
-            || strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR;
+        return $this->canManageInventory();
     }
 
     public function canManageInventory(): bool
