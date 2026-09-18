@@ -311,6 +311,37 @@
         </div>
     @endif
 
+    {{-- What arrived after the pack was handed over.
+
+         Its own box, not mixed into the design above: the artist has been
+         working from that for days, and the whole point of these is that they
+         are new. They are the client's late additions - the logo photo, the
+         colour, the spelling - and without somewhere to sit they were sent
+         somewhere the system cannot see. --}}
+    @php $lateFiles = $task->order->jobOrder?->filesAddedAfterSending() ?? collect(); @endphp
+
+    @if ($lateFiles->isNotEmpty())
+        <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--warn-ink, #b45309);">
+            <h2>
+                {{ $lateFiles->count() }} {{ \Illuminate\Support\Str::plural('file', $lateFiles->count()) }}
+                sent after you were given this
+            </h2>
+            <p class="sub" style="margin-bottom: 1rem;">
+                From the account officer, after the pack went out. Check these against what you are drawing.
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 1.2rem;">
+                @foreach ($lateFiles as $ref)
+                    <div style="text-align:center;">
+                        @include('partials.reference-file', ['ref' => $ref, 'width' => 200])
+                        <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.2rem;">
+                            arrived {{ $ref->created_at?->diffForHumans() }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     @if (filled($task->order->jobOrder?->reference_note))
         <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--accent);">
             <h2 style="margin-bottom: 0.4rem;">📝 Notes from the account officer</h2>

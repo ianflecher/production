@@ -800,6 +800,68 @@
     </div>
 @endif
 
+{{-- Sending the artist something after the job has already started.
+
+     The client does not stop sending things when the work begins - a photo of
+     the logo, the right shade, the spelling of a name on a jersey. There was
+     nowhere to put them: the brief's upload box belongs to the brief, and once
+     the order existed the officer sent them somewhere the system cannot see.
+
+     Adding only. Nothing here removes a file an artist may already be working
+     from. --}}
+@if (($canRecordPayment || $isLeader) && $order->jobOrder)
+    @php
+        $sentToArtist = $order->jobOrder->sent_to_artist_at;
+        $waitingArtists = $order->tasks
+            ->where('team', \App\Models\User::JOB_ARTIST)
+            ->whereNotIn('status', ['complete', 'cancelled'])
+            ->pluck('assignee.name')->filter()->unique()->values();
+        $lateFiles = $order->jobOrder->filesAddedAfterSending();
+    @endphp
+    <div class="card panel" style="margin-bottom: 1.4rem;">
+        <h2>Send files to the artist</h2>
+        <p class="sub">
+            @if ($sentToArtist && $waitingArtists->isNotEmpty())
+                Anything the client sends after the job has started — a logo photo, a
+                colour, the spelling of a name. {{ $waitingArtists->implode(' and ') }}
+                {{ $waitingArtists->count() === 1 ? 'is' : 'are' }} told as soon as you add it.
+            @elseif ($sentToArtist)
+                The pack has gone out. Files added here sit with it; nobody is holding
+                an artist step on this order right now, so there is nobody to tell.
+            @else
+                The pack has not gone to the artist yet — these go with it when it does.
+            @endif
+        </p>
+
+        <form method="POST" action="{{ route('job-orders.reference', $order) }}" enctype="multipart/form-data">
+            @csrf
+            <input type="file" name="reference_files[]" multiple
+                   accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+            <div style="font-size:0.72rem; color:var(--ink-3); margin-top:0.25rem;">
+                Images, PDFs or design files, up to 500MB each.
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:0.6rem;">Send to the artist</button>
+        </form>
+
+        @if ($lateFiles->isNotEmpty())
+            <div style="margin-top:1rem; border-top:1px solid var(--border); padding-top:0.8rem;">
+                <div style="font-size:0.78rem; font-weight:700; margin-bottom:0.5rem;">
+                    Sent after the pack went out ({{ $lateFiles->count() }})
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:0.6rem;">
+                    @foreach ($lateFiles as $ref)
+                        <a href="{{ route('job-order-files.view', $ref) }}" target="_blank"
+                           style="font-size:0.75rem; border:1px solid var(--border); border-radius:8px; padding:0.35rem 0.55rem;">
+                            {{ $ref->original_name }}
+                            <span style="color:var(--ink-3);">— {{ $ref->created_at?->format('M j') }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+    </div>
+@endif
+
 @if ($order->materialRequests->isNotEmpty())
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Material requests</h2>

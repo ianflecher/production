@@ -1,0 +1,192 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\AppNotification;
+use App\Models\ProductionOrder;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+/**
+ * The officer can send the artist more files after the job has started.
+ *
+ * The client does not stop sending things when the work begins — a photo of
+ * the logo, the right shade, the spelling of a name on a jersey. There was
+ * nowhere to put them: the brief's upload box belongs to the brief, and once
+ * the order existed the officer sent them somewhere the system cannot see.
+ *
+ * The endpoint was there and no page posted to it, so nothing could reach it;
+ * and nothing told the artist, so a file that did arrive was a file nobody
+ * opened.
+ *
+ * ADDING only. Nothing here removes a file an artist may be working from.
+ */
+class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function officer(): User
+    {
+        return User::factory()->create(['job_role' => User::ROLE_SALES, 'is_active' => true]);
+    }
+
+    private function artist(string $name): User
+    {
+        return User::factory()->create([
+            'name' => $name, 'job_role' => User::JOB_ARTIST, 'is_active' => true,
+        ]);
+    }
+
+    /** An order whose pack has gone out, with an artist holding a step. */
+    private function runningOrder(User $officer, ?User $artist = null, bool $sent = true): ProductionOrder
+    {
+        $this->actingAs($officer)->post('/orders', [
+            'order_number' => 'IC2026-08080',
+            'client_name' => 'Late', 'client_last_name' => 'Files',
+            'client_contact' => '0917-000-0000', 'client_address' => 'Angeles City',
+            'due_date' => now()->addWeeks(3)->toDateString(),
+            'product_type' => 'round_neck',
+            'sizes' => ['M' => 10],
+        ]);
+
+        $order = ProductionOrder::where('order_number', 'IC2026-08080')->firstOrFail();
+
+        if ($sent) {
+            $order->jobOrder->update(['sent_to_artist_at' => now()->subDays(2)]);
+        }
+
+        if ($artist) {
+            $order->tasks()->where('team', User::JOB_ARTIST)->orderBy('sequence')->first()
+                ->update(['assigned_to' => $artist->id, 'status' => 'in_progress']);
+        }
+
+        return $order->fresh();
+    }
+
+    private function send(User $officer, ProductionOrder $order, string $name = 'logo-photo.jpg'): \Illuminate\Testing\TestResponse
+    {
+        Storage::fake('local');
+
+        return $this->actingAs($officer)->post(route('job-orders.reference', $order), [
+            'reference_files' => [UploadedFile::fake()->image($name)],
+        ]);
+    }
+
+    /* ---------------- there is a way in ---------------- */
+
+    /** The box that was missing: nothing on the order page posted to the route. */
+    public function test_the_order_page_offers_a_way_to_send_files(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->actingAs($officer)->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee('Send files to the artist')
+            ->assertSee(route('job-orders.reference', $order), false);
+    }
+
+    public function test_a_file_can_be_added_once_the_job_has_started(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $this->send($officer, $order)->assertSessionHasNoErrors();
+
+        $this->assertCount(1, $order->jobOrder->fresh()->referenceFiles);
+    }
+
+    /* ---------------- the artist hears about it ---------------- */
+
+    public function test_the_artist_holding_the_step_is_told(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        $this->send($officer, $order);
+
+        $note = AppNotification::where('user_id', $cristal->id)->latest('id')->first();
+
+        $this->assertNotNull($note, 'the file landed and nobody was told');
+        $this->assertStringContainsString('IC2026-08080', $note->body);
+    }
+
+    /** An artist who already finished their step is not chased about it. */
+    public function test_an_artist_whose_step_is_done_is_not_told(): void
+    {
+        $officer = $this->officer();
+        $done = $this->artist('Mick');
+        $order = $this->runningOrder($officer, $done);
+
+        $order->tasks()->where('assigned_to', $done->id)->update(['status' => 'complete']);
+
+        $this->send($officer, $order);
+
+        $this->assertSame(0, AppNotification::where('user_id', $done->id)->count());
+    }
+
+    /** Nobody is told before the pack has gone out — they have not been given it yet. */
+    public function test_nobody_is_told_before_the_pack_is_sent(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal, sent: false);
+
+        $this->send($officer, $order);
+
+        $this->assertSame(0, AppNotification::where('user_id', $cristal->id)->count());
+    }
+
+    /* ---------------- and can see it ---------------- */
+
+    public function test_the_late_file_shows_on_the_artists_step(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal);
+
+        $this->send($officer, $order, 'the-logo.jpg');
+
+        $task = $order->tasks()->where('assigned_to', $cristal->id)->firstOrFail();
+
+        $this->actingAs($cristal)->get(route('tasks.show', $task->id))
+            ->assertOk()
+            ->assertSee('sent after you were given this');
+    }
+
+    /** What was on the pack from the start is not dressed up as new. */
+    public function test_a_file_that_was_there_all_along_is_not_marked_late(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $order = $this->runningOrder($officer, $cristal, sent: false);
+
+        $this->send($officer, $order);
+
+        // Sent to the artist AFTER the file was put on it.
+        $order->jobOrder->update(['sent_to_artist_at' => now()]);
+
+        $this->assertCount(0, $order->jobOrder->fresh()->filesAddedAfterSending());
+    }
+
+    /* ---------------- who may ---------------- */
+
+    /** Another officer's order is not theirs to add to. */
+    public function test_another_officer_cannot_send_files_to_it(): void
+    {
+        $owner = $this->officer();
+        $order = $this->runningOrder($owner, $this->artist('Cristal'));
+
+        Storage::fake('local');
+
+        $this->actingAs($this->officer())
+            ->post(route('job-orders.reference', $order), [
+                'reference_files' => [UploadedFile::fake()->image('sneaky.jpg')],
+            ])
+            ->assertForbidden();
+    }
+}

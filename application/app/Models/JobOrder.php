@@ -155,6 +155,28 @@ class JobOrder extends Model
     }
 
     /**
+     * Files put on the job order AFTER it went to the artist.
+     *
+     * The client does not stop sending things when the work starts — a photo
+     * of the logo, the right shade, the spelling of a name. Those arrive on an
+     * order that is already open, and the artist has no way to tell them from
+     * what they were given at the start.
+     *
+     * Stamped by nothing: created_at against the moment the pack was sent is
+     * the whole answer, so no column and no migration.
+     */
+    public function filesAddedAfterSending(): \Illuminate\Support\Collection
+    {
+        if (! $this->sent_to_artist_at) {
+            return collect();
+        }
+
+        return $this->referenceFiles
+            ->filter(fn ($f) => $f->created_at?->greaterThan($this->sent_to_artist_at))
+            ->values();
+    }
+
+    /**
      * The files that ARE the design, as the artist should see them.
      *
      * The "layout" ones: the drawing the artist handed back and the client

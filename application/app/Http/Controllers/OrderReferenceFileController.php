@@ -69,9 +69,56 @@ class OrderReferenceFileController extends Controller
             ]);
         }
 
-        return back()->with('success', ($data['kind'] ?? null) === 'output'
-            ? 'Design uploaded — this is what the artist will work from.'
-            : 'File uploaded.');
+        $count = count($request->file('reference_files'));
+
+        // A late file nobody is told about is a file nobody opens.
+        //
+        // The client keeps sending things after the work has started, and the
+        // artist is head down in a pack they were handed days ago. Told once
+        // each, however many files landed at once, and only once the pack has
+        // actually gone out — before that they have not been given anything
+        // to be interrupted about.
+        $told = $order->jobOrder->sent_to_artist_at
+            ? $this->tellTheArtists($order, $count)
+            : collect();
+
+        return back()->with('success', match (true) {
+            ($data['kind'] ?? null) === 'output' => 'Design uploaded — this is what the artist will work from.',
+            $told->isNotEmpty() => \Illuminate\Support\Str::plural('File', $count).' sent to '.$told->implode(' and ').'.',
+            default => 'File uploaded.',
+        });
+    }
+
+    /**
+     * Tell the artists on this order that files have arrived, once each.
+     *
+     * Whoever is actually holding an artist step, not every artist who ever
+     * touched it: a finished Layout is not somebody who needs to know a photo
+     * landed for the mockup. Returns the names, so the officer is told who was
+     * told rather than a bare "File uploaded."
+     */
+    private function tellTheArtists(ProductionOrder $order, int $count): \Illuminate\Support\Collection
+    {
+        $artists = $order->tasks()
+            ->where('team', \App\Models\User::JOB_ARTIST)
+            ->whereNotNull('assigned_to')
+            ->whereNotIn('status', ['complete', 'cancelled'])
+            ->with('assignee')
+            ->get()
+            ->pluck('assignee')
+            ->filter()
+            ->unique('id');
+
+        foreach ($artists as $artist) {
+            \App\Models\AppNotification::toUser(
+                $artist->id,
+                '📎 '.$count.' more '.\Illuminate\Support\Str::plural('file', $count).' for a job you are on',
+                $order->order_number.' — '.$order->clientName().'. Sent by the account officer after the pack went out.',
+                route('tasks.mine'),
+            );
+        }
+
+        return $artists->pluck('name')->values();
     }
 
     /** Mark an already-uploaded file as the ChatGPT design the artist works from. */
