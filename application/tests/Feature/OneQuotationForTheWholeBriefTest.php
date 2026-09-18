@@ -206,6 +206,78 @@ class OneQuotationForTheWholeBriefTest extends TestCase
         $this->assertStringNotContainsString('class="group-row"', $html);
     }
 
+    /* ---------------- a garment written later ---------------- */
+
+    /**
+     * The officer writes the orders of a brief one at a time and opens the
+     * quotation in between. Boys Of South's sheet was made at 11:32 and the
+     * cotton hoodie at 11:36, so the hoodie was simply not on it - and asking
+     * for "Re-fill" to gain it means throwing away every correction typed.
+     */
+    public function test_a_garment_written_after_the_sheet_joins_it(): void
+    {
+        [$officer, $inquiry, $shirt] = $this->threeGarments();
+
+        // The sheet as it stands, before the fourth garment exists.
+        $this->actingAs($officer)->get(route('orders.document', [$shirt, OrderDocument::TYPE_DR]));
+        $doc = $shirt->fresh()->documents()->firstWhere('type', OrderDocument::TYPE_DR);
+        $this->assertFalse(collect($doc->items)->contains('group', 'BOS WINDBREAKER'));
+
+        $this->garment($inquiry, $officer, 'BOS WINDBREAKER', ['M' => 7], 900, 3);
+
+        $this->actingAs($officer)->get(route('orders.document', [$shirt, OrderDocument::TYPE_DR]))->assertOk();
+
+        $this->assertTrue(collect($doc->fresh()->items)->contains('group', 'BOS WINDBREAKER'),
+            'the garment written after the sheet never reached it');
+    }
+
+    /** And nothing already on the sheet is touched, including a corrected price. */
+    public function test_adding_a_later_garment_leaves_the_typed_lines_alone(): void
+    {
+        [$officer, $inquiry, $shirt] = $this->threeGarments();
+
+        $this->actingAs($officer)->get(route('orders.document', [$shirt, OrderDocument::TYPE_DR]));
+        $doc = $shirt->fresh()->documents()->firstWhere('type', OrderDocument::TYPE_DR);
+
+        $corrected = collect($doc->items)->map(function ($row) {
+            if (($row['group'] ?? null) === 'BOS POLO SHIRT') {
+                $row['unit_price'] = 777;
+            }
+
+            return $row;
+        })->all();
+
+        $this->actingAs($officer)->post(route('orders.document.save', [$shirt, OrderDocument::TYPE_DR]), [
+            'number' => $doc->number,
+            'items' => $corrected,
+        ]);
+
+        $this->garment($inquiry, $officer, 'BOS WINDBREAKER', ['M' => 7], 900, 3);
+        $this->actingAs($officer)->get(route('orders.document', [$shirt, OrderDocument::TYPE_DR]));
+
+        $after = collect($doc->fresh()->items);
+
+        $this->assertTrue($after->where('group', 'BOS POLO SHIRT')->every(fn ($r) => (float) $r['unit_price'] === 777.0),
+            'the corrected price was overwritten by adding a garment');
+        $this->assertTrue($after->contains('group', 'BOS WINDBREAKER'));
+    }
+
+    /** A sheet for a single garment is left alone. */
+    public function test_a_lone_sheet_is_not_rewritten(): void
+    {
+        $officer = $this->officer();
+        $inquiry = $this->brief($officer);
+        $only = $this->garment($inquiry, $officer, 'ONE SHIRT', ['M' => 2], 550, 0);
+
+        $this->actingAs($officer)->get(route('orders.document', [$only, OrderDocument::TYPE_DR]));
+        $doc = $only->fresh()->documents()->firstWhere('type', OrderDocument::TYPE_DR);
+        $before = $doc->items;
+
+        $this->actingAs($officer)->get(route('orders.document', [$only, OrderDocument::TYPE_DR]));
+
+        $this->assertSame($before, $doc->fresh()->items);
+    }
+
     /* ---------------- editing it ---------------- */
 
     /** A corrected price stays under the garment it belongs to. */

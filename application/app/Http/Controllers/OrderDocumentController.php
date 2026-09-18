@@ -69,9 +69,63 @@ class OrderDocumentController extends Controller
             }
         }
 
+        // A garment written AFTER the sheet was opened has no lines on it.
+        //
+        // The officer writes the orders of a brief one at a time and opens the
+        // quotation in between: Boys Of South's sheet was made at 11:32 and the
+        // cotton hoodie at 11:36, so the hoodie was simply not there. Asking
+        // them to press "Re-fill" for that is asking them to throw away every
+        // correction they have typed, to gain something purely additive.
+        //
+        // Added, never overwritten. Same rule as the fields above.
+        $this->addGarmentsWrittenSince($doc, $order);
+
         $order->load('tasks.files');
 
         return view('orders.document', ['order' => $order, 'doc' => $doc]);
+    }
+
+    /**
+     * Put the brief's newer garments onto a sheet that predates them.
+     *
+     * Existing lines are left exactly as they are, including any the officer
+     * has corrected. Lines written before the sheet covered a whole brief
+     * carry no garment of their own; they belong to the order it was made on.
+     */
+    private function addGarmentsWrittenSince(\App\Models\OrderDocument $doc, ProductionOrder $anchor): void
+    {
+        $covered = $anchor->quotationOrders();
+
+        if ($covered->count() < 2) {
+            return;
+        }
+
+        $before = $doc->items ?? [];
+
+        if (! $before) {
+            return;   // an empty sheet is built from scratch elsewhere
+        }
+
+        $items = collect($before)->map(function ($row) use ($anchor) {
+            $row['order_id'] ??= $anchor->id;
+            $row['group'] ??= $anchor->quotationGroupLabel();
+
+            return $row;
+        });
+
+        $have = $items->pluck('order_id')->filter()->unique();
+
+        foreach ($covered as $part) {
+            if ($have->contains($part->id)) {
+                continue;
+            }
+
+            $items = $items->concat(\App\Models\OrderDocument::linesFor($part));
+        }
+
+        if ($items->all() !== $before) {
+            $doc->update(['items' => $items->values()->all()]);
+        }
     }
 
     public function saveDocument(Request $request, ProductionOrder $order, string $type): RedirectResponse

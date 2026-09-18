@@ -125,7 +125,7 @@ class OrderDocument extends Model
      * under its own drawing, and so a line the officer edits stays attached to
      * the garment it prices.
      */
-    private static function linesFor(ProductionOrder $order, bool $grouped): array
+    public static function linesFor(ProductionOrder $order, bool $grouped = true): array
     {
         $pb = $order->pricingBreakdown();
         $stamp = fn (array $row) => $grouped
