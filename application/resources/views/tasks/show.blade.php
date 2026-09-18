@@ -318,7 +318,7 @@
          are new. They are the client's late additions - the logo photo, the
          colour, the spelling - and without somewhere to sit they were sent
          somewhere the system cannot see. --}}
-    @php $lateFiles = $task->order->jobOrder?->filesSentToTheArtist() ?? collect(); @endphp
+    @php $lateFiles = $task->order->filesSentToTheArtist(); @endphp
 
     @if ($lateFiles->isNotEmpty())
         <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--warn-ink, #b45309);">

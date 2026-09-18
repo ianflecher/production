@@ -416,6 +416,69 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
             ->assertSessionHasErrors('reference_files');
     }
 
+    /* ---------------- one brief is one job ---------------- */
+
+    /**
+     * IC2026-01234 is three orders on one brief, Cristal draws all three, and
+     * the officer sent two links on one of them. Asked per order, her page
+     * showed nothing: the files were on a sibling she was not standing on.
+     * The officer sent them to the job, and the job is the brief.
+     */
+    public function test_a_file_sent_on_one_order_reaches_the_artist_on_a_sibling(): void
+    {
+        $officer = $this->officer();
+        $cristal = $this->artist('Cristal');
+        $first = $this->runningOrder($officer, $cristal);
+
+        // A second order on the same brief, with its own artist step.
+        $second = ProductionOrder::create([
+            'order_number' => $first->order_number,
+            'customer_name' => $first->customer_name,
+            'client_id' => $first->client_id,
+            'inquiry_id' => $first->inquiry_id,
+            'product_type' => 'round_neck',
+            'quantity' => 5,
+            'due_date' => now()->addWeeks(3),
+            'created_by' => $officer->id,
+            'status' => 'active',
+        ]);
+        $second->jobOrder()->create(['status' => 'draft', 'created_by' => $officer->id]);
+        $task = $second->tasks()->create([
+            'department' => 'Final mockup', 'team' => User::JOB_ARTIST,
+            'sequence' => 2, 'status' => 'in_progress', 'assigned_to' => $cristal->id,
+        ]);
+
+        // Sent on the FIRST order.
+        $this->send($officer, $first, 'the-name-list.jpg');
+
+        $this->assertCount(1, $second->fresh()->filesSentToTheArtist(),
+            'the sibling could not see what was sent to the job');
+
+        $this->actingAs($cristal)->get(route('tasks.show', $task->id))
+            ->assertOk()
+            ->assertSee('from the account officer');
+    }
+
+    /** A different brief's files stay on that brief. */
+    public function test_another_briefs_files_do_not_leak_in(): void
+    {
+        $officer = $this->officer();
+        $mine = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $other = ProductionOrder::create([
+            'order_number' => 'IC2026-08081',
+            'customer_name' => 'Somebody', 'client_id' => $mine->client_id,
+            'inquiry_id' => null,
+            'product_type' => 'round_neck', 'quantity' => 1,
+            'due_date' => now()->addWeek(), 'created_by' => $officer->id, 'status' => 'active',
+        ]);
+        $other->jobOrder()->create(['status' => 'draft', 'created_by' => $officer->id]);
+
+        $this->send($officer, $mine);
+
+        $this->assertCount(0, $other->fresh()->filesSentToTheArtist());
+    }
+
     /* ---------------- who may ---------------- */
 
     /** Another officer's order is not theirs to add to. */

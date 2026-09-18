@@ -816,7 +816,7 @@
             ->where('team', \App\Models\User::JOB_ARTIST)
             ->whereNotIn('status', ['complete', 'cancelled'])
             ->pluck('assignee.name')->filter()->unique()->values();
-        $lateFiles = $order->jobOrder->filesSentToTheArtist();
+        $lateFiles = $order->filesSentToTheArtist();
     @endphp
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Send files to the artist</h2>

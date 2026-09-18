@@ -2405,6 +2405,30 @@ class ProductionOrder extends Model
     }
 
     /**
+     * Everything the officer has sent the artist for this JOB, not this row.
+     *
+     * One brief is one job: IC2026-01234 is three orders, Cristal draws all
+     * three, and the officer sent two links on one of them. Asked per order,
+     * her page showed nothing — the files were on a sibling she was not
+     * standing on. The officer sent them to the job, and the job is the brief.
+     *
+     * Newest last, so a stack of them reads in the order it arrived.
+     */
+    public function filesSentToTheArtist(): \Illuminate\Support\Collection
+    {
+        $covered = $this->quotationOrders();
+
+        // each->loadMissing, not ->loadMissing: an order with no brief behind
+        // it comes back as a plain collection of one, which has no loadMissing.
+        $covered->each->loadMissing('jobOrder.referenceFiles');
+
+        return $covered
+            ->flatMap(fn ($part) => $part->jobOrder?->filesSentToTheArtist() ?? collect())
+            ->sortBy('id')
+            ->values();
+    }
+
+    /**
      * The order the shared sheet is stored on: the first one written.
      *
      * One sheet, so it has to live somewhere. Opening the quotation from any
