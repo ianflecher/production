@@ -172,6 +172,40 @@ class EveryGarmentGetsItsMockupPageTest extends TestCase
         $this->assertSame(3, substr_count($html, 'name="fields[design_rotated'));
     }
 
+    /* ---------------- and not in the header ---------------- */
+
+    /**
+     * The header corner has room for one drawing. On a shared sheet it showed
+     * the first garment's, at the top of a quotation that also prices the
+     * others, which reads as if the whole sheet were for that one.
+     */
+    public function test_a_shared_sheet_has_no_drawing_in_the_header(): void
+    {
+        [$officer, $anchor] = $this->threeDrawnGarments();
+
+        $html = $this->sheet($officer, $anchor);
+
+        // The label under the header thumbnail, which only that corner prints.
+        $this->assertStringNotContainsString(
+            'letter-spacing:0.05em; margin-top:0.1rem;">Mockup</div>', $html);
+
+        // The flatlay corner beside it is untouched.
+        $this->assertStringContainsString('Upload Flatlay', $html);
+    }
+
+    /** A single-garment sheet keeps the drawing at the top, as it always had. */
+    public function test_a_lone_sheet_keeps_its_header_drawing(): void
+    {
+        Storage::fake('local');
+        $officer = $this->officer();
+        $inquiry = $this->brief($officer);
+        $only = $this->garment($inquiry, $officer, 'ONE SHIRT', 0);
+
+        $this->assertStringContainsString(
+            'letter-spacing:0.05em; margin-top:0.1rem;">Mockup</div>',
+            $this->sheet($officer, $only));
+    }
+
     /* ---------------- a lone order is unchanged ---------------- */
 
     public function test_a_single_garment_still_gets_one_page(): void

@@ -218,7 +218,16 @@
                 </td>
                 <td style="width:38%; vertical-align:top; padding-left:0.5rem;">
                     <div style="display:flex; gap:0.3rem; align-items:flex-start;">
-                        {{-- Product mockup --}}
+                        {{-- Product mockup.
+
+                             Only when the sheet prices ONE garment. A shared
+                             sheet carries several, and this corner has room
+                             for one — so it showed the shirt's drawing at the
+                             top of a quotation that also prices the polo and
+                             the hoodie, which reads as if the whole sheet were
+                             for the shirt. Each garment has its own page and
+                             its own picture beside its own lines. --}}
+                        @unless ($sharedSheet)
                         <div style="flex:1; text-align:center; min-width:0;">
                             @php $firstDesign = $designFiles->first(fn ($d) => $d->isImage()); @endphp
                             @if ($firstDesign && ! ($firstDesign->isExternal() && ! $firstDesign->isWebLink()))
@@ -234,6 +243,7 @@
                             @endif
                             <div style="font-size:0.52rem; color:#666; text-transform:uppercase; letter-spacing:0.05em; margin-top:0.1rem;">{{ $designLabel }}</div>
                         </div>
+                        @endunless
                         {{-- Flatlay --}}
                         <div style="flex:1; text-align:center; min-width:0;">
                             @if ($flatlay)
