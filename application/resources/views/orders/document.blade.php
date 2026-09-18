@@ -78,6 +78,22 @@
 
     $minRows = $isPq ? 15 : 5;
     $blank = max($rows->isEmpty() ? 3 : 0, $minRows - $rows->count(), $attachRows);
+
+    // One page, whatever the brief holds.
+    //
+    // The sheet is a fixed block — header, bill-to, terms, totals and the
+    // signatures — plus one row per line and one heading per garment. A brief
+    // quoted on one sheet now carries all of them, so Stephanie Moto's four
+    // garments came to 22 lines and 4 headings and pushed the terms and
+    // signatures onto a second page, where a quotation's signature block is
+    // no use to anybody.
+    //
+    // Estimated in millimetres against A4's 281mm of usable height at the 8mm
+    // margins set below, and the whole sheet is zoomed to fit. Floored at 0.55
+    // so a very long brief prints small rather than unreadable.
+    $groupHeadings = $rows->pluck('group')->filter()->unique()->count();
+    $estimatedMm = 133 + (5 * ($rows->count() + $blank)) + (16 * $groupHeadings);
+    $printZoom = max(0.55, min(1.0, round(281 / max(1, $estimatedMm), 3)));
 @endphp
 
 <style>
@@ -132,7 +148,9 @@
         .scrim { display:none !important; }
         .sidebar, .topbar, .no-print, .doc-actions { display:none !important; }
         .content { padding:0 !important; max-width:none !important; width:auto !important; animation:none !important; }
-        .doc { max-width:none !important; padding:0 !important; }
+        /* Shrunk to fit one sheet. Only the quotation itself — the mockup
+           pages below are whole pages of their own and must not shrink. */
+        .doc { max-width:none !important; padding:0 !important; zoom: var(--print-zoom, 1); }
         /* Page 2: the mockup / layout on its own portrait sheet. The image is
            turned sideways (landscape) so a wide design fills the tall page. */
         .design-page {
@@ -188,7 +206,7 @@
         </span>
     </div>
 
-    <div class="doc">
+    <div class="doc" style="--print-zoom:{{ $printZoom }};">
         {{-- Left: address then logo · Right: mockup + flatlay --}}
         <table class="plain">
             <tr>

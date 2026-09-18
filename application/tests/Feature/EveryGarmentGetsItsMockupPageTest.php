@@ -48,7 +48,7 @@ class EveryGarmentGetsItsMockupPageTest extends TestCase
     }
 
     /** One garment, with or without a drawing handed in for it. */
-    private function garment(Inquiry $inquiry, User $officer, string $label, int $position, bool $drawn = true): ProductionOrder
+    private function garment(Inquiry $inquiry, User $officer, string $label, int $position, bool $drawn = true, array $sizes = ['M']): ProductionOrder
     {
         $design = InquiryDesign::create([
             'inquiry_id' => $inquiry->id,
@@ -71,7 +71,9 @@ class EveryGarmentGetsItsMockupPageTest extends TestCase
             'status' => 'active',
         ]);
 
-        $order->items()->create(['size' => 'M', 'quantity' => 10, 'description' => $label]);
+        foreach ($sizes as $size) {
+            $order->items()->create(['size' => $size, 'quantity' => 10, 'description' => $label]);
+        }
 
         if ($drawn) {
             $task = $order->tasks()->where('department', 'Final mockup')->first()
@@ -103,6 +105,25 @@ class EveryGarmentGetsItsMockupPageTest extends TestCase
         $first = $this->garment($inquiry, $officer, 'BOS COTTON SHIRT', 0);
         $this->garment($inquiry, $officer, 'BOS POLO SHIRT', 1);
         $this->garment($inquiry, $officer, 'BOS COTTON HOODIE', 2);
+
+        return [$officer, $first];
+    }
+
+    /**
+     * A brief the size of a real one: four garments, six sizes each, which is
+     * what Stephanie Moto's sheet actually came to (22 lines, 4 headings).
+     */
+    private function longBrief(): array
+    {
+        Storage::fake('local');
+        $officer = $this->officer();
+        $inquiry = $this->brief($officer);
+        $sizes = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+
+        $first = $this->garment($inquiry, $officer, 'BOS COTTON SHIRT', 0, sizes: $sizes);
+        $this->garment($inquiry, $officer, 'BOS POLO SHIRT', 1, sizes: $sizes);
+        $this->garment($inquiry, $officer, 'BOS COTTON HOODIE', 2, sizes: $sizes);
+        $this->garment($inquiry, $officer, 'BOS WINDBREAKER', 3, sizes: $sizes);
 
         return [$officer, $first];
     }
@@ -204,6 +225,53 @@ class EveryGarmentGetsItsMockupPageTest extends TestCase
         $this->assertStringContainsString(
             'letter-spacing:0.05em; margin-top:0.1rem;">Mockup</div>',
             $this->sheet($officer, $only));
+    }
+
+    /* ---------------- it prints on one sheet ---------------- */
+
+    /**
+     * Stephanie Moto's four garments came to 22 lines and 4 headings, which
+     * pushed the terms, totals and signatures onto a second page. A signature
+     * block on a page of its own is no use to anybody, so the sheet shrinks to
+     * fit rather than spilling.
+     */
+    public function test_a_long_sheet_shrinks_to_one_page(): void
+    {
+        [$officer, $anchor] = $this->longBrief();
+
+        $html = $this->sheet($officer, $anchor);
+
+        $this->assertMatchesRegularExpression('/--print-zoom:(0\.\d+)/', $html,
+            'a four-garment sheet printed at full size and spilled onto a second page');
+
+        preg_match('/--print-zoom:([\d.]+)/', $html, $m);
+        $this->assertLessThan(1.0, (float) $m[1]);
+        $this->assertGreaterThanOrEqual(0.55, (float) $m[1], 'shrunk past readable');
+    }
+
+    /** A short sheet is left alone at full size. */
+    public function test_a_short_sheet_is_not_shrunk(): void
+    {
+        Storage::fake('local');
+        $officer = $this->officer();
+        $inquiry = $this->brief($officer);
+        $only = $this->garment($inquiry, $officer, 'ONE SHIRT', 0);
+
+        preg_match('/--print-zoom:([\d.]+)/', $this->sheet($officer, $only), $m);
+
+        $this->assertSame(1.0, (float) $m[1]);
+    }
+
+    /** The mockup pages are whole pages of their own and must not shrink. */
+    public function test_only_the_quotation_is_shrunk(): void
+    {
+        [$officer, $anchor] = $this->threeDrawnGarments();
+
+        $html = $this->sheet($officer, $anchor);
+
+        // The zoom is carried by the sheet itself, not by the design pages.
+        $this->assertSame(1, substr_count($html, '--print-zoom:'));
+        $this->assertStringContainsString('zoom: var(--print-zoom, 1)', $html);
     }
 
     /* ---------------- a lone order is unchanged ---------------- */
