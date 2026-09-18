@@ -129,8 +129,14 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
         $this->assertSame(0, AppNotification::where('user_id', $done->id)->count());
     }
 
-    /** Nobody is told before the pack has gone out — they have not been given it yet. */
-    public function test_nobody_is_told_before_the_pack_is_sent(): void
+    /**
+     * Told while they are working, whatever the tech pack is doing.
+     *
+     * The first cut waited for sent_to_artist_at. That is stage three, and the
+     * artist draws from stage one: an officer sent two links on a live job,
+     * the artist was already at Final mockup, and the page showed nothing.
+     */
+    public function test_the_artist_is_told_even_before_the_pack_goes_out(): void
     {
         $officer = $this->officer();
         $cristal = $this->artist('Cristal');
@@ -138,7 +144,7 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
 
         $this->send($officer, $order);
 
-        $this->assertSame(0, AppNotification::where('user_id', $cristal->id)->count());
+        $this->assertSame(1, AppNotification::where('user_id', $cristal->id)->count());
     }
 
     /* ---------------- and can see it ---------------- */
@@ -155,22 +161,48 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
 
         $this->actingAs($cristal)->get(route('tasks.show', $task->id))
             ->assertOk()
-            ->assertSee('sent after you were given this');
+            ->assertSee('from the account officer');
     }
 
-    /** What was on the pack from the start is not dressed up as new. */
-    public function test_a_file_that_was_there_all_along_is_not_marked_late(): void
+    /** The brief's own files are not dressed up as something the officer sent. */
+    public function test_the_briefs_own_files_are_not_listed_as_sent(): void
     {
         $officer = $this->officer();
-        $cristal = $this->artist('Cristal');
-        $order = $this->runningOrder($officer, $cristal, sent: false);
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
 
-        $this->send($officer, $order);
+        $order->jobOrder->referenceFiles()->create([
+            'path' => 'job-order-refs/from-the-brief.jpg',
+            'original_name' => 'from-the-brief.jpg',
+            'kind' => 'layout',
+            'mime' => 'image/jpeg',
+            'size' => 100,
+            'uploaded_by' => $officer->id,
+        ]);
 
-        // Sent to the artist AFTER the file was put on it.
-        $order->jobOrder->update(['sent_to_artist_at' => now()]);
+        $this->assertCount(0, $order->jobOrder->fresh()->filesSentToTheArtist());
+    }
 
-        $this->assertCount(0, $order->jobOrder->fresh()->filesAddedAfterSending());
+    /** And a sent file is never mistaken for the design to make. */
+    public function test_a_sent_file_is_not_the_design(): void
+    {
+        $officer = $this->officer();
+        $order = $this->runningOrder($officer, $this->artist('Cristal'));
+
+        $order->jobOrder->referenceFiles()->create([
+            'path' => 'job-order-refs/drawing.jpg',
+            'original_name' => 'drawing.jpg',
+            'kind' => 'layout',
+            'mime' => 'image/jpeg',
+            'size' => 100,
+            'uploaded_by' => $officer->id,
+        ]);
+
+        $this->send($officer, $order, 'a-photo-the-client-sent.jpg');
+
+        $design = $order->jobOrder->fresh()->designFiles();
+
+        $this->assertCount(1, $design);
+        $this->assertSame('drawing.jpg', $design->first()->original_name);
     }
 
     /* ---------------- and the message with them ---------------- */
@@ -245,7 +277,7 @@ class FilesCanReachTheArtistAfterTheOrderStartsTest extends TestCase
 
         $this->actingAs($cristal)->get(route('tasks.show', $task->id))
             ->assertOk()
-            ->assertSee('sent after you were given this')
+            ->assertSee('from the account officer')
             ->assertDontSee('What the account officer said');
     }
 

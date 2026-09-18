@@ -7,6 +7,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class JobOrderFile extends Model
 {
+    /**
+     * Put here by the officer through "Send files to the artist", rather than
+     * uploaded as part of the brief or the tech pack.
+     *
+     * Its own kind because it is its own act: whatever else is happening to
+     * the order, a file sent this way is FOR the artist, and the artist has to
+     * be able to see it without waiting for a stage that comes later.
+     */
+    public const KIND_SENT = 'sent';
+
     protected $fillable = [
         'job_order_id', 'path', 'external_path', 'original_name', 'kind', 'note', 'mime', 'size', 'uploaded_by',
     ];

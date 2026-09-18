@@ -175,24 +175,21 @@ class JobOrder extends Model
     }
 
     /**
-     * Files put on the job order AFTER it went to the artist.
+     * What the officer has sent the artist through the send box.
      *
      * The client does not stop sending things when the work starts — a photo
-     * of the logo, the right shade, the spelling of a name. Those arrive on an
-     * order that is already open, and the artist has no way to tell them from
-     * what they were given at the start.
+     * of the logo, the right shade, the spelling of a name, a link to a name
+     * list. Those arrive on an order that is already open.
      *
-     * Stamped by nothing: created_at against the moment the pack was sent is
-     * the whole answer, so no column and no migration.
+     * Found by WHAT THEY ARE, not by when they landed. They were shown only
+     * once the tech pack had gone out, and the tech pack is stage three while
+     * the artist is drawing from stage one: an officer sent two links, the
+     * artist was already working, and the page showed nothing.
      */
-    public function filesAddedAfterSending(): \Illuminate\Support\Collection
+    public function filesSentToTheArtist(): \Illuminate\Support\Collection
     {
-        if (! $this->sent_to_artist_at) {
-            return collect();
-        }
-
         return $this->referenceFiles
-            ->filter(fn ($f) => $f->created_at?->greaterThan($this->sent_to_artist_at))
+            ->where('kind', JobOrderFile::KIND_SENT)
             ->values();
     }
 
@@ -222,7 +219,9 @@ class JobOrder extends Model
      */
     public function designFiles(): \Illuminate\Support\Collection
     {
-        $all = $this->referenceFiles;
+        // What the officer SENT is never the design: it is the extra a client
+        // passed on afterwards, and it has a card of its own.
+        $all = $this->referenceFiles->where('kind', '!=', JobOrderFile::KIND_SENT);
         $drawn = $all->where('kind', 'layout');
 
         return ($drawn->isNotEmpty() ? $drawn : $all)->values();

@@ -318,16 +318,16 @@
          are new. They are the client's late additions - the logo photo, the
          colour, the spelling - and without somewhere to sit they were sent
          somewhere the system cannot see. --}}
-    @php $lateFiles = $task->order->jobOrder?->filesAddedAfterSending() ?? collect(); @endphp
+    @php $lateFiles = $task->order->jobOrder?->filesSentToTheArtist() ?? collect(); @endphp
 
     @if ($lateFiles->isNotEmpty())
         <div class="card panel" style="margin-bottom: 1.4rem; border-left: 4px solid var(--warn-ink, #b45309);">
             <h2>
                 {{ $lateFiles->count() }} {{ \Illuminate\Support\Str::plural('file', $lateFiles->count()) }}
-                sent after you were given this
+                from the account officer
             </h2>
             <p class="sub" style="margin-bottom: 1rem;">
-                From the account officer, after the pack went out. Check these against what you are drawing.
+                Sent to you for this job. Check these against what you are drawing.
             </p>
             {{-- Grouped by what was said about them, so a message sits with
                  the files it came with rather than above all of them. --}}

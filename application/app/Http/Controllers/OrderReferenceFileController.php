@@ -79,7 +79,7 @@ class OrderReferenceFileController extends Controller
             $order->jobOrder->referenceFiles()->create([
                 'path' => $file->store('job-order-refs', 'local'),
                 'original_name' => $file->getClientOriginalName(),
-                'kind' => $data['kind'] ?? null,
+                'kind' => $data['kind'] ?? \App\Models\JobOrderFile::KIND_SENT,
                 // The same message on every file of one upload: one batch,
                 // one thing the officer was saying about it.
                 'note' => filled($data['note'] ?? null) ? trim($data['note']) : null,
@@ -95,7 +95,7 @@ class OrderReferenceFileController extends Controller
                 // Shown in place of a filename, so a row of links does not read
                 // as a row of blanks.
                 'original_name' => \Illuminate\Support\Str::limit(preg_replace('#^https?://(www\.)?#i', '', $link), 60),
-                'kind' => $data['kind'] ?? null,
+                'kind' => $data['kind'] ?? \App\Models\JobOrderFile::KIND_SENT,
                 'note' => filled($data['note'] ?? null) ? trim($data['note']) : null,
                 'uploaded_by' => $request->user()->id,
             ]);
@@ -103,16 +103,13 @@ class OrderReferenceFileController extends Controller
 
         $count = count($files) + ($link !== '' ? 1 : 0);
 
-        // A late file nobody is told about is a file nobody opens.
+        // A file nobody is told about is a file nobody opens.
         //
-        // The client keeps sending things after the work has started, and the
-        // artist is head down in a pack they were handed days ago. Told once
-        // each, however many files landed at once, and only once the pack has
-        // actually gone out — before that they have not been given anything
-        // to be interrupted about.
-        $told = $order->jobOrder->sent_to_artist_at
-            ? $this->tellTheArtists($order, $count)
-            : collect();
+        // Told whatever the tech pack is doing. That gate was wrong: the pack
+        // goes out at stage three and the artist is drawing from stage one, so
+        // "wait until it is sent" meant the artist working right now heard
+        // nothing. Whoever is holding an artist step is told, once each.
+        $told = $this->tellTheArtists($order, $count);
 
         return back()->with('success', match (true) {
             ($data['kind'] ?? null) === 'output' => 'Design uploaded — this is what the artist will work from.',

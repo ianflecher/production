@@ -816,7 +816,7 @@
             ->where('team', \App\Models\User::JOB_ARTIST)
             ->whereNotIn('status', ['complete', 'cancelled'])
             ->pluck('assignee.name')->filter()->unique()->values();
-        $lateFiles = $order->jobOrder->filesAddedAfterSending();
+        $lateFiles = $order->jobOrder->filesSentToTheArtist();
     @endphp
     <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Send files to the artist</h2>
@@ -876,7 +876,7 @@
         @if ($lateFiles->isNotEmpty())
             <div style="margin-top:1rem; border-top:1px solid var(--border); padding-top:0.8rem;">
                 <div style="font-size:0.78rem; font-weight:700; margin-bottom:0.5rem;">
-                    Sent after the pack went out ({{ $lateFiles->count() }})
+                    Already sent to the artist ({{ $lateFiles->count() }})
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:0.6rem;">
                     @foreach ($lateFiles as $ref)

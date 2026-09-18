@@ -455,10 +455,25 @@
                 @else
                     <strong class="design-card-name">{{ $design->name() }}</strong>
                 @endif
+                {{-- Who drew it, in every state.
+
+                     The name was on the two states where the design is still
+                     moving and off the two where it has stopped, so the moment
+                     an artist handed a design back it stopped saying who had
+                     drawn it - and that is exactly when somebody asks. A design
+                     sent back and redrawn shows its round here too. --}}
+                @php
+                    $drawnBy = $design->artist?->name;
+                    $rounds = (int) $design->revision_count;
+                @endphp
                 @if ($design->approved())
-                    <span class="design-pill is-approved">&#10003; Approved</span>
+                    <span class="design-pill is-approved">
+                        &#10003; Approved{{ $drawnBy ? ' · drawn by '.$drawnBy : '' }}{{ $rounds > 0 ? ' · rev '.$rounds.'/'.\App\Models\InquiryDesign::REVISION_LIMIT : '' }}
+                    </span>
                 @elseif ($design->submitted())
-                    <span class="design-pill is-waiting">With the client</span>
+                    <span class="design-pill is-waiting">
+                        With the client{{ $drawnBy ? ' · drawn by '.$drawnBy : '' }}{{ $rounds > 0 ? ' · rev '.$rounds.'/'.\App\Models\InquiryDesign::REVISION_LIMIT : '' }}
+                    </span>
                 @elseif ($design->notSentYet())
                     {{-- The one that was wrong. This used to fall into the
                          "is drawing it" arm below, so a brief nobody had sent
