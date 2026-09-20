@@ -106,14 +106,23 @@ class DashboardController extends Controller
         // leader, finance, the desks - and adding it to each compact() is how
         // one of them quietly ends up without it.
 
-        // The designing board's top of page. Shared for the same reason: the
-        // board belongs to everybody who used to read the spreadsheet, and
-        // index() returns from a different branch for each of them.
+        // The designing board's top of page. Shared for the same reason as the
+        // block above: index() returns from a different branch for each trade,
+        // and adding it to each compact() is how one of them quietly misses it.
+        //
+        // NOT the floor. "Everybody who used to read the spreadsheet" was the
+        // design side and the leaders chasing them; the roller press operator
+        // opened his dashboard to eight rows of other people's drawings above
+        // the machines he actually runs. His page is the station board.
+        //
+        // canSeeDesignBoard() is the same question the sidebar link and the
+        // board itself ask, so all three agree about whose board this is.
         //
         // A week, and the newest handful of it. The whole board is a click
         // away; what belongs on a dashboard is what moved today.
-        //
-        view()->share('designBoard', DesignLog::rows(7)->take(8));
+        view()->share('designBoard', $user->canSeeDesignBoard()
+            ? DesignLog::rows(7)->take(8)
+            : null);
 
         $hour = (int) now()->format('G');
         $greeting = match (true) {

@@ -328,14 +328,19 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
     }
 
     /**
-     * The summary of it stays everybody's, and the way through to the full
-     * board is offered to exactly the people it opens for.
+     * The summary is the design side's, and the way through to the full board
+     * is offered to exactly the people it opens for.
      *
-     * A button that answers Forbidden is worse than no button, so this is the
-     * same question as the page's own gate asked in the one place a person
-     * actually meets it.
+     * It used to be everybody's, on the reasoning that the spreadsheet it
+     * replaced was read by everybody. That was the design side and the leaders
+     * chasing them: the roller press opened his dashboard to eight rows of
+     * other people's drawings above the machines he runs. His page is the
+     * station board — see TheFloorsDashboardIsTheirOwnTest.
+     *
+     * A button that answers Forbidden is worse than no button, so the door is
+     * the same question as the page's own gate, asked where a person meets it.
      */
-    public function test_the_dashboard_summary_is_still_everybodys(): void
+    public function test_the_dashboard_summary_belongs_to_the_design_side(): void
     {
         $officer = $this->officer('vip', 'Pau');
         $artist = $this->artist('Maru');
@@ -343,7 +348,7 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
 
         $floor = User::factory()->create(['job_role' => User::JOB_PRODUCTION, 'is_active' => true]);
 
-        foreach ([$officer, $artist, $floor] as $person) {
+        foreach ([$officer, $artist] as $person) {
             $this->actingAs($person)->get(route('dashboard'))
                 ->assertOk()
                 ->assertSee('Designing board')
@@ -354,8 +359,11 @@ class TheDesigningBoardReadsTheWorkTest extends TestCase
             $this->actingAs($person)->get(route('dashboard'))->assertSee('Open the board');
         }
 
-        // The floor reads the summary and is offered no door it cannot open.
-        $this->actingAs($floor)->get(route('dashboard'))->assertDontSee('Open the board');
+        // The floor gets neither the rows nor a door it cannot open.
+        $this->actingAs($floor)->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('Designing board')
+            ->assertDontSee('Open the board');
     }
 
     /**
