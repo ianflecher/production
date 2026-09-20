@@ -51,6 +51,27 @@
                             @php $forSize = filled($req->size) ? ($sizeCounts[$req->order->id][$req->size] ?? null) : null; @endphp
                             · {{ number_format($forSize ?? $req->order->quantity) }} pcs
                             · requested {{ $req->created_at->diffForHumans() }}
+                            {{-- What is left to hand over belongs with the
+                                 request, not under the box. Sat under the
+                                 Quantity input, it was the only column with a
+                                 line below it, so that column's bottom was the
+                                 note and its box floated above every other box
+                                 in the row. --}}
+                            @php
+                                $out = (float) ($req->issued_quantity ?? 0);
+                                $owed = $req->requested_quantity !== null
+                                    ? max(0, (float) $req->requested_quantity - $out)
+                                    : null;
+                                $tidy = fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.');
+                            @endphp
+                            @if ($req->requested_quantity !== null)
+                                @if ($out > 0)
+                                    · {{ $tidy($out) }} of {{ $tidy($req->requested_quantity) }} already out,
+                                    <strong>{{ $tidy($owed) }} still owed</strong>
+                                @else
+                                    · asked for {{ $tidy($req->requested_quantity) }}
+                                @endif
+                            @endif
                         </p>
                     </div>
                     @if ($match)
@@ -80,14 +101,6 @@
                         </div>
                         <div>
                             <label style="font-size: 0.75rem;">Quantity</label>
-                            @php
-                                $out = (float) ($req->issued_quantity ?? 0);
-                                $owed = $req->requested_quantity !== null
-                                    ? max(0, (float) $req->requested_quantity - $out)
-                                    : null;
-                                $tidy = fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.');
-                            @endphp
-
                             {{-- The job's number is what the box starts at, not
                                  what it is stuck at.
                                  It used to be a fixed figure with no box at all,
@@ -100,17 +113,6 @@
                                    @if ($owed !== null) value="{{ $tidy($owed) }}" max="{{ $tidy($owed) }}" @endif
                                    required placeholder="0"
                                    style="width: 110px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
-
-                            @if ($req->requested_quantity !== null)
-                                <div style="font-size: 0.7rem; color: var(--ink-3); margin-top: 0.2rem;">
-                                    @if ($out > 0)
-                                        {{ $tidy($out) }} of {{ $tidy($req->requested_quantity) }} already out —
-                                        <strong>{{ $tidy($owed) }} still owed</strong>
-                                    @else
-                                        the job asked for {{ $tidy($req->requested_quantity) }}
-                                    @endif
-                                </div>
-                            @endif
                         </div>
                         {{-- Who physically hands the materials out. --}}
                         <div>
