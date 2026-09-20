@@ -427,11 +427,15 @@
         <form method="POST" id="rmForm" enctype="multipart/form-data">
             @csrf
             <input type="hidden" name="unit" id="rmUnit">
-            <input type="hidden" name="quantity" id="rmQty">
             <div class="field">
                 <label>Add to stock <span id="rmStock" style="color: var(--ink-3); font-weight: 400;"></span></label>
                 {{-- Not required: leaving it blank means "just add the photo". --}}
-                <input type="number" id="rmAdd" step="0.01" min="0" autocomplete="off" placeholder="e.g. 20 — or leave blank">
+                {{-- Posted as-is. It used to be turned into a new TOTAL by the
+                     browser, using the figure printed on the page, and the
+                     server subtracted the real one to get back to a movement.
+                     A page a few minutes out of date silently changed the
+                     number: 150.5 kg typed, 156.5 kg logged. --}}
+                <input type="number" id="rmAdd" name="add" step="0.01" min="0" autocomplete="off" placeholder="e.g. 20.5 — or leave blank">
             </div>
 
             {{-- The stock sheet's mock-up pictures can't come through a CSV, so
@@ -476,7 +480,6 @@
             var title = document.getElementById('rmTitle');
             var stock = document.getElementById('rmStock');
             var addEl = document.getElementById('rmAdd');
-            var qtyHidden = document.getElementById('rmQty');
             var unitHidden = document.getElementById('rmUnit');
             var nameEl = document.getElementById('rmName');
             var photoEl = document.getElementById('rmPhoto');
@@ -509,8 +512,8 @@
             }
             function closeRestock() { modal.hidden = true; }
 
-            // Controller sets the TOTAL — add the entered amount to current stock.
-            form.addEventListener('submit', function () { qtyHidden.value = current + Number(addEl.value || 0); });
+            // Nothing to compute: the amount typed is the amount sent, and the
+            // server adds it to whatever the shelf really holds.
             document.querySelectorAll('.js-restock-open').forEach(function (b) { b.addEventListener('click', function () { openRestock(b); }); });
             document.getElementById('rmCancel').addEventListener('click', closeRestock);
             modal.addEventListener('click', function (e) { if (e.target === modal) closeRestock(); });

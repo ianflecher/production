@@ -241,7 +241,12 @@ class InventoryController extends Controller
         $this->assertAccess();
 
         $data = $request->validate([
-            'quantity' => ['required', 'numeric', 'min:0', 'max:999999999'],
+            // How much is going IN. This is the number the person actually
+            // typed, and it is the number that gets logged.
+            'add' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+            // The absolute count, for setting a shelf to what was counted on
+            // it. Kept for anything that still works that way.
+            'quantity' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
             'unit' => ['required', 'string', 'max:30'],
             'note' => ['nullable', 'string', 'max:255'],
             // Who is putting it in / taking it out.
@@ -250,8 +255,20 @@ class InventoryController extends Controller
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
         ], ['operator_name.required' => 'Enter the name of the person moving the stock.']);
 
-        // Log the difference as stock in/out so the change is attributable.
-        $delta = (float) $data['quantity'] - (float) $item->quantity;
+        // What goes in is what was typed.
+        //
+        // The dialog used to send a TOTAL: the browser read the figure printed
+        // on the page, added what was typed, and the server subtracted the
+        // real figure to get the movement. Any drift between the two landed in
+        // the difference — Ricky typed 150.5 kg of TASLAN H9 BLK against a
+        // page showing 239, the shelf actually held 233, and the sheet logged
+        // 156.5. Neither the number he typed nor the number he meant.
+        //
+        // Sending the amount instead means 150.5 is 150.5 whatever the page
+        // was showing, and a stale page can no longer quietly change it.
+        $delta = array_key_exists('add', $data) && $data['add'] !== null
+            ? (float) $data['add']
+            : (float) ($data['quantity'] ?? $item->quantity) - (float) $item->quantity;
         $item->update(['unit' => $data['unit']]);
 
         if ($request->hasFile('photo')) {
