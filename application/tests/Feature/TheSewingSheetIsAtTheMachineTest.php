@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\JobOrder;
 use App\Models\ProductionOrder;
 use App\Models\SewingOperation;
 use App\Models\StationSession;
@@ -35,6 +36,11 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         ]);
     }
 
+    /** What the last runningAtSewing() left behind, for a second page to use. */
+    private ?ProductionOrder $order = null;
+
+    private ?StationSession $session = null;
+
     /** An order sitting at sewing, and a sewer running it. */
     private function runningAtSewing(User $who): StationSession
     {
@@ -66,7 +72,10 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
             'production_order_id' => $order->fresh()->id,
         ]);
 
-        return StationSession::where('station', 'sewing_1')->whereNull('ended_at')->firstOrFail();
+        $this->order = $order->fresh();
+
+        return $this->session = StationSession::where('station', 'sewing_1')
+            ->whereNull('ended_at')->firstOrFail();
     }
 
     /* ---------------- the sheet itself ---------------- */
@@ -104,10 +113,8 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         $this->assertNull($seaming->sam);
         $this->assertSame('—', $seaming->samLabel());
 
-        $totals = SewingOperation::totals(SewingOperation::forGarment('SHORT'));
-
-        $this->assertSame(4, $totals['untimed']);
-        $this->assertEqualsWithDelta(32.934, $totals['minutes'], 0.0001);
+        $this->assertSame(4, SewingOperation::forGarment('SHORT')
+            ->filter(fn ($o) => $o->sam === null)->count());
     }
 
     /**
@@ -127,7 +134,7 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
 
     /* ---------------- it is where the work is ---------------- */
 
-    public function test_a_sewing_station_shows_the_sheet_with_its_add_buttons(): void
+    public function test_a_sewing_station_lays_the_record_out_by_product(): void
     {
         $sewer = $this->sewer();
         $session = $this->runningAtSewing($sewer);
@@ -136,12 +143,19 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
             ->get(route('stations.finish', $session))
             ->assertOk()->getContent();
 
-        $this->assertStringContainsString('What this garment takes', $html);
-        $this->assertStringContainsString('WINDBREAKER (BOA)', $html, 'the picker is missing a garment');
+        $this->assertStringContainsString('What this garment takes, and who did it', $html);
+        $this->assertStringContainsString('WINDBREAKER (BOA)', $html, 'the picker is missing a product');
         $this->assertStringContainsString('NECK BOND / JOIN SHOULDER', $html);
-        // The ADD column, and something for it to drop a line into.
-        $this->assertStringContainsString('class="so-use"', $html);
+
+        // The operation and who did it, and nothing else: no minutes, no
+        // pieces-a-day. That is what the floor asked for.
+        $this->assertStringNotContainsString('PCS/DAY', $html);
+        $this->assertStringNotContainsString('1.763', $html, 'the minutes are back on the shop floor page');
+
+        // Every operation is a line, and every line has a box for a name.
         $this->assertStringContainsString('sheet[sewing_log][0][work]', $html);
+        $this->assertStringContainsString('sheet[sewing_log][0][name]', $html);
+        $this->assertStringContainsString('sheet[sewing_garment]', $html);
     }
 
     /**
@@ -181,22 +195,73 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         );
     }
 
-    /** And a page of its own, for reading it away from a machine. */
-    public function test_the_sheet_has_a_page_of_its_own(): void
+    /**
+     * And in the SEWING block of the correction sheet, which is the same
+     * record in the shop's own yellow boxes. A line typed against the wrong
+     * garment is put right there, and the sheet has to be there to put it
+     * right against.
+     */
+    public function test_the_correction_sheet_has_it_in_its_sewing_block(): void
     {
-        $html = $this->actingAs($this->sewer())
-            ->get(route('sewing-operations.index'))
+        $sewer = $this->sewer();
+        $this->runningAtSewing($sewer);
+
+        $html = $this->actingAs($sewer)
+            ->get(route('orders.sheet', $this->order))
             ->assertOk()->getContent();
 
-        $this->assertStringContainsString('HOODY JACKET RAGLAN', $html);
-        $this->assertStringContainsString('ATTACH VEST HOLDER', $html);
+        $this->assertStringContainsString('What this garment takes, and who did it', $html);
+        $this->assertStringContainsString('sheet[sewing_log][0][name]', $html);
+
+        // In the sewing block, above the record that prints — not in a card
+        // of its own somewhere further up the page. strpos() returning false
+        // would read as position 0 and pass on its own, so both are checked.
+        $picker = strpos($html, 'What this garment takes, and who did it');
+        $printed = strpos($html, 'Notes from sewer');
+
+        $this->assertNotFalse($picker);
+        $this->assertNotFalse($printed);
+        $this->assertLessThan($printed, $picker, 'the sheet is not in the sewing block');
+    }
+
+    /**
+     * It sits inside the job order sheet, which is one big form. Its own forms
+     * are pushed past the end of it and its inputs point back by id, because a
+     * browser throws away a form nested in another one — and with it the
+     * button that adds a line.
+     */
+    public function test_nothing_it_draws_is_a_form_inside_a_form(): void
+    {
+        $sewer = $this->sewer();
+        $this->runningAtSewing($sewer);
+
+        foreach (['orders.sheet' => $this->order, 'stations.finish' => $this->session] as $route => $on) {
+            $html = $this->actingAs($sewer)->get(route($route, $on))->getContent();
+
+            $this->assertStringContainsString('form="soAddSheet"', $html, $route.' has no add boxes');
+            $this->assertStringContainsString('id="soAddSheet"', $html, $route.' has no add form');
+
+            $previous = libxml_use_internal_errors(true);
+            $dom = new \DOMDocument;
+            $dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+
+            foreach ($dom->getElementsByTagName('form') as $form) {
+                $this->assertSame(0, $form->getElementsByTagName('form')->length,
+                    $route.' nests a form inside the form at '.$form->getAttribute('action'));
+            }
+        }
     }
 
     /** A garment can be asked for by name, so the link is worth sending. */
     public function test_the_link_can_name_the_garment(): void
     {
-        $this->actingAs($this->sewer())
-            ->get(route('sewing-operations.index', ['garment' => 'evo vest']))
+        $sewer = $this->sewer();
+        $session = $this->runningAtSewing($sewer);
+
+        $this->actingAs($sewer)
+            ->get(route('stations.finish', $session).'?garment=evo+vest')
             ->assertOk()
             ->assertSee('value="EVO VEST" selected', false);
     }
@@ -298,13 +363,137 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
 
         $this->assertFalse($artist->fresh()->canEditSewingSheet());
 
-        $this->actingAs($artist)->get(route('sewing-operations.index'))->assertOk();
-
         $this->actingAs($artist)->post(route('sewing-operations.store'), [
             'garment' => 'SANDO', 'name' => 'SOMETHING',
         ])->assertForbidden();
 
         $this->assertSame(9, SewingOperation::forGarment('SANDO')->count());
+    }
+
+    /* ---------------- a line per operation, a name per line ---------------- */
+
+    /**
+     * The record is the garment's own list now. Pick the product and every
+     * operation it takes is a line with a box beside it, instead of five blank
+     * slots and a memory of what a polo takes.
+     */
+    public function test_the_record_is_a_line_for_every_operation_of_the_garment(): void
+    {
+        $sewer = $this->sewer();
+        $session = $this->runningAtSewing($sewer);
+
+        $html = $this->actingAs($sewer)
+            ->get(route('stations.finish', $session).'?garment=SANDO')
+            ->assertOk()->getContent();
+
+        // SANDO takes nine, and the record has nine lines plus the spares.
+        foreach (range(0, 8 + JobOrder::SEWING_LOG_SPARES - 1) as $i) {
+            $this->assertStringContainsString('sheet[sewing_log]['.$i.'][name]', $html, 'line '.$i.' is missing');
+        }
+
+        $this->assertStringNotContainsString('sheet[sewing_log][12][name]', $html, 'the record runs on past the garment');
+        $this->assertStringContainsString('ATTACH RIBBINGS ARMHOLE', $html);
+    }
+
+    /** And the names go down against the operations they were typed beside. */
+    public function test_the_names_are_saved_against_their_operations(): void
+    {
+        $sewer = $this->sewer();
+        $session = $this->runningAtSewing($sewer);
+
+        $this->actingAs($sewer)->post(route('stations.end', $session), [
+            'end_reason' => 'done',
+            'sheet' => [
+                'sewing_garment' => 'SANDO',
+                'sewing_log' => [
+                    ['work' => 'NECK BOND / JOIN SHOULDER', 'listed' => '1', 'name' => 'Melanie'],
+                    ['work' => 'FLATBED', 'listed' => '1', 'name' => ''],
+                    ['work' => 'TAPPING NECK', 'listed' => '1', 'name' => 'PERLA'],
+                    ['work' => 'Unpicked a seam', 'name' => 'Arlene'],
+                    ['work' => '', 'name' => ''],
+                ],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $jo = $this->order->fresh()->jobOrder;
+
+        // Three lines: the two somebody signed, and the one they typed. The
+        // operation nobody did is not recorded as done.
+        $this->assertSame([
+            ['work' => 'NECK BOND / JOIN SHOULDER', 'name' => 'Melanie'],
+            ['work' => 'TAPPING NECK', 'name' => 'PERLA'],
+            ['work' => 'Unpicked a seam', 'name' => 'Arlene'],
+        ], $jo->sewing_log);
+
+        $this->assertSame('SANDO', $jo->sewing_garment);
+    }
+
+    /** And whoever opens the job next gets the same list, without picking. */
+    public function test_the_job_remembers_which_product_it_is(): void
+    {
+        $sewer = $this->sewer();
+        $session = $this->runningAtSewing($sewer);
+
+        $this->order->jobOrder->update(['sewing_garment' => 'EVO VEST']);
+
+        $this->actingAs($sewer)
+            ->get(route('stations.finish', $session))
+            ->assertOk()
+            ->assertSee('value="EVO VEST" selected', false)
+            ->assertSee('ATTACH VEST HOLDER');
+    }
+
+    /**
+     * A name already written comes back beside its own operation, wherever the
+     * shop has since moved that operation in the list.
+     */
+    public function test_what_was_written_comes_back_on_its_own_line(): void
+    {
+        $sewer = $this->sewer();
+        $session = $this->runningAtSewing($sewer);
+
+        $this->order->jobOrder->update([
+            'sewing_garment' => 'SANDO',
+            'sewing_log' => [['work' => 'TAPPING NECK', 'name' => 'Jovy']],
+        ]);
+
+        $rows = $this->order->fresh()->jobOrder->sewingRows(
+            SewingOperation::forGarment('SANDO')
+                ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name])->all()
+        );
+
+        $tapping = collect($rows)->firstWhere('work', 'TAPPING NECK');
+
+        $this->assertSame('Jovy', $tapping['name']);
+        $this->assertTrue($tapping['listed']);
+
+        // And nobody else was given her name.
+        $this->assertSame(1, collect($rows)->where('name', 'Jovy')->count());
+    }
+
+    /**
+     * Work the list has not got is kept on its own line rather than thrown
+     * away when the garment changes under it.
+     */
+    public function test_work_the_list_has_not_got_keeps_its_line(): void
+    {
+        $sewer = $this->sewer();
+        $this->runningAtSewing($sewer);
+
+        $this->order->jobOrder->update([
+            'sewing_log' => [['work' => 'Re-ran the whole hem', 'name' => 'Leonor']],
+        ]);
+
+        $rows = $this->order->fresh()->jobOrder->sewingRows(
+            SewingOperation::forGarment('SANDO')
+                ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name])->all()
+        );
+
+        $mine = collect($rows)->firstWhere('work', 'Re-ran the whole hem');
+
+        $this->assertNotNull($mine, 'a line nobody could match was dropped');
+        $this->assertSame('Leonor', $mine['name']);
+        $this->assertFalse($mine['listed'], 'a typed line must stay editable');
     }
 
     /* ---------------- and no Blade leaking ---------------- */
@@ -315,8 +504,9 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
      */
     public function test_the_page_prints_no_directives(): void
     {
-        $html = $this->actingAs($this->sewer())
-            ->get(route('sewing-operations.index'))->getContent();
+        $sewer = $this->sewer();
+        $html = $this->actingAs($sewer)
+            ->get(route('stations.finish', $this->runningAtSewing($sewer)))->getContent();
 
         $this->assertStringNotContainsString('@if (', $html);
         $this->assertStringNotContainsString('@endif', $html);

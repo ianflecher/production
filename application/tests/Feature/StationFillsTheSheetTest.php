@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\StationController;
 use App\Models\JobOrder;
 use App\Models\ProductionOrder;
 use App\Models\StationSession;
@@ -174,14 +175,14 @@ class StationFillsTheSheetTest extends TestCase
     {
         // A printer has no part of the sheet to fill — its operator name is
         // stamped automatically, and that is the whole of its contribution.
-        $this->assertSame([], \App\Http\Controllers\StationController::sheetFieldsFor('printer_1'));
+        $this->assertSame([], StationController::sheetFieldsFor('printer_1'));
         $this->assertSame(
             JobOrder::SEWING_STATION_FIELDS,
-            \App\Http\Controllers\StationController::sheetFieldsFor('sewing_2')
+            StationController::sheetFieldsFor('sewing_2')
         );
         $this->assertSame(
             JobOrder::QC_STATION_FIELDS,
-            \App\Http\Controllers\StationController::sheetFieldsFor('qc_3')
+            StationController::sheetFieldsFor('qc_3')
         );
     }
 
@@ -294,10 +295,11 @@ class StationFillsTheSheetTest extends TestCase
         $this->actingAs($sewer)
             ->get("/station-sessions/{$session->id}/finish")
             ->assertOk()
-            // Five slots: what was done, and who did it.
+            // A line per operation of whatever this garment is, each with a
+            // box for the name of whoever did it.
             ->assertSee('name="sheet[sewing_log][0][name]"', false)
             ->assertSee('name="sheet[sewing_log][4][work]"', false)
-            ->assertSee('Who sewed this', false);
+            ->assertSee('What this garment takes, and who did it', false);
 
         // Opening the page must not have closed anything on its own.
         $this->assertNotSame('complete', $order->fresh()->tasks()->where('department', 'Sewing')->value('status'));
@@ -371,13 +373,13 @@ class StationFillsTheSheetTest extends TestCase
         $sewer = User::factory()->make(['job_role' => 'Sewing']);
         $checker = User::factory()->make(['job_role' => 'Quality control']);
 
-        $sewerFields = \App\Http\Controllers\StationController::sheetFieldsForUser($sewer);
-        $checkerFields = \App\Http\Controllers\StationController::sheetFieldsForUser($checker);
+        $sewerFields = StationController::sheetFieldsForUser($sewer);
+        $checkerFields = StationController::sheetFieldsForUser($checker);
 
         $this->assertEmpty(array_intersect($sewerFields, JobOrder::QC_STATION_FIELDS),
-            "the QC line is not for the sewer to write");
+            'the QC line is not for the sewer to write');
         $this->assertEmpty(array_intersect($checkerFields, JobOrder::SEWING_STATION_FIELDS),
-            "the seams are not for the checker to write");
+            'the seams are not for the checker to write');
         $this->assertNotEmpty($sewerFields);
         $this->assertNotEmpty($checkerFields);
     }

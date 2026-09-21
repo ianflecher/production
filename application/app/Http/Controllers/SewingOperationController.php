@@ -5,39 +5,29 @@ namespace App\Http\Controllers;
 use App\Models\SewingOperation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 
 /**
- * The sewing sheet: what each garment takes, and how long.
+ * Writing on the sewing sheet.
  *
- * Reading it is open to everyone signed in — the costing desk prices off these
- * minutes and the account officers quote off them, so walling it into the floor
- * would just mean the spreadsheet staying alive beside it. Writing on it is the
- * sewing line's, which canEditSewingSheet() decides.
+ * The sheet itself has no page of its own. It is drawn where it is used — in
+ * the sewing block of the job order sheet, beside the boxes that record the
+ * work — so this holds only the two things that change it.
  */
 class SewingOperationController extends Controller
 {
-    public function index(Request $request): View
-    {
-        $sheet = SewingOperation::sheet();
-
-        return view('sewing.operations', [
-            'sheet' => $sheet,
-            'garment' => self::showing($request, $sheet),
-            'canEdit' => $request->user()->canEditSewingSheet(),
-        ]);
-    }
-
     /**
-     * Which garment the page opens on.
+     * Which product the sewing record is laid out against.
      *
-     * Whatever was last added, so somebody writing three operations onto a
-     * windbreaker is not put back on the t-shirt between each one; then a
-     * garment asked for in the link; then the first on the sheet.
+     * What they just picked, which is this request; then what the job order
+     * already says it is, because that is a decision somebody made at the
+     * machine and everybody who opens the job afterwards should see the same
+     * list; then whatever was last added to, so writing three operations onto
+     * a windbreaker does not put them back on the t-shirt between each one;
+     * then the first on the sheet, which is where a new job starts.
      */
-    public static function showing(Request $request, array $sheet): string
+    public static function showing(Request $request, array $sheet, ?string $saved = null): string
     {
-        foreach ([session('sewing_garment'), $request->query('garment')] as $wanted) {
+        foreach ([$request->query('garment'), $saved, session('sewing_garment')] as $wanted) {
             $wanted = $wanted ? SewingOperation::normaliseGarment((string) $wanted) : null;
 
             if ($wanted && isset($sheet[$wanted])) {

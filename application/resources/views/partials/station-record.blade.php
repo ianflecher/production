@@ -16,23 +16,16 @@
 
 <div class="rec-card">
     @if ($isSewing)
-        <h3 class="rec-head">Who sewed this, and what they did</h3>
-        <p class="rec-hint">One line each. Leave the rest blank — five is room, not a quota.</p>
-
-        {{-- Five across, each one a pair: what was done, and who did it. --}}
-        <div class="rec-grid">
-            @foreach ($log as $i => $row)
-                <div class="rec-slot">
-                    <span class="rec-num">{{ $i + 1 }}</span>
-                    <input type="text" name="sheet[sewing_log][{{ $i }}][work]" maxlength="255"
-                           value="{{ $row['work'] }}" placeholder="What they did"
-                           list="dl_sheet_work" autocomplete="off">
-                    <input type="text" name="sheet[sewing_log][{{ $i }}][name]" maxlength="100"
-                           value="{{ $row['name'] }}" placeholder="Their name"
-                           list="dl_sheet_sewer" autocomplete="off">
-                </div>
-            @endforeach
-        </div>
+        {{-- The record is the garment's own list of operations now, with a
+             name beside each. See partials/sewing-operations. --}}
+        @if ($sewingSheet ?? null)
+            @include('partials.sewing-operations', [
+                'sheet' => $sewingSheet,
+                'garment' => $sewingGarment,
+                'rows' => $sewingRows,
+                'canEdit' => $canEditSewingSheet ?? false,
+            ])
+        @endif
     @elseif ($isQc)
         <h3 class="rec-head">The quality check</h3>
         <p class="rec-hint">

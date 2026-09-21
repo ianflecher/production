@@ -55,6 +55,7 @@ class JobOrder extends Model
         'raw_material_quantities',
         'raw_material_kinds',
         'sewing_log',
+        'sewing_garment',
         'free_logo_sticker',
         // Sewing (yellow) — the four headline seams, each with its size/thread
         'neck',
@@ -515,7 +516,7 @@ class JobOrder extends Model
      * who did it — in one JSON column. The old seam columns are still on the
      * table and still readable: a job sewn before this is unchanged.
      */
-    public const SEWING_STATION_FIELDS = ['sewing_log', 'sewer_notes'];
+    public const SEWING_STATION_FIELDS = ['sewing_log', 'sewing_garment', 'sewer_notes'];
 
     /**
      * The seam columns the sewing record used to live in.
@@ -539,24 +540,94 @@ class JobOrder extends Model
         'sewer_notes',
     ];
 
-    /** How many people can be named against one sewing run. */
-    public const SEWING_LOG_SLOTS = 5;
+    /**
+     * Blank lines kept at the end of the record, for work the garment's list
+     * has not got. Something always comes up that nobody wrote down.
+     */
+    public const SEWING_LOG_SPARES = 3;
 
     /**
-     * The sewing log padded to its five slots, so the form always has its rows.
+     * The most lines one sewing record can carry.
+     *
+     * The longest garment on the sheet is thirty-four operations; this is room
+     * for that, for what the shop adds to it, and for the spare lines, without
+     * being an invitation to post ten thousand rows.
+     */
+    public const SEWING_LOG_MAX = 80;
+
+    /**
+     * What was written down, as it was written down.
      *
      * @return array<int, array{work: string, name: string}>
      */
     public function sewingLog(): array
     {
+        return collect($this->sewing_log ?? [])
+            ->map(function ($row) {
+                $row = (array) $row;
+
+                return [
+                    'work' => trim((string) ($row['work'] ?? '')),
+                    'name' => trim((string) ($row['name'] ?? '')),
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * The lines the sewing record shows.
+     *
+     * The shop's sheet is one line per operation with a name beside it, and
+     * that is what this is: every operation the chosen garment takes, in the
+     * order the shop wrote them, carrying whatever name has already been put
+     * against it.
+     *
+     * Then anything written down that the garment's list has not got — work
+     * typed by hand, or a record made before a garment was chosen — because
+     * changing the garment must not quietly drop somebody's line. Then a few
+     * blank ones.
+     *
+     * A line is "listed" when it came off the garment's list. That is what
+     * tells the save which lines are the shop's suggestion and which are
+     * somebody's writing: a listed line with nobody against it is an operation
+     * not yet done, and is not worth keeping.
+     *
+     * @param  array<int, array{id: int, name: string}>  $operations  the chosen garment's
+     * @return array<int, array{id: ?int, work: string, name: string, listed: bool}>
+     */
+    public function sewingRows(array $operations): array
+    {
+        $saved = $this->sewingLog();
+        $taken = [];
         $rows = [];
 
-        foreach (range(0, self::SEWING_LOG_SLOTS - 1) as $i) {
-            $row = (array) (($this->sewing_log ?? [])[$i] ?? []);
+        foreach ($operations as $operation) {
+            $found = null;
+
+            foreach ($saved as $i => $row) {
+                if (! isset($taken[$i]) && strcasecmp($row['work'], $operation['name']) === 0) {
+                    $found = $i;
+                    $taken[$i] = true;
+                    break;
+                }
+            }
+
             $rows[] = [
-                'work' => (string) ($row['work'] ?? ''),
-                'name' => (string) ($row['name'] ?? ''),
+                'id' => $operation['id'],
+                'work' => $operation['name'],
+                'name' => $found === null ? '' : $saved[$found]['name'],
+                'listed' => true,
             ];
+        }
+
+        foreach ($saved as $i => $row) {
+            if (! isset($taken[$i]) && ($row['work'] !== '' || $row['name'] !== '')) {
+                $rows[] = $row + ['id' => null, 'listed' => false];
+            }
+        }
+
+        foreach (range(1, self::SEWING_LOG_SPARES) as $ignored) {
+            $rows[] = ['id' => null, 'work' => '', 'name' => '', 'listed' => false];
         }
 
         return $rows;

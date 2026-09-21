@@ -238,16 +238,6 @@
                     </a>
                 @endif
 
-                {{-- The sewing sheet. Anyone signed in may read it, but only the
-                     people it is for get a permanent link to it: a DTF operator
-                     has no use for a seam list on their sidebar. --}}
-                @if (auth()->user()->canEditSewingSheet())
-                    <a href="{{ route('sewing-operations.index') }}" class="nav-item {{ request()->routeIs('sewing-operations.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v9"/><circle cx="12" cy="13" r="2"/><path d="M12 15v7"/><path d="M5 8h3"/><path d="M16 8h3"/></svg>
-                        Sewing sheet
-                    </a>
-                @endif
-
                 {{-- Finance — all payments & proof. --}}
                 @if (! auth()->user()->isSupervisor() && auth()->user()->canManageFinance())
                     @php $toConfirm = $paymentsToConfirm ?? 0; @endphp
@@ -375,6 +365,13 @@
             <main class="content">
                 @yield('content')
             </main>
+
+            {{-- Forms that belong to something drawn inside another form.
+                 The sewing sheet sits in the middle of the job order sheet,
+                 which is itself one big form, and a form cannot nest - so its
+                 own forms are pushed out here and its inputs point back at
+                 them by id. --}}
+            @stack('sewing-sheet-forms')
         </div>
     </div>
 

@@ -71,19 +71,6 @@
         @include('partials.tech-pack', ['order' => $order])
     @endif
 
-    {{-- At a sewing machine, the sheet for what is being sewn: pick the
-         garment, read the operations, and put one of them straight into the
-         record below. Above the record and outside its form, because adding a
-         line to the sheet is its own form and a form cannot nest. --}}
-    @if ($sewingSheet ?? null)
-        @include('partials.sewing-operations', [
-            'sheet' => $sewingSheet,
-            'garment' => $sewingGarment,
-            'canEdit' => $canEditSewingSheet,
-            'withAdd' => true,
-        ])
-    @endif
-
     {{-- The production record, with this station's own boxes live. The
          questions used to be repeated in a list underneath it, which meant
          reading the spec in one place and answering it in another, twice as

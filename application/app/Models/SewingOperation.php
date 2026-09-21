@@ -18,14 +18,6 @@ use Illuminate\Database\Eloquent\Model;
  */
 class SewingOperation extends Model
 {
-    /**
-     * The minutes in a working day, as the shop's own sheet has it.
-     *
-     * It is the "440" printed beside every line: divide it by a garment's total
-     * SAM and you get how many one sewer is expected to finish in a day.
-     */
-    public const MINUTES_A_DAY = 440;
-
     protected $fillable = ['garment', 'name', 'sam', 'position', 'added_by'];
 
     protected $casts = [
@@ -101,8 +93,12 @@ class SewingOperation extends Model
      * The minutes, trimmed of the zeros a decimal column pads on.
      *
      * 0.5039 is a measurement; "0.5039000" is a column width. An operation the
-     * shop has never timed shows a dash, because a blank cell in the sheet
+     * shop has never timed reads as a dash, because a blank cell in the sheet
      * means nobody knows, not nought.
+     *
+     * Nothing shows this at the moment - the floor asked for the operation and
+     * who did it, and nothing else. The minutes are still kept, against the day
+     * somebody plans a line with them.
      */
     public function samLabel(): string
     {
@@ -119,27 +115,5 @@ class SewingOperation extends Model
         return (int) static::query()
             ->where('garment', static::normaliseGarment($garment))
             ->max('position') + 1;
-    }
-
-    /**
-     * What a garment takes altogether, and how many of it a day is.
-     *
-     * Untimed operations are left out of the total rather than counted as
-     * nothing, and the page says how many were skipped so the figure is not
-     * read as complete when it is not.
-     *
-     * @param  Collection<int, static>  $operations
-     * @return array{minutes: float, untimed: int, a_day: float|null}
-     */
-    public static function totals(Collection $operations): array
-    {
-        $timed = $operations->filter(fn ($o) => $o->sam !== null);
-        $minutes = (float) $timed->sum(fn ($o) => (float) $o->sam);
-
-        return [
-            'minutes' => $minutes,
-            'untimed' => $operations->count() - $timed->count(),
-            'a_day' => $minutes > 0 ? self::MINUTES_A_DAY / $minutes : null,
-        ];
     }
 }

@@ -342,56 +342,52 @@
 
     {{-- SEWING — who did what.
 
-         Laid out the way the station types it: five slots across, what was
-         done above the name of whoever did it. It was twenty-one boxes named
-         after seams, each wanting a sewer and a thread code; every garment is
-         different, so most printed blank and the ones that mattered were lost
-         in the grid. --}}
+         Laid out the way the shop's own sheet is: one line per operation of
+         whatever garment this is, and a name beside each. It was twenty-one
+         boxes named after seams, then five blank slots and a memory of what a
+         polo takes. --}}
     @php
-        $slots = $jo?->sewingLog() ?? [];
+        $recorded = collect($jo?->sewingLog() ?? [])
+            ->filter(fn ($row) => $row['work'] !== '' || $row['name'] !== '');
         // The floor fills these in on their own page, and corrects them here.
         $logEditable = in_array('sewing_log', $editable, true);
     @endphp
+    {{-- Live: the garment's operations with a name box against each. --}}
+    @if ($logEditable && ($sewingSheet ?? null))
+        @include('partials.sewing-operations', [
+            'sheet' => $sewingSheet,
+            'garment' => $sewingGarment,
+            'rows' => $sewingRows,
+            'canEdit' => $canEditSewingSheet ?? false,
+        ])
+    @endif
+
+    {{-- And the record itself, which is what prints: what was done, and who
+         did it, in the order it was written. Nothing that nobody signed. --}}
     <table class="jo">
-        <tr><td colspan="5" class="sec">Sewing</td></tr>
+        <tr><td colspan="2" class="sec">Sewing</td></tr>
+
+        @if ($jo?->sewing_garment)
+            <tr>
+                <td class="lbl-l" style="width: 55%%;">Product:</td>
+                <td class="fld">{{ $jo->sewing_garment }}</td>
+            </tr>
+        @endif
+
+        @forelse ($recorded as $row)
+            <tr>
+                <td class="lbl-l">{{ strtoupper($row['work']) ?: '&mdash;' }}</td>
+                <td class="yellow">{{ strtoupper($row['name']) }}</td>
+            </tr>
+        @empty
+            <tr>
+                <td class="lbl-l">What was done</td>
+                <td class="yellow">&nbsp;</td>
+            </tr>
+        @endforelse
+
         <tr>
-            @foreach ($slots as $row)
-                <td class="lbl" style="width: 20%;">What was done</td>
-            @endforeach
-        </tr>
-        <tr>
-            @foreach ($slots as $i => $row)
-                <td class="yellow">
-                    @if ($logEditable)
-                        <input type="text" class="fill-in" name="sheet[sewing_log][{{ $i }}][work]"
-                               maxlength="255" value="{{ $row['work'] }}" list="dl_sheet_work"
-                               placeholder="&mdash;" autocomplete="off">
-                    @else
-                        {{ strtoupper($row['work']) }}
-                    @endif
-                </td>
-            @endforeach
-        </tr>
-        <tr>
-            @foreach ($slots as $row)
-                <td class="lbl">Who did it</td>
-            @endforeach
-        </tr>
-        <tr>
-            @foreach ($slots as $i => $row)
-                <td class="yellow">
-                    @if ($logEditable)
-                        <input type="text" class="fill-in" name="sheet[sewing_log][{{ $i }}][name]"
-                               maxlength="100" value="{{ $row['name'] }}" list="dl_sheet_sewer"
-                               placeholder="&mdash;" autocomplete="off">
-                    @else
-                        {{ strtoupper($row['name']) }}
-                    @endif
-                </td>
-            @endforeach
-        </tr>
-        <tr>
-            <td colspan="5" class="fld" style="text-align: left;">
+            <td colspan="2" class="fld" style="text-align: left;">
                 Notes from sewer: {!! $fill('sewer_notes', false) !!}
             </td>
         </tr>

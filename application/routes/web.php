@@ -152,10 +152,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->whereNumber('stationSession')->name('stations.end');
 
     // -------- The sewing sheet: what each garment takes, and how long --------
-    // Reading is open to everyone signed in; writing is the sewing line's, which
-    // the controller checks with canEditSewingSheet().
-    Route::get('/sewing-sheet', [\App\Http\Controllers\SewingOperationController::class, 'index'])
-        ->name('sewing-operations.index');
+    // It is drawn in the sewing block of the job order sheet rather than on a
+    // page of its own, so there is nothing here but the two ways it changes.
+    // Who may change it is canEditSewingSheet(), checked in the controller.
     Route::post('/sewing-sheet', [\App\Http\Controllers\SewingOperationController::class, 'store'])
         ->name('sewing-operations.store');
     Route::delete('/sewing-sheet/{sewingOperation}', [\App\Http\Controllers\SewingOperationController::class, 'destroy'])

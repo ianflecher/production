@@ -502,19 +502,8 @@ class StationController extends Controller
             ARRAY_FILTER_USE_BOTH
         );
 
-        // Five slots come back as five rows, most of them empty on most jobs.
-        // Keep the ones somebody wrote in, in the order they were written.
         if (isset($typed['sewing_log'])) {
-            $rows = collect((array) $typed['sewing_log'])
-                ->map(fn ($row) => [
-                    'work' => trim((string) ($row['work'] ?? '')),
-                    'name' => trim((string) ($row['name'] ?? '')),
-                ])
-                ->filter(fn ($row) => $row['work'] !== '' || $row['name'] !== '')
-                ->values()
-                ->all();
-
-            $typed['sewing_log'] = $rows ?: null;
+            $typed['sewing_log'] = self::sewingRowsWorthKeeping((array) $typed['sewing_log']);
         }
 
         if ($typed !== []) {
@@ -590,10 +579,13 @@ class StationController extends Controller
                 $order->order_number.' is finished — its sheet is now a record and cannot be changed.');
         }
 
+        $fields = self::sheetFieldsForUser(request()->user());
+
         return view('stations.sheet', [
             'order' => $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee', 'tasks.files']),
-            'fields' => self::sheetFieldsForUser(request()->user()),
+            'fields' => $fields,
             'suggest' => JobOrder::stationSuggestions(),
+            ...self::sewingSheet($fields, $order),
         ]);
     }
 
@@ -615,9 +607,11 @@ class StationController extends Controller
 
         $request->validate([
             // The sewing record is a list of rows, not a box of text.
-            'sheet.sewing_log' => ['nullable', 'array', 'max:'.JobOrder::SEWING_LOG_SLOTS],
+            'sheet.sewing_log' => ['nullable', 'array', 'max:'.JobOrder::SEWING_LOG_MAX],
             'sheet.sewing_log.*.work' => ['nullable', 'string', 'max:255'],
             'sheet.sewing_log.*.name' => ['nullable', 'string', 'max:100'],
+            // Whether the line came off the garment's list. See writeSheet().
+            'sheet.sewing_log.*.listed' => ['nullable'],
             ...array_fill_keys(
                 array_map(fn ($f) => 'sheet.'.$f, array_diff($fields, ['sewing_log'])),
                 ['nullable', 'string', 'max:1000']
@@ -630,16 +624,7 @@ class StationController extends Controller
             ->only($fields)
             ->map(function ($value, $key) {
                 if ($key === 'sewing_log') {
-                    $rows = collect((array) $value)
-                        ->map(fn ($row) => [
-                            'work' => trim((string) ($row['work'] ?? '')),
-                            'name' => trim((string) ($row['name'] ?? '')),
-                        ])
-                        ->filter(fn ($row) => $row['work'] !== '' || $row['name'] !== '')
-                        ->values()
-                        ->all();
-
-                    return $rows ?: null;
+                    return self::sewingRowsWorthKeeping((array) $value);
                 }
 
                 return filled($value) ? trim((string) $value) : null;
@@ -728,36 +713,77 @@ class StationController extends Controller
             'suggest' => JobOrder::stationSuggestions(),
             // The step being finished, so its note can be written here.
             'task' => $this->stepFor($stationSession),
-            // And, at a sewing machine, the sheet for whatever is being sewn.
-            ...self::sewingSheet($stationSession->station),
+            // And, where the sewing boxes are live, the sheet for whatever
+            // is being sewn.
+            ...self::sewingSheet(self::sheetFieldsFor($stationSession->station), $stationSession->order),
         ]);
     }
 
     /**
-     * The sewing sheet, for the stations that sew.
+     * The sewing sheet, wherever the sewing boxes are live.
      *
      * The list of operations a garment takes has always existed; it lived in a
      * spreadsheet, which is to say it lived somewhere the person holding the
-     * garment could not read it. It belongs on the page where they write down
-     * what they did, so picking a line off it and recording it are one action.
+     * garment could not read it. It belongs beside the boxes that record the
+     * work, so reading what has to be done and writing down that it was done
+     * are the same action.
      *
-     * Every other station gets nothing: a printer has no use for a seam list.
+     * Asked of the fields rather than the station, so it follows the sewing
+     * log onto the correction sheet as well; a printer, whose fields are its
+     * own, gets nothing, because a printer has no use for a seam list.
      *
+     * @param  array<int, string>  $fields
      * @return array<string, mixed>
      */
-    private static function sewingSheet(string $station): array
+    private static function sewingSheet(array $fields, ?ProductionOrder $order): array
     {
-        if (! str_starts_with($station, 'sewing_')) {
+        if (! in_array('sewing_log', $fields, true) || ! $order?->jobOrder) {
             return ['sewingSheet' => null];
         }
 
         $sheet = SewingOperation::sheet();
+        $garment = SewingOperationController::showing(request(), $sheet, $order->jobOrder->sewing_garment);
 
         return [
             'sewingSheet' => $sheet,
-            'sewingGarment' => SewingOperationController::showing(request(), $sheet),
+            'sewingGarment' => $garment,
+            'sewingRows' => $order->jobOrder->sewingRows(
+                collect($sheet[$garment] ?? [])
+                    ->map(fn ($operation) => ['id' => $operation->id, 'name' => $operation->name])
+                    ->all()
+            ),
             'canEditSewingSheet' => (bool) request()->user()?->canEditSewingSheet(),
         ];
+    }
+
+    /**
+     * The lines of a sewing record worth writing down.
+     *
+     * The form posts a line for every operation the garment takes, which on a
+     * windbreaker is thirty-four of them and on most jobs is mostly blank.
+     *
+     * A line off the garment's list with nobody against it is an operation
+     * nobody has done yet, and storing it would be storing the list twice — the
+     * list is already the list. What is kept is what somebody wrote: a name
+     * against an operation, and any line they typed themselves.
+     *
+     * @param  array<int, mixed>  $posted
+     * @return array<int, array{work: string, name: string}>|null
+     */
+    private static function sewingRowsWorthKeeping(array $posted): ?array
+    {
+        $rows = collect($posted)
+            ->map(fn ($row) => [
+                'work' => trim((string) ((array) $row)['work'] ?? ''),
+                'name' => trim((string) ((array) $row)['name'] ?? ''),
+                'listed' => (bool) (((array) $row)['listed'] ?? false),
+            ])
+            ->filter(fn ($row) => $row['name'] !== '' || ($row['work'] !== '' && ! $row['listed']))
+            ->map(fn ($row) => ['work' => $row['work'], 'name' => $row['name']])
+            ->values()
+            ->all();
+
+        return $rows ?: null;
     }
 
     /**
@@ -811,9 +837,11 @@ class StationController extends Controller
             // What happened at this step, in the words of whoever ran it.
             'task_note' => ['nullable', 'string', 'max:1000'],
             // Five slots of "what they did" and "who did it".
-            'sheet.sewing_log' => ['nullable', 'array', 'max:'.JobOrder::SEWING_LOG_SLOTS],
+            'sheet.sewing_log' => ['nullable', 'array', 'max:'.JobOrder::SEWING_LOG_MAX],
             'sheet.sewing_log.*.work' => ['nullable', 'string', 'max:255'],
             'sheet.sewing_log.*.name' => ['nullable', 'string', 'max:100'],
+            // Whether the line came off the garment's list. See writeSheet().
+            'sheet.sewing_log.*.listed' => ['nullable'],
             ...array_fill_keys(
                 array_map(fn ($f) => 'sheet.'.$f, array_diff($sheetFields, ['sewing_log'])),
                 ['nullable', 'string', 'max:1000']
