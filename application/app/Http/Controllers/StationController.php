@@ -31,20 +31,37 @@ class StationController extends Controller
     public static function eligibleOrders(string $station)
     {
         $departments = Stations::departments($station);
+        $printer = Stations::printerFor($station);
 
-        $query = ProductionOrder::where('status', 'active')
-            ->whereHas('tasks', fn ($q) => $q->whereIn('department', $departments)
-                ->whereIn('status', Stations::RELEASED))
+        // Printing and the batch run go to the machine the job order named —
+        // an Atexco job must not show up on the DTF board. Everything else a
+        // station covers is its own work whatever machine printed the job:
+        // embroidery as an ADD-ON belongs to the embroidery bench even when
+        // the printing was done on an Atexco.
+        $bound = array_values(array_intersect($departments, Stations::PRINTER_BOUND));
+        $free = array_values(array_diff($departments, Stations::PRINTER_BOUND));
+
+        $released = fn ($q, array $in) => $q->whereIn('department', $in)
+            ->whereIn('status', Stations::RELEASED);
+
+        return ProductionOrder::where('status', 'active')
+            ->where(function ($q) use ($bound, $free, $printer, $released) {
+                if ($free) {
+                    $q->whereHas('tasks', fn ($t) => $released($t, $free));
+                }
+
+                if (! $bound) {
+                    return;
+                }
+
+                $onThisMachine = fn ($o) => $o
+                    ->whereHas('tasks', fn ($t) => $released($t, $bound))
+                    ->when($printer !== null, fn ($w) => $w
+                        ->whereHas('jobOrder', fn ($j) => $j->where('printer', $printer)));
+
+                $free ? $q->orWhere($onThisMachine) : $q->where($onThisMachine);
+            })
             ->orderByDesc('id');
-
-        // A printer only gets the jobs whose job order actually picked THAT
-        // printer — an Atexco job shouldn't show up on the DTF machine.
-        if (str_starts_with($station, 'printer_')) {
-            $printer = substr($station, strlen('printer_'));
-            $query->whereHas('jobOrder', fn ($q) => $q->where('printer', $printer));
-        }
-
-        return $query;
     }
 
     /**
@@ -115,22 +132,23 @@ class StationController extends Controller
 
     private static function ordersWaitingAt(string $station, $orders, $ordersByDepartment, $stepDueDates = null)
     {
-        // A printer only gets the jobs whose job order actually picked THAT
-        // printer — an Atexco job shouldn't show up on the DTF machine.
-        $printer = str_starts_with($station, 'printer_')
-            ? substr($station, strlen('printer_'))
-            : null;
+        // The same rule as eligibleOrders: printing and the batch run belong to
+        // the machine the job order named, and everything else a station covers
+        // is its own work whatever machine printed the job.
+        $printer = Stations::printerFor($station);
 
         $waiting = collect();
 
         foreach (Stations::departments($station) as $department) {
+            $boundToMachine = in_array($department, Stations::PRINTER_BOUND, true);
+
             foreach ($ordersByDepartment->get($department, collect()) as $id) {
                 $order = $orders->get($id);
 
                 if (! $order || $waiting->has($id)) {
                     continue;
                 }
-                if ($printer !== null && $order->jobOrder?->printer !== $printer) {
+                if ($boundToMachine && $printer !== null && $order->jobOrder?->printer !== $printer) {
                     continue;
                 }
 

@@ -78,7 +78,17 @@ class AnEmbroideredJobCanSaySoOnTheSheetTest extends TestCase
         $this->assertArrayNotHasKey('printer_embroidery', Stations::all());
     }
 
-    /** And the shop still has exactly one Embroidery station, where it was. */
+    /**
+     * And the shop still has exactly one Embroidery station, where it was.
+     *
+     * It takes more than the Embroidery department now. A job whose printer IS
+     * embroidery carries a Printer step and a Mass production step like every
+     * other job, and with no printer_embroidery station those matched nothing:
+     * they sat ready for nobody and the stages behind them never unlocked. Both
+     * are bound to the machine the job order names, so an Atexco job's printing
+     * still does not appear here — see
+     * AnEmbroideredJobReachesTheEmbroideryBenchTest.
+     */
     public function test_there_is_still_one_embroidery_station(): void
     {
         $embroidery = collect(Stations::all())
@@ -86,7 +96,10 @@ class AnEmbroideredJobCanSaySoOnTheSheetTest extends TestCase
 
         $this->assertCount(1, $embroidery);
         $this->assertSame('Add-ons', $embroidery->first()['group']);
-        $this->assertSame(['Embroidery'], $embroidery->first()['departments']);
+        $this->assertSame(
+            ['Embroidery', 'Printer', 'Mass production'],
+            $embroidery->first()['departments']
+        );
     }
 
     /* ---------------- what picking embroidery does ---------------- */

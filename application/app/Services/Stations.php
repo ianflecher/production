@@ -43,7 +43,17 @@ class Stations
         // Add-on stations, so more than one job can run at once. The counts are
         // Every parallel work area has at least five stations. The fabric-merge
         // press runs on these same press stations, by its type.
-        $stations['embroidery'] = ['label' => 'Embroidery', 'group' => 'Add-ons', 'departments' => ['Embroidery']];
+        // Embroidery is a machine that decorates, and on some jobs it is the
+        // ONLY machine that decorates: "Embro Print Only" has no print at all.
+        // Those jobs still carry a Printer step and a Mass production step,
+        // and both belong here, because the embroidery machine is what runs
+        // them. Both are printer-bound below, so an Atexco job's printing does
+        // not appear here - only a job whose printer IS embroidery.
+        $stations['embroidery'] = [
+            'label' => 'Embroidery',
+            'group' => 'Add-ons',
+            'departments' => ['Embroidery', 'Printer', 'Mass production'],
+        ];
         foreach ([
             'small_press' => ['Small press', self::MIN_PARALLEL_STATIONS],
             'roller_press' => ['Roller press', self::MIN_PARALLEL_STATIONS],
@@ -169,6 +179,31 @@ class Stations
             // The old broad "production" role covers the whole line.
             'production' => array_merge($cuttings, $pairings, $sewings, $qcs),
         ];
+    }
+
+    /**
+     * Departments a station takes only when the job order named its machine.
+     *
+     * An Atexco job must not appear on the DTF board, and an embroidered job
+     * must not appear on either — which is the same rule, so it is one list.
+     */
+    public const PRINTER_BOUND = ['Printer', 'Mass production'];
+
+    /**
+     * Which printer a station IS, or null if it is not a printing machine.
+     *
+     * The embroidery station answers "embroidery", because that is what the
+     * job order's printer box says when the job is embroidered. There is no
+     * printer_embroidery station: embroidery is deliberately not in PRINTERS,
+     * since that list is what builds the printer stations.
+     */
+    public static function printerFor(string $station): ?string
+    {
+        if (str_starts_with($station, 'printer_')) {
+            return substr($station, strlen('printer_'));
+        }
+
+        return $station === 'embroidery' ? 'embroidery' : null;
     }
 
     public static function keys(): array
