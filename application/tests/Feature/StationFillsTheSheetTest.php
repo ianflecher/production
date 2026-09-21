@@ -293,9 +293,9 @@ class StationFillsTheSheetTest extends TestCase
         $session = $this->runningOn($sewer, 'sewing_1', $order);
 
         $this->actingAs($sewer)
-            ->get("/station-sessions/{$session->id}/finish")
+            ->get("/station-sessions/{$session->id}/finish?garment=REGULAR+T-SHIRT")
             ->assertOk()
-            // A line per operation of whatever this garment is, each with a
+            // A line per operation of whatever this product is, each with a
             // box for the name of whoever did it.
             ->assertSee('name="sheet[sewing_log][0][name]"', false)
             ->assertSee('name="sheet[sewing_log][4][work]"', false)

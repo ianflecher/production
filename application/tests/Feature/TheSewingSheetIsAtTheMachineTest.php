@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\JobOrder;
 use App\Models\ProductionOrder;
 use App\Models\SewingOperation;
 use App\Models\StationSession;
@@ -140,7 +139,7 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         $session = $this->runningAtSewing($sewer);
 
         $html = $this->actingAs($sewer)
-            ->get(route('stations.finish', $session))
+            ->get(route('stations.finish', $session).'?garment=REGULAR+T-SHIRT')
             ->assertOk()->getContent();
 
         $this->assertStringContainsString('What this garment takes, and who did it', $html);
@@ -207,11 +206,12 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         $this->runningAtSewing($sewer);
 
         $html = $this->actingAs($sewer)
-            ->get(route('orders.sheet', $this->order))
+            ->get(route('orders.sheet', $this->order).'?garment=EVO+VEST')
             ->assertOk()->getContent();
 
         $this->assertStringContainsString('What this garment takes, and who did it', $html);
         $this->assertStringContainsString('sheet[sewing_log][0][name]', $html);
+        $this->assertStringContainsString('ATTACH VEST HOLDER', $html);
 
         // In the sewing block, above the record that prints — not in a card
         // of its own somewhere further up the page. strpos() returning false
@@ -236,7 +236,7 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         $this->runningAtSewing($sewer);
 
         foreach (['orders.sheet' => $this->order, 'stations.finish' => $this->session] as $route => $on) {
-            $html = $this->actingAs($sewer)->get(route($route, $on))->getContent();
+            $html = $this->actingAs($sewer)->get(route($route, $on).'?garment=SANDO')->getContent();
 
             $this->assertStringContainsString('form="soAddSheet"', $html, $route.' has no add boxes');
             $this->assertStringContainsString('id="soAddSheet"', $html, $route.' has no add form');
@@ -373,11 +373,11 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
     /* ---------------- a line per operation, a name per line ---------------- */
 
     /**
-     * The record is the garment's own list now. Pick the product and every
-     * operation it takes is a line with a box beside it, instead of five blank
-     * slots and a memory of what a polo takes.
+     * The record is the product's own list now, and only that: every operation
+     * it takes, numbered, with a box beside it. No blank spares, and nothing
+     * carried over from a product somebody switched away from.
      */
-    public function test_the_record_is_a_line_for_every_operation_of_the_garment(): void
+    public function test_the_record_is_a_line_for_every_operation_and_nothing_else(): void
     {
         $sewer = $this->sewer();
         $session = $this->runningAtSewing($sewer);
@@ -386,13 +386,33 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
             ->get(route('stations.finish', $session).'?garment=SANDO')
             ->assertOk()->getContent();
 
-        // SANDO takes nine, and the record has nine lines plus the spares.
-        foreach (range(0, 8 + JobOrder::SEWING_LOG_SPARES - 1) as $i) {
+        // SANDO takes nine. Nine lines, and nothing after them.
+        foreach (range(0, 8) as $i) {
             $this->assertStringContainsString('sheet[sewing_log]['.$i.'][name]', $html, 'line '.$i.' is missing');
         }
 
-        $this->assertStringNotContainsString('sheet[sewing_log][12][name]', $html, 'the record runs on past the garment');
+        $this->assertStringNotContainsString('sheet[sewing_log][9][name]', $html, 'the record runs on past the product');
         $this->assertStringContainsString('ATTACH RIBBINGS ARMHOLE', $html);
+        $this->assertStringNotContainsString('Something else that was done', $html);
+        $this->assertSame(9, substr_count($html, '[listed]'));
+    }
+
+    /**
+     * Until somebody says what the product is, the record lays nothing out. A
+     * job is not a t-shirt because t-shirts come first on the sheet.
+     */
+    public function test_no_product_is_guessed_for_a_new_job(): void
+    {
+        $sewer = $this->sewer();
+        $session = $this->runningAtSewing($sewer);
+
+        $html = $this->actingAs($sewer)
+            ->get(route('stations.finish', $session))
+            ->assertOk()->getContent();
+
+        $this->assertStringContainsString('pick the product', $html);
+        $this->assertStringContainsString('its operations will be listed here', $html);
+        $this->assertStringNotContainsString('sheet[sewing_log][0][name]', $html);
     }
 
     /** And the names go down against the operations they were typed beside. */
@@ -465,35 +485,31 @@ class TheSewingSheetIsAtTheMachineTest extends TestCase
         $tapping = collect($rows)->firstWhere('work', 'TAPPING NECK');
 
         $this->assertSame('Jovy', $tapping['name']);
-        $this->assertTrue($tapping['listed']);
 
         // And nobody else was given her name.
         $this->assertSame(1, collect($rows)->where('name', 'Jovy')->count());
     }
 
     /**
-     * Work the list has not got is kept on its own line rather than thrown
-     * away when the garment changes under it.
+     * A job sewn before any of this has a record and no product against it.
+     * Its own lines are what it shows, rather than nothing.
      */
-    public function test_work_the_list_has_not_got_keeps_its_line(): void
+    public function test_an_older_record_still_reads_without_a_product(): void
     {
         $sewer = $this->sewer();
-        $this->runningAtSewing($sewer);
+        $session = $this->runningAtSewing($sewer);
 
         $this->order->jobOrder->update([
+            'sewing_garment' => null,
             'sewing_log' => [['work' => 'Re-ran the whole hem', 'name' => 'Leonor']],
         ]);
 
-        $rows = $this->order->fresh()->jobOrder->sewingRows(
-            SewingOperation::forGarment('SANDO')
-                ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name])->all()
-        );
+        $html = $this->actingAs($sewer)
+            ->get(route('stations.finish', $session))
+            ->assertOk()->getContent();
 
-        $mine = collect($rows)->firstWhere('work', 'Re-ran the whole hem');
-
-        $this->assertNotNull($mine, 'a line nobody could match was dropped');
-        $this->assertSame('Leonor', $mine['name']);
-        $this->assertFalse($mine['listed'], 'a typed line must stay editable');
+        $this->assertStringContainsString('Re-ran the whole hem', $html);
+        $this->assertStringContainsString('value="Leonor"', $html);
     }
 
     /* ---------------- and no Blade leaking ---------------- */

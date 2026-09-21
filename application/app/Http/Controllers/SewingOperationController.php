@@ -22,11 +22,20 @@ class SewingOperationController extends Controller
      * already says it is, because that is a decision somebody made at the
      * machine and everybody who opens the job afterwards should see the same
      * list; then whatever was last added to, so writing three operations onto
-     * a windbreaker does not put them back on the t-shirt between each one;
-     * then the first on the sheet, which is where a new job starts.
+     * a windbreaker does not put them back on the t-shirt between each one.
+     *
+     * Failing all of that, nothing. A job whose product nobody has chosen is
+     * not a t-shirt because t-shirts are first on the sheet, and laying out a
+     * t-shirt's operations against it would be the system answering a question
+     * it was not asked.
      */
     public static function showing(Request $request, array $sheet, ?string $saved = null): string
     {
+        // Asked for, and asked for as nothing: they picked the blank option.
+        if ($request->has('garment') && trim((string) $request->query('garment')) === '') {
+            return '';
+        }
+
         foreach ([$request->query('garment'), $saved, session('sewing_garment')] as $wanted) {
             $wanted = $wanted ? SewingOperation::normaliseGarment((string) $wanted) : null;
 
@@ -35,7 +44,7 @@ class SewingOperationController extends Controller
             }
         }
 
-        return (string) array_key_first($sheet);
+        return '';
     }
 
     /**

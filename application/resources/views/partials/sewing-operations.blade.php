@@ -1,16 +1,13 @@
-{{-- The sewing record: the garment's operations, and who did each one.
+{{-- The sewing record: the product's operations, and who did each one.
 
      Pick the product and the record lays itself out the way the shop's own
-     sheet does — one line per operation, a box beside it for the name. It was
-     five blank slots and a memory of what a polo takes.
+     sheet does — one numbered line per operation, a box beside it for the name.
+     Nothing else: an operation the list has not got is added to the list, where
+     it gets a number like the rest.
 
-     Lines off the garment's list carry their operation as a hidden value and a
-     flag saying where it came from: a listed line with nobody against it is an
-     operation not done yet, and is not written down. See
-     StationController::sewingRowsWorthKeeping().
-
-     The blank lines at the end are for work the list has not got, and anything
-     typed into one is kept whether or not it ends up with a name.
+     Each line carries its operation as a hidden value and a flag saying it came
+     off the list, so the save can tell a line somebody signed from a line
+     nobody has done yet. See StationController::sewingRowsWorthKeeping().
 
      It sits inside the job order sheet, which is one big form, so its own forms
      are pushed out to the end of the page and its inputs point back at them by
@@ -18,12 +15,11 @@
 
      Expects:
        $sheet    garment => operations, from SewingOperation::sheet()
-       $garment  the one this job order is being sewn as
+       $garment  the product this job is being sewn as, or '' if nobody has said
        $rows     from JobOrder::sewingRows()
-       $canEdit  whether this person may add to the garment's list --}}
+       $canEdit  whether this person may add to the product's list --}}
 @php
     $canEdit = $canEdit ?? false;
-    $listed = collect($rows)->where('listed', true)->count();
 @endphp
 
 <style>
@@ -56,15 +52,13 @@
     .so-table tbody tr:nth-child(even) td { background: rgba(127, 127, 127, 0.05); }
     .so-table td.op { font-weight: 600; }
     .so-num { color: var(--ink-3); width: 36px; }
-    .so-added { font-size: 0.72rem; color: var(--ink-3); font-weight: 400; }
+    .so-empty { padding: 1rem 0.7rem; font-size: 0.85rem; color: var(--ink-3); }
 
-    /* The name box, and the box for work the list has not got. */
     .so-table input[type="text"] {
         width: 100%; box-sizing: border-box;
         padding: 0.3rem 0.5rem; border: 1px solid var(--border-strong);
         border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 0.88rem;
     }
-    .so-table tr.so-spare td.op input { font-weight: 600; }
     .so-who { width: 40%; }
 
     .so-use {
@@ -93,11 +87,16 @@
     <div class="so-pick">
         <label for="soGarment">Product</label>
         <select id="soGarment" aria-label="Which product this is">
+            {{-- Nobody has said what this is yet. It is not a t-shirt because
+                 t-shirts come first on the sheet. --}}
+            <option value="" @selected($garment === '')>&mdash; pick the product &mdash;</option>
             @foreach ($sheet as $name => $operations)
                 <option value="{{ $name }}" @selected($name === $garment)>{{ $name }}</option>
             @endforeach
         </select>
-        <span class="so-count">{{ $listed }} operations</span>
+        @if ($garment !== '')
+            <span class="so-count">{{ count($rows) }} operations</span>
+        @endif
     </div>
 
     {{-- What the record is a record of. Saved with it, so whoever opens the job
@@ -115,19 +114,13 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach ($rows as $i => $row)
-                    <tr class="{{ $row['listed'] ? '' : 'so-spare' }}">
-                        <td class="so-num">{{ $row['listed'] ? $i + 1 : '' }}</td>
+                @forelse ($rows as $i => $row)
+                    <tr>
+                        <td class="so-num">{{ $i + 1 }}</td>
                         <td class="op">
-                            @if ($row['listed'])
-                                {{ $row['work'] }}
-                                <input type="hidden" name="sheet[sewing_log][{{ $i }}][work]" value="{{ $row['work'] }}">
-                                <input type="hidden" name="sheet[sewing_log][{{ $i }}][listed]" value="1">
-                            @else
-                                <input type="text" name="sheet[sewing_log][{{ $i }}][work]"
-                                       maxlength="255" value="{{ $row['work'] }}" list="dl_sheet_work"
-                                       placeholder="Something else that was done" autocomplete="off">
-                            @endif
+                            {{ $row['work'] }}
+                            <input type="hidden" name="sheet[sewing_log][{{ $i }}][work]" value="{{ $row['work'] }}">
+                            <input type="hidden" name="sheet[sewing_log][{{ $i }}][listed]" value="1">
                         </td>
                         <td>
                             <input type="text" name="sheet[sewing_log][{{ $i }}][name]"
@@ -136,7 +129,7 @@
                         </td>
                         @if ($canEdit)
                             <td class="act">
-                                @if ($row['listed'])
+                                @if ($row['id'])
                                     <button type="submit" class="so-use"
                                             form="soDrop{{ $row['id'] }}"
                                             title="Take this operation off the {{ $garment }} list">&times;</button>
@@ -144,31 +137,31 @@
                             </td>
                         @endif
                     </tr>
-                @endforeach
+                @empty
+                    <tr>
+                        <td colspan="{{ $canEdit ? 4 : 3 }}" class="so-empty">
+                            Pick the product above and its operations will be listed here.
+                        </td>
+                    </tr>
+                @endforelse
             </tbody>
         </table>
     </div>
 
-    @if ($canEdit)
-        {{-- Adding to the garment's list. The boxes are here; the form they
-             belong to is at the end of the page, because this one sits inside
-             the job order sheet's own form. The product box is free text with
-             the sheet behind it, so a garment the shop starts making on a
-             Tuesday can be written down on the Tuesday rather than waiting for
-             somebody with a database. --}}
+    @if ($canEdit && $garment !== '')
+        {{-- Adding to the product's list: the operation, and nothing else. The
+             product is the one chosen above, so asking for it again would be
+             asking the same question twice and giving it two places to
+             disagree. The box is here; the form it belongs to is at the end of
+             the page, because this one sits inside the job order sheet's own
+             form. --}}
         <div class="so-add">
-            <input type="text" name="garment" form="soAddSheet" style="flex:0 1 180px;"
-                   value="{{ old('garment', $garment) }}" list="soGarments"
-                   maxlength="120" autocomplete="off" placeholder="Product" required>
+            <input type="hidden" name="garment" form="soAddSheet" value="{{ $garment }}">
             <input type="text" name="name" form="soAddSheet" value="{{ old('name') }}"
                    maxlength="255" autocomplete="off" required
-                   placeholder="An operation this list has not got">
+                   placeholder="An operation the {{ $garment }} list has not got">
             <button class="btn btn-success btn-sm" form="soAddSheet">+ Add to the list</button>
         </div>
-
-        <datalist id="soGarments">
-            @foreach ($sheet as $name => $operations)<option value="{{ $name }}"></option>@endforeach
-        </datalist>
     @endif
 </div>
 
@@ -197,24 +190,30 @@ Anything already written against it on this job is kept.');">
     if (!picker) return;
 
     // Changing the product changes which operations the record is laid out
-    // against, which the page has to be redrawn to do. Anything typed and not
-    // saved would go with it, so it asks first when there is something to lose.
+    // against, which the page has to be redrawn to do. Names already written
+    // belong to the product they were written against, so they go with it.
     picker.addEventListener('change', function () {
-        var typed = Array.prototype.filter.call(
+        var written = Array.prototype.filter.call(
             document.querySelectorAll('input[name^="sheet[sewing_log]"][name$="[name]"]'),
             function (box) { return box.value.trim() !== ''; }
         ).length;
 
-        if (typed && !confirm(
-            'Change the product to ' + picker.value + '?\n\n'
-            + typed + ' name(s) typed here and not yet saved will be lost.'
+        if (written && !confirm(
+            'Change the product to ' + (picker.value || 'none') + '?\n\n'
+            + written + ' name(s) written against the current one will be dropped.'
         )) {
             picker.value = picker.dataset.was;
             return;
         }
 
         var url = new URL(window.location.href);
-        url.searchParams.set('garment', picker.value);
+
+        if (picker.value) {
+            url.searchParams.set('garment', picker.value);
+        } else {
+            url.searchParams.delete('garment');
+        }
+
         window.location.href = url.toString();
     });
 

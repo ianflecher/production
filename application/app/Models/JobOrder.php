@@ -541,12 +541,6 @@ class JobOrder extends Model
     ];
 
     /**
-     * Blank lines kept at the end of the record, for work the garment's list
-     * has not got. Something always comes up that nobody wrote down.
-     */
-    public const SEWING_LOG_SPARES = 3;
-
-    /**
      * The most lines one sewing record can carry.
      *
      * The longest garment on the sheet is thirty-four operations; this is room
@@ -578,26 +572,30 @@ class JobOrder extends Model
      * The lines the sewing record shows.
      *
      * The shop's sheet is one line per operation with a name beside it, and
-     * that is what this is: every operation the chosen garment takes, in the
-     * order the shop wrote them, carrying whatever name has already been put
-     * against it.
+     * that is what this is: every operation the chosen product takes, in the
+     * order the shop wrote them, numbered, carrying whatever name has already
+     * been put against it. Nothing else — an operation the list has not got is
+     * added to the list, where it gets a number like the rest.
      *
-     * Then anything written down that the garment's list has not got — work
-     * typed by hand, or a record made before a garment was chosen — because
-     * changing the garment must not quietly drop somebody's line. Then a few
-     * blank ones.
+     * Until a product is chosen there is nothing to lay out, so a job that
+     * already has a record shows that record instead. It is how a job sewn
+     * before any of this still reads.
      *
-     * A line is "listed" when it came off the garment's list. That is what
-     * tells the save which lines are the shop's suggestion and which are
-     * somebody's writing: a listed line with nobody against it is an operation
-     * not yet done, and is not worth keeping.
-     *
-     * @param  array<int, array{id: int, name: string}>  $operations  the chosen garment's
-     * @return array<int, array{id: ?int, work: string, name: string, listed: bool}>
+     * @param  array<int, array{id: int, name: string}>  $operations  the chosen product's
+     * @return array<int, array{id: ?int, work: string, name: string}>
      */
     public function sewingRows(array $operations): array
     {
         $saved = $this->sewingLog();
+
+        if ($operations === []) {
+            return collect($saved)
+                ->filter(fn ($row) => $row['work'] !== '' || $row['name'] !== '')
+                ->map(fn ($row) => $row + ['id' => null])
+                ->values()
+                ->all();
+        }
+
         $taken = [];
         $rows = [];
 
@@ -616,18 +614,7 @@ class JobOrder extends Model
                 'id' => $operation['id'],
                 'work' => $operation['name'],
                 'name' => $found === null ? '' : $saved[$found]['name'],
-                'listed' => true,
             ];
-        }
-
-        foreach ($saved as $i => $row) {
-            if (! isset($taken[$i]) && ($row['work'] !== '' || $row['name'] !== '')) {
-                $rows[] = $row + ['id' => null, 'listed' => false];
-            }
-        }
-
-        foreach (range(1, self::SEWING_LOG_SPARES) as $ignored) {
-            $rows[] = ['id' => null, 'work' => '', 'name' => '', 'listed' => false];
         }
 
         return $rows;
