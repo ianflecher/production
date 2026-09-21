@@ -71,6 +71,19 @@
         @include('partials.tech-pack', ['order' => $order])
     @endif
 
+    {{-- At a sewing machine, the sheet for what is being sewn: pick the
+         garment, read the operations, and put one of them straight into the
+         record below. Above the record and outside its form, because adding a
+         line to the sheet is its own form and a form cannot nest. --}}
+    @if ($sewingSheet ?? null)
+        @include('partials.sewing-operations', [
+            'sheet' => $sewingSheet,
+            'garment' => $sewingGarment,
+            'canEdit' => $canEditSewingSheet,
+            'withAdd' => true,
+        ])
+    @endif
+
     {{-- The production record, with this station's own boxes live. The
          questions used to be repeated in a list underneath it, which meant
          reading the spec in one place and answering it in another, twice as
@@ -116,6 +129,13 @@ The clock stops and the step stays exactly as it is. Anything you typed above is
             Stops the clock and leaves the step untouched.
         </span>
     </form>
+
+    {{-- "What they did" has pointed at this list since the log replaced the
+         seam boxes, and until the sewing sheet came in there was nothing to
+         put in it. Now it is the shop's own operations. --}}
+    <datalist id="dl_sheet_work">
+        @foreach (($suggest['work'] ?? []) as $w)<option value="{{ $w }}"></option>@endforeach
+    </datalist>
 
     {{-- The same handful of people work every seam and the same thread codes go
          through all of them, so both boxes pick from one shared list. --}}

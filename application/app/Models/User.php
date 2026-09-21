@@ -762,8 +762,8 @@ class User extends Authenticatable
         }
 
         return strtolower(trim((string) $this->job_role)) === self::JOB_RAW_MATERIALS_SUPERVISOR
-            ? \App\Models\InventoryItem::KIND_FABRIC
-            : \App\Models\InventoryItem::KIND_READY_MADE;
+            ? InventoryItem::KIND_FABRIC
+            : InventoryItem::KIND_READY_MADE;
     }
 
     /**
@@ -862,6 +862,34 @@ class User extends Authenticatable
         }
 
         return ! empty(Stations::forUser($this));
+    }
+
+    /**
+     * Who may write on the sewing sheet.
+     *
+     * Everyone signed in can read it - it is the shop's own reference, and the
+     * costing desk has as much use for "what does a windbreaker take" as the
+     * floor does. Writing on it belongs to the people who work a sewing machine
+     * and the ones who run them, because an operation is added by somebody who
+     * has just done it.
+     *
+     * Asked of the stations rather than the job role, so "sewing supervisor",
+     * "production" and a plain sewer all answer the same way, and an agent
+     * supervisor - who supervises no machine - does not.
+     */
+    public function canEditSewingSheet(): bool
+    {
+        if ($this->isLeader()) {
+            return true;
+        }
+
+        foreach (Stations::forUser($this) as $station) {
+            if (str_starts_with($station, 'sewing_')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

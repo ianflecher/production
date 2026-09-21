@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class JobOrder extends Model
 {
@@ -23,11 +24,11 @@ class JobOrder extends Model
      */
     public const PRINT_TYPES = [
         'full_sublimation' => ['label' => 'Full Sublimation', 'printer' => 'atexco',            'cutting' => 'laser',  'press' => 'roller_press'],
-        'dtf'              => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => null],
-        'eco_solvent'      => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
-        'vinyl'            => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
-        'embroidery'       => ['label' => 'Embroidery',      'printer' => 'embroidery',        'cutting' => 'manual', 'press' => null],
-        'silkscreen'       => ['label' => 'Silkscreen',      'printer' => 'epson',             'cutting' => 'manual', 'press' => 'small_press'],
+        'dtf' => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => null],
+        'eco_solvent' => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
+        'vinyl' => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
+        'embroidery' => ['label' => 'Embroidery',      'printer' => 'embroidery',        'cutting' => 'manual', 'press' => null],
+        'silkscreen' => ['label' => 'Silkscreen',      'printer' => 'epson',             'cutting' => 'manual', 'press' => 'small_press'],
     ];
 
     protected $fillable = [
@@ -186,7 +187,7 @@ class JobOrder extends Model
      * the artist is drawing from stage one: an officer sent two links, the
      * artist was already working, and the page showed nothing.
      */
-    public function filesSentToTheArtist(): \Illuminate\Support\Collection
+    public function filesSentToTheArtist(): Collection
     {
         return $this->referenceFiles
             ->where('kind', JobOrderFile::KIND_SENT)
@@ -217,7 +218,7 @@ class JobOrder extends Model
      * Reads the loaded relation, so a page that eager-loads referenceFiles
      * pays nothing for asking.
      */
-    public function designFiles(): \Illuminate\Support\Collection
+    public function designFiles(): Collection
     {
         // What the officer SENT is never the design: it is the extra a client
         // passed on afterwards, and it has a card of its own.
@@ -382,11 +383,11 @@ class JobOrder extends Model
      * @var array<string, array{label: string, press: ?string}>
      */
     public const ADDONS = [
-        'embroidery'    => ['label' => 'Embroidery',    'press' => 'embroidery'],
-        'sublimated'    => ['label' => 'Sublimated',    'press' => null],
+        'embroidery' => ['label' => 'Embroidery',    'press' => 'embroidery'],
+        'sublimated' => ['label' => 'Sublimated',    'press' => null],
         'reflectorized' => ['label' => 'Reflectorized', 'press' => 'roller_press'],
         // Free text — the shop says what it is, and picks the press.
-        'others'        => ['label' => 'Others',        'press' => null],
+        'others' => ['label' => 'Others',        'press' => null],
     ];
 
     /** The press that does a given add-on, or null when it must be chosen. */
@@ -662,7 +663,26 @@ class JobOrder extends Model
             ->values()
             ->all();
 
-        return ['sewer' => $sewers, 'thread' => $pool('thread')];
+        // What was done, for the box that asks it. The sewing sheet first -
+        // the shop's own list of operations, which is what anybody sewing is
+        // actually doing - then whatever has been typed into the log since,
+        // because a job carries work no sheet has a line for.
+        $work = SewingOperation::query()
+            ->orderBy('name')
+            ->pluck('name')
+            ->merge(self::query()
+                ->whereNotNull('sewing_log')
+                ->pluck('sewing_log')
+                ->flatMap(fn ($log) => collect(is_array($log) ? $log : (json_decode((string) $log, true) ?: []))
+                    ->pluck('work')))
+            ->map(fn ($v) => trim((string) $v))
+            ->filter()
+            ->unique(fn ($v) => mb_strtolower($v))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+
+        return ['sewer' => $sewers, 'thread' => $pool('thread'), 'work' => $work];
     }
 
     public const SUGGEST_FIELDS = [

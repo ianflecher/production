@@ -58,6 +58,12 @@
         </div>
     </form>
 
+    {{-- The operations off the sewing sheet, for the box that asks what was
+         done. Correcting a line weeks later should offer the same words the
+         station offered when it was written. --}}
+    <datalist id="dl_sheet_work">
+        @foreach (($suggest['work'] ?? []) as $w)<option value="{{ $w }}"></option>@endforeach
+    </datalist>
     <datalist id="dl_sheet_sewer">
         @foreach (($suggest['sewer'] ?? []) as $n)<option value="{{ $n }}"></option>@endforeach
     </datalist>

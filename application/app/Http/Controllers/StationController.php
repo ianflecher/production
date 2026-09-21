@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\JobOrder;
 use App\Models\ProductionOrder;
+use App\Models\SewingOperation;
 use App\Models\StationSession;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\Stations;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 /**
@@ -69,8 +73,8 @@ class StationController extends Controller
      * that is actually waiting there. Works off collections already in memory
      * so the board doesn't query per station.
      *
-     * @param  \Illuminate\Support\Collection<int, ProductionOrder>  $orders  keyed by id
-     * @param  \Illuminate\Support\Collection<string, \Illuminate\Support\Collection<int, int>>  $ordersByDepartment
+     * @param  Collection<int, ProductionOrder>  $orders  keyed by id
+     * @param  Collection<string, Collection<int, int>>  $ordersByDepartment
      */
     /**
      * One page of a station's queue, late work first — whoever takes the station
@@ -79,7 +83,7 @@ class StationController extends Controller
      * Each station pages on its own parameter, so turning the page on the busy
      * machine doesn't move every other card on the board.
      *
-     * @param  \Illuminate\Support\Collection  $waiting
+     * @param  Collection  $waiting
      */
     /**
      * Jobs this station has already finished, on orders that are still running.
@@ -88,9 +92,9 @@ class StationController extends Controller
      * still be there. It drops off the board when the whole order is finished,
      * at which point the sheet is a record and stops being editable.
      *
-     * @return \Illuminate\Support\Collection<int, ProductionOrder>
+     * @return Collection<int, ProductionOrder>
      */
-    private static function finishedHere(string $station, $orders, $finishedByDepartment): \Illuminate\Support\Collection
+    private static function finishedHere(string $station, $orders, $finishedByDepartment): Collection
     {
         if (self::sheetFieldsFor($station) === []) {
             return collect();
@@ -214,9 +218,9 @@ class StationController extends Controller
         // sheet can still be corrected. One query for both: this board is left
         // open all day and each query on it is paid over and over.
         $steps = Task::where(fn ($q) => $q
-                ->whereIn('status', Stations::RELEASED)
-                ->orWhere(fn ($w) => $w->where('status', 'complete')
-                    ->whereIn('department', ['Sewing', 'Quality control'])))
+            ->whereIn('status', Stations::RELEASED)
+            ->orWhere(fn ($w) => $w->where('status', 'complete')
+                ->whereIn('department', ['Sewing', 'Quality control'])))
             ->whereHas('order', fn ($q) => $q->where('status', 'active'))
             ->get(['production_order_id', 'department', 'status', 'due_at']);
 
@@ -306,7 +310,7 @@ class StationController extends Controller
         // floor picks from a list instead of retyping (and misspelling) them.
         // One query, not one per suggestable field — this is a board the shop
         // leaves open all day.
-        $suggest = \App\Models\JobOrder::stationSuggestions();
+        $suggest = JobOrder::stationSuggestions();
 
         return view('stations.index', [
             'groups' => $groups,
@@ -440,8 +444,8 @@ class StationController extends Controller
     public static function sheetFieldsFor(string $station): array
     {
         return match (true) {
-            str_starts_with($station, 'sewing_') => \App\Models\JobOrder::SEWING_STATION_FIELDS,
-            str_starts_with($station, 'qc_') => \App\Models\JobOrder::QC_STATION_FIELDS,
+            str_starts_with($station, 'sewing_') => JobOrder::SEWING_STATION_FIELDS,
+            str_starts_with($station, 'qc_') => JobOrder::QC_STATION_FIELDS,
             default => [],
         };
     }
@@ -529,7 +533,7 @@ class StationController extends Controller
      *
      * @return array<int, string>
      */
-    public static function sheetFieldsForUser(\App\Models\User $user): array
+    public static function sheetFieldsForUser(User $user): array
     {
         $fields = [];
 
@@ -589,7 +593,7 @@ class StationController extends Controller
         return view('stations.sheet', [
             'order' => $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee', 'tasks.files']),
             'fields' => self::sheetFieldsForUser(request()->user()),
-            'suggest' => \App\Models\JobOrder::stationSuggestions(),
+            'suggest' => JobOrder::stationSuggestions(),
         ]);
     }
 
@@ -611,7 +615,7 @@ class StationController extends Controller
 
         $request->validate([
             // The sewing record is a list of rows, not a box of text.
-            'sheet.sewing_log' => ['nullable', 'array', 'max:'.\App\Models\JobOrder::SEWING_LOG_SLOTS],
+            'sheet.sewing_log' => ['nullable', 'array', 'max:'.JobOrder::SEWING_LOG_SLOTS],
             'sheet.sewing_log.*.work' => ['nullable', 'string', 'max:255'],
             'sheet.sewing_log.*.name' => ['nullable', 'string', 'max:100'],
             ...array_fill_keys(
@@ -721,10 +725,39 @@ class StationController extends Controller
                 'order.creator', 'order.tasks.assignee', 'order.tasks.files',
             ]),
             'fields' => self::sheetFieldsFor($stationSession->station),
-            'suggest' => \App\Models\JobOrder::stationSuggestions(),
+            'suggest' => JobOrder::stationSuggestions(),
             // The step being finished, so its note can be written here.
             'task' => $this->stepFor($stationSession),
+            // And, at a sewing machine, the sheet for whatever is being sewn.
+            ...self::sewingSheet($stationSession->station),
         ]);
+    }
+
+    /**
+     * The sewing sheet, for the stations that sew.
+     *
+     * The list of operations a garment takes has always existed; it lived in a
+     * spreadsheet, which is to say it lived somewhere the person holding the
+     * garment could not read it. It belongs on the page where they write down
+     * what they did, so picking a line off it and recording it are one action.
+     *
+     * Every other station gets nothing: a printer has no use for a seam list.
+     *
+     * @return array<string, mixed>
+     */
+    private static function sewingSheet(string $station): array
+    {
+        if (! str_starts_with($station, 'sewing_')) {
+            return ['sewingSheet' => null];
+        }
+
+        $sheet = SewingOperation::sheet();
+
+        return [
+            'sewingSheet' => $sheet,
+            'sewingGarment' => SewingOperationController::showing(request(), $sheet),
+            'canEditSewingSheet' => (bool) request()->user()?->canEditSewingSheet(),
+        ];
     }
 
     /**
@@ -745,7 +778,7 @@ class StationController extends Controller
     }
 
     /** The task this run is closing, if the station has one open. */
-    private function stepFor(StationSession $session): ?\App\Models\Task
+    private function stepFor(StationSession $session): ?Task
     {
         return $session->order?->tasks
             ->whereIn('department', Stations::departments($session->station))
@@ -778,7 +811,7 @@ class StationController extends Controller
             // What happened at this step, in the words of whoever ran it.
             'task_note' => ['nullable', 'string', 'max:1000'],
             // Five slots of "what they did" and "who did it".
-            'sheet.sewing_log' => ['nullable', 'array', 'max:'.\App\Models\JobOrder::SEWING_LOG_SLOTS],
+            'sheet.sewing_log' => ['nullable', 'array', 'max:'.JobOrder::SEWING_LOG_SLOTS],
             'sheet.sewing_log.*.work' => ['nullable', 'string', 'max:255'],
             'sheet.sewing_log.*.name' => ['nullable', 'string', 'max:100'],
             ...array_fill_keys(

@@ -151,6 +151,16 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/station-sessions/{stationSession}/end', [\App\Http\Controllers\StationController::class, 'end'])
         ->whereNumber('stationSession')->name('stations.end');
 
+    // -------- The sewing sheet: what each garment takes, and how long --------
+    // Reading is open to everyone signed in; writing is the sewing line's, which
+    // the controller checks with canEditSewingSheet().
+    Route::get('/sewing-sheet', [\App\Http\Controllers\SewingOperationController::class, 'index'])
+        ->name('sewing-operations.index');
+    Route::post('/sewing-sheet', [\App\Http\Controllers\SewingOperationController::class, 'store'])
+        ->name('sewing-operations.store');
+    Route::delete('/sewing-sheet/{sewingOperation}', [\App\Http\Controllers\SewingOperationController::class, 'destroy'])
+        ->whereNumber('sewingOperation')->name('sewing-operations.destroy');
+
     // -------- Messages: one conversation per job order, for everyone on it --------
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/unread', [MessageController::class, 'unread'])->name('messages.unread');
