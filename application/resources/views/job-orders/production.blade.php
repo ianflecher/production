@@ -61,25 +61,28 @@
             materials supervisor, <strong>Ready-made</strong> to the raw materials desk —
             the caps, boxes and tapes that arrive finished. The amount is what they are
             allowed to issue; leave it blank and they can issue any amount.
-            <br>Pick the material off that shelf where you can &mdash; a name picked
-            here is the row the desk deducts, where a name typed is one they have to
-            work out. <strong>Other</strong> is there for anything not stocked yet.
+            <br>Say the shelf first, then pick the material off it &mdash; a name
+            picked here is the row the desk deducts, where a name typed is one they
+            have to work out. <strong>Other</strong> is there for anything not
+            stocked yet.
         </p>
-        {{-- Wider than the other blocks: a row is a picker, a box for Other, the shelf, the amount and a remove. --}}
+        {{-- Wider than the other blocks: a row is the shelf, a picker, a box for Other, the amount and a remove. --}}
         <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 900px;">
             @foreach ($rawMaterials as $i => $rm)
                 <div class="raw-row" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                    {{-- The shelf itself, not a name to be matched later. The
-                         picker carries no name of its own: it writes into the
-                         box beside it, which is what posts. --}}
-                    <select class="rm-pick" style="flex: 1 1 200px; min-width: 0;" aria-label="Which material"></select>
-                    <input type="text" name="raw_materials[]" class="rm-name" list="dl_raw_materials"
-                           maxlength="255" value="{{ $rm }}" placeholder="Type the material"
-                           style="flex: 1 1 180px; min-width: 0; display: none;">
+                    {{-- Which shelf first: it decides what the list beside it
+                         holds, so it is asked before the thing it decides. --}}
                     <select name="raw_material_kind[]" class="rm-kind" style="width: 130px;" aria-label="Which shelf this comes off">
                         <option value="fabric" @selected(($rawKinds[$i] ?? 'fabric') === 'fabric')>Fabric</option>
                         <option value="ready_made" @selected(($rawKinds[$i] ?? 'fabric') === 'ready_made')>Ready-made</option>
                     </select>
+                    {{-- Then the shelf itself, not a name to be matched later.
+                         The picker carries no name of its own: it writes into
+                         the box beside it, which is what posts. --}}
+                    <select class="rm-pick" style="flex: 1 1 200px; min-width: 0;" aria-label="Which material"></select>
+                    <input type="text" name="raw_materials[]" class="rm-name" list="dl_raw_materials"
+                           maxlength="255" value="{{ $rm }}" placeholder="Type the material"
+                           style="flex: 1 1 180px; min-width: 0; display: none;">
                     <input type="number" name="raw_material_qty[]" min="0" step="0.01" value="{{ $rawQty[$i] ?? '' }}"
                            placeholder="How many" style="width: 110px;" aria-label="How much of this material">
                     <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('.raw-row').remove()">✕</button>
@@ -372,16 +375,16 @@
         const row = document.createElement('div');
         row.className = 'raw-row';
         row.style.cssText = 'display: flex; gap: 0.4rem; flex-wrap: wrap;';
-        row.innerHTML = '<select class="rm-pick" style="flex: 1 1 200px; min-width: 0;" aria-label="Which material"></select>'
-            + '<input type="text" name="raw_materials[]" class="rm-name" list="dl_raw_materials" maxlength="255" placeholder="Type the material" style="flex: 1 1 180px; min-width: 0; display: none;">'
-            + '<select name="raw_material_kind[]" class="rm-kind" style="width: 130px;" aria-label="Which shelf this comes off">'
+        row.innerHTML = '<select name="raw_material_kind[]" class="rm-kind" style="width: 130px;" aria-label="Which shelf this comes off">'
             + '<option value="fabric">Fabric</option><option value="ready_made">Ready-made</option></select>'
+            + '<select class="rm-pick" style="flex: 1 1 200px; min-width: 0;" aria-label="Which material"></select>'
+            + '<input type="text" name="raw_materials[]" class="rm-name" list="dl_raw_materials" maxlength="255" placeholder="Type the material" style="flex: 1 1 180px; min-width: 0; display: none;">'
             + '<input type="number" name="raw_material_qty[]" min="0" step="0.01" placeholder="How many" style="width: 110px;" aria-label="How much of this material">'
             + '<button type="button" class="btn btn-ghost btn-sm">✕</button>';
         row.querySelector('button').addEventListener('click', function () { row.remove(); });
         list.appendChild(row);
         rmWire(row);
-        row.querySelector('.rm-pick').focus();
+        row.querySelector('.rm-kind').focus();
     }
 </script>
 @endsection

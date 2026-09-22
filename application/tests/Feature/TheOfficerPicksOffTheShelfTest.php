@@ -76,6 +76,14 @@ class TheOfficerPicksOffTheShelfTest extends TestCase
 
         // A picker that writes into the box, and the box that posts.
         $this->assertStringContainsString('class="rm-pick"', $html);
+
+        // The shelf is asked first, because it decides what the picker holds.
+        $kind = strpos($html, 'class="rm-kind"');
+        $pick = strpos($html, 'class="rm-pick"');
+
+        $this->assertNotFalse($kind);
+        $this->assertNotFalse($pick);
+        $this->assertLessThan($pick, $kind, 'the material is asked before the shelf it comes off');
         $this->assertStringContainsString('name="raw_materials[]"', $html);
         $this->assertStringContainsString('Other', $html);
     }
