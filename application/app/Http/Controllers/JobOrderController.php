@@ -274,11 +274,25 @@ class JobOrderController extends Controller
             // actually deduct instead of typing a name for it to guess at.
             // "QA700" typed here is ten QUIANAs for the supervisor to choose
             // between; "QUIANA (140GSM) BLK" picked here is one.
+            //
+            // With what is on each: an officer promising a client three hundred
+            // of something the shelf holds four of should find that out while
+            // they are writing the job, not a week later when the desk rejects
+            // the request. Short keys because this is eighteen hundred rows on
+            // the page and the names are long enough already.
             'shelfMaterials' => InventoryItem::query()
                 ->orderBy('name')
-                ->get(['name', 'kind'])
+                ->get(['name', 'kind', 'quantity', 'unit'])
+                ->unique(fn ($item) => $item->kind.'|'.$item->name)
                 ->groupBy('kind')
-                ->map(fn ($rows) => $rows->pluck('name')->unique()->values()->all())
+                ->map(fn ($rows) => $rows->map(fn ($item) => [
+                    'n' => $item->name,
+                    'q' => $item->qtyForHumans(),
+                    'u' => (string) $item->unit,
+                    // Zero is worth saying differently from "0", which reads
+                    // as a number somebody typed rather than an empty shelf.
+                    'o' => (float) $item->quantity <= 0,
+                ])->values()->all())
                 ->all(),
         ]);
     }

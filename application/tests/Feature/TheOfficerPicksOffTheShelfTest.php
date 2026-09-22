@@ -102,11 +102,38 @@ class TheOfficerPicksOffTheShelfTest extends TestCase
         $this->assertNotEmpty($m, 'the shelves never reached the page');
 
         $shelves = json_decode($m[1], true);
+        $names = fn (string $kind) => array_column($shelves[$kind], 'n');
 
-        $this->assertContains('QUIANA (140GSM) WHT', $shelves['fabric']);
-        $this->assertNotContains('AAA HOODIE BLACK - L', $shelves['fabric']);
-        $this->assertContains('AAA HOODIE BLACK - L', $shelves['ready_made']);
-        $this->assertNotContains('QUIANA (140GSM) WHT', $shelves['ready_made']);
+        $this->assertContains('QUIANA (140GSM) WHT', $names('fabric'));
+        $this->assertNotContains('AAA HOODIE BLACK - L', $names('fabric'));
+        $this->assertContains('AAA HOODIE BLACK - L', $names('ready_made'));
+        $this->assertNotContains('QUIANA (140GSM) WHT', $names('ready_made'));
+
+        // And what is left of each, so nothing is promised off an empty shelf.
+        $quiana = collect($shelves['fabric'])->firstWhere('n', 'QUIANA (140GSM) WHT');
+
+        $this->assertSame('40', $quiana['q']);
+        $this->assertSame('KG', $quiana['u']);
+        $this->assertFalse($quiana['o']);
+    }
+
+    /** A material at zero is marked out, not shown as a quantity of none. */
+    public function test_an_empty_shelf_row_is_marked_as_one(): void
+    {
+        $officer = $this->officer();
+        $order = $this->order($officer);
+        $this->stock();
+
+        InventoryItem::create(['name' => 'RIBBING BLACK', 'category' => 'FABRIC', 'unit' => 'KG',
+            'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 0]);
+
+        $html = $this->actingAs($officer)->get(route('job-orders.production', $order))->getContent();
+
+        preg_match('/const RM_SHELVES = (\{.*?\});/s', $html, $m);
+        $shelves = json_decode($m[1], true);
+
+        $this->assertTrue(collect($shelves['fabric'])->firstWhere('n', 'RIBBING BLACK')['o']);
+        $this->assertStringContainsString('none left', $html);
     }
 
     /* ---------------- and what is picked is what is deducted ---------- */

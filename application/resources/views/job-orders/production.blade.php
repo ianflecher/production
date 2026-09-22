@@ -63,8 +63,9 @@
             allowed to issue; leave it blank and they can issue any amount.
             <br>Say the shelf first, then pick the material off it &mdash; a name
             picked here is the row the desk deducts, where a name typed is one they
-            have to work out. <strong>Other</strong> is there for anything not
-            stocked yet.
+            have to work out, and it says what is left of each one so nothing gets
+            promised off an empty shelf. <strong>Other</strong> is there for
+            anything not stocked yet.
         </p>
         {{-- Wider than the other blocks: a row is the shelf, a picker, a box for Other, the amount and a remove. --}}
         <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 900px;">
@@ -288,32 +289,48 @@
     const RM_SHELVES = @json($shelfMaterials ?? []);
     const RM_OTHER = '\u0000other';
 
+    /** A row on the shelf, as one line: what it is and what is left of it. */
+    function rmLabel(row) {
+        return row.o
+            ? row.n + '  —  none left'
+            : row.n + '  —  ' + row.q + (row.u ? ' ' + row.u : '') + ' left';
+    }
+
+    function rmFind(kind, name) {
+        const rows = RM_SHELVES[kind] || [];
+
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].n === name) { return rows[i]; }
+        }
+
+        return null;
+    }
+
     function rmFill(pick, kind, current) {
-        const names = RM_SHELVES[kind] || [];
-        const known = names.indexOf(current) !== -1;
+        const rows = RM_SHELVES[kind] || [];
 
         pick.innerHTML = '';
-        pick.appendChild(new Option(names.length ? '— pick from the shelf —' : '— nothing on this shelf yet —', ''));
+        pick.appendChild(new Option(rows.length ? '— pick from the shelf —' : '— nothing on this shelf yet —', ''));
 
-        names.forEach(function (name) {
-            pick.appendChild(new Option(name, name, false, name === current));
+        rows.forEach(function (row) {
+            pick.appendChild(new Option(rmLabel(row), row.n, false, row.n === current));
         });
 
         // Last, so it is where anybody who has read the list ends up.
-        pick.appendChild(new Option('Other — type it in', RM_OTHER, false, current !== '' && !known));
+        pick.appendChild(new Option('Other — type it in', RM_OTHER, false, current !== '' && !rmFind(kind, current)));
         pick.dataset.filled = kind;
     }
 
     /** What the row shows before anybody opens its picker. */
     function rmStub(pick, kind, current) {
-        const known = (RM_SHELVES[kind] || []).indexOf(current) !== -1;
+        const row = rmFind(kind, current);
 
         pick.innerHTML = '';
 
         if (current === '') {
             pick.appendChild(new Option('— pick from the shelf —', '', true, true));
-        } else if (known) {
-            pick.appendChild(new Option(current, current, true, true));
+        } else if (row) {
+            pick.appendChild(new Option(rmLabel(row), current, true, true));
         } else {
             pick.appendChild(new Option('Other — ' + current, RM_OTHER, true, true));
         }
