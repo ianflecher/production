@@ -61,12 +61,22 @@
             materials supervisor, <strong>Ready-made</strong> to the raw materials desk —
             the caps, boxes and tapes that arrive finished. The amount is what they are
             allowed to issue; leave it blank and they can issue any amount.
+            <br>Pick the material off that shelf where you can &mdash; a name picked
+            here is the row the desk deducts, where a name typed is one they have to
+            work out. <strong>Other</strong> is there for anything not stocked yet.
         </p>
-        <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 640px;">
+        {{-- Wider than the other blocks: a row is a picker, a box for Other, the shelf, the amount and a remove. --}}
+        <div id="rawMaterialsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 900px;">
             @foreach ($rawMaterials as $i => $rm)
-                <div class="raw-row" style="display: flex; gap: 0.4rem;">
-                    <input type="text" name="raw_materials[]" list="dl_raw_materials" maxlength="255" value="{{ $rm }}" placeholder="e.g. lanyard, cloth, ribbing" style="flex: 1;">
-                    <select name="raw_material_kind[]" style="width: 130px;" aria-label="Which shelf this comes off">
+                <div class="raw-row" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                    {{-- The shelf itself, not a name to be matched later. The
+                         picker carries no name of its own: it writes into the
+                         box beside it, which is what posts. --}}
+                    <select class="rm-pick" style="flex: 1 1 200px; min-width: 0;" aria-label="Which material"></select>
+                    <input type="text" name="raw_materials[]" class="rm-name" list="dl_raw_materials"
+                           maxlength="255" value="{{ $rm }}" placeholder="Type the material"
+                           style="flex: 1 1 180px; min-width: 0; display: none;">
+                    <select name="raw_material_kind[]" class="rm-kind" style="width: 130px;" aria-label="Which shelf this comes off">
                         <option value="fabric" @selected(($rawKinds[$i] ?? 'fabric') === 'fabric')>Fabric</option>
                         <option value="ready_made" @selected(($rawKinds[$i] ?? 'fabric') === 'ready_made')>Ready-made</option>
                     </select>
@@ -261,19 +271,117 @@
         refresh();
     })();
 
+    /* ---------------------------------------------------------------------
+       Raw materials: pick off the shelf, or say Other and type it.
+
+       A name typed here is a name the supply desk has to work out at the far
+       end — "QA700" is ten QUIANAs for the supervisor to choose between, and
+       "COTTON HOODIE" is nothing at all. A name picked is the row they deduct.
+
+       The lists are the shop's own stock, eighteen hundred rows across the two
+       shelves, so a picker is filled the first time somebody opens it rather
+       than eighteen hundred times over on page load.
+    --------------------------------------------------------------------- */
+    const RM_SHELVES = @json($shelfMaterials ?? []);
+    const RM_OTHER = '\u0000other';
+
+    function rmFill(pick, kind, current) {
+        const names = RM_SHELVES[kind] || [];
+        const known = names.indexOf(current) !== -1;
+
+        pick.innerHTML = '';
+        pick.appendChild(new Option(names.length ? '— pick from the shelf —' : '— nothing on this shelf yet —', ''));
+
+        names.forEach(function (name) {
+            pick.appendChild(new Option(name, name, false, name === current));
+        });
+
+        // Last, so it is where anybody who has read the list ends up.
+        pick.appendChild(new Option('Other — type it in', RM_OTHER, false, current !== '' && !known));
+        pick.dataset.filled = kind;
+    }
+
+    /** What the row shows before anybody opens its picker. */
+    function rmStub(pick, kind, current) {
+        const known = (RM_SHELVES[kind] || []).indexOf(current) !== -1;
+
+        pick.innerHTML = '';
+
+        if (current === '') {
+            pick.appendChild(new Option('— pick from the shelf —', '', true, true));
+        } else if (known) {
+            pick.appendChild(new Option(current, current, true, true));
+        } else {
+            pick.appendChild(new Option('Other — ' + current, RM_OTHER, true, true));
+        }
+
+        delete pick.dataset.filled;
+    }
+
+    function rmWire(row) {
+        const pick = row.querySelector('.rm-pick');
+        const name = row.querySelector('.rm-name');
+        const kind = row.querySelector('.rm-kind');
+
+        const shelf = function () { return kind.value || 'fabric'; };
+        const showTyping = function (on) { name.style.display = on ? '' : 'none'; };
+        const fillOnce = function () {
+            if (pick.dataset.filled !== shelf()) { rmFill(pick, shelf(), name.value); }
+        };
+
+        rmStub(pick, shelf(), name.value);
+        showTyping(pick.value === RM_OTHER);
+
+        // Filled on the way in, not on page load: eighteen hundred options a
+        // row, on a row nobody may touch, is a page that stalls opening.
+        pick.addEventListener('mousedown', fillOnce);
+        pick.addEventListener('focus', fillOnce);
+
+        pick.addEventListener('change', function () {
+            if (pick.value === RM_OTHER) {
+                showTyping(true);
+                name.focus();
+
+                return;
+            }
+
+            // Picked off the shelf, or cleared.
+            name.value = pick.value;
+            showTyping(false);
+        });
+
+        // Typing under Other is the answer, so the picker follows the box.
+        name.addEventListener('input', function () {
+            if (pick.value !== RM_OTHER && name.value !== pick.value) {
+                rmStub(pick, shelf(), name.value);
+            }
+        });
+
+        // A different shelf is a different list. Whatever was picked off the
+        // old one is kept as typed text rather than thrown away.
+        kind.addEventListener('change', function () {
+            rmStub(pick, shelf(), name.value);
+            showTyping(pick.value === RM_OTHER);
+        });
+    }
+
+    document.querySelectorAll('#rawMaterialsList .raw-row').forEach(rmWire);
+
     function addRawMaterial() {
         const list = document.getElementById('rawMaterialsList');
         const row = document.createElement('div');
         row.className = 'raw-row';
-        row.style.cssText = 'display: flex; gap: 0.4rem;';
-        row.innerHTML = '<input type="text" name="raw_materials[]" list="dl_raw_materials" maxlength="255" placeholder="e.g. lanyard, cloth, ribbing" style="flex: 1;">'
-            + '<select name="raw_material_kind[]" style="width: 130px;" aria-label="Which shelf this comes off">'
+        row.style.cssText = 'display: flex; gap: 0.4rem; flex-wrap: wrap;';
+        row.innerHTML = '<select class="rm-pick" style="flex: 1 1 200px; min-width: 0;" aria-label="Which material"></select>'
+            + '<input type="text" name="raw_materials[]" class="rm-name" list="dl_raw_materials" maxlength="255" placeholder="Type the material" style="flex: 1 1 180px; min-width: 0; display: none;">'
+            + '<select name="raw_material_kind[]" class="rm-kind" style="width: 130px;" aria-label="Which shelf this comes off">'
             + '<option value="fabric">Fabric</option><option value="ready_made">Ready-made</option></select>'
             + '<input type="number" name="raw_material_qty[]" min="0" step="0.01" placeholder="How many" style="width: 110px;" aria-label="How much of this material">'
             + '<button type="button" class="btn btn-ghost btn-sm">✕</button>';
-        row.querySelector('button').addEventListener('click', () => row.remove());
+        row.querySelector('button').addEventListener('click', function () { row.remove(); });
         list.appendChild(row);
-        row.querySelector('input').focus();
+        rmWire(row);
+        row.querySelector('.rm-pick').focus();
     }
 </script>
 @endsection

@@ -3,10 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesOrderAccess;
+use App\Models\InventoryItem;
 use App\Models\JobOrder;
 use App\Models\ProductionOrder;
+use App\Models\TechPack;
+use App\Services\Stations;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -39,11 +45,12 @@ class JobOrderController extends Controller
         return $this->createJobOrder($request, $order);
     }
 
-    public function editJobOrder(\Illuminate\Http\Request $request, ProductionOrder $order): View|RedirectResponse
+    public function editJobOrder(Request $request, ProductionOrder $order): View|RedirectResponse
     {
         $this->assertOrderVisible($order);
         $order->load(['jobOrder', 'items', 'client', 'creator', 'tasks.assignee', 'techPacks']);
         abort_unless($order->jobOrder, 404);
+
         // This used to redirect to the artist's sheet and never render its own
         // view at all, so job-orders/edit.blade.php - the officer's copy, the
         // one carrying the form - was unreachable. The page's own comment had
@@ -69,18 +76,18 @@ class JobOrderController extends Controller
      * quietly open a second sheet nobody drew, so an unopened phase falls back
      * to the sample rather than creating anything.
      */
-    private function phaseAsked(\Illuminate\Http\Request $request, ProductionOrder $order): string
+    private function phaseAsked(Request $request, ProductionOrder $order): string
     {
-        $asked = (string) $request->query('phase', \App\Models\TechPack::PHASE_SAMPLE);
+        $asked = (string) $request->query('phase', TechPack::PHASE_SAMPLE);
 
-        return $asked === \App\Models\TechPack::PHASE_MASSPROD
-            && $order->techPackFor(\App\Models\TechPack::PHASE_MASSPROD)
-                ? \App\Models\TechPack::PHASE_MASSPROD
-                : \App\Models\TechPack::PHASE_SAMPLE;
+        return $asked === TechPack::PHASE_MASSPROD
+            && $order->techPackFor(TechPack::PHASE_MASSPROD)
+                ? TechPack::PHASE_MASSPROD
+                : TechPack::PHASE_SAMPLE;
     }
 
     /** Compatibility endpoint: account officers now review rather than edit. */
-    public function updateJobOrder(\Illuminate\Http\Request $request, ProductionOrder $order): \Illuminate\Http\RedirectResponse
+    public function updateJobOrder(Request $request, ProductionOrder $order): RedirectResponse
     {
         $this->assertOrderVisible($order);
         $order->load(['jobOrder', 'tasks']);
@@ -102,7 +109,7 @@ class JobOrderController extends Controller
             'fitting' => ['nullable', 'string', 'max:60'],
             'item_style' => ['nullable', 'string', 'max:100'],
             'print_type' => ['nullable', 'string', 'max:60'],
-            'printer' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(JobOrder::printerOptions()))],
+            'printer' => ['nullable', 'string', Rule::in(array_keys(JobOrder::printerOptions()))],
             'fabric' => ['nullable', 'string', 'max:255'],
             // The rest of the spec. The officer takes all of it from the
             // client; the artist was retyping it under a picture.
@@ -129,7 +136,7 @@ class JobOrderController extends Controller
         // record of what the client held and approved.
         $phase = $this->phaseAsked($request, $order);
         $pack = $order->openTechPack($phase);
-        $pack->fill(\Illuminate\Support\Arr::only($data, [
+        $pack->fill(Arr::only($data, [
             'design_name', 'fitting', 'item_style', 'tshirt_color', 'thread_color',
             'zipper_type', 'lip_pocket_color', 'placing_title',
             'pack_created_date', 'pack_delivery_date',
@@ -139,7 +146,7 @@ class JobOrderController extends Controller
         $pack->save();
 
         $order->jobOrder->update(
-            \Illuminate\Support\Arr::only($data, [
+            Arr::only($data, [
                 'print_type', 'printer', 'fabric', 'neck', 'cuff_arm_sleeves',
                 'neck_label', 'packaging', 'bottom_hem', 'free_logo_sticker',
             ])
@@ -161,7 +168,7 @@ class JobOrderController extends Controller
             $order->applyPrintTypeRouting();
         }
 
-        return redirect()->route('job-orders.edit', ['order' => $order] + ($phase === \App\Models\TechPack::PHASE_MASSPROD ? ['phase' => $phase] : []))
+        return redirect()->route('job-orders.edit', ['order' => $order] + ($phase === TechPack::PHASE_MASSPROD ? ['phase' => $phase] : []))
             ->with('success', $pack->phaseLabel().' Tech Pack saved.');
     }
 
@@ -180,9 +187,9 @@ class JobOrderController extends Controller
 
         $path = $order->techPack?->folder_shot_path;
 
-        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->response(
+        return Storage::disk('local')->response(
             $path,
             $order->techPack->folder_shot_name ?: basename($path)
         );
@@ -197,43 +204,43 @@ class JobOrderController extends Controller
      * it means. Read off the sample by default, which is every pack drawn
      * before the split and every link written before this parameter existed.
      */
-    public function techPackImage(\Illuminate\Http\Request $request, ProductionOrder $order, string $slot)
+    public function techPackImage(Request $request, ProductionOrder $order, string $slot)
     {
         $this->assertOrderVisible($order);
         // imageSlots(), not IMAGE_SLOTS: the spare sample boxes and the extra
         // mockups are real slots, and served from the same private disk. Asked
         // against the short list, a picture in one of them 404'd on a sheet
         // that was showing it.
-        abort_unless(in_array($slot, \App\Models\TechPack::imageSlots(), true), 404);
+        abort_unless(in_array($slot, TechPack::imageSlots(), true), 404);
 
-        $phase = $request->query('phase') === \App\Models\TechPack::PHASE_MASSPROD
-            ? \App\Models\TechPack::PHASE_MASSPROD
-            : \App\Models\TechPack::PHASE_SAMPLE;
+        $phase = $request->query('phase') === TechPack::PHASE_MASSPROD
+            ? TechPack::PHASE_MASSPROD
+            : TechPack::PHASE_SAMPLE;
 
         $image = $order->techPackFor($phase)?->image_uploads[$slot] ?? null;
         $path = $image['path'] ?? null;
-        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->response(
+        return Storage::disk('local')->response(
             $path,
             $image['name'] ?? basename($path)
         );
     }
 
     /** Serve an artist-imported one-image Tech Pack from private storage. */
-    public function importedTechPack(\Illuminate\Http\Request $request, ProductionOrder $order)
+    public function importedTechPack(Request $request, ProductionOrder $order)
     {
         $this->assertOrderVisible($order);
 
-        $phase = $request->query('phase') === \App\Models\TechPack::PHASE_MASSPROD
-            ? \App\Models\TechPack::PHASE_MASSPROD
-            : \App\Models\TechPack::PHASE_SAMPLE;
+        $phase = $request->query('phase') === TechPack::PHASE_MASSPROD
+            ? TechPack::PHASE_MASSPROD
+            : TechPack::PHASE_SAMPLE;
         $pack = $order->techPackFor($phase);
         $path = $pack?->imported_pack_path;
 
-        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404);
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->response(
+        return Storage::disk('local')->response(
             $path,
             $pack->imported_pack_name ?: basename($path)
         );
@@ -263,17 +270,27 @@ class JobOrderController extends Controller
             'order' => $order,
             'jobOrder' => $order->jobOrder,
             'rawMaterialSuggestions' => JobOrder::fieldSuggestions()['raw_materials'] ?? [],
+            // The two shelves, so the officer picks the row the desk will
+            // actually deduct instead of typing a name for it to guess at.
+            // "QA700" typed here is ten QUIANAs for the supervisor to choose
+            // between; "QUIANA (140GSM) BLK" picked here is one.
+            'shelfMaterials' => InventoryItem::query()
+                ->orderBy('name')
+                ->get(['name', 'kind'])
+                ->groupBy('kind')
+                ->map(fn ($rows) => $rows->pluck('name')->unique()->values()->all())
+                ->all(),
         ]);
     }
 
-    public function updateProductionDetails(\Illuminate\Http\Request $request, ProductionOrder $order): RedirectResponse
+    public function updateProductionDetails(Request $request, ProductionOrder $order): RedirectResponse
     {
         $this->assertOrderVisible($order);
         $order->load('jobOrder');
         abort_unless($order->jobOrder, 404);
 
         // Both press dropdowns accept the real presses OR embroidery.
-        $pressKeys = array_keys(\App\Models\JobOrder::pressOptions());
+        $pressKeys = array_keys(JobOrder::pressOptions());
 
         $data = $request->validate([
             // A garment always needs something to make it from. Saving this
@@ -361,8 +378,8 @@ class JobOrderController extends Controller
             // rather than inside them, so everything reading rawMaterialsList()
             // still reads a plain list of names.
             $materialKind[$name] = ($data['raw_material_kind'][$i] ?? null) === 'ready_made'
-                ? \App\Models\InventoryItem::KIND_READY_MADE
-                : \App\Models\InventoryItem::KIND_FABRIC;
+                ? InventoryItem::KIND_READY_MADE
+                : InventoryItem::KIND_FABRIC;
         }
 
         $order->jobOrder->update([
@@ -394,7 +411,7 @@ class JobOrderController extends Controller
         // that, the requests are raised on approval instead.
         $rawStepOpen = $order->tasks()
             ->where('department', 'Raw materials')
-            ->whereIn('status', \App\Services\Stations::RELEASED)
+            ->whereIn('status', Stations::RELEASED)
             ->exists();
 
         if ($rawStepOpen) {
@@ -447,7 +464,7 @@ class JobOrderController extends Controller
         return redirect()->route('orders.show', $order)->with('success', $note);
     }
 
-    public function sendJobOrderToArtist(\Illuminate\Http\Request $request, ProductionOrder $order): \Illuminate\Http\RedirectResponse
+    public function sendJobOrderToArtist(Request $request, ProductionOrder $order): RedirectResponse
     {
         $this->assertOrderVisible($order);
         $order->load(['jobOrder', 'tasks']);
