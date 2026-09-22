@@ -292,7 +292,8 @@ class FullShopWalkthroughTest extends TestCase
             'the leader signs off the pack, and that is what opens production');
 
         // ---- 6. Materials: the desk issues what the job asked for -----------
-        $item = InventoryItem::create(['name' => 'Cotton shirt blank', 'unit' => 'pcs', 'quantity' => 500]);
+        $item = InventoryItem::create(['name' => 'Cotton shirt blank', 'unit' => 'pcs', 'quantity' => 500,
+            'kind' => InventoryItem::KIND_FABRIC]);
 
         // The material is asked for one size at a time, so the desk can issue
         // the smalls while the larges are still on order.

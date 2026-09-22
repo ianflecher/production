@@ -4,13 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
 use App\Models\MaterialRequest;
+use App\Models\ProductionOrder;
 use App\Models\StockMovement;
+use App\Services\MaterialName;
+use App\Services\SpreadsheetExport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class InventoryController extends Controller
 {
@@ -44,7 +48,7 @@ class InventoryController extends Controller
      * Once every material this order asked for has been issued or rejected, the
      * "Raw materials" step is finished and the order moves on.
      */
-    private function closeRawMaterialsStep(?\App\Models\ProductionOrder $order): void
+    private function closeRawMaterialsStep(?ProductionOrder $order): void
     {
         if (! $order) {
             return;
@@ -157,12 +161,11 @@ class InventoryController extends Controller
     }
 
     /** Who added stock and who took it out, newest first. */
-
     public function history(Request $request): View
     {
         $this->assertAccess();
 
-        $movements = \App\Models\StockMovement::with([
+        $movements = StockMovement::with([
             'item', 'user',
             'order' => fn ($q) => $q->withExists('jobOrder'),
         ])
@@ -209,7 +212,7 @@ class InventoryController extends Controller
             // Onto the shelf the person adding it works: a fabric she enters
             // by hand belongs with her fabric, not among the caps. The admin,
             // who is on neither shelf, adds to the ready-made one.
-            'kind' => $request->user()->inventoryShelf() ?? \App\Models\InventoryItem::KIND_READY_MADE,
+            'kind' => $request->user()->inventoryShelf() ?? InventoryItem::KIND_READY_MADE,
             'code' => $data['code'] ?? null,
             'size' => $data['size'] ?? null,
             'color' => $data['color'] ?? null,
@@ -313,18 +316,18 @@ class InventoryController extends Controller
             (float) $i->quantity <= 0 ? 'OUT OF STOCK' : '',
         ]);
 
-        return \App\Services\SpreadsheetExport::download(
+        return SpreadsheetExport::download(
             'inventory-'.now()->format('Y-m-d').'.xlsx',
             'Raw materials stock',
             [
-                ['Name', \App\Services\SpreadsheetExport::TEXT],
-                ['Code', \App\Services\SpreadsheetExport::TEXT],
-                ['Category', \App\Services\SpreadsheetExport::TEXT],
-                ['Size', \App\Services\SpreadsheetExport::TEXT],
-                ['Color', \App\Services\SpreadsheetExport::TEXT],
-                ['Unit', \App\Services\SpreadsheetExport::TEXT],
-                ['Quantity', \App\Services\SpreadsheetExport::NUMBER],
-                ['Status', \App\Services\SpreadsheetExport::TEXT],
+                ['Name', SpreadsheetExport::TEXT],
+                ['Code', SpreadsheetExport::TEXT],
+                ['Category', SpreadsheetExport::TEXT],
+                ['Size', SpreadsheetExport::TEXT],
+                ['Color', SpreadsheetExport::TEXT],
+                ['Unit', SpreadsheetExport::TEXT],
+                ['Quantity', SpreadsheetExport::NUMBER],
+                ['Status', SpreadsheetExport::TEXT],
             ],
             $rows,
             subtitle: $items->count().' material(s), '
@@ -395,7 +398,7 @@ class InventoryController extends Controller
 
                     continue;
                 }
-                $key = \App\Services\MaterialName::key($name);
+                $key = MaterialName::key($name);
                 $item = $existing[$key] ?? null;
 
                 if (! $item) {
@@ -405,7 +408,7 @@ class InventoryController extends Controller
                         'quantity' => 0,
                         // auth(), not $request: this runs inside a closure
                         // that does not capture the request.
-                        'kind' => auth()->user()?->inventoryShelf() ?? \App\Models\InventoryItem::KIND_READY_MADE,
+                        'kind' => auth()->user()?->inventoryShelf() ?? InventoryItem::KIND_READY_MADE,
                     ]);
                     $existing[$key] = $item;   // a file naming it twice updates it twice, not two rows
                 }
@@ -441,7 +444,7 @@ class InventoryController extends Controller
         $map = [];
 
         foreach (InventoryItem::withTrashed()->get() as $item) {
-            $key = \App\Services\MaterialName::key($item->name);
+            $key = MaterialName::key($item->name);
 
             // First one wins, so an import can never be steered onto a
             // different row by the order rows happen to come back in.
@@ -465,7 +468,7 @@ class InventoryController extends Controller
      */
     private function rowsFromSpreadsheet(string $path): array
     {
-        $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($path);
+        $reader = IOFactory::createReaderForFile($path);
         $reader->setReadDataOnly(true);
 
         $names = $reader->listWorksheetNames($path);
@@ -563,7 +566,7 @@ class InventoryController extends Controller
                 $received = $number($cell($row, $map['received']));
                 $less = $number($cell($row, $map['less']));
 
-                $key = \App\Services\MaterialName::key($name);
+                $key = MaterialName::key($name);
                 $item = $existing[$key] ?? new InventoryItem(['name' => $name]);
 
                 if ($item->exists && $item->trashed()) {
@@ -575,8 +578,8 @@ class InventoryController extends Controller
                 // size and colour filters work from.
                 $item->fill([
                     'category' => array_key_exists($group, InventoryItem::CATEGORIES) ? $group : null,
-                    'size' => $item->size ?: \App\Services\MaterialName::size($name),
-                    'color' => $item->color ?: \App\Services\MaterialName::color($name),
+                    'size' => $item->size ?: MaterialName::size($name),
+                    'color' => $item->color ?: MaterialName::color($name),
                     'unit' => $item->unit ?: 'pcs',
                     'quantity' => 0,
                     'beginning_stock' => $beginning,
@@ -662,12 +665,14 @@ class InventoryController extends Controller
         return view('inventory.requests', [
             'search' => $search,
             'sizeCounts' => $sizeCounts,
-            // A queue that grows while nobody acts on it, so it is paged. The
-            // $items list below stays whole on purpose — it fills the material
-            // dropdown and matches names, so it is not a list being read.
+            // A queue that grows while nobody acts on it, so it is paged.
+            //
+            // Every material in the shop used to be loaded alongside it — 1,670
+            // rows on every page view — to fill a dropdown asking which stock to
+            // deduct. The request says which material it is, so the dropdown is
+            // gone and so is the list behind it.
             'pending' => $pending,
             'decided' => $decided,
-            'items' => InventoryItem::orderBy('name')->get(),
         ]);
     }
 
@@ -689,11 +694,25 @@ class InventoryController extends Controller
             : null;
 
         $data = $request->validate([
-            'inventory_item_id' => ['required', 'integer', 'exists:inventory_items,id'],
             'quantity' => [$needs === null ? 'required' : 'nullable', 'numeric', 'gt:0', 'max:999999999'],
             // Who is handing the materials out.
             'operator_name' => ['required', 'string', 'max:100'],
         ], ['operator_name.required' => 'Enter the name of the person issuing the materials.']);
+
+        // WHICH stock it comes out of is not a question: the material is
+        // written on the request. It used to be a dropdown of every material
+        // in the shop, one right answer and a thousand wrong ones, and picking
+        // the wrong line deducted the wrong shelf.
+        $item = $materialRequest->stockItem();
+
+        if (! $item) {
+            return back()->withErrors([
+                'quantity' => $materialRequest->material.' is not on your shelf yet. '
+                    .'Add it to stock first, then approve — or reject the request.',
+            ]);
+        }
+
+        $data['inventory_item_id'] = $item->id;
 
         // What the desk actually hands over.
         //

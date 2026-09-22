@@ -23,6 +23,15 @@ use Illuminate\View\View;
 class DashboardController extends Controller
 {
     /**
+     * How many waiting material requests the dashboard lists.
+     *
+     * Enough to see what the morning looks like without turning the front page
+     * into the queue itself, which has its own page, its own search and its own
+     * paging.
+     */
+    private const MATERIAL_QUEUE_SHOWN = 8;
+
+    /**
      * Orders grouped by the step they are actually sitting on.
      *
      * The donut used to have one wedge called "In production" holding every
@@ -330,13 +339,37 @@ class DashboardController extends Controller
         // the station board — so show each of them their own numbers.
         if (! $user->isArtist()) {
             if ($user->canManageInventory()) {
+                // Her fabric or the desk's ready-made stock, and not each
+                // other's. The numbers counted both shelves, so the supervisor
+                // was told about requests she cannot open and stock she does
+                // not keep — the same fault the queue itself had. Super admin
+                // has no shelf and still sees the lot.
+                $shelf = $user->inventoryShelf();
+                $mine = fn ($query) => $query->when($shelf !== null, fn ($q) => $q->where('kind', $shelf));
+
                 $stats = [
-                    ['label' => 'Material requests', 'value' => MaterialRequest::where('status', 'pending')->count(), 'note' => 'Waiting for you to issue or reject'],
-                    ['label' => 'Out of stock', 'value' => InventoryItem::where('quantity', '<=', 0)->count(), 'note' => 'Materials at zero'],
-                    ['label' => 'Materials tracked', 'value' => InventoryItem::count(), 'note' => 'Items in raw materials'],
+                    ['label' => 'Material requests', 'value' => $mine(MaterialRequest::where('status', 'pending'))->count(), 'note' => 'Waiting for you to issue or reject'],
+                    ['label' => 'Out of stock', 'value' => $mine(InventoryItem::where('quantity', '<=', 0))->count(), 'note' => 'Materials at zero'],
+                    ['label' => 'Materials tracked', 'value' => $mine(InventoryItem::query())->count(), 'note' => 'Items on your shelf'],
                 ];
+
                 $desk = ['url' => route('inventory.requests'), 'action' => 'Open material requests',
                     'title' => 'Raw materials', 'text' => 'Issue the materials each job order asked for, or reject when stock is short.'];
+
+                // The queue itself, not a button to it. What is waiting is the
+                // whole of this desk's work, and a dashboard that says only
+                // "open material requests" is a door with nothing written on
+                // it: she had to go through to find out whether anything was
+                // there.
+                $materialQueue = $mine(MaterialRequest::where('status', 'pending'))
+                    ->with(['order' => fn ($q) => $q->select('id', 'order_number', 'customer_name', 'client_id', 'due_date')->with('client')])
+                    ->orderBy('id')
+                    ->limit(self::MATERIAL_QUEUE_SHOWN)
+                    ->get();
+
+                $queueTotal = $mine(MaterialRequest::where('status', 'pending'))->count();
+
+                return view('dashboard', compact('user', 'greeting', 'stats', 'desk', 'materialQueue', 'queueTotal'));
             } elseif ($user->canManageProducts()) {
                 $stats = [
                     ['label' => 'To receive', 'value' => ProductReceipt::pending()->count(), 'note' => 'Finished orders waiting to be counted in'],

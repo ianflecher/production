@@ -137,7 +137,7 @@ class MaterialRequestsGoToTheirSupervisorTest extends TestCase
         $this->orderNeedingMaterials($this->sales());
 
         $pill = fn ($user) => preg_match(
-            '#Raw Materials\s*<span class="count-pill">(\d+)</span>#',
+            '#Material Requests\s*<span class="count-pill">(\d+)</span>#',
             $this->actingAs($user)->get(route('inventory.index'))->getContent(),
             $m
         ) ? (int) $m[1] : 0;

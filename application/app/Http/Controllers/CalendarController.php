@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionOrder;
+use App\Services\PricingService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -52,9 +53,16 @@ class CalendarController extends Controller
         $visibleOrdersQuery = ProductionOrder::query()
             ->with('client')
             ->whereNotNull('due_date')
+            // Bounded by the END of the last day, not its start.
+            //
+            // due_date is a DATE column on the shop's own database, where a
+            // bare date reads as the whole day; it is a datetime string
+            // everywhere else, where "2026-09-30 00:00:00" sorts after
+            // "2026-09-30" and an order due on the last day of the month
+            // dropped off the calendar altogether.
             ->whereBetween('due_date', [
-                $monthStart->toDateString(),
-                $monthEnd->toDateString(),
+                $monthStart->copy()->startOfDay()->toDateTimeString(),
+                $monthEnd->copy()->endOfDay()->toDateTimeString(),
             ]);
 
         $ordersByDay = $visibleOrdersQuery
@@ -63,8 +71,7 @@ class CalendarController extends Controller
             ->orderBy('order_number')
             ->get()
             ->groupBy(
-                fn (ProductionOrder $order): string =>
-                    $order->due_date->toDateString()
+                fn (ProductionOrder $order): string => $order->due_date->toDateString()
             );
 
         /*
@@ -84,8 +91,9 @@ class CalendarController extends Controller
             ->with('client')
             ->whereNotNull('due_date')
             ->whereBetween('due_date', [
-                $monthStart->toDateString(),
-                $monthEnd->toDateString(),
+                // The whole of the last day — see the note above.
+                $monthStart->copy()->startOfDay()->toDateTimeString(),
+                $monthEnd->copy()->endOfDay()->toDateTimeString(),
             ])
             ->where(function (Builder $query): void {
                 $query
@@ -104,12 +112,10 @@ class CalendarController extends Controller
          */
         $quantityByDay = $allCompanyOrders
             ->groupBy(
-                fn (ProductionOrder $order): string =>
-                    $order->due_date->toDateString()
+                fn (ProductionOrder $order): string => $order->due_date->toDateString()
             )
             ->map(
-                fn ($orders): int =>
-                    (int) $orders->sum('quantity')
+                fn ($orders): int => (int) $orders->sum('quantity')
             );
 
         /*
@@ -144,7 +150,7 @@ class CalendarController extends Controller
                         // The ceiling this product is actually held to, read
                         // from the list the job was priced from — the same
                         // figure the order form refuses against.
-                        $cap = \App\Services\PricingService::dailyCapacity($type ?: null, $first->price_list);
+                        $cap = PricingService::dailyCapacity($type ?: null, $first->price_list);
 
                         return [
                             'type' => $type,
@@ -174,12 +180,10 @@ class CalendarController extends Controller
          */
         $orderCountByDay = $allCompanyOrders
             ->groupBy(
-                fn (ProductionOrder $order): string =>
-                    $order->due_date->toDateString()
+                fn (ProductionOrder $order): string => $order->due_date->toDateString()
             )
             ->map(
-                fn ($orders): int =>
-                    $orders->count()
+                fn ($orders): int => $orders->count()
             );
 
         /*
@@ -230,8 +234,9 @@ class CalendarController extends Controller
                 'on_hold',
             ])
             ->whereBetween('due_date', [
-                $today->toDateString(),
-                $upcomingEnd->toDateString(),
+                // The whole of the last day — see the note above.
+                $today->copy()->startOfDay()->toDateTimeString(),
+                $upcomingEnd->copy()->endOfDay()->toDateTimeString(),
             ]);
 
         // The grid is the whole shop's capacity; the deadline list is a

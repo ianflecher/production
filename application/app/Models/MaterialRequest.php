@@ -63,4 +63,33 @@ class MaterialRequest extends Model
             ? $this->decided_by_name
             : ($this->decider?->name ?? '—');
     }
+
+    /**
+     * The stock this request comes out of.
+     *
+     * The desk used to pick it from a dropdown of every material in the shop,
+     * which is a question with one right answer — the material is written on
+     * the request — and a thousand wrong ones. So the system answers it.
+     *
+     * Matched on MaterialName::key() rather than the literal name, because a
+     * stock sheet typed by hand comes back as "Cotton White XL", "cotton white
+     * xl" and "COTTON-WHITE-XL" on three different days; and through
+     * MaterialAlias, because a job order asking for QA700 means the fabric the
+     * stock sheet files under QUIANA.
+     *
+     * Kept to its own shelf: the supervisor's fabric is not the desk's
+     * ready-made stock, and a request must not deduct from the other one.
+     */
+    public function stockItem(): ?InventoryItem
+    {
+        $shelf = InventoryItem::shelfIndex($this->kind);
+
+        foreach (MaterialAlias::keysFor($this->material) as $key) {
+            if (isset($shelf[$key])) {
+                return $shelf[$key];
+            }
+        }
+
+        return null;
+    }
 }

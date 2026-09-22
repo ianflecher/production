@@ -27,7 +27,9 @@
     <div style="display: grid; gap: 1.1rem; margin-bottom: 1.6rem;">
         @foreach ($pending as $req)
             @php
-                $match = $items->first(fn ($i) => strcasecmp($i->name, $req->material) === 0);
+                // The same rule the approval uses, so what the page shows
+                // and what the button deducts can never disagree.
+                $match = $req->stockItem();
             @endphp
             <div class="card panel">
                 <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: flex-start;">
@@ -86,18 +88,29 @@
                 <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: flex-end;">
                     <form method="POST" action="{{ route('inventory.requests.approve', $req) }}"
                           data-order="{{ $req->order?->order_number ?? 'this order' }}"
+                          data-material="{{ $req->material }}"
                           data-size="{{ $req->size }}"
                           onsubmit="return confirmIssue(this);"
                           style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end;">
                         @csrf
+                        {{-- No dropdown: the material is written on the
+                             request, so the shelf it comes out of is not a
+                             question anybody should be asked. It is shown
+                             rather than chosen. --}}
                         <div>
                             <label style="font-size: 0.75rem;">Issue from stock</label>
-                            <select name="inventory_item_id" required style="min-width: 200px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
-                                <option value="">— Select material —</option>
-                                @foreach ($items as $i)
-                                    <option value="{{ $i->id }}" @selected($match && $match->id === $i->id)>{{ $i->name }} ({{ $i->qtyForHumans() }} {{ $i->unit }})</option>
-                                @endforeach
-                            </select>
+                            <div style="padding: 0.42rem 0; font-size: 0.85rem; font-weight: 600;">
+                                @if ($match)
+                                    {{ $match->name }}
+                                    <span style="font-weight: 400; color: var(--ink-3);">
+                                        ({{ $match->qtyForHumans() }} {{ $match->unit }} on the shelf)
+                                    </span>
+                                @else
+                                    <span style="color: var(--danger-ink, #b91c1c);">
+                                        Not on your shelf — add it to stock first
+                                    </span>
+                                @endif
+                            </div>
                         </div>
                         <div>
                             <label style="font-size: 0.75rem;">Quantity</label>
@@ -196,17 +209,16 @@
                                         <div class="pop" style="min-width: 260px;">
                                             <form method="POST" action="{{ route('inventory.requests.approve', $d) }}"
                                                   data-order="{{ $d->order?->order_number ?? 'this order' }}"
+                                                  data-material="{{ $d->material }}"
                                                   data-size="{{ $d->size }}"
                                                   onsubmit="return confirmIssue(this);">
                                                 @csrf
                                                 <div class="field">
                                                     <label>Issue from stock</label>
-                                                    <select name="inventory_item_id" required>
-                                                        <option value="">— Select material —</option>
-                                                        @foreach ($items as $i)
-                                                            <option value="{{ $i->id }}">{{ $i->name }} ({{ $i->qtyForHumans() }} {{ $i->unit }})</option>
-                                                        @endforeach
-                                                    </select>
+                                                    {{-- Shown, not chosen: same reason as above. --}}
+                                                    <div style="font-weight: 600; padding: 0.2rem 0;">
+                                                        {{ $d->material }}
+                                                    </div>
                                                 </div>
                                                 <div class="field">
                                                     <label>Quantity</label>
@@ -275,20 +287,13 @@
             ? fixed.firstChild.textContent.trim()
             : (form.quantity.value || '').trim();
         var name = (form.operator_name.value || '').trim();
-        var select = form.inventory_item_id;
-        var material = select && select.selectedIndex > 0
-            ? select.options[select.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/, '')
-            : '';
+        // The material is the one written on the request, carried on the form
+        // rather than read out of a dropdown nobody picks from any more.
+        var material = (form.getAttribute('data-material') || '').trim();
         var order = form.getAttribute('data-order') || 'this order';
         // Two requests can now differ by size alone, so the size is part of
         // naming which one is being issued.
         var size = (form.getAttribute('data-size') || '').trim();
-
-        if (material === '') {
-            alert('Choose which material to issue.');
-            select.focus();
-            return false;
-        }
 
         if (size !== '') { material += ' (size ' + size + ')'; }
         if (qty === '' || isNaN(Number(qty)) || Number(qty) <= 0) {

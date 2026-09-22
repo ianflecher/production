@@ -1049,7 +1049,89 @@
         @endif
     @endif
 
-    @if (isset($stationCards))
+    @if (isset($materialQueue))
+        {{-- The raw-materials desks: their own numbers, then the queue itself.
+             It was a button to a page and three lines of filler, so the only
+             way to know whether anything was waiting was to go and look. --}}
+        <div class="dash-focus-grid">
+            @foreach ($stats as $stat)
+                <div class="dash-focus-card">
+                    <div class="dash-focus-title">{{ $stat['label'] }}</div>
+                    <div style="font-size:1.9rem; font-weight:800; line-height:1.1; margin:0.15rem 0 0.3rem;">{{ $stat['value'] }}</div>
+                    <div class="dash-focus-text">{{ $stat['note'] }}</div>
+                </div>
+            @endforeach
+        </div>
+
+        <div class="card panel" style="margin-top: 1.4rem;">
+            <h2>Waiting on you</h2>
+
+            @if ($materialQueue->isEmpty())
+                <p class="sub" style="margin: 0;">
+                    Nothing is waiting. Every material a job order asked for has been
+                    issued or turned down.
+                </p>
+            @else
+                <p class="sub" style="margin: 0 0 0.9rem;">
+                    {{ $queueTotal }} {{ \Illuminate\Support\Str::plural('material', $queueTotal) }}
+                    asked for and not yet answered.
+                    @if ($queueTotal > $materialQueue->count())
+                        The {{ $materialQueue->count() }} oldest are here.
+                    @endif
+                </p>
+
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>Job order</th>
+                                <th>Client</th>
+                                <th>Material</th>
+                                <th>Size</th>
+                                <th style="text-align:right;">Asked for</th>
+                                <th>Due</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($materialQueue as $req)
+                                @php $order = $req->order; @endphp
+                                <tr>
+                                    <td style="font-weight:600;">
+                                        {{-- Straight to this job's own line in the
+                                             queue, rather than to the top of a list
+                                             she then has to search. --}}
+                                        <a href="{{ route('inventory.requests', ['q' => $order?->order_number]) }}">
+                                            {{ $order?->order_number ?? '—' }}
+                                        </a>
+                                    </td>
+                                    <td>{{ $order?->clientName() ?? '—' }}</td>
+                                    <td>{{ $req->material }}</td>
+                                    <td>{{ $req->size ?: '—' }}</td>
+                                    <td style="text-align:right;">
+                                        {{ $req->quantity !== null ? rtrim(rtrim(number_format((float) $req->quantity, 2, '.', ''), '0'), '.') : '—' }}
+                                    </td>
+                                    <td>
+                                        @if ($order?->due_date)
+                                            <span @if ($order->due_date->isPast()) style="color:var(--danger-ink, #b91c1c); font-weight:600;" @endif>
+                                                {{ $order->due_date->format('M j') }}
+                                            </span>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <a href="{{ route('inventory.requests') }}" class="btn btn-ghost btn-sm" style="margin-top:0.75rem;">
+                    Open material requests →
+                </a>
+            @endif
+        </div>
+
+    @elseif (isset($stationCards))
         {{-- Station operator: a card per machine they run — waiting count + who's on it. --}}
         <div class="dash-focus-grid">
             @forelse ($stationCards as $sc)

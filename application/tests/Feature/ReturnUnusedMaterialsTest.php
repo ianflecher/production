@@ -35,7 +35,8 @@ class ReturnUnusedMaterialsTest extends TestCase
             'due_date' => now()->addWeek(), 'created_by' => $sales->id, 'status' => 'active',
         ]);
 
-        $item = InventoryItem::create(['name' => 'Cotton shirt blank', 'unit' => 'pcs', 'quantity' => 500]);
+        $item = InventoryItem::create(['name' => 'Cotton shirt blank', 'unit' => 'pcs', 'quantity' => 500,
+            'kind' => InventoryItem::KIND_FABRIC]);
         $req = MaterialRequest::create([
             'production_order_id' => $order->id, 'material' => 'Cotton shirt blank', 'status' => 'pending',
         ]);

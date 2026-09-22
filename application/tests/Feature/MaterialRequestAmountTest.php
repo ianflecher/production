@@ -38,6 +38,8 @@ class MaterialRequestAmountTest extends TestCase
         $item = InventoryItem::create([
             'name' => 'Cotton shirt blank '.random_int(1000, 9999),
             'unit' => 'pcs', 'quantity' => 500,
+            // The desk above keeps the fabric shelf, so this is on it.
+            'kind' => InventoryItem::KIND_FABRIC,
         ]);
 
         $req = MaterialRequest::create([

@@ -64,7 +64,8 @@ class ListSearchAndIssuerTest extends TestCase
     {
         $desk = User::factory()->create(['job_role' => User::JOB_RAW_MATERIALS_SUPERVISOR, 'is_active' => true, 'name' => 'Supply Desk']);
         $order = $this->order('IC2026-44444', 'Fabric Co');
-        $item = InventoryItem::create(['name' => 'Cotton combed 24s', 'unit' => 'kg', 'quantity' => 50]);
+        $item = InventoryItem::create(['name' => 'Cotton combed 24s', 'unit' => 'kg', 'quantity' => 50,
+            'kind' => InventoryItem::KIND_FABRIC]);
         $req = MaterialRequest::create([
             'production_order_id' => $order->id, 'material' => 'Cotton combed 24s', 'status' => 'pending',
         ]);

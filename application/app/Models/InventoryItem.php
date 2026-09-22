@@ -2,12 +2,70 @@
 
 namespace App\Models;
 
+use App\Services\MaterialName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class InventoryItem extends Model
 {
+    /**
+     * One shelf, keyed by material name, read once per request.
+     *
+     * The material requests page asks "which stock is this line?" for every row
+     * on it. Asking the database each time is a query a row; loading the whole
+     * of both shelves is 1,670 rows to answer a question about six. So each
+     * shelf is read at most once and held.
+     *
+     * Keyed on MaterialName::key(), because a stock sheet typed by hand spells
+     * one fabric three ways and none of them is wrong.
+     *
+     * @var array<string, array<string, static>>
+     */
+    private static array $shelves = [];
+
+    /** @return array<string, static> key => the item */
+    public static function shelfIndex(?string $kind): array
+    {
+        $cacheKey = $kind ?? '*';
+
+        if (isset(self::$shelves[$cacheKey])) {
+            return self::$shelves[$cacheKey];
+        }
+
+        $index = [];
+
+        static::query()
+            ->when($kind !== null, fn ($q) => $q->where('kind', $kind))
+            ->orderBy('id')
+            ->get()
+            ->each(function ($item) use (&$index) {
+                $key = MaterialName::key($item->name);
+
+                // First row wins: two rows spelt the same way are one material
+                // typed twice, and the older one is the one in use.
+                if ($key !== '' && ! isset($index[$key])) {
+                    $index[$key] = $item;
+                }
+            });
+
+        return self::$shelves[$cacheKey] = $index;
+    }
+
+    /** Read the shelves again — after stock moves, or in a test. */
+    public static function forgetShelves(): void
+    {
+        self::$shelves = [];
+    }
+
+    protected static function booted(): void
+    {
+        // A row added, renamed or taken away changes the shelf, so what was
+        // read before it is no longer what is there.
+        static::saved(fn () => self::forgetShelves());
+        static::deleted(fn () => self::forgetShelves());
+    }
+
     use SoftDeletes;
 
     /** Raw-material categories. */

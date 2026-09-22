@@ -212,10 +212,22 @@
                 @endif
 
                 @if (auth()->user()->canManageInventory())
-                    <a href="{{ route('inventory.index') }}" class="nav-item {{ request()->routeIs('inventory.*') ? 'active' : '' }}">
+                    <a href="{{ route('inventory.index') }}" class="nav-item {{ request()->routeIs('inventory.*') && ! request()->routeIs('inventory.requests*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                         Raw Materials
-                        {{-- The count is for the raw-materials desk, not leaders/admins. --}}
+                    </a>
+                @endif
+
+                {{-- The queue, its own door. It was reachable only through the
+                     dashboard's button or the stock page, so the keeper's whole
+                     day's work had no place of its own in the sidebar. The
+                     count rides here rather than on the stock link, because it
+                     counts requests and this is where they are. --}}
+                @if (auth()->user()->canDecideMaterialRequests())
+                    <a href="{{ route('inventory.requests') }}" class="nav-item {{ request()->routeIs('inventory.requests*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H3v10h6z"/><path d="M14 3h-4v18h4z"/><path d="M21 7h-6v14h6z"/></svg>
+                        Material Requests
+                        {{-- Their own queue, not the other keeper's. --}}
                         @if (($pendingMaterials ?? 0) > 0 && ! auth()->user()->isLeader())
                             <span class="count-pill">{{ $pendingMaterials }}</span>
                         @endif
