@@ -65,6 +65,33 @@ class MaterialName
         return trim(preg_replace('/\s+/', ' ', $key) ?? '');
     }
 
+    /**
+     * Whether one material name is the other, or a kind of it.
+     *
+     * The shop's job orders name a fabric — QUIANA — and its shelf holds the
+     * colours and weights of it: "QUIANA (140GSM) BLK", "QUIANA MANIPIS WHT".
+     * Ten rows, one fabric, and nothing on the request to say which.
+     *
+     * So this answers the question the desk can answer: is this row one of the
+     * ones worth looking at? A name matches when either is the start of the
+     * other AND the break falls between words, so QUIANA finds every QUIANA and
+     * QUIAN finds none of them.
+     */
+    public static function sameFamily(string $a, string $b): bool
+    {
+        if ($a === '' || $b === '') {
+            return false;
+        }
+
+        if ($a === $b) {
+            return true;
+        }
+
+        [$short, $long] = strlen($a) < strlen($b) ? [$a, $b] : [$b, $a];
+
+        return str_starts_with($long, $short.' ');
+    }
+
     public static function size(string $name): ?string
     {
         // Sizes are written after the final dash: "… BLACK - 2XL".

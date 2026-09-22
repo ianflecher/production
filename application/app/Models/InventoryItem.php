@@ -20,17 +20,20 @@ class InventoryItem extends Model
      * Keyed on MaterialName::key(), because a stock sheet typed by hand spells
      * one fabric three ways and none of them is wrong.
      *
-     * @var array<string, array<string, static>>
+     * Held on the container rather than in a static, so it lasts exactly one
+     * request and no longer. A static outlives the request, which in a test run
+     * means one test's shelf answering another's question.
      */
-    private static array $shelves = [];
+    private const SHELVES = 'inventory.shelves';
 
     /** @return array<string, static> key => the item */
     public static function shelfIndex(?string $kind): array
     {
+        $shelves = app()->bound(self::SHELVES) ? app(self::SHELVES) : [];
         $cacheKey = $kind ?? '*';
 
-        if (isset(self::$shelves[$cacheKey])) {
-            return self::$shelves[$cacheKey];
+        if (isset($shelves[$cacheKey])) {
+            return $shelves[$cacheKey];
         }
 
         $index = [];
@@ -49,13 +52,16 @@ class InventoryItem extends Model
                 }
             });
 
-        return self::$shelves[$cacheKey] = $index;
+        $shelves[$cacheKey] = $index;
+        app()->instance(self::SHELVES, $shelves);
+
+        return $index;
     }
 
     /** Read the shelves again — after stock moves, or in a test. */
     public static function forgetShelves(): void
     {
-        self::$shelves = [];
+        app()->forgetInstance(self::SHELVES);
     }
 
     protected static function booted(): void

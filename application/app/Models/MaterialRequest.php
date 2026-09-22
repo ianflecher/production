@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\MaterialName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 
 class MaterialRequest extends Model
 {
@@ -65,31 +67,48 @@ class MaterialRequest extends Model
     }
 
     /**
-     * The stock this request comes out of.
+     * The stock rows this request could come out of.
      *
-     * The desk used to pick it from a dropdown of every material in the shop,
-     * which is a question with one right answer — the material is written on
-     * the request — and a thousand wrong ones. So the system answers it.
+     * The material is written on the request, so the desk should not be picking
+     * it out of a list of every material in the shop. But a job order names a
+     * FABRIC — QA700, which the stock sheet files under QUIANA — and the shelf
+     * holds ten of it: two weights, eight colours. The request says which
+     * fabric, never which bolt.
      *
-     * Matched on MaterialName::key() rather than the literal name, because a
-     * stock sheet typed by hand comes back as "Cotton White XL", "cotton white
-     * xl" and "COTTON-WHITE-XL" on three different days; and through
-     * MaterialAlias, because a job order asking for QA700 means the fabric the
-     * stock sheet files under QUIANA.
+     * So: everything on this desk's shelf that is that material, or a kind of
+     * it. One row means there is nothing to ask. Several means the desk picks
+     * from those several rather than from sixteen hundred.
      *
-     * Kept to its own shelf: the supervisor's fabric is not the desk's
-     * ready-made stock, and a request must not deduct from the other one.
+     * Aliases both ways round, because the sheet and the job order have never
+     * agreed on what to call it.
+     *
+     * @return Collection<int, InventoryItem>
+     */
+    public function stockCandidates(): Collection
+    {
+        $wanted = MaterialAlias::keysFor($this->material);
+
+        if ($wanted === []) {
+            return collect();
+        }
+
+        return collect(InventoryItem::shelfIndex($this->kind))
+            ->filter(fn ($item, $key) => collect($wanted)
+                ->contains(fn ($name) => MaterialName::sameFamily($key, $name)))
+            ->sortBy(fn ($item) => $item->name)
+            ->values();
+    }
+
+    /**
+     * The one row it obviously comes out of, when there is only one.
+     *
+     * Null when the shelf holds none of it, and null when it holds several:
+     * both are questions, and neither is the system's to answer quietly.
      */
     public function stockItem(): ?InventoryItem
     {
-        $shelf = InventoryItem::shelfIndex($this->kind);
+        $candidates = $this->stockCandidates();
 
-        foreach (MaterialAlias::keysFor($this->material) as $key) {
-            if (isset($shelf[$key])) {
-                return $shelf[$key];
-            }
-        }
-
-        return null;
+        return $candidates->count() === 1 ? $candidates->first() : null;
     }
 }

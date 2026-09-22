@@ -29,7 +29,8 @@
             @php
                 // The same rule the approval uses, so what the page shows
                 // and what the button deducts can never disagree.
-                $match = $req->stockItem();
+                $candidates = $req->stockCandidates();
+                $match = $candidates->count() === 1 ? $candidates->first() : null;
             @endphp
             <div class="card panel">
                 <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: flex-start;">
@@ -93,24 +94,39 @@
                           onsubmit="return confirmIssue(this);"
                           style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end;">
                         @csrf
-                        {{-- No dropdown: the material is written on the
-                             request, so the shelf it comes out of is not a
-                             question anybody should be asked. It is shown
-                             rather than chosen. --}}
+                        {{-- The material is written on the request, so the row
+                             it comes out of is shown, not chosen out of a list
+                             of every material in the shop.
+
+                             Except when the shop holds several of it: a job
+                             order asks for QUIANA and the shelf keeps ten
+                             colours and weights of it, and nothing on the
+                             request says which bolt. Then the desk says which,
+                             out of those ten. --}}
                         <div>
                             <label style="font-size: 0.75rem;">Issue from stock</label>
-                            <div style="padding: 0.42rem 0; font-size: 0.85rem; font-weight: 600;">
-                                @if ($match)
+                            @if ($match)
+                                <div style="padding: 0.42rem 0; font-size: 0.85rem; font-weight: 600;">
                                     {{ $match->name }}
                                     <span style="font-weight: 400; color: var(--ink-3);">
                                         ({{ $match->qtyForHumans() }} {{ $match->unit }} on the shelf)
                                     </span>
-                                @else
+                                </div>
+                            @elseif ($candidates->isNotEmpty())
+                                <select name="inventory_item_id" required
+                                        style="min-width: 240px; padding: 0.42rem 0.6rem; font-size: 0.85rem;">
+                                    <option value="">Which {{ $req->material }}?</option>
+                                    @foreach ($candidates as $c)
+                                        <option value="{{ $c->id }}">{{ $c->name }} ({{ $c->qtyForHumans() }} {{ $c->unit }})</option>
+                                    @endforeach
+                                </select>
+                            @else
+                                <div style="padding: 0.42rem 0; font-size: 0.85rem; font-weight: 600;">
                                     <span style="color: var(--danger-ink, #b91c1c);">
                                         Not on your shelf — add it to stock first
                                     </span>
-                                @endif
-                            </div>
+                                </div>
+                            @endif
                         </div>
                         <div>
                             <label style="font-size: 0.75rem;">Quantity</label>

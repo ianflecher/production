@@ -699,16 +699,35 @@ class InventoryController extends Controller
             'operator_name' => ['required', 'string', 'max:100'],
         ], ['operator_name.required' => 'Enter the name of the person issuing the materials.']);
 
-        // WHICH stock it comes out of is not a question: the material is
-        // written on the request. It used to be a dropdown of every material
-        // in the shop, one right answer and a thousand wrong ones, and picking
-        // the wrong line deducted the wrong shelf.
-        $item = $materialRequest->stockItem();
+        // WHICH stock it comes out of is mostly not a question: the material is
+        // written on the request, and it used to be picked out of a dropdown of
+        // every material in the shop — one right answer and a thousand wrong
+        // ones, each of which deducted the wrong row.
+        //
+        // Mostly, because a job order names a fabric and the shelf holds the
+        // colours of it. One QUIANA on the shelf and there is nothing to ask;
+        // ten and the desk says which, out of those ten.
+        $candidates = $materialRequest->stockCandidates();
 
-        if (! $item) {
+        if ($candidates->isEmpty()) {
             return back()->withErrors([
                 'quantity' => $materialRequest->material.' is not on your shelf yet. '
                     .'Add it to stock first, then approve — or reject the request.',
+            ]);
+        }
+
+        $chosen = $request->integer('inventory_item_id');
+
+        // Whatever was sent has to be one of this request's own rows. A posted
+        // id is not a way round the shelf.
+        $item = $chosen
+            ? $candidates->firstWhere('id', $chosen)
+            : ($candidates->count() === 1 ? $candidates->first() : null);
+
+        if (! $item) {
+            return back()->withErrors([
+                'inventory_item_id' => 'Which '.$materialRequest->material.'? The shelf holds '
+                    .$candidates->count().' of it — say which one is going out.',
             ]);
         }
 

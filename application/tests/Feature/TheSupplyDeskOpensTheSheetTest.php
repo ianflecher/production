@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\InventoryItem;
+use App\Models\MaterialAlias;
 use App\Models\MaterialRequest;
 use App\Models\ProductionOrder;
 use App\Models\User;
@@ -143,6 +145,12 @@ class TheSupplyDeskOpensTheSheetTest extends TestCase
         $desk = $this->supplyDesk();
 
         $load = function () use ($desk) {
+            // Both runs start cold. The shelf and the alias pairs are read once
+            // per request and held, so a warm second run would come out cheaper
+            // for eight rows than for four and prove nothing either way.
+            InventoryItem::forgetShelves();
+            MaterialAlias::forget();
+
             DB::flushQueryLog();
             DB::enableQueryLog();
             $this->actingAs($desk)->get(route('inventory.requests'))->assertOk();

@@ -23,17 +23,16 @@ class MaterialAlias extends Model
      * The index, read once and held for the rest of the request.
      *
      * The requests page asks this once per row, and the table is a handful of
-     * pairs rather than a list being read.
-     *
-     * @var array<string, array<int, string>>|null
+     * pairs rather than a list being read. Held on the container so it lasts
+     * one request and no longer.
      */
-    private static ?array $index = null;
+    private const CACHE = 'material.aliases';
 
     /** @return array<string, array<int, string>> key => the other names' keys */
     public static function index(): array
     {
-        if (self::$index !== null) {
-            return self::$index;
+        if (app()->bound(self::CACHE)) {
+            return app(self::CACHE);
         }
 
         $index = [];
@@ -50,16 +49,17 @@ class MaterialAlias extends Model
             $index[$b][] = $a;
         }
 
-        return self::$index = array_map(
-            fn ($keys) => array_values(array_unique($keys)),
-            $index
-        );
+        $index = array_map(fn ($keys) => array_values(array_unique($keys)), $index);
+
+        app()->instance(self::CACHE, $index);
+
+        return $index;
     }
 
-    /** Read it again — for a test, or anything that writes a pair mid-request. */
+    /** Read it again — for anything that writes a pair mid-request. */
     public static function forget(): void
     {
-        self::$index = null;
+        app()->forgetInstance(self::CACHE);
     }
 
     protected static function booted(): void

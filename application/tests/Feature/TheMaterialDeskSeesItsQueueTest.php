@@ -281,6 +281,129 @@ class TheMaterialDeskSeesItsQueueTest extends TestCase
         );
     }
 
+    /* ---------------- one fabric, ten bolts of it ---------------- */
+
+    /**
+     * The one that bit on the live floor.
+     *
+     * A job order asks for QA700. The alias says that is QUIANA. The shelf
+     * holds ten QUIANAs — two weights, eight colours — and no plain row called
+     * QUIANA at all, so there is no single right answer and the desk was told
+     * its own fabric was "not on your shelf".
+     *
+     * The choice is the ten, not the sixteen hundred.
+     */
+    public function test_one_fabric_in_several_colours_offers_those_and_only_those(): void
+    {
+        $supervisor = $this->supervisor();
+        $order = $this->orderWithBoth();
+
+        $order->jobOrder->update([
+            'raw_materials' => ['QA700'],
+            'raw_material_kinds' => ['QA700' => InventoryItem::KIND_FABRIC],
+        ]);
+        $order->refresh()->syncMaterialRequests();
+
+        foreach (['QUIANA (140GSM) BLK', 'QUIANA (140GSM) WHT', 'QUIANA MANIPIS WHT'] as $name) {
+            InventoryItem::create(['name' => $name, 'category' => 'FABRIC', 'unit' => 'KG',
+                'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 40]);
+        }
+
+        // On the same shelf, and none of this job's business.
+        InventoryItem::create(['name' => 'TASLAN H9 BLK', 'category' => 'FABRIC', 'unit' => 'KG',
+            'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 40]);
+
+        $request = MaterialRequest::where('material', 'QA700')->firstOrFail();
+
+        $this->assertSame(3, $request->stockCandidates()->count());
+        $this->assertNull($request->stockItem(), 'three bolts is not one answer');
+
+        $html = $this->actingAs($supervisor)->get(route('inventory.requests'))->getContent();
+
+        $this->assertStringContainsString('Which QA700?', $html);
+        $this->assertStringContainsString('QUIANA MANIPIS WHT', $html);
+        $this->assertStringNotContainsString('TASLAN H9 BLK', $html, 'the whole shelf is back on the page');
+    }
+
+    /** And saying which deducts that one. */
+    public function test_saying_which_bolt_deducts_that_bolt(): void
+    {
+        $supervisor = $this->supervisor();
+        $order = $this->orderWithBoth();
+
+        $order->jobOrder->update([
+            'raw_materials' => ['QA700'],
+            'raw_material_kinds' => ['QA700' => InventoryItem::KIND_FABRIC],
+        ]);
+        $order->refresh()->syncMaterialRequests();
+
+        $black = InventoryItem::create(['name' => 'QUIANA (140GSM) BLK', 'category' => 'FABRIC',
+            'unit' => 'KG', 'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 40]);
+        $white = InventoryItem::create(['name' => 'QUIANA (140GSM) WHT', 'category' => 'FABRIC',
+            'unit' => 'KG', 'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 40]);
+
+        $request = MaterialRequest::where('material', 'QA700')->firstOrFail();
+
+        $this->actingAs($supervisor)
+            ->post(route('inventory.requests.approve', $request), [
+                'inventory_item_id' => $white->id,
+                'quantity' => 5,
+                'operator_name' => 'Khaye',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('35.00', $white->fresh()->quantity);
+        $this->assertSame('40.00', $black->fresh()->quantity);
+    }
+
+    /** Not saying which, when there are several, is an answerable question. */
+    public function test_not_saying_which_is_asked_again_rather_than_guessed(): void
+    {
+        $supervisor = $this->supervisor();
+        $order = $this->orderWithBoth();
+
+        $order->jobOrder->update([
+            'raw_materials' => ['QA700'],
+            'raw_material_kinds' => ['QA700' => InventoryItem::KIND_FABRIC],
+        ]);
+        $order->refresh()->syncMaterialRequests();
+
+        foreach (['QUIANA (140GSM) BLK', 'QUIANA (140GSM) WHT'] as $name) {
+            InventoryItem::create(['name' => $name, 'category' => 'FABRIC', 'unit' => 'KG',
+                'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 40]);
+        }
+
+        $request = MaterialRequest::where('material', 'QA700')->firstOrFail();
+
+        $this->actingAs($supervisor)
+            ->post(route('inventory.requests.approve', $request), ['quantity' => 5, 'operator_name' => 'Khaye'])
+            ->assertSessionHasErrors('inventory_item_id');
+
+        $this->assertSame('pending', $request->fresh()->status);
+    }
+
+    /** A posted row that is not this material's is not a way round the shelf. */
+    public function test_a_row_that_is_not_this_material_is_refused(): void
+    {
+        $supervisor = $this->supervisor();
+        $this->orderWithBoth();
+
+        InventoryItem::create(['name' => 'AIRCOOL 11X1 WHT', 'category' => 'FABRIC', 'unit' => 'KG',
+            'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 50]);
+        $other = InventoryItem::create(['name' => 'TASLAN H9 BLK', 'category' => 'FABRIC', 'unit' => 'KG',
+            'kind' => InventoryItem::KIND_FABRIC, 'quantity' => 50]);
+
+        $request = MaterialRequest::where('material', 'AIRCOOL 11X1 WHT')->firstOrFail();
+
+        $this->actingAs($supervisor)
+            ->post(route('inventory.requests.approve', $request), [
+                'inventory_item_id' => $other->id, 'quantity' => 5, 'operator_name' => 'Khaye',
+            ])
+            ->assertSessionHasErrors('inventory_item_id');
+
+        $this->assertSame('50.00', $other->fresh()->quantity);
+    }
+
     /** A material nobody has put on the shelf says so, and deducts nothing. */
     public function test_a_material_not_on_the_shelf_is_refused_plainly(): void
     {
