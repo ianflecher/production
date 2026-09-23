@@ -8,7 +8,6 @@ use App\Models\ProductionOrder;
 use App\Models\ProductItem;
 use App\Models\ProductReceipt;
 use App\Models\Task;
-use App\Models\TechPack;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -54,6 +53,11 @@ class FullShopWalkthroughTest extends TestCase
         ] as $who => $role) {
             $this->staff[$who] = User::factory()->create([
                 'job_role' => $role, 'is_active' => true, 'name' => ucfirst($who),
+                // A Tech Pack's final sign-off is two named people, not the
+                // leader role — the role also covers the supervisors, who run
+                // parts of the floor and are not who the shop means. The
+                // walkthrough's leader is one of the named two.
+                'can_approve_tech_packs' => $role === User::ROLE_LEADER,
             ]);
         }
 
@@ -217,23 +221,23 @@ class FullShopWalkthroughTest extends TestCase
         // their own copy of the sheet before the artist opens it.
         $this->actingAs($this->staff['sales'])
             ->post(route('job-orders.update', $this->order), [
-                    'design_name' => 'Walkthrough Tee',
-                    'fitting' => 'Original fit',
-                    'item_style' => 'Cotton shirt',
-                    'print_type' => 'dtf',
-                    'printer' => 'dtf_printer',
-                    'fabric' => 'Cotton blend',
-                    'neck' => 'Round neck',
-                    'cuff_arm_sleeves' => 'Tupi',
-                    'neck_label' => 'IC woven label',
-                    'tshirt_color' => 'Black',
-                    'thread_color' => 'Black',
-                    'packaging' => 'Polybag',
-                    'zipper_type' => 'N/A',
-                    'bottom_hem' => 'Straight hem',
-                    'lip_pocket_color' => 'N/A',
-                    'free_logo_sticker' => 'IC sticker',
-                ])->assertRedirect()->assertSessionHasNoErrors();
+                'design_name' => 'Walkthrough Tee',
+                'fitting' => 'Original fit',
+                'item_style' => 'Cotton shirt',
+                'print_type' => 'dtf',
+                'printer' => 'dtf_printer',
+                'fabric' => 'Cotton blend',
+                'neck' => 'Round neck',
+                'cuff_arm_sleeves' => 'Tupi',
+                'neck_label' => 'IC woven label',
+                'tshirt_color' => 'Black',
+                'thread_color' => 'Black',
+                'packaging' => 'Polybag',
+                'zipper_type' => 'N/A',
+                'bottom_hem' => 'Straight hem',
+                'lip_pocket_color' => 'N/A',
+                'free_logo_sticker' => 'IC sticker',
+            ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->actingAs($this->staff['artist'])
             ->post(route('tasks.tech-pack', $packTask->id), [

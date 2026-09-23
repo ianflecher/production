@@ -1523,7 +1523,16 @@ class TaskController extends Controller
     /** The mockup + template are one job package — approve both at once. */
     public function approvePackage(Request $request, ProductionOrder $order): RedirectResponse
     {
-        abort_unless($request->user()->isLeader() || $request->user()->isArtistLead(), 403);
+        // The same two named people as the single-task approval, and for the
+        // same reason — see User::canApproveTechPacks() and assertApprover().
+        //
+        // This asked isLeader(), which in this app includes the supervisors.
+        // Four of them could press "Approve package" and release production on
+        // a pack neither of the two people who are meant to check it had seen.
+        // IC2026-01237 went to the floor that way on 2026-09-23: the officer
+        // approved at 11:09, and at 11:36 the pack was complete and the printer
+        // had the job, with nothing recording who had said so.
+        $this->assertMayApproveTechPacks($request);
 
         $tasks = $this->packageTasks($order);
         abort_if($tasks->isEmpty(), 404);
@@ -1601,6 +1610,20 @@ class TaskController extends Controller
      * Nobody signs off their own drawing. The artist leader is on the artist
      * rotation, so a pack he made waits for a leader instead.
      */
+    /**
+     * Who may sign off a Tech Pack: two named people, and the super admin.
+     *
+     * Not the leader ROLE, which in this app includes the supervisors. They
+     * run parts of the floor and none of them is who the shop means when it
+     * says the pack has been checked.
+     */
+    private function assertMayApproveTechPacks(Request $request): void
+    {
+        $user = $request->user();
+
+        abort_unless($user->isSuperAdmin() || $user->canApproveTechPacks(), 403);
+    }
+
     private function assertNotOwnPack(Request $request, $tasks): void
     {
         abort_if(
@@ -1643,6 +1666,13 @@ class TaskController extends Controller
      */
     public function forceComplete(Request $request, Task $task): RedirectResponse
     {
+        // Completing a Tech Pack step IS approving it: the next stage unlocks
+        // either way. So the override cannot be a way round the two people who
+        // are allowed to say so.
+        if ($task->isTechPackStep()) {
+            $this->assertMayApproveTechPacks($request);
+        }
+
         $order = $task->order;
         $unpaidRelease = $task->department === 'Release to client' && ! $order->isFullyPaid();
         $reason = null;

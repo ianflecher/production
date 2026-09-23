@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\StaffAssigner;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class Task extends Model
@@ -47,7 +49,7 @@ class Task extends Model
         'production_order_id', 'sequence', 'stage', 'department', 'team', 'instructions',
         'assigned_to', 'passed_from', 'operator_name', 'note', 'status', 'approver_role', 'auto_assign', 'auto_submit',
         'officer_approved_by', 'officer_approved_at',
-        'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'released_at', 'due_at',
+        'revision_note', 'revision_count', 'submitted_at', 'approved_at', 'approved_by', 'was_forced', 'released_at', 'due_at',
     ];
 
     protected function casts(): array
@@ -55,6 +57,7 @@ class Task extends Model
         return [
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
+            'was_forced' => 'boolean',
             'officer_approved_at' => 'datetime',
             'released_at' => 'datetime',
             'due_at' => 'datetime',
@@ -230,7 +233,7 @@ class Task extends Model
         // person from "My Tasks". Everything else is run from the station board —
         // whoever is on the machine types their name, so there is nothing to wait
         // for and no attendance to check.
-        if ($this->team !== \App\Models\User::JOB_ARTIST) {
+        if ($this->team !== User::JOB_ARTIST) {
             return false;
         }
 
@@ -241,7 +244,7 @@ class Task extends Model
         }
 
         // Supply chain always receives its work, so it's never "stuck on staff".
-        if (\App\Services\StaffAssigner::alwaysReceives($this->team)) {
+        if (StaffAssigner::alwaysReceives($this->team)) {
             return false;
         }
 
@@ -268,7 +271,7 @@ class Task extends Model
             return app($key);
         }
 
-        $answer = \App\Models\User::where('is_active', true)
+        $answer = User::where('is_active', true)
             ->where('job_role', $team)
             ->get()
             ->contains(fn ($u) => $u->isPresentToday());
@@ -424,7 +427,7 @@ class Task extends Model
             return null;
         }
 
-        if ($this->team === \App\Models\User::JOB_ARTIST) {
+        if ($this->team === User::JOB_ARTIST) {
             return null;   // the assignee column already names the artist
         }
 
@@ -483,7 +486,7 @@ class Task extends Model
      */
     public function workUrl(): string
     {
-        if ($this->team === \App\Models\User::JOB_ARTIST) {
+        if ($this->team === User::JOB_ARTIST) {
             return route('tasks.show', $this->id);
         }
 
@@ -516,14 +519,30 @@ class Task extends Model
             ]);
         }
 
-        $this->markComplete();
+        $this->markComplete(forced: true);
     }
 
-    private function markComplete(): void
+    /** Who signed this step off, as a person. */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    private function markComplete(bool $forced = false): void
     {
         $assignee = $this->assignee;
 
-        $this->update(['status' => 'complete', 'approved_at' => now()]);
+        // Who said so. The pack recorded the account officer who passed it on
+        // and then nobody at all for the approval that releases production, so
+        // "did the leader approve this?" had no answer in the system. Taken
+        // from whoever is signed in, which is null on the console and for the
+        // scheduler — both of which are also true answers.
+        $this->update([
+            'status' => 'complete',
+            'approved_at' => now(),
+            'approved_by' => auth()->id(),
+            'was_forced' => $forced,
+        ]);
 
         // The order unlocks the next stage once every task in this stage is done
         // (parallel tasks in the same stage must all finish first).
@@ -532,7 +551,7 @@ class Task extends Model
         // If the person who finished this is now free, roll them onto the next
         // waiting job for their team (keeps one worker on one project at a time).
         if ($assignee) {
-            \App\Services\StaffAssigner::assignWaitingWork($assignee->fresh());
+            StaffAssigner::assignWaitingWork($assignee->fresh());
         }
     }
 
@@ -595,7 +614,7 @@ class Task extends Model
 
         $order = $this->order;
         $isRevision = $this->status === 'revision_required';
-        $note = \Illuminate\Support\Str::limit((string) $this->revision_note, 80);
+        $note = Str::limit((string) $this->revision_note, 80);
         $url = $this->workUrl();
 
         // Artists are handed work personally, so it goes to that one person.
