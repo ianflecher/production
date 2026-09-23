@@ -2,12 +2,18 @@
 
 namespace App\Models;
 
+use App\Services\PricingService;
 use App\Services\StaffAssigner;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class ProductionOrder extends Model
@@ -210,7 +216,7 @@ class ProductionOrder extends Model
     /** The back-pocket charge: fee × number of pieces with a pocket. */
     public function backPocketAmount(): float
     {
-        return $this->backPocketCount() * (float) \App\Services\PricingService::backPocketFee();
+        return $this->backPocketCount() * (float) PricingService::backPocketFee();
     }
 
     /**
@@ -407,7 +413,7 @@ class ProductionOrder extends Model
      * was filled in fall back to when they were last touched — otherwise the
      * oldest jobs in the shop are the ones that never leave the list.
      */
-    public function scopeArchived($query, ?\Carbon\CarbonInterface $before = null)
+    public function scopeArchived($query, ?CarbonInterface $before = null)
     {
         $cutoff = $before ?? now()->subDays(self::ARCHIVE_AFTER_DAYS);
 
@@ -455,8 +461,8 @@ class ProductionOrder extends Model
         // not in the standard list, and without this a hybrid jersey came out
         // titled from its key ("Hybrid Riding Jersey Type 1") on every sheet
         // that shows the product.
-        return \App\Services\PricingService::label($this->product_type, $this->price_list)
-            ?? ($this->product_type ? \Illuminate\Support\Str::title($this->product_type) : null);
+        return PricingService::label($this->product_type, $this->price_list)
+            ?? ($this->product_type ? Str::title($this->product_type) : null);
     }
 
     /**
@@ -581,14 +587,14 @@ class ProductionOrder extends Model
      * always meant by "the tech pack", and every pack drawn before the split
      * is a sample. Callers that want the batch sheet ask for it by name.
      */
-    public function techPack(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function techPack(): HasOne
     {
         return $this->hasOne(TechPack::class)->where('phase', TechPack::PHASE_SAMPLE);
     }
 
     /** The sheet the batch is made from, copied from the sample once the
      *  client has approved it. */
-    public function techPackMassprod(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function techPackMassprod(): HasOne
     {
         return $this->hasOne(TechPack::class)->where('phase', TechPack::PHASE_MASSPROD);
     }
@@ -943,7 +949,7 @@ class ProductionOrder extends Model
      * time. A job already past its due date gets today for everything that is
      * left — it is late, and pretending otherwise helps nobody.
      */
-    public function scheduleStepDeadlines(?\Carbon\CarbonInterface $from = null, bool $preserveCompleted = false): int
+    public function scheduleStepDeadlines(?CarbonInterface $from = null, bool $preserveCompleted = false): int
     {
         if (! $this->due_date) {
             return 0;
@@ -971,7 +977,7 @@ class ProductionOrder extends Model
             return $steps->count();
         }
 
-        $assignWindow = static function ($windowSteps, \Carbon\CarbonInterface $windowStart, \Carbon\CarbonInterface $windowEnd): void {
+        $assignWindow = static function ($windowSteps, CarbonInterface $windowStart, CarbonInterface $windowEnd): void {
             $count = $windowSteps->count();
 
             if ($count === 0) {
@@ -1166,10 +1172,15 @@ class ProductionOrder extends Model
             return;
         }
 
-        $config = JobOrder::printTypeConfig($jobOrder->fresh()->print_type);
+        // The print type decides both, every time. They used to be filled
+        // only when empty, on the reasoning that whatever the officer chose
+        // stays chosen — but there is nothing for them to choose any more, so
+        // "empty" only ever meant "not answered yet", and a job whose print
+        // type changed kept the route of the one it used to be.
+        $routing = $jobOrder->fresh()->printRouting();
 
-        if (! $this->cutting_type && ($config['cutting'] ?? null)) {
-            $this->update(['cutting_type' => $config['cutting']]);
+        if ($this->cutting_type !== $routing['cutting']) {
+            $this->update(['cutting_type' => $routing['cutting']]);
         }
 
         // The printer, the same way and for the same reason. It was the one
@@ -1185,11 +1196,10 @@ class ProductionOrder extends Model
             $jobOrder->update(['printer' => $jobOrder->fresh()->defaultPrinter()]);
         }
 
-        if (! $jobOrder->fresh()->fabric_press) {
-            $fabricPress = $jobOrder->fresh()->defaultFabricPress();
+        if ($jobOrder->fresh()->fabric_press !== $routing['fabric_press']) {
             $jobOrder->update([
-                'fabric_press' => $fabricPress,
-                'needs_embroidery' => $fabricPress === 'embroidery'
+                'fabric_press' => $routing['fabric_press'],
+                'needs_embroidery' => $routing['fabric_press'] === 'embroidery'
                     ? true
                     : (bool) $jobOrder->needs_embroidery,
             ]);
@@ -1220,7 +1230,7 @@ class ProductionOrder extends Model
      * deadlines start from: an order sitting unpaid has not used any of its
      * time. An order set to skip the sample has no sample to be late for.
      */
-    public function computeSampleDueDate(): ?\Carbon\CarbonInterface
+    public function computeSampleDueDate(): ?CarbonInterface
     {
         if ($this->skip_sample) {
             return null;
@@ -1282,7 +1292,7 @@ class ProductionOrder extends Model
      * loads them already, and asking again per order is how a list page turns
      * into a query per row.
      */
-    private function lastSampleStepDueAt(): ?\Carbon\CarbonInterface
+    private function lastSampleStepDueAt(): ?CarbonInterface
     {
         if ($this->relationLoaded('tasks')) {
             return $this->tasks
@@ -1306,11 +1316,11 @@ class ProductionOrder extends Model
             ->where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'cancelled'))
             ->max('due_at');
 
-        return $latest ? \Illuminate\Support\Carbon::parse($latest) : null;
+        return $latest ? Carbon::parse($latest) : null;
     }
 
     /** Works out the sample date and writes it down, when it has changed. */
-    public function applySampleDueDate(): ?\Carbon\CarbonInterface
+    public function applySampleDueDate(): ?CarbonInterface
     {
         $due = $this->computeSampleDueDate();
 
@@ -1339,7 +1349,7 @@ class ProductionOrder extends Model
     }
 
     /** When the first payment was confirmed — the moment the job starts. */
-    public function firstConfirmedPaymentAt(): ?\Carbon\CarbonInterface
+    public function firstConfirmedPaymentAt(): ?CarbonInterface
     {
         // ->value() hands back the raw column, not a date: ask for the row so
         // the model's own cast does the work.
@@ -1476,13 +1486,13 @@ class ProductionOrder extends Model
      * When this job reached the printer — the moment it became the mover's to
      * follow. Null while it is still with the artist or the account officer.
      */
-    public function reachedTheFloorAt(): ?\Illuminate\Support\Carbon
+    public function reachedTheFloorAt(): ?Carbon
     {
         return $this->tasks->firstWhere('department', self::MOVER_FIRST_STEP)?->released_at;
     }
 
     /** When the finished pieces were counted in, closing her slice. */
-    public function leftTheFloorAt(): ?\Illuminate\Support\Carbon
+    public function leftTheFloorAt(): ?Carbon
     {
         $inventory = $this->tasks->firstWhere('department', self::MOVER_LAST_STEP);
 
@@ -1699,7 +1709,7 @@ class ProductionOrder extends Model
      * prerequisite step doesn't exist for this order). Supports a single prereq or
      * a list — the step waits for ALL of them.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $stageTasks
+     * @param  Collection<int, Task>  $stageTasks
      */
     private static function prerequisitesMet(string $department, $stageTasks): bool
     {
@@ -1794,7 +1804,7 @@ class ProductionOrder extends Model
      * page), then embroidery if the job order asks for it.
      *
      * @param  array<int, string>  $legacyMethods  older orders stored these on the order itself
-     * @return array<int, string>  department labels
+     * @return array<int, string> department labels
      */
     public function decorationSteps(array $legacyMethods = []): array
     {
@@ -2350,9 +2360,9 @@ class ProductionOrder extends Model
      *
      * Cancelled ones are left out. Nobody is paying for those.
      *
-     * @return \Illuminate\Support\Collection<int, self>
+     * @return Collection<int, self>
      */
-    public function siblingOrders(): \Illuminate\Support\Collection
+    public function siblingOrders(): Collection
     {
         return self::where('order_number', $this->order_number)
             ->where('status', '!=', 'cancelled')
@@ -2375,7 +2385,7 @@ class ProductionOrder extends Model
      * but a design deliberately moved onto a number of its own is still part
      * of what this client is buying.
      */
-    public function quotationOrders(): \Illuminate\Support\Collection
+    public function quotationOrders(): Collection
     {
         if (! $this->inquiry_id) {
             return collect([$this]);
@@ -2414,7 +2424,7 @@ class ProductionOrder extends Model
      *
      * Newest last, so a stack of them reads in the order it arrived.
      */
-    public function filesSentToTheArtist(): \Illuminate\Support\Collection
+    public function filesSentToTheArtist(): Collection
     {
         $covered = $this->quotationOrders();
 
@@ -2452,7 +2462,7 @@ class ProductionOrder extends Model
      * Lifted out of orders/document.blade.php so the header picture and the
      * per-product pictures cannot disagree about which drawing is the design.
      */
-    public function documentDesignFiles(): \Illuminate\Support\Collection
+    public function documentDesignFiles(): Collection
     {
         $task = $this->documentDesignTask();
 
@@ -2521,10 +2531,10 @@ class ProductionOrder extends Model
      * what the client handed over rather than drifting a few centavos short -
      * the same way splitAcrossSizes() divides a material.
      *
-     * @param  \Illuminate\Support\Collection<int, self>  $orders
-     * @return array<int, float>  order id => its share
+     * @param  Collection<int, self>  $orders
+     * @return array<int, float> order id => its share
      */
-    public static function splitPaymentAcross(float $amount, \Illuminate\Support\Collection $orders): array
+    public static function splitPaymentAcross(float $amount, Collection $orders): array
     {
         $amount = round($amount, 2);
         $owed = $orders->mapWithKeys(fn (self $o) => [$o->id => (float) ($o->balance() ?? 0)]);
@@ -2743,7 +2753,7 @@ class ProductionOrder extends Model
         // - so those orders reached the batch and silently stopped there, with
         // nothing on any screen to say why.
         if ($stage === 10) {
-            $inquiry = \App\Models\Inquiry::where('production_order_id', $this->id)->first();
+            $inquiry = Inquiry::where('production_order_id', $this->id)->first();
 
             if ($inquiry && $inquiry->designsOutstanding()->isNotEmpty()) {
                 return;
@@ -2929,7 +2939,7 @@ class ProductionOrder extends Model
     public function queueProductReceipts(): void
     {
         try {
-            if (\App\Models\ProductReceipt::where('production_order_id', $this->id)->exists()) {
+            if (ProductReceipt::where('production_order_id', $this->id)->exists()) {
                 return;
             }
 
@@ -2961,7 +2971,7 @@ class ProductionOrder extends Model
             foreach ($byProduct as $product => $qty) {
                 // Prefix the order number so each job order's products stay their
                 // own stock line (released together, per job order).
-                \App\Models\ProductReceipt::create([
+                ProductReceipt::create([
                     'production_order_id' => $this->id,
                     'name' => $this->order_number.' — '.$product,
                     'unit' => 'pcs',
@@ -2970,7 +2980,7 @@ class ProductionOrder extends Model
                 ]);
             }
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error(
+            Log::error(
                 'queueProductReceipts failed for order '.$this->id.': '.$e->getMessage()
             );
         }
@@ -2992,7 +3002,7 @@ class ProductionOrder extends Model
     public function stockFirstSample(): void
     {
         try {
-            if (\App\Models\ProductReceipt::where('production_order_id', $this->id)
+            if (ProductReceipt::where('production_order_id', $this->id)
                 ->where('is_sample', true)->exists()) {
                 return;
             }
@@ -3009,7 +3019,7 @@ class ProductionOrder extends Model
                 $name = trim((string) ($this->product_type ?: $this->customer_name)) ?: ('Order '.$this->order_number);
             }
 
-            \App\Models\ProductReceipt::create([
+            ProductReceipt::create([
                 'production_order_id' => $this->id,
                 'name' => $name,
                 'unit' => 'pcs',
@@ -3025,7 +3035,7 @@ class ProductionOrder extends Model
                 route('products.index'),
             );
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error(
+            Log::error(
                 'stockFirstSample failed for order '.$this->id.': '.$e->getMessage()
             );
         }

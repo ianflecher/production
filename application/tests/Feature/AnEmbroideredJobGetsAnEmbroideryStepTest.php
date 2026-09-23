@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\JobOrder;
 use App\Models\ProductionOrder;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -174,7 +175,7 @@ class AnEmbroideredJobGetsAnEmbroideryStepTest extends TestCase
     {
         $order = $this->order(['printer' => 'embroidery'], skipSample: true);
 
-        \App\Models\Task::create([
+        Task::create([
             'production_order_id' => $order->id,
             'department' => 'Embroidery',
             'team' => User::JOB_PRODUCTION,
@@ -196,12 +197,19 @@ class AnEmbroideredJobGetsAnEmbroideryStepTest extends TestCase
      * A press the officer chose themselves is still not overruled — this only
      * ever fills the fabric press when it is empty.
      */
-    public function test_a_press_the_officer_chose_is_left_alone(): void
+    /**
+     * There is no press for the officer to choose any more, so a row saying
+     * roller press on an embroidered job is a leftover rather than a decision
+     * — and an embroidered job is not pressed at all. Its machine is the
+     * embroidery machine, which is what puts it on the embroidery bench.
+     */
+    public function test_an_embroidered_job_is_put_back_on_its_own_machine(): void
     {
         $order = $this->order(['printer' => 'embroidery', 'fabric_press' => 'roller_press']);
 
         $order->applyPrintTypeRouting();
 
-        $this->assertSame('roller_press', $order->fresh()->jobOrder->fabric_press);
+        $this->assertSame('embroidery', $order->fresh()->jobOrder->fabric_press);
+        $this->assertSame('manual', $order->fresh()->cutting_type);
     }
 }

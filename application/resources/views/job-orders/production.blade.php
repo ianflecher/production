@@ -5,13 +5,10 @@
 
 @section('content')
 @php
-    // Cutting defaults from the print type chosen on the sheet, but is overridable.
-    $selectedCut = old('cutting_type', $order->cutting_type);
-    if (! $selectedCut) {
-        foreach (\App\Models\JobOrder::PRINT_TYPES as $pt) {
-            if (strtolower($pt['label']) === strtolower((string) $jobOrder->print_type)) { $selectedCut = $pt['cutting']; break; }
-        }
-    }
+    // Cutting and the fabric press are not asked for: the print type decides
+    // both, and this page says what that comes to rather than offering a
+    // second answer to the same question. See JobOrder::printRouting().
+    $routing = $jobOrder->printRouting();
     $rawMaterials = old('raw_materials', $jobOrder->rawMaterialsList());
     // What each line was last said to be. Kept beside the names rather than
     // inside them, so everything that reads the list keeps reading names.
@@ -98,21 +95,8 @@
     </div>
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
-        <h2>Cutting <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">(defaults from print type — overridable)</span></h2>
-        <div class="field" style="max-width: 300px;">
-            <select name="cutting_type">
-                <option value="">— Select cutting —</option>
-                @foreach (\App\Models\ProductionOrder::CUTTING_TYPES as $k => $l)
-                    <option value="{{ $k }}" @selected($selectedCut === $k)>{{ $l }}</option>
-                @endforeach
-            </select>
-        </div>
-    </div>
-
-    <div class="card panel" style="margin-bottom: 1.4rem;">
         <h2>Step 3 — Fabric press</h2>
         @php
-            $selectedFabric = old('fabric_press', $jobOrder->fabric_press ?: $jobOrder->defaultFabricPress());
             // Add-ons are a toggle: on = pick a press or embroidery; off = none.
             // (The form field is still named decoration_on — renaming the stored
             // column would be a data migration, and only the wording changed.)
@@ -122,22 +106,32 @@
 
             // The cap press is hidden unless this job is actually a cap — but
             // never hidden out from under a value the order already holds.
-            $fabricOptions = \App\Models\JobOrder::pressOptionsFor($order, $selectedFabric);
             $addonPressOptions = \App\Models\JobOrder::pressOptionsFor($order, $selectedDeco);
         @endphp
 
-        {{-- Step 3: presses the print onto the fabric. Always needed. --}}
-        <div class="field" style="max-width: 360px;">
-            <label>Fabric press <span style="color: var(--danger-ink);">*</span></label>
-            <select name="fabric_press" id="fabricPress" required>
-                @foreach ($fabricOptions as $k => $l)
-                    <option value="{{ $k }}" @selected($selectedFabric === $k)>{{ $l }}</option>
-                @endforeach
-            </select>
+        {{-- Step 3: presses the print onto the fabric. Not a question: the
+             print type answers it, and the cutting with it. --}}
+        @php
+            $cutLabel = \App\Models\ProductionOrder::CUTTING_TYPES[$routing['cutting']] ?? $routing['cutting'];
+            $pressLabel = \App\Models\JobOrder::pressOptions()[$routing['fabric_press']] ?? $routing['fabric_press'];
+            $printLabel = $jobOrder->printTypeLabel() ?: null;
+        @endphp
+        <div class="field" style="max-width: 460px;">
+            <label>Cutting and fabric press</label>
+            <p style="margin: 0.15rem 0 0; font-size: 0.95rem; font-weight: 600;">
+                {{ $cutLabel }} &middot; {{ $pressLabel }}
+            </p>
             <div style="font-size: 0.75rem; color: var(--ink-3); margin-top: 0.3rem;">
-                Presses the print onto the fabric after printing. Auto-matches the
-                print type ({{ $jobOrder->printTypeLabel() ?: '—' }}) — overridable.
+                @if ($printLabel)
+                    Decided by the print type, <strong>{{ $printLabel }}</strong>:
+                    sublimation is laser cut and pressed on the roller, everything
+                    else is cut by hand and pressed on the small press.
+                @else
+                    No print type on the tech pack yet, so this is the default
+                    route &mdash; set the print type and it follows.
+                @endif
             </div>
+        </div>
         </div>
     </div>
 
@@ -231,10 +225,9 @@
 
 <script>
     // Decoration is a checkbox: show the press/embroidery method only when it's
-    // ticked, and only ask "what needs to be embroidered?" when embroidery is
-    // actually chosen (as the fabric press, or as the decoration method).
+    // ticked. The fabric press used to be a control here too; it is the print
+    // type's answer now, so nothing listens to it.
     (function () {
-        var fabric = document.getElementById('fabricPress');
         var deco = document.getElementById('decorationPress');
         var decoToggle = document.getElementById('decorationToggle');
         var addonFields = document.getElementById('addonFields');
@@ -256,8 +249,7 @@
 
             // The whole add-on block only exists once the tick is on.
             if (addonFields) addonFields.style.display = on ? '' : 'none';
-            // Nothing inside it should be submitted while it is hidden. The
-            // fabric press is Step 3 and stays enabled either way.
+            // Nothing inside it should be submitted while it is hidden.
             if (deco) deco.disabled = !on;
             if (addonSelect) addonSelect.disabled = !on;
 
@@ -269,7 +261,6 @@
             matchPress();   // automatic…
             refresh();
         });
-        if (fabric) fabric.addEventListener('change', refresh);
         if (deco) deco.addEventListener('change', refresh);   // …but overridable
         if (decoToggle) decoToggle.addEventListener('change', refresh);
         refresh();

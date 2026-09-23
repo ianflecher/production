@@ -328,11 +328,8 @@ class JobOrderController extends Controller
             // the desk's ready-made stock.
             'raw_material_kind' => ['nullable', 'array'],
             'raw_material_kind.*' => ['nullable', 'in:fabric,ready_made'],
-            'cutting_type' => ['nullable', 'in:'.implode(',', array_keys(ProductionOrder::CUTTING_TYPES))],
-            // Fabric press (required, merges the print onto the fabric) and the
-            // decoration — a checkbox toggle; when on it's a press OR embroidery.
-            // Step 3 — always needed, it merges the print onto the fabric.
-            'fabric_press' => ['required', 'in:'.implode(',', $pressKeys)],
+            // Neither the cutting nor the fabric press is asked for any more:
+            // the print type decides both. See JobOrder::printRouting().
             'decoration_on' => ['nullable', 'boolean'],
             'press' => ['nullable', 'in:'.implode(',', $pressKeys)],
             // Add-ons: which one, what it is when "Others", and what it costs.
@@ -347,7 +344,11 @@ class JobOrderController extends Controller
         // Add-ons off → no add-on and no add-on press. On → the chosen add-on,
         // whose press is matched automatically (Others has none, so the officer
         // picks it from the press list).
-        $fabricPress = $data['fabric_press'];
+        // What the print type says this job is cut and pressed by. It was two
+        // dropdowns, defaulted from the print type and overridable, so the shop
+        // could be told a job was sublimation and cut by hand.
+        $routing = $order->jobOrder->printRouting();
+        $fabricPress = $routing['fabric_press'];
         $decoOn = (bool) ($data['decoration_on'] ?? false);
 
         $addon = $decoOn ? ($data['addon'] ?? null) : null;
@@ -432,7 +433,7 @@ class JobOrderController extends Controller
             $order->refresh()->syncMaterialRequests();
         }
 
-        $newCut = $data['cutting_type'] ?? null;
+        $newCut = $routing['cutting'];
         $note = 'Production details saved.';
 
         if ($newCut !== $order->cutting_type) {

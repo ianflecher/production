@@ -339,30 +339,61 @@ class JobOrder extends Model
      * normally uses, EXCEPT an embroidery print type has nothing to merge, so the
      * fabric press is automatically embroidery. Overridable on production details.
      */
+    /**
+     * What the print type decides on its own: how the cloth is cut, and which
+     * press merges the print onto it.
+     *
+     * Sublimation is printed on paper and rolled onto the cloth under heat, so
+     * it is cut by laser and pressed on the roller. Everything else is cut by
+     * hand and goes under the small press. Those were two dropdowns on the
+     * production form, defaulted from the print type and overridable, which
+     * meant the shop could be told a job was sublimation and cut by hand — two
+     * answers to one question, and no way to tell which was the mistake.
+     *
+     * Embroidery is the exception, and not really an exception: it is not
+     * printed at all, so no press merges anything onto it. Its "press" is the
+     * embroidery machine, which is what puts the job on the embroidery bench.
+     * IC2026-00009 is what happens when that is not said — a job that no
+     * station could see.
+     *
+     * @return array{cutting: string, fabric_press: string}
+     */
+    public function printRouting(): array
+    {
+        if ($this->isEmbroidered()) {
+            return ['cutting' => 'manual', 'fabric_press' => 'embroidery'];
+        }
+
+        // Read on the word, not the key: the box is free text and the shop
+        // writes "SUBLIMATION" as often as "FULL SUBLIMATION".
+        return str_contains(mb_strtolower((string) $this->print_type), 'sublimation')
+            ? ['cutting' => 'laser', 'fabric_press' => 'roller_press']
+            : ['cutting' => 'manual', 'fabric_press' => 'small_press'];
+    }
+
+    /**
+     * Whether this job is embroidered rather than printed.
+     *
+     * The print type says so, or the printer box does. That box only learned
+     * to say "Embroidery" recently and nothing else was listening, so a job
+     * could be an embroidery job in its product type, in its imported sheet
+     * and in the box the officer had just answered — and still have no
+     * embroidery step, because this asked the print type and only the print
+     * type. The work then appeared at no station and waited for nobody.
+     */
+    public function isEmbroidered(): bool
+    {
+        if ($this->printer === 'embroidery') {
+            return true;
+        }
+
+        return str_contains(mb_strtolower((string) $this->print_type), 'embroider');
+    }
+
+    /** The press that merges the print onto the fabric, from the print type. */
     public function defaultFabricPress(): ?string
     {
-        $config = self::printTypeConfig($this->print_type);
-
-        if ($config && strcasecmp($config['label'], 'Embroidery') === 0) {
-            return 'embroidery';
-        }
-
-        // Or the Printer box says so.
-        //
-        // That box only learned to say "Embroidery" recently, and nothing
-        // else in the shop was listening. So a job could be an embroidery job
-        // in its product type, in its imported sheet and in the box the
-        // officer had just answered - and still have no Embroidery step,
-        // because this asked the PRINT TYPE and only the print type. The work
-        // then appeared at no station and waited for nobody.
-        //
-        // IC2026-00009 is the one that showed it: "Embro Print Only",
-        // printer = embroidery, needs_embroidery = 0, no embroidery step.
-        if ($this->printer === 'embroidery') {
-            return 'embroidery';
-        }
-
-        return $config['press'] ?? null;
+        return $this->printRouting()['fabric_press'];
     }
 
     /*

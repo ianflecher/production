@@ -69,17 +69,20 @@ class TheCuttingCanChangeUntilCuttingStartsTest extends TestCase
         $this->assertFalse($order->fresh()->canEditCutting());
     }
 
-    public function test_the_officer_can_swap_the_cutting_after_the_press_has_run(): void
+    /**
+     * The cutting is not chosen any more: the print type decides it. Saying
+     * the job is sublimation is what makes it a laser job.
+     */
+    public function test_a_change_of_print_type_swaps_the_cutting_after_the_press_has_run(): void
     {
         $order = $this->orderAtStageThree();
         $order->tasks()->where('department', 'Small press')->update(['status' => 'complete']);
+        $order->jobOrder->update(['print_type' => 'SUBLIMATION']);
 
         $officer = User::find($order->created_by);
 
         $this->actingAs($officer)->post(route('job-orders.production.update', $order), [
             'raw_materials' => ['Cotton'],
-            'fabric_press' => 'small_press',
-            'cutting_type' => 'laser',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $order = $order->fresh();
@@ -95,13 +98,12 @@ class TheCuttingCanChangeUntilCuttingStartsTest extends TestCase
     {
         $order = $this->orderAtStageThree();
         $order->tasks()->where('stage', 5)->update(['status' => 'in_progress']);
+        $order->jobOrder->update(['print_type' => 'SUBLIMATION']);
 
         $officer = User::find($order->created_by);
 
         $this->actingAs($officer)->post(route('job-orders.production.update', $order), [
             'raw_materials' => ['Cotton'],
-            'fabric_press' => 'small_press',
-            'cutting_type' => 'laser',
         ])->assertRedirect();
 
         // Still manual, and the message says what actually stopped it.

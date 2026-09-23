@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\JobOrder;
+use App\Models\OrderDocument;
 use App\Models\ProductionOrder;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -34,7 +36,7 @@ class JobOrderAddonTest extends TestCase
         return ProductionOrder::where('order_number', 'IC2026-04444')->firstOrFail();
     }
 
-    private function save(ProductionOrder $order, array $fields): \Illuminate\Testing\TestResponse
+    private function save(ProductionOrder $order, array $fields): TestResponse
     {
         $sales = User::find($order->created_by);
 
@@ -133,14 +135,26 @@ class JobOrderAddonTest extends TestCase
         $this->assertNull($jo->addon_price);
     }
 
-    public function test_the_fabric_press_is_still_required(): void
+    /**
+     * The fabric press is not asked for any more: the print type decides it,
+     * so a form that never sends one still saves the right press.
+     */
+    public function test_the_fabric_press_comes_from_the_print_type(): void
     {
         $order = $this->order();
+        $order->jobOrder->update(['print_type' => 'FULL SUBLIMATION', 'printer' => 'atexco']);
         $sales = User::find($order->created_by);
 
         $this->actingAs($sales)
-            ->post("/job-orders/{$order->id}/production", ['decoration_on' => 1, 'addon' => 'embroidery'])
-            ->assertInvalid(['fabric_press']);
+            ->post("/job-orders/{$order->id}/production", [
+                'raw_materials' => ['Cotton'],
+                'decoration_on' => 1,
+                'addon' => 'embroidery',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('roller_press', $order->fresh()->jobOrder->fabric_press);
+        $this->assertSame('laser', $order->fresh()->cutting_type);
     }
 
     public function test_the_addon_press_map_is_what_the_shop_expects(): void
@@ -201,7 +215,7 @@ class JobOrderAddonTest extends TestCase
             'addon_price' => 1200,
         ]);
 
-        $defaults = \App\Models\OrderDocument::defaultsFor($order->fresh()->load('jobOrder'), 'pq');
+        $defaults = OrderDocument::defaultsFor($order->fresh()->load('jobOrder'), 'pq');
         $line = collect($defaults['items'])->firstWhere('description', 'Reflectorized');
 
         $this->assertNotNull($line, 'the add-on should be its own quotation line');
@@ -219,7 +233,7 @@ class JobOrderAddonTest extends TestCase
             'addon_price' => 900,
         ]);
 
-        $defaults = \App\Models\OrderDocument::defaultsFor($order->fresh()->load('jobOrder'), 'pq');
+        $defaults = OrderDocument::defaultsFor($order->fresh()->load('jobOrder'), 'pq');
 
         $this->assertNotNull(collect($defaults['items'])->firstWhere('description', 'Rubberized print'));
     }
