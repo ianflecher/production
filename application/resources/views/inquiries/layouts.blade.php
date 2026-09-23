@@ -31,11 +31,24 @@
     </div>
 @else
     @foreach ($queue as $designs)
-        @php $inq = $designs->first()->inquiry; @endphp
+        @php
+            $inq = $designs->first()->inquiry;
+
+            // Which officer, and which team they are on: "From VIP Ave", "From
+            // META Kyson". The shop has two account-officer teams and the
+            // artist draws for both, so a first name on its own leaves them
+            // asking whose client this is before they can ask anything else.
+            // Built as a value because a Blade directive written flush against
+            // a word does not compile.
+            $officer = $inq->officer;
+            $from = $officer
+                ? trim(($officer->teamLabel() ? $officer->teamLabel().' ' : '').$officer->name)
+                : 'the office';
+        @endphp
         <div class="card panel" style="margin-bottom: 1.1rem;">
             <h2>{{ $inq->client->fullName() }}@if ($inq->client->company) - {{ $inq->client->company }}@endif</h2>
             <p class="sub">
-                From {{ $inq->officer?->name ?? 'the office' }}
+                From {{ $from }}
                 @if ($inq->layout_sent_at) &middot; sent {{ $inq->layout_sent_at->diffForHumans() }} @endif
                 &middot; <strong>{{ $designs->count() }} {{ \Illuminate\Support\Str::plural('design', $designs->count()) }} for you</strong>
             </p>
