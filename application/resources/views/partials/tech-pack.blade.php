@@ -162,7 +162,7 @@
          nothing can read it off a flattened picture, so the officer confirms
          what they can see. --}}
     @php $importedPrintType = (string) $jo?->print_type; @endphp
-    <div class="no-print tp-imported-floc{{ blank($importedPrintType) ? ' is-missing' : '' }}">
+    <div class="no-print tp-imported-floc{{ blank($importedPrintType) ? ' is-missing' : '' }}" @if ($canType('print_type')) data-tech-pack-ocr data-image-url="{{ $importedPackSrc }}" @endif>
         @if (blank($importedPrintType))
             <strong>No print type off the image</strong>
             <p>It decides the cutting and the press. Sublimation is laser cut and pressed on the roller; anything else is cut by hand and pressed on the small press.</p>
@@ -175,10 +175,19 @@
             <input type="text" name="print_type" maxlength="60"
                    value="{{ old('print_type', $importedPrintType) }}"
                    placeholder="e.g. Full Sublimation, DTF, Silkscreen">
+            <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.65rem;">
+                <button type="button" class="btn btn-ghost btn-sm" data-ocr-read>Read print type from image</button>
+                <button type="button" class="btn btn-primary btn-sm" data-ocr-apply hidden>Use detected print type</button>
+            </div>
+            <p data-ocr-message role="status" aria-live="polite">Read the image to get a suggestion, then confirm and save. Image recognition runs in your browser.</p>
         @else
             <strong style="font-weight:600;">{{ $jo?->printTypeLabel() ?: 'Not confirmed yet' }}</strong>
         @endif
     </div>
+
+    @if ($canType('print_type'))
+        <script src="{{ asset('js/tech-pack-ocr.js') }}?v={{ filemtime(public_path('js/tech-pack-ocr.js')) }}" defer></script>
+    @endif
 
     {{-- And the file location: the printer needs a real path, and it cannot be
          recovered from a flattened image either. --}}

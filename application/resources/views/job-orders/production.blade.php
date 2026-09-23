@@ -132,7 +132,6 @@
                 @endif
             </div>
         </div>
-        </div>
     </div>
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
