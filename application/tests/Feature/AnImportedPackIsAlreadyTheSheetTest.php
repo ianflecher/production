@@ -52,7 +52,13 @@ class AnImportedPackIsAlreadyTheSheetTest extends TestCase
             'status' => 'active',
         ]);
 
-        $order->jobOrder()->create(['status' => 'sent_to_artist', 'created_by' => $officer->id]);
+        $order->jobOrder()->create([
+            'status' => 'sent_to_artist', 'created_by' => $officer->id,
+            // Read off the image by the officer. It is one of the two things
+            // an imported pack still has to carry, because it decides how the
+            // job is cut and which press merges it.
+            'print_type' => $imported ? 'DTF' : null,
+        ]);
 
         $order->techPacks()->create([
             'phase' => TechPack::PHASE_SAMPLE,
@@ -79,7 +85,7 @@ class AnImportedPackIsAlreadyTheSheetTest extends TestCase
      * The bug. Every manual box is empty, but the picture carries them, so
      * the submit goes through.
      */
-    public function test_an_imported_pack_submits_without_the_sixteen_boxes(): void
+    public function test_an_imported_pack_submits_without_the_fifteen_boxes(): void
     {
         $artist = $this->artist();
         $task = $this->packWithTheArtist($artist, imported: true);
@@ -142,7 +148,9 @@ class AnImportedPackIsAlreadyTheSheetTest extends TestCase
 
         $said = session('errors')->first('tech_pack');
 
-        foreach (['Design name', 'Fitting', 'Print type', 'Fabric', 'Neck type', 'Packaging'] as $box) {
+        $this->assertStringContainsString('File location', $said);
+
+        foreach (['Design name', 'Fitting', 'Fabric', 'Neck type', 'Packaging'] as $box) {
             $this->assertStringNotContainsString($box, $said,
                 'the artist was sent to fill in a box that is not on the page');
         }

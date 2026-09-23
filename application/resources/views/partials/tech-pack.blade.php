@@ -153,9 +153,35 @@
         <img src="{{ $importedPackSrc }}" alt="Imported complete Tech Pack">
         <figcaption class="no-print" style="padding:0.5rem 0.7rem; font-size:0.82rem; color:var(--ink-2);">Imported complete Tech Pack{{ $tp->imported_pack_name ? ': '.$tp->imported_pack_name : '' }}</figcaption>
     </figure>
-    {{-- The imported image replaces the built-in sheet. The only extra field is
-         the file location: the printer needs a real path, and it cannot be
-         recovered from a flattened image. --}}
+    {{-- The imported image replaces the built-in sheet, so the two things the
+         shop reads OFF the sheet have to be typed back in.
+
+         The print type, because it decides how the job is cut and which press
+         merges it — sublimation is laser cut and rolled, everything else is
+         cut by hand and pressed small. It is printed somewhere in the image and
+         nothing can read it off a flattened picture, so the officer confirms
+         what they can see. --}}
+    @php $importedPrintType = (string) $jo?->print_type; @endphp
+    <div class="no-print tp-imported-floc{{ blank($importedPrintType) ? ' is-missing' : '' }}">
+        @if (blank($importedPrintType))
+            <strong>No print type off the image</strong>
+            <p>It decides the cutting and the press. Sublimation is laser cut and pressed on the roller; anything else is cut by hand and pressed on the small press.</p>
+        @else
+            <strong>Print type</strong>
+            <p>Read off the image. It decides the cutting and the press.</p>
+        @endif
+
+        @if ($canType('print_type'))
+            <input type="text" name="print_type" maxlength="60"
+                   value="{{ old('print_type', $importedPrintType) }}"
+                   placeholder="e.g. Full Sublimation, DTF, Silkscreen">
+        @else
+            <strong style="font-weight:600;">{{ $jo?->printTypeLabel() ?: 'Not confirmed yet' }}</strong>
+        @endif
+    </div>
+
+    {{-- And the file location: the printer needs a real path, and it cannot be
+         recovered from a flattened image either. --}}
     @php $importedPath = (string) $tp->file_location_notes; @endphp
     <div class="no-print tp-imported-floc{{ blank($importedPath) ? ' is-missing' : '' }}">
         @if (blank($importedPath))

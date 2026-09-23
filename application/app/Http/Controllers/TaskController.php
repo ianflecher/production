@@ -2,11 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppNotification;
+use App\Models\JobOrder;
+use App\Models\ProductionOrder;
 use App\Models\Task;
+use App\Models\TaskFile;
+use App\Models\TechPack;
+use App\Models\User;
+use App\Rules\NetworkFilePath;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -46,13 +54,13 @@ class TaskController extends Controller
         // (mockup) is still locked — it waits on the account officer to collect
         // the downpayment and send the job order. Kept visible so the artist
         // knows the project is still theirs and what it's waiting on.
-        $waiting = \App\Models\ProductionOrder::query()
+        $waiting = ProductionOrder::query()
             ->where('status', 'active')
             ->with(['jobOrder', 'tasks.files'])
             ->whereHas('tasks', fn ($q) => $q->where('assigned_to', $request->user()->id)
-                ->where('team', \App\Models\User::JOB_ARTIST)
+                ->where('team', User::JOB_ARTIST)
                 ->where('status', 'complete'))
-            ->whereHas('tasks', fn ($q) => $q->where('team', \App\Models\User::JOB_ARTIST)
+            ->whereHas('tasks', fn ($q) => $q->where('team', User::JOB_ARTIST)
                 ->where('status', 'todo'))
             ->whereDoesntHave('tasks', fn ($q) => $q->where('assigned_to', $request->user()->id)
                 ->whereIn('status', ['ready', 'in_progress', 'for_checking', 'revision_required']))
@@ -174,7 +182,7 @@ class TaskController extends Controller
     }
 
     /** True when a text slot still has something written in it. */
-    private function slotCarriesText(\App\Models\TechPack $pack, string $slot): bool
+    private function slotCarriesText(TechPack $pack, string $slot): bool
     {
         $field = $this->textFieldForSlot($slot);
 
@@ -216,6 +224,9 @@ class TaskController extends Controller
         // picture. Everything else is IN the picture.
         if (filled($pack?->imported_pack_path)) {
             $required = [
+                // Both are read off the picture by a person, because nothing
+                // else can. The print type decides the cutting and the press.
+                [$jobOrder, 'print_type', 'Print type (read it off the image)'],
                 [$pack, 'file_location_notes', 'File location'],
             ];
         } else {
@@ -299,14 +310,14 @@ class TaskController extends Controller
             'folder_shot' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
             'imported_tech_pack' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
             'remove_imported_tech_pack' => ['nullable', 'boolean'],
-            'remove_image' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
+            'remove_image' => ['nullable', 'string', 'in:'.implode(',', TechPack::removableSlots())],
             // "this picture belongs in that box" - dragged from one box to
             // another on the sheet. Only meaningful for a picture already
             // SAVED: a freshly pasted one has not been uploaded yet and the
             // browser moves it between file inputs on its own.
             'move_image' => ['nullable', 'string'],
             'add_image_box' => ['nullable'],
-            'restore_image_box' => ['nullable', 'string', 'in:'.implode(',', \App\Models\TechPack::removableSlots())],
+            'restore_image_box' => ['nullable', 'string', 'in:'.implode(',', TechPack::removableSlots())],
             // Text blocks the artist added themselves.
             'add_note_box' => ['nullable'],
             'remove_note' => ['nullable', 'integer', 'min:0'],
@@ -347,7 +358,7 @@ class TaskController extends Controller
             'tech_pack_images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
             // Several designs at once on the batch sheet: a team kit is
             // uploaded as a set, not one file per visit to this page.
-            'tech_pack_mockups' => ['nullable', 'array', 'max:'.count(\App\Models\TechPack::MOCKUP_SLOTS)],
+            'tech_pack_mockups' => ['nullable', 'array', 'max:'.count(TechPack::MOCKUP_SLOTS)],
             'tech_pack_mockups.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:40960'],
 
             // These belong to the JOB ORDER and keep living there — the pack
@@ -361,7 +372,7 @@ class TaskController extends Controller
             'packaging' => ['nullable', 'string', 'max:120'],
             'free_logo_sticker' => ['nullable', 'string', 'max:120'],
             'print_type' => ['nullable', 'string', 'max:60'],
-            'printer' => ['nullable', Rule::in(array_keys(\App\Models\JobOrder::printerOptions()))],
+            'printer' => ['nullable', Rule::in(array_keys(JobOrder::printerOptions()))],
         ]);
 
         // The artist remains the author until the leader's final approval. A
@@ -408,7 +419,6 @@ class TaskController extends Controller
             'print_type', 'printer', 'fabric', 'neck', 'cuff_arm_sleeves',
             'neck_label', 'bottom_hem', 'packaging', 'free_logo_sticker',
         ])->all();
-
 
         // The sheet this step draws, opened from the approved sample the first
         // time the batch sheet is asked for - see openTechPack().
@@ -591,7 +601,7 @@ class TaskController extends Controller
             $kept = $pack->image_sizes ?? [];
 
             foreach ($sizes as $slot => $size) {
-                if (! in_array($slot, \App\Models\TechPack::imageSlots(), true)) {
+                if (! in_array($slot, TechPack::imageSlots(), true)) {
                     continue;
                 }
 
@@ -602,7 +612,7 @@ class TaskController extends Controller
 
             // A box that was removed takes its size with it.
             $packFields['image_sizes'] = array_intersect_key($kept, array_flip(
-                array_merge($boxes, \App\Models\TechPack::imageSlots())
+                array_merge($boxes, TechPack::imageSlots())
             )) ?: null;
         }
 
@@ -615,7 +625,7 @@ class TaskController extends Controller
         // should do.
         if ($move = $data['move_image'] ?? null) {
             [$from, $to] = array_pad(explode('>', $move, 2), 2, null);
-            $slots = \App\Models\TechPack::imageSlots();
+            $slots = TechPack::imageSlots();
 
             if ($from !== $to
                 && in_array($from, $slots, true)
@@ -634,7 +644,7 @@ class TaskController extends Controller
             }
         }
 
-        foreach (\App\Models\TechPack::imageSlots() as $slot) {
+        foreach (TechPack::imageSlots() as $slot) {
             if (! $request->hasFile("tech_pack_images.{$slot}")) {
                 continue;
             }
@@ -657,7 +667,7 @@ class TaskController extends Controller
                 continue;
             }
 
-            $free = collect(\App\Models\TechPack::MOCKUP_SLOTS)
+            $free = collect(TechPack::MOCKUP_SLOTS)
                 ->first(fn ($slot) => blank($imageUploads[$slot]['path'] ?? null));
 
             if (! $free) {
@@ -696,7 +706,7 @@ class TaskController extends Controller
         // takes it away. Done from whichever desk typed it.
         if (array_key_exists('free_logo_sticker', $jobOrderFields)) {
             $order->update([
-                'needs_sticker' => \App\Models\ProductionOrder::namesASticker($jobOrderFields['free_logo_sticker']),
+                'needs_sticker' => ProductionOrder::namesASticker($jobOrderFields['free_logo_sticker']),
             ]);
         }
 
@@ -742,7 +752,7 @@ class TaskController extends Controller
         $rules = [];
         $messages = [];
         foreach ($slots as $key => $label) {
-            $rules["paths.$key"] = ['required', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
+            $rules["paths.$key"] = ['required', 'string', 'max:1024', new NetworkFilePath];
             $messages["paths.$key.required"] = "Enter the file path for the {$label}.";
         }
         $request->validate($rules, $messages);
@@ -919,7 +929,7 @@ class TaskController extends Controller
         foreach ($slots as $key => $label) {
             // The box arrives pre-filled with the PC's address, so "not empty"
             // was never enough — it has to point at an actual file.
-            $rules["paths.$key"] = ['required', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
+            $rules["paths.$key"] = ['required', 'string', 'max:1024', new NetworkFilePath];
             $messages["paths.$key.required"] = "Enter the file path for the {$label}.";
         }
         // One design is not always one file - a front and a back, a sleeve
@@ -929,7 +939,7 @@ class TaskController extends Controller
             ->filter(fn ($v, $k) => str_starts_with((string) $k, 'extra_') && filled($v));
 
         foreach ($extras as $key => $ignored) {
-            $rules["paths.$key"] = ['nullable', 'string', 'max:1024', new \App\Rules\NetworkFilePath];
+            $rules["paths.$key"] = ['nullable', 'string', 'max:1024', new NetworkFilePath];
         }
 
         $request->validate($rules, $messages);
@@ -994,7 +1004,7 @@ class TaskController extends Controller
     }
 
     /** Who may see a submitted file: the assignee, the approver, leaders, admins. */
-    private function assertCanSeeFile(Request $request, \App\Models\TaskFile $file): void
+    private function assertCanSeeFile(Request $request, TaskFile $file): void
     {
         $user = $request->user();
         $task = $file->task;
@@ -1014,11 +1024,11 @@ class TaskController extends Controller
         abort_unless($allowed, 403);
         // External (network-path) files have nothing stored — the check below is
         // only for real uploads.
-        abort_unless($file->isExternal() || \Illuminate\Support\Facades\Storage::disk('local')->exists($file->path), 404);
+        abort_unless($file->isExternal() || Storage::disk('local')->exists($file->path), 404);
     }
 
     /** Download a submitted file (sales sends this to the client). */
-    public function downloadFile(Request $request, \App\Models\TaskFile $file)
+    public function downloadFile(Request $request, TaskFile $file)
     {
         $this->assertCanSeeFile($request, $file);
 
@@ -1028,11 +1038,11 @@ class TaskController extends Controller
                 : response()->view('files.external-path', ['file' => $file]);
         }
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->download($file->path, $file->original_name);
+        return Storage::disk('local')->download($file->path, $file->original_name);
     }
 
     /** Show a submitted file in the browser (leader checks it on screen). */
-    public function viewFile(Request $request, \App\Models\TaskFile $file)
+    public function viewFile(Request $request, TaskFile $file)
     {
         $this->assertCanSeeFile($request, $file);
 
@@ -1042,7 +1052,7 @@ class TaskController extends Controller
                 : response()->view('files.external-path', ['file' => $file]);
         }
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->response($file->path, $file->original_name);
+        return Storage::disk('local')->response($file->path, $file->original_name);
     }
 
     /** Sales: samples waiting for the client's decision. */
@@ -1068,7 +1078,7 @@ class TaskController extends Controller
 
     public function approvals(Request $request): View
     {
-        $mockup = \App\Models\ProductionOrder::STAGE_MOCKUP;
+        $mockup = ProductionOrder::STAGE_MOCKUP;
 
         // META or VIP, for the artist leader who wants one team's packs at a
         // time. Anything else in the box means both, so a stale or hand-typed
@@ -1149,7 +1159,7 @@ class TaskController extends Controller
 
         if ($request->user()->isArtistLead() || $request->user()->isLeader()) {
             $bench = Task::with(array_merge(['order.client', 'assignee'], $teamSources))
-                ->where('team', \App\Models\User::JOB_ARTIST)
+                ->where('team', User::JOB_ARTIST)
                 ->whereNotIn('status', ['complete', 'cancelled', 'todo'])
                 ->whereHas('order', fn ($q) => $q->where('status', 'active'))
                 // His own work stays off this page entirely, the same way his
@@ -1166,10 +1176,10 @@ class TaskController extends Controller
                 ->orderBy('sequence')
                 ->get();
 
-            $artists = \App\Models\User::where('is_active', true)
+            $artists = User::where('is_active', true)
                 ->where(fn ($q) => $q
-                    ->where('job_role', \App\Models\User::JOB_ARTIST)
-                    ->orWhere('job_role', \App\Models\User::JOB_ARTIST_LEAD))
+                    ->where('job_role', User::JOB_ARTIST)
+                    ->orWhere('job_role', User::JOB_ARTIST_LEAD))
                 ->orderBy('name')
                 ->get();
         }
@@ -1201,7 +1211,7 @@ class TaskController extends Controller
         // belongs to the leader, and so does the person he would be handing it
         // to — the rest of the floor does not answer to him.
         if ($request->user()->isArtistLead() && ! $request->user()->isLeader()) {
-            abort_unless($task->team === \App\Models\User::JOB_ARTIST, 403);
+            abort_unless($task->team === User::JOB_ARTIST, 403);
         }
 
         $data = $request->validate([
@@ -1219,7 +1229,7 @@ class TaskController extends Controller
                 ->exists();
 
             if ($busy) {
-                return back()->withErrors(['assigned_to' => \App\Models\User::find($userId)?->name.' already has an open task. Finish or reassign that first.']);
+                return back()->withErrors(['assigned_to' => User::find($userId)?->name.' already has an open task. Finish or reassign that first.']);
             }
         }
 
@@ -1264,7 +1274,7 @@ class TaskController extends Controller
                 // Everything else is unchanged: the artist leader signs off
                 // the stage-2 artist work, and never his own.
                 : ($user->isArtistLead() && ! $user->isLeader()
-                    ? $task->stage === \App\Models\ProductionOrder::STAGE_MOCKUP
+                    ? $task->stage === ProductionOrder::STAGE_MOCKUP
                         && $task->assigned_to !== $user->id
                     : $user->isLeader()),
         };
@@ -1297,14 +1307,14 @@ class TaskController extends Controller
                 'officer_approved_at' => now(),
             ]);
 
-            \App\Models\AppNotification::toRole(
-                \App\Models\User::ROLE_LEADER,
+            AppNotification::toRole(
+                User::ROLE_LEADER,
                 '📋 Tech Pack approved by account officer',
                 "{$task->order->order_number} — ready for your final approval.",
                 route('approvals'),
             );
-            \App\Models\AppNotification::toRole(
-                \App\Models\User::JOB_ARTIST_LEAD,
+            AppNotification::toRole(
+                User::JOB_ARTIST_LEAD,
                 '📋 Tech Pack approved by account officer',
                 "{$task->order->order_number} — ready for your final approval.",
                 route('approvals'),
@@ -1393,7 +1403,7 @@ class TaskController extends Controller
         if (str_starts_with((string) $task->department, 'Final mockup')
             && $task->order->fresh()->mockupApproved()) {
             $task->order->fresh(['jobOrder', 'tasks'])
-                ->unlockStage(\App\Models\ProductionOrder::STAGE_MOCKUP);
+                ->unlockStage(ProductionOrder::STAGE_MOCKUP);
         }
 
         // The client approved the first physical sample — count that one piece
@@ -1412,7 +1422,7 @@ class TaskController extends Controller
         // recorded on the order's job-order details page. Send the account officer
         // straight there (to the payment section) instead of back to the now-empty
         // review list, so they don't have to hunt for the order.
-        if ($task->stage === \App\Models\ProductionOrder::STAGE_LAYOUT && ! $order->hasDownpayment()) {
+        if ($task->stage === ProductionOrder::STAGE_LAYOUT && ! $order->hasDownpayment()) {
             return redirect()
                 ->to(route('orders.show', $order).'#payment-section')
                 ->with('success', $task->department.' approved — now record the downpayment to move the order into the job order.');
@@ -1499,10 +1509,10 @@ class TaskController extends Controller
             $order->unlockStage($target->stage);
         });
 
-        \App\Models\AppNotification::toRole(
-            $target->team ?: \App\Models\User::JOB_PRODUCTION,
+        AppNotification::toRole(
+            $target->team ?: User::JOB_PRODUCTION,
             '↩ Sample sent back',
-            "{$order->order_number} — {$target->department} has to be done again: ".\Illuminate\Support\Str::limit($data['revision_note'], 80),
+            "{$order->order_number} — {$target->department} has to be done again: ".Str::limit($data['revision_note'], 80),
             route('stations.index'),
         );
 
@@ -1511,7 +1521,7 @@ class TaskController extends Controller
     }
 
     /** The mockup + template are one job package — approve both at once. */
-    public function approvePackage(Request $request, \App\Models\ProductionOrder $order): RedirectResponse
+    public function approvePackage(Request $request, ProductionOrder $order): RedirectResponse
     {
         abort_unless($request->user()->isLeader() || $request->user()->isArtistLead(), 403);
 
@@ -1538,7 +1548,7 @@ class TaskController extends Controller
      * The mockup/template tasks are never deleted or rewound to TODO, so no
      * second pipeline is ever created and it always comes back as ONE package.
      */
-    public function revisePackage(Request $request, \App\Models\ProductionOrder $order): RedirectResponse
+    public function revisePackage(Request $request, ProductionOrder $order): RedirectResponse
     {
         abort_unless($request->user()->isLeader() || $request->user()->isArtistLead(), 403);
 
@@ -1601,10 +1611,10 @@ class TaskController extends Controller
     }
 
     /** Tech Packs awaiting the leader after account-officer approval. */
-    private function packageTasks(\App\Models\ProductionOrder $order)
+    private function packageTasks(ProductionOrder $order)
     {
         return $order->tasks()
-            ->where('stage', \App\Models\ProductionOrder::STAGE_MOCKUP)
+            ->where('stage', ProductionOrder::STAGE_MOCKUP)
             ->where('status', 'for_checking')
             ->where('approver_role', 'leader')
             ->where(function ($query) {
