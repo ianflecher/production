@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Payment extends Model
 {
@@ -35,7 +36,15 @@ class Payment extends Model
 
     public function hasProof(): bool
     {
-        return ! empty($this->proof_path);
+        return ! empty($this->proof_path)
+            || ($this->relationLoaded('proofFiles')
+                ? $this->proofFiles->isNotEmpty()
+                : $this->proofFiles()->exists());
+    }
+
+    public function proofFiles(): HasMany
+    {
+        return $this->hasMany(PaymentProof::class)->orderBy('position')->orderBy('id');
     }
 
     protected function casts(): array

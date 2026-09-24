@@ -91,14 +91,52 @@
                             <td>{{ $p->reference ?? '—' }}</td>
                             <td>
                                 @if ($p->hasProof())
-                                    @php $ext = strtolower(pathinfo($p->proof_name ?? '', PATHINFO_EXTENSION)); @endphp
-                                    @if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
-                                        <a href="{{ route('finance.proof', $p) }}" target="_blank" rel="noopener" title="Open full size">
-                                            <img src="{{ route('finance.proof', $p) }}" alt="Proof"
-                                                 style="width:64px; height:64px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;">
-                                        </a>
+                                    @php
+                                        $proofLinks = collect();
+
+                                        if ($p->proof_path) {
+                                            $proofLinks->push([
+                                                'url' => route('finance.proof', $p),
+                                                'name' => $p->proof_name,
+                                                'path' => $p->proof_path,
+                                            ]);
+                                        }
+
+                                        foreach ($p->proofFiles as $proof) {
+                                            if ($proofLinks->contains('path', $proof->path)) {
+                                                continue;
+                                            }
+
+                                            $proofLinks->push([
+                                                'url' => route('finance.proof-file', $proof),
+                                                'name' => $proof->original_name,
+                                                'path' => $proof->path,
+                                            ]);
+                                        }
+                                    @endphp
+
+                                    @if ($proofLinks->count() > 1)
+                                        <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                                            @foreach ($proofLinks as $proof)
+                                                @php $ext = strtolower(pathinfo($proof['name'] ?? '', PATHINFO_EXTENSION)); @endphp
+                                                <a href="{{ $proof['url'] }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:0.25rem 0.45rem;">
+                                                    {{ $loop->iteration }}{{ $ext ? ' '.strtoupper($ext) : '' }}
+                                                </a>
+                                            @endforeach
+                                        </div>
                                     @else
-                                        <a href="{{ route('finance.proof', $p) }}" target="_blank" rel="noopener">📄 {{ $ext ? strtoupper($ext) : 'View' }}</a>
+                                        @php
+                                            $proof = $proofLinks->first();
+                                            $ext = strtolower(pathinfo($proof['name'] ?? '', PATHINFO_EXTENSION));
+                                        @endphp
+                                        @if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
+                                            <a href="{{ $proof['url'] }}" target="_blank" rel="noopener" title="Open full size">
+                                                <img src="{{ $proof['url'] }}" alt="Proof"
+                                                     style="width:64px; height:64px; object-fit:cover; border:1px solid var(--border); border-radius:6px; display:block;">
+                                            </a>
+                                        @else
+                                            <a href="{{ $proof['url'] }}" target="_blank" rel="noopener">{{ $ext ? strtoupper($ext) : 'View' }}</a>
+                                        @endif
                                     @endif
                                 @else
                                     <span style="color: var(--ink-3);">—</span>

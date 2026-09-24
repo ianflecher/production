@@ -319,11 +319,11 @@ class JobOrderController extends Controller
                     $fail('List at least one raw material — the supply desk has nothing to issue without it.');
                 }
             }],
-            'raw_materials.*' => ['nullable', 'string', 'max:255'],
+            'raw_materials.*' => ['required', 'string', 'max:255'],
             // How much of each, in the same order as the names. Blank means
             // nobody said, and the desk is not held to a number.
-            'raw_material_qty' => ['nullable', 'array'],
-            'raw_material_qty.*' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+            'raw_material_qty' => ['required', 'array'],
+            'raw_material_qty.*' => ['required', 'numeric', 'min:0.01', 'max:999999999'],
             // Which shelf each material comes off: the supervisor's fabric or
             // the desk's ready-made stock.
             'raw_material_kind' => ['nullable', 'array'],
@@ -340,6 +340,14 @@ class JobOrderController extends Controller
         ], [
             'addon_other.required_if' => 'Say what the add-on is when you choose Others.',
         ]);
+
+        foreach (array_keys($data['raw_materials']) as $index) {
+            if (! isset($data['raw_material_qty'][$index])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'raw_material_qty' => 'Enter a quantity greater than zero for every raw material.',
+                ]);
+            }
+        }
 
         // Add-ons off → no add-on and no add-on press. On → the chosen add-on,
         // whose press is matched automatically (Others has none, so the officer
@@ -489,8 +497,8 @@ class JobOrderController extends Controller
         // has already opened the pack automatically. Treat that as success,
         // not a forbidden action.
         if ($order->jobOrder->status === 'sent_to_artist') {
-            return redirect()->route('orders.show', $order)
-                ->with('success', 'The Tech Pack is already open to the artist.');
+            return redirect()->route('job-orders.production', $order)
+                ->with('success', 'The Tech Pack is already open to the artist. Complete the raw materials and quantities below.');
         }
 
         abort_unless($order->jobOrder->status === 'draft', 403);
@@ -525,7 +533,7 @@ class JobOrderController extends Controller
         // leader approves the design package, i.e. when the Raw materials stage
         // opens — see ProductionOrder::unlockStage().
 
-        return redirect()->route('orders.show', $order)
-            ->with('success', 'Tech Pack sent to the artist. When finished, it will return to the account officer for approval before going to the leader.');
+        return redirect()->route('job-orders.production', $order)
+            ->with('success', 'Tech Pack sent to the artist. Next, complete the required raw materials and quantities below.');
     }
 }

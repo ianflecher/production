@@ -52,12 +52,12 @@
     @csrf
 
     <div class="card panel" style="margin-bottom: 1.4rem;">
-        <h2>Raw materials <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">(one per item, and how much of it)</span></h2>
+        <h2>Raw materials <span style="color:var(--danger-ink);">*</span> <span style="font-weight: 400; font-size: 0.8rem; color: var(--ink-3);">(at least one material and quantity required)</span></h2>
         <p class="muted" style="font-size: 0.8rem; margin: -0.3rem 0 0.7rem;">
             Say which shelf each one comes off: <strong>Fabric</strong> goes to the raw
             materials supervisor, <strong>Ready-made</strong> to the raw materials desk —
             the caps, boxes and tapes that arrive finished. The amount is what they are
-            allowed to issue; leave it blank and they can issue any amount.
+            allowed to issue; enter a quantity greater than zero for each material.
             <br>Say the shelf first, then pick the material off it &mdash; a name
             picked here is the row the desk deducts, where a name typed is one they
             have to work out, and it says what is left of each one so nothing gets
@@ -334,7 +334,11 @@
         const kind = row.querySelector('.rm-kind');
 
         const shelf = function () { return kind.value || 'fabric'; };
-        const showTyping = function (on) { name.style.display = on ? '' : 'none'; };
+        pick.required = true;
+        const quantity = row.querySelector('[name="raw_material_qty[]"]');
+        quantity.required = true;
+        quantity.min = '0.01';
+        const showTyping = function (on) { name.style.display = on ? '' : 'none'; name.required = on; };
         const fillOnce = function () {
             if (pick.dataset.filled !== shelf()) { rmFill(pick, shelf(), name.value); }
         };

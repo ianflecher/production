@@ -26,6 +26,7 @@
     $accept = $accept ?? '.jpg,.jpeg,.png,.webp,.pdf';
     $required = $required ?? false;
     $hint = $hint ?? 'Paste a screenshot, drop a file, or choose one.';
+    $multiple = $multiple ?? false;
     // The name of a field on the same form to read out of the picture, or
     // null to just take the file and ask nothing of it.
     $ocrTarget = $ocrTarget ?? null;
@@ -33,7 +34,7 @@
 
 <div class="paste-drop" data-paste-drop @if ($ocrTarget) data-ocr-target="{{ $ocrTarget }}" @endif>
     <input type="file" id="{{ $id }}" name="{{ $name }}" accept="{{ $accept }}"
-           class="paste-drop-input" @if ($required) required @endif>
+           class="paste-drop-input" @if ($multiple) multiple @endif @if ($required) required @endif>
 
     <div class="paste-drop-hint">
         <kbd>Ctrl</kbd>+<kbd>V</kbd> {{ $hint }}
@@ -197,8 +198,9 @@ document.addEventListener('DOMContentLoaded', function () {
         box.addEventListener('mouseleave', function () { if (hovered === box) hovered = null; });
 
         function show() {
-            var file = input.files && input.files[0];
-            if (!file) {
+            var files = Array.prototype.slice.call(input.files || []);
+            var file = files[0];
+            if (!files.length) {
                 preview.hidden = true;
                 thumb.hidden = true;
                 if (thumb.src) { URL.revokeObjectURL(thumb.src); thumb.removeAttribute('src'); }
@@ -206,7 +208,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            nameOut.textContent = file.name + ' · ' + Math.max(1, Math.round(file.size / 1024)) + ' KB';
+            nameOut.textContent = files.map(function (f) {
+                return f.name + ' · ' + Math.max(1, Math.round(f.size / 1024)) + ' KB';
+            }).join(' | ');
             preview.hidden = false;
             box.classList.add('has-file');
 
@@ -231,6 +235,11 @@ document.addEventListener('DOMContentLoaded', function () {
         function put(file) {
             if (!file) return false;
             var t = new DataTransfer();
+            if (input.multiple) {
+                Array.prototype.forEach.call(input.files || [], function (existing) {
+                    t.items.add(existing);
+                });
+            }
             t.items.add(file);
             input.files = t.files;
             /* change does not fire for a programmatic assignment. */

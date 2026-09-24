@@ -363,7 +363,13 @@
                                 <td>{{ $p->reference ?? '—' }}</td>
                                 <td>
                                     @if ($p->hasProof())
-                                        <a href="{{ route('payments.proof', $p) }}" target="_blank" style="font-size:0.8rem;">📎 View</a>
+                                        @if ($p->proofFiles->isNotEmpty())
+                                            @foreach ($p->proofFiles as $proof)
+                                                <a href="{{ route('payments.proof-file', $proof) }}" target="_blank" style="font-size:0.8rem; display:inline-block; margin-right:0.25rem;">View {{ $loop->iteration }}</a>
+                                            @endforeach
+                                        @else
+                                            <a href="{{ route('payments.proof', $p) }}" target="_blank" style="font-size:0.8rem;">View</a>
+                                        @endif
                                     @else
                                         <span style="color: var(--ink-3);">—</span>
                                     @endif
@@ -464,10 +470,12 @@
 
                             <label style="margin-top:0.5rem;">Proof of payment <span style="color: var(--danger-ink);">*</span></label>
                             @include('partials.paste-image-field', [
-                                'name' => 'proof',
+                                'name' => 'proofs[]',
+                                'id' => 'payment_proofs_'.$order->id,
                                 'accept' => '.jpg,.jpeg,.png,.webp,.pdf',
                                 'required' => true,
-                                'hint' => 'the GCash or bank screenshot, drop a file, or choose one.',
+                                'multiple' => true,
+                                'hint' => 'the GCash or bank screenshots, drop files, or choose them.',
                                 // Read the reference number off it and offer
                                 // it above — the officer still has to agree.
                                 'ocrTarget' => 'reference',

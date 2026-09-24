@@ -418,6 +418,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/finance/export', [FinanceController::class, 'export'])->name('finance.export');
         Route::get('/finance/payments/{payment}/proof', [FinanceController::class, 'proof'])
             ->whereNumber('payment')->name('finance.proof');
+        Route::get('/finance/payment-proofs/{proof}', [FinanceController::class, 'proofFile'])
+            ->whereNumber('proof')->name('finance.proof-file');
 
         // Confirming is the finance desk's own act, so it is not in the group
         // with the leader: the controller checks canConfirmPayments().
@@ -470,6 +472,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         // (the calendar is its own route below - every supervisor reads it)
         Route::get('/payments/{payment}/proof', [PaymentController::class, 'proof'])
             ->whereNumber('payment')->name('payments.proof');
+        Route::get('/payment-proofs/{proof}', [PaymentController::class, 'proofFile'])
+            ->whereNumber('proof')->name('payments.proof-file');
     });
 
     // -------- Checking the artists' work, and the artist accounts --------

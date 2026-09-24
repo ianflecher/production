@@ -145,10 +145,11 @@
             </div>
         @elseif ($slots !== [])
             @foreach ($slots as $key => $label)
-                <div class="field" style="max-width: 420px;">
+                <div class="field paste-file-field" style="max-width: 420px;" data-paste-into-box>
                     <label for="{{ $key }}_{{ $task->id }}">{{ $label }} <span style="color: var(--danger-ink);">*</span></label>
-                    <input id="{{ $key }}_{{ $task->id }}" type="file" name="{{ $key }}" accept=".jpg,.jpeg,.png,.webp,.pdf,.ai,.psd,.eps,.cdr,.zip" class="js-file-preview" required>
+                    <input id="{{ $key }}_{{ $task->id }}" type="file" name="{{ $key }}" accept=".jpg,.jpeg,.png,.webp,.pdf,.ai,.psd,.eps,.cdr,.zip" class="js-file-preview" data-paste-into required>
                     <div class="file-preview" hidden></div>
+                    <div class="paste-file-hint">Paste a screenshot here with Ctrl+V, drop a file, or choose one.</div>
                 </div>
             @endforeach
             @if (count($slots) > 1)
@@ -160,10 +161,11 @@
                 Your saved Tech Pack is the deliverable. Complete every manual field; use N/A when a row does not apply.
             </div>
         @else
-            <div class="field" style="max-width: 420px;">
+            <div class="field paste-file-field" style="max-width: 420px;" data-paste-into-box>
                 <label for="file_{{ $task->id }}">Attach a file (optional)</label>
-                <input id="file_{{ $task->id }}" type="file" name="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.ai,.psd,.eps,.cdr,.zip" class="js-file-preview">
+                <input id="file_{{ $task->id }}" type="file" name="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.ai,.psd,.eps,.cdr,.zip" class="js-file-preview" data-paste-into>
                 <div class="file-preview" hidden></div>
+                <div class="paste-file-hint">Paste a screenshot here with Ctrl+V, drop a file, or choose one.</div>
             </div>
             <div style="font-size: 0.75rem; color: var(--ink-3); margin-bottom: 0.8rem;">Image, PDF, AI, PSD, EPS, CDR or ZIP.</div>
         @endif
@@ -203,6 +205,31 @@
 @endif
 
 @once
+    @include('partials.paste-into-file-input')
+
+    <style>
+        .paste-file-field {
+            border: 1px dashed var(--line);
+            border-radius: 8px;
+            padding: 0.75rem;
+            background: color-mix(in srgb, var(--panel) 86%, var(--accent-soft));
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        }
+
+        .paste-file-field.is-dragging,
+        .paste-file-field.just-pasted {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+            background: var(--accent-soft);
+        }
+
+        .paste-file-hint {
+            margin-top: 0.45rem;
+            font-size: 0.76rem;
+            color: var(--ink-3);
+        }
+    </style>
+
     <script>
         /* Another file path on an export step.
          *

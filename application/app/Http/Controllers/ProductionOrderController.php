@@ -973,7 +973,7 @@ class ProductionOrderController extends Controller
         // exists, so the design the client approved hangs off the brief rather
         // than off any task, and the pipeline has nothing to show without it.
         $order->load(['tasks.assignee', 'tasks.files', 'creator', 'jobOrder.referenceFiles',
-            'materialRequests.item', 'payments', 'inquiryDesign.inquiry']);
+            'materialRequests.item', 'payments.proofFiles', 'inquiryDesign.inquiry']);
 
         return view('orders.show', [
             'order' => $order,

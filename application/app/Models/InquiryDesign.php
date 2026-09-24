@@ -187,4 +187,26 @@ class InquiryDesign extends Model
         return $query->where('artist_id', $artist->id)
             ->whereIn('status', [self::STATUS_WITH_ARTIST, self::STATUS_SUBMITTED]);
     }
+
+    /**
+     * Keep the already-written production task with the artist shown on the
+     * design board.
+     */
+    public function syncOpenOrderArtistTasks(): void
+    {
+        if (! $this->artist_id) {
+            return;
+        }
+
+        $order = $this->relationLoaded('order') ? $this->order : $this->order()->first();
+
+        if (! $order) {
+            return;
+        }
+
+        $order->tasks()
+            ->whereIn('department', ['Layout', 'Final mockup'])
+            ->whereNotIn('status', ['complete', 'for_checking'])
+            ->update(['assigned_to' => $this->artist_id]);
+    }
 }

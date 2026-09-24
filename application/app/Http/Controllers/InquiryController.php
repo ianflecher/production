@@ -610,6 +610,12 @@ class InquiryController extends Controller
             ->where('status', '!=', InquiryDesign::STATUS_APPROVED)
             ->update(['artist_id' => $artist->id]);
 
+        $inquiry->designs()
+            ->where('status', '!=', InquiryDesign::STATUS_APPROVED)
+            ->with('order')
+            ->get()
+            ->each->syncOpenOrderArtistTasks();
+
         // Both of them need to know: one has work that is no longer theirs, the
         // other has work they have not been told about.
         AppNotification::toUser($artist->id,

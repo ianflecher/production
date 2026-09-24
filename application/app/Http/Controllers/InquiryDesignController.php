@@ -233,6 +233,7 @@ class InquiryDesignController extends Controller
         abort_unless($artist->isArtist(), 422);
 
         $design->update(['artist_id' => $artist->id]);
+        $design->syncOpenOrderArtistTasks();
 
         if ($inquiry->layout_sent_at) {
             AppNotification::toUser($artist->id,

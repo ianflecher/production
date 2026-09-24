@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesOrderAccess;
+use App\Models\PaymentProof;
 use App\Models\ProductionOrder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Recording payments against an order, and serving payment-proof files.
@@ -37,9 +39,11 @@ class PaymentController extends Controller
             // Proof is mandatory — no payment is recorded without it.
             // Images/PDF only, never executables. No app-side size cap; PHP's
             // upload_max_filesize (40M) is the practical ceiling.
-            'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf'],
+            'proofs' => ['required', 'array', 'min:1'],
+            'proofs.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf'],
         ], [
-            'proof.required' => 'A picture/screenshot of the payment proof is required before the payment can be recorded.',
+            'proofs.required' => 'A picture/screenshot of the payment proof is required before the payment can be recorded.',
+            'proofs.min' => 'A picture/screenshot of the payment proof is required before the payment can be recorded.',
         ]);
 
         // Does this cover the whole job number?
@@ -122,13 +126,15 @@ class PaymentController extends Controller
 
         // Proof files stay on this PC in storage/app (never in the public folder)
         // and are only served through an authenticated route.
-        $proofPath = null;
-        $proofName = null;
-        if ($request->hasFile('proof')) {
-            $file = $request->file('proof');
-            $proofName = $file->getClientOriginalName();
-            $proofPath = $file->store('payment-proofs', 'local');
-        }
+        $proofUploads = collect($request->file('proofs', []))
+            ->values()
+            ->map(fn ($file, $position) => [
+                'path' => $file->store('payment-proofs', 'local'),
+                'name' => $file->getClientOriginalName(),
+                'position' => $position,
+            ]);
+
+        $primaryProof = $proofUploads->first();
 
         $method = $data['method'];
         if ($method === \App\Models\Payment::METHOD_OTHER_TRANSFER) {
@@ -152,15 +158,23 @@ class PaymentController extends Controller
                 continue;
             }
 
-            $sibling->recordPayment([
+            $payment = $sibling->recordPayment([
                 'amount' => $share,
                 'method' => $method,
                 'reference' => trim($data['reference']),
-                'proof_path' => $proofPath,
-                'proof_name' => $proofName,
+                'proof_path' => $primaryProof['path'] ?? null,
+                'proof_name' => $primaryProof['name'] ?? null,
                 'kind' => $sibling->hasDownpayment() ? 'payment' : $kind,
                 'recorded_by' => $request->user()->id,
             ]);
+
+            foreach ($proofUploads as $proof) {
+                $payment->proofFiles()->create([
+                    'path' => $proof['path'],
+                    'original_name' => $proof['name'],
+                    'position' => $proof['position'],
+                ]);
+            }
         }
 
         // Safety net: the draft job order is normally created at inquiry, but make
@@ -218,6 +232,23 @@ class PaymentController extends Controller
         return \Illuminate\Support\Facades\Storage::disk('local')->response(
             $payment->proof_path,
             $payment->proof_name ?: basename($payment->proof_path)
+        );
+    }
+
+    public function proofFile(PaymentProof $proof)
+    {
+        $payment = $proof->payment;
+
+        $user = auth()->user();
+        if ($user->isSales() && $payment->order && $payment->order->created_by !== $user->id) {
+            abort(403);
+        }
+
+        abort_unless(Storage::disk('local')->exists($proof->path), 404);
+
+        return Storage::disk('local')->response(
+            $proof->path,
+            $proof->original_name ?: basename($proof->path)
         );
     }
 }

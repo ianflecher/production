@@ -1220,19 +1220,6 @@ class TaskController extends Controller
 
         $userId = $data['assigned_to'] ?: null;
 
-        // One job at a time: don't hand a task to someone who already has an open one.
-        if ($userId) {
-            $busy = Task::where('assigned_to', $userId)
-                ->where('id', '!=', $task->id)
-                ->whereNotIn('status', ['complete', 'cancelled'])
-                ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
-                ->exists();
-
-            if ($busy) {
-                return back()->withErrors(['assigned_to' => User::find($userId)?->name.' already has an open task. Finish or reassign that first.']);
-            }
-        }
-
         $task->assignTo($userId);
 
         return back()->with('success', $task->department.' assignment updated.');

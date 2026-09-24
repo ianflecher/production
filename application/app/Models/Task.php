@@ -530,6 +530,18 @@ class Task extends Model
 
     private function markComplete(bool $forced = false): void
     {
+        if ($this->isTechPackStep()) {
+            $sheet = $this->order->jobOrder;
+            $materials = $sheet?->rawMaterialsList() ?? [];
+            if (empty($materials) || collect($materials)->contains(fn ($material) =>
+                blank($material) || (float) $sheet->rawMaterialQuantity($material) <= 0
+            )) {
+                throw ValidationException::withMessages([
+                    'raw_materials' => 'Complete Production details: add at least one raw material and a quantity greater than zero for each before approving the Tech Pack.',
+                ]);
+            }
+        }
+
         $assignee = $this->assignee;
 
         // Who said so. The pack recorded the account officer who passed it on

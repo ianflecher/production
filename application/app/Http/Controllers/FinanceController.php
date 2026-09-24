@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Payment;
+use App\Models\PaymentProof;
 use App\Services\SpreadsheetExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -19,7 +20,7 @@ class FinanceController extends Controller
         $search = trim((string) $request->query('q', ''));
         $method = $request->query('method');
 
-        return Payment::with(['order.client', 'recorder', 'confirmer'])
+        return Payment::with(['order.client', 'recorder', 'confirmer', 'proofFiles'])
             ->when($search !== '', function ($q) use ($search) {
                 $q->whereHas('order', fn ($o) => $o
                     ->where('order_number', 'like', "%{$search}%")
@@ -179,6 +180,17 @@ class FinanceController extends Controller
         return Storage::disk('local')->response(
             $payment->proof_path,
             $payment->proof_name ?: basename($payment->proof_path)
+        );
+    }
+
+    public function proofFile(PaymentProof $proof)
+    {
+        abort_unless(request()->user()?->canManageFinance(), 403);
+        abort_unless(Storage::disk('local')->exists($proof->path), 404);
+
+        return Storage::disk('local')->response(
+            $proof->path,
+            $proof->original_name ?: basename($proof->path)
         );
     }
 }
