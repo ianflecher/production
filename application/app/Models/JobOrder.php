@@ -340,6 +340,49 @@ class JobOrder extends Model
      * fabric press is automatically embroidery. Overridable on production details.
      */
     /**
+     * The print type the print LOCATION gives away.
+     *
+     * The imported Tech Packs are pictures, and the print type is not text on
+     * them: one template puts it in a row of checkboxes and ticks one in red,
+     * another writes only the printer's name, a third does not mention it at
+     * all. Reading it off the image was never going to work — every option is
+     * printed on the sheet, so the words say nothing about which was chosen.
+     *
+     * The path the printer opens the files from does say. The shop files work
+     * by the machine that runs it, and has done consistently across every job
+     * on the system: \IC-EMBRO\...\FOR EMBRO is embroidered, NEW ATEXCO is
+     * sublimation, DTF PC is DTF. Eleven of eleven agree, including three
+     * whose print type box was left blank or "N/A".
+     *
+     * A suggestion, not an answer: it is offered and a person confirms it.
+     */
+    public static function printTypeFromLocation(?string $location): ?string
+    {
+        $path = mb_strtolower((string) $location);
+
+        if ($path === '') {
+            return null;
+        }
+
+        foreach ([
+            'embro' => 'Embroidery',
+            'atexco' => 'Full Sublimation',
+            'subli' => 'Full Sublimation',
+            'dtf' => 'DTF',
+            'silkscreen' => 'Silkscreen',
+            'silk screen' => 'Silkscreen',
+            'eco solvent' => 'Eco Solvent',
+            'vinyl' => 'Vinyl',
+        ] as $needle => $type) {
+            if (str_contains($path, $needle)) {
+                return $type;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * What the print type decides on its own: how the cloth is cut, and which
      * press merges the print onto it.
      *

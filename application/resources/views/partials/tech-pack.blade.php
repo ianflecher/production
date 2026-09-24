@@ -161,10 +161,19 @@
          cut by hand and pressed small. It is printed somewhere in the image and
          nothing can read it off a flattened picture, so the officer confirms
          what they can see. --}}
-    @php $importedPrintType = (string) $jo?->print_type; @endphp
-    <div class="no-print tp-imported-floc{{ blank($importedPrintType) ? ' is-missing' : '' }}" @if ($canType('print_type')) data-tech-pack-ocr data-image-url="{{ $importedPackSrc }}" @endif>
+    @php
+        $importedPrintType = (string) $jo?->print_type;
+        // What the print location gives away. The path the printer opens the
+        // files from names the machine, and the shop has filed work that way
+        // on every job in the system.
+        $suggested = \App\Models\JobOrder::printTypeFromLocation($tp->file_location_notes);
+        // The words the shop's own templates use, so this is a tick rather
+        // than a spelling test.
+        $printTypeChoices = collect(\App\Models\JobOrder::PRINT_TYPES)->pluck('label')->all();
+    @endphp
+    <div class="no-print tp-imported-floc{{ blank($importedPrintType) ? ' is-missing' : '' }}" data-print-type-pick>
         @if (blank($importedPrintType))
-            <strong>No print type off the image</strong>
+            <strong>Which print type is on this sheet?</strong>
             <p>It decides the cutting and the press. Sublimation is laser cut and pressed on the roller; anything else is cut by hand and pressed on the small press.</p>
         @else
             <strong>Print type</strong>
@@ -172,21 +181,66 @@
         @endif
 
         @if ($canType('print_type'))
+            <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.6rem;">
+                @foreach ($printTypeChoices as $choice)
+                    <button type="button" class="btn btn-ghost btn-sm" data-print-type="{{ $choice }}"
+                            @if (strcasecmp($choice, $importedPrintType) === 0) style="border-color: var(--accent, #E31B23); font-weight: 700;" @endif>
+                        {{ $choice }}
+                    </button>
+                @endforeach
+            </div>
+
             <input type="text" name="print_type" maxlength="60"
                    value="{{ old('print_type', $importedPrintType) }}"
-                   placeholder="e.g. Full Sublimation, DTF, Silkscreen">
-            <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.65rem;">
-                <button type="button" class="btn btn-ghost btn-sm" data-ocr-read>Read print type from image</button>
-                <button type="button" class="btn btn-primary btn-sm" data-ocr-apply hidden>Use detected print type</button>
-            </div>
-            <p data-ocr-message role="status" aria-live="polite">Read the image to get a suggestion, then confirm and save. Image recognition runs in your browser.</p>
+                   placeholder="Tap one above, or type it as the sheet has it">
+
+            @if ($suggested && blank($importedPrintType))
+                <p data-print-type-hint role="status" aria-live="polite" style="margin-top:.5rem;">
+                    The print location says <strong>{{ $tp->file_location_notes }}</strong>,
+                    which is <strong>{{ $suggested }}</strong>. Check it against the image before saving.
+                </p>
+            @else
+                <p data-print-type-hint role="status" aria-live="polite" style="margin-top:.5rem;">
+                    Tap what the sheet says. A ticked box or a printer name on the image is the answer.
+                </p>
+            @endif
         @else
             <strong style="font-weight:600;">{{ $jo?->printTypeLabel() ?: 'Not confirmed yet' }}</strong>
         @endif
     </div>
 
     @if ($canType('print_type'))
-        <script src="{{ asset('js/tech-pack-ocr.js') }}?v={{ filemtime(public_path('js/tech-pack-ocr.js')) }}" defer></script>
+        <script>
+            /* Tapping a print type fills the box. It was a "read it off the
+               image" button, which could not work: every option is printed on
+               the sheet, so the words never say which one was chosen — one
+               template ticks a box in red, another writes only the printer's
+               name, a third says nothing at all. The officer is looking at the
+               sheet; one tap is quicker than a minute of recognition that
+               answers "no clear print type found" either way. */
+            (function () {
+                var panel = document.querySelector('[data-print-type-pick]');
+
+                if (! panel) { return; }
+
+                var box = panel.querySelector('input[name="print_type"]');
+
+                panel.querySelectorAll('[data-print-type]').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        box.value = button.dataset.printType;
+                        box.dispatchEvent(new Event('input', { bubbles: true }));
+
+                        panel.querySelectorAll('[data-print-type]').forEach(function (other) {
+                            other.style.borderColor = '';
+                            other.style.fontWeight = '';
+                        });
+
+                        button.style.borderColor = 'var(--accent, #E31B23)';
+                        button.style.fontWeight = '700';
+                    });
+                });
+            })();
+        </script>
     @endif
 
     {{-- And the file location: the printer needs a real path, and it cannot be
