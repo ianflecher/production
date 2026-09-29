@@ -130,7 +130,7 @@ class ThePrintTypeDecidesTheCutAndThePressTest extends TestCase
         $officer = User::find($order->created_by);
 
         $this->actingAs($officer)
-            ->post(route('job-orders.production.update', $order), ['raw_materials' => ['Cotton']])
+            ->post(route('job-orders.production.update', $order), ['raw_materials' => ['Cotton'], 'raw_material_qty' => [25]])
             ->assertSessionHasNoErrors();
 
         $this->assertSame('roller_press', $order->fresh()->jobOrder->fabric_press);
@@ -151,6 +151,7 @@ class ThePrintTypeDecidesTheCutAndThePressTest extends TestCase
         $this->actingAs($officer)
             ->post(route('job-orders.production.update', $order), [
                 'raw_materials' => ['Cotton'],
+                'raw_material_qty' => [25],
                 'cutting_type' => 'manual',
                 'fabric_press' => 'small_press',
             ])

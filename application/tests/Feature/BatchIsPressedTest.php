@@ -41,6 +41,10 @@ class BatchIsPressedTest extends TestCase
         $order->jobOrder()->create([
             'status' => 'sent_to_artist', 'created_by' => $sales->id,
             'print_type' => 'full_sublimation', 'printer' => 'atexco', 'press' => $press,
+            // Production details filled in: the pack cannot be signed off
+            // without them.
+            'raw_materials' => ['Cotton combed 24s'],
+            'raw_material_quantities' => ['Cotton combed 24s' => 25],
         ]);
 
         $order->refresh()->rebuildPipeline([], 'laser');

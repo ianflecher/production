@@ -50,6 +50,10 @@ class TechPackApprovalChainTest extends TestCase
         $order->jobOrder()->create([
             'status' => 'sent_to_artist',
             'created_by' => $officer->id,
+            // Production details filled in: the pack cannot be signed off
+            // without them.
+            'raw_materials' => ['Cotton combed 24s'],
+            'raw_material_quantities' => ['Cotton combed 24s' => 25],
         ]);
 
         Task::create([
@@ -150,6 +154,10 @@ class TechPackApprovalChainTest extends TestCase
         ]);
         $order->jobOrder()->create([
             'status' => 'draft', 'created_by' => $officer->id,
+            // Production details filled in: the pack cannot be signed off
+            // without them.
+            'raw_materials' => ['Cotton combed 24s'],
+            'raw_material_quantities' => ['Cotton combed 24s' => 25],
         ]);
 
         $mockup = Task::create([

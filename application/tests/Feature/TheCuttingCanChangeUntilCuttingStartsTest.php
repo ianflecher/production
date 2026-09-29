@@ -83,6 +83,7 @@ class TheCuttingCanChangeUntilCuttingStartsTest extends TestCase
 
         $this->actingAs($officer)->post(route('job-orders.production.update', $order), [
             'raw_materials' => ['Cotton'],
+            'raw_material_qty' => [25],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $order = $order->fresh();
@@ -104,6 +105,7 @@ class TheCuttingCanChangeUntilCuttingStartsTest extends TestCase
 
         $this->actingAs($officer)->post(route('job-orders.production.update', $order), [
             'raw_materials' => ['Cotton'],
+            'raw_material_qty' => [25],
         ])->assertRedirect();
 
         // Still manual, and the message says what actually stopped it.

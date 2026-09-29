@@ -44,6 +44,7 @@ class JobOrderAddonTest extends TestCase
             'fabric_press' => 'small_press',   // Step 3, always required
             // A garment needs something to make it from; the page requires it.
             'raw_materials' => ['Cotton combed 24s'],
+            'raw_material_qty' => [25],
         ], $fields));
     }
 
@@ -148,6 +149,7 @@ class JobOrderAddonTest extends TestCase
         $this->actingAs($sales)
             ->post("/job-orders/{$order->id}/production", [
                 'raw_materials' => ['Cotton'],
+                'raw_material_qty' => [25],
                 'decoration_on' => 1,
                 'addon' => 'embroidery',
             ])
