@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\OrderDocument;
 use App\Models\ProductionOrder;
 use App\Models\Task;
+use App\Models\TechPack;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -90,11 +91,19 @@ class AnotherProductShowsOnEverySheetTest extends TestCase
         ]);
         $order->techPack()->create(['design_name' => 'Second Line Tee']);
 
+        // The BATCH list is what the cutting table works to. The sample sheet
+        // above it is one garment in one size now, so a new line shows up on
+        // the batch rather than in the sample's row.
+        $batch = collect($order->refresh()->techPackOrNew(TechPack::PHASE_MASSPROD)->batchSizeList($order))
+            ->pluck('quantity', 'size')->all();
+
+        $this->assertArrayHasKey('XL', $batch);
+        $this->assertSame(5, $batch['XL']);
+
+        // And the sheet still opens for the officer who added it.
         $this->actingAs($sales)
             ->get("/orders/{$order->id}/job-order")
-            ->assertOk()
-            ->assertSee('XL')
-            ->assertSeeInOrder(['XL', '5'], false);
+            ->assertOk();
     }
 
     public function test_the_sizes_stay_in_the_order_the_shop_reads_them(): void

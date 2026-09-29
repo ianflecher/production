@@ -122,9 +122,11 @@ class ASkippedSampleSheetShowsTheWholeJobTest extends TestCase
 
         $batch = collect($pack->batchSizeList($order))->pluck('quantity', 'size')->all();
 
-        // One of each size was sewn as the sample.
-        $this->assertSame(['S' => 19, 'M' => 33, 'L' => 38, 'XL' => 17], $batch);
-        $this->assertSame(107, array_sum($batch));
+        // ONE garment was sewn as the sample, in the first size on the order.
+        // It used to be one of every size, which took four off a job that
+        // needed one sewing for the fitting.
+        $this->assertSame(['S' => 19, 'M' => 34, 'L' => 39, 'XL' => 18], $batch);
+        $this->assertSame(110, array_sum($batch));
     }
 
     /* ---------------- what is printed ---------------- */

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ServerIp;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -405,17 +406,17 @@ class TechPack extends Model
      */
     public function setFileLocationNotesAttribute(?string $value): void
     {
-        $this->attributes['file_location_notes'] = \App\Services\ServerIp::pack(
+        $this->attributes['file_location_notes'] = ServerIp::pack(
             $value,
-            \App\Services\ServerIp::ipForUser(auth()->user())
+            ServerIp::ipForUser(auth()->user())
         );
     }
 
     public function getFileLocationNotesAttribute(?string $value): ?string
     {
-        return \App\Services\ServerIp::unpack(
+        return ServerIp::unpack(
             $value,
-            \App\Services\ServerIp::ipForUser(auth()->user())
+            ServerIp::ipForUser(auth()->user())
         );
     }
 
@@ -542,24 +543,45 @@ class TechPack extends Model
     }
 
     /**
-     * The sizes this sample is made in — one piece of each.
+     * The size this sample is made in. One size, one piece.
      *
      * A sample is not the order in miniature: the batch's 830 pieces across
-     * five sizes say nothing about what to cut today. Until somebody says
-     * otherwise it is one of every size the order asked for, which is the
-     * usual thing to sew for a fitting, and from then on it is whatever the
-     * sheet was edited to say.
+     * five sizes say nothing about what to cut today. It used to be one of
+     * EVERY size the order asked for, which on a seven-size order is seven
+     * garments sewn for a fitting that needs one — and seven pieces taken off
+     * the batch.
      *
-     * @return array<int, string>
+     * The officer picks which, because only they know what the client is
+     * fitting. Until they do it is the first size on the order, which is a
+     * garment that has to exist either way, and it is shown on the sheet
+     * rather than assumed.
+     *
+     * @return array<int, string> the one size, or none when the order has no
+     *                            sizes at all. An array because the batch
+     *                            counts against it.
      */
     public function sampleSizeList(ProductionOrder $order): array
     {
         $saved = $this->sample_sizes;
 
         if (is_array($saved)) {
-            return array_values(array_filter(array_map('trim', $saved), fn ($s) => $s !== ''));
+            // One row now. An older sheet may hold several; the first is the
+            // one it is made in, and the rest are not quietly sewn as well.
+            $kept = array_values(array_filter(array_map('trim', $saved), fn ($s) => $s !== ''));
+
+            return $kept ? [$kept[0]] : [];
         }
 
+        return array_slice($this->sizesOnTheOrder($order), 0, 1);
+    }
+
+    /**
+     * Every size this order has, for the officer to pick the sample from.
+     *
+     * @return array<int, string>
+     */
+    public function sizesOnTheOrder(ProductionOrder $order): array
+    {
         return $order->itemsInSizeOrder()
             ->map(fn ($item) => (string) ($item->size ?: 'One size'))
             ->filter(fn ($s) => $s !== '')

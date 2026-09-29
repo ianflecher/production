@@ -413,52 +413,43 @@
                  sample has one sheet and it is the batch sheet; asking
                  isSample() alone printed one of each size on it. --}}
             @if ($tp->showsTheSampleRun($order))
-                {{-- A sample is ONE of each size. The order's breakdown - 830
-                     pieces across five sizes - belongs to the batch, and
-                     printing it here told the floor to cut the whole job.
-                     Which sizes get sewn is its own decision, so the list is
-                     typed on the sheet rather than copied off the order. --}}
-                @php $sampleSizes = $tp->sampleSizeList($order); @endphp
+                {{-- A sample is ONE garment in ONE size. The order's breakdown
+                     — 830 pieces across five sizes — belongs to the batch, and
+                     printing it here told the floor to cut the whole job. One of
+                     every size was not much better: seven garments sewn for a
+                     fitting that needs one, and seven taken off the batch.
+
+                     Which size is the officer's to say, so it is picked from
+                     the sizes the order actually has. --}}
+                @php
+                    $sampleSize = $tp->sampleSizeList($order)[0] ?? null;
+                    $orderSizes = $tp->sizesOnTheOrder($order);
+                    // Whatever the sheet already says stays on the list, even
+                    // if the order's sizes have changed under it.
+                    $sizeChoices = collect($orderSizes)->when(
+                        $sampleSize && ! in_array($sampleSize, $orderSizes, true),
+                        fn ($sizes) => $sizes->prepend($sampleSize)
+                    )->all();
+                @endphp
                 <table class="tp-ref-table">
                     <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
-                    @forelse ($sampleSizes as $i => $size)
-                        <tr>
-                            <td>
-                                @if ($textEditable)
-                                    <input class="tp-in" type="text" name="sample_sizes[]" value="{{ $size }}"
-                                           maxlength="20" aria-label="Sample size {{ $i + 1 }}">
-                                @else
-                                    {{ $size }}
-                                @endif
-                            </td>
-                            <td>1</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td>
-                                @if ($textEditable)
-                                    <input class="tp-in" type="text" name="sample_sizes[]" value=""
-                                           maxlength="20" placeholder="Size" aria-label="Sample size">
-                                @else
-                                    &mdash;
-                                @endif
-                            </td>
-                            <td>@if ($textEditable) 1 @else &mdash; @endif</td>
-                        </tr>
-                    @endforelse
-
-                    @if ($textEditable)
-                        {{-- One spare row, so another size can be added without
-                             a button and without any script. An empty one is
-                             dropped when the sheet is saved. --}}
-                        <tr>
-                            <td><input class="tp-in" type="text" name="sample_sizes[]" value=""
-                                       maxlength="20" placeholder="+ add a size" aria-label="Add a sample size"></td>
-                            <td>1</td>
-                        </tr>
-                    @endif
-
-                    <tr class="tp-ref-size-total"><td>Total</td><td>{{ count($sampleSizes) }}</td></tr>
+                    <tr>
+                        <td>
+                            @if ($textEditable)
+                                <select class="tp-in" name="sample_sizes[]" aria-label="Which size the sample is made in">
+                                    @forelse ($sizeChoices as $size)
+                                        <option value="{{ $size }}" @selected($size === $sampleSize)>{{ $size }}</option>
+                                    @empty
+                                        <option value="">— no sizes on this order —</option>
+                                    @endforelse
+                                </select>
+                            @else
+                                {{ $sampleSize ?: '—' }}
+                            @endif
+                        </td>
+                        <td>1</td>
+                    </tr>
+                    <tr class="tp-ref-size-total"><td>Total</td><td>1</td></tr>
                 </table>
             @else
                 {{-- The batch, less the pieces the sample already used. The

@@ -521,7 +521,10 @@ class TaskController extends Controller
                 fn ($s) => $s !== ''
             ));
 
-            $packFields['sample_sizes'] = $sizes;
+            // One size, one piece. The sheet asks for one; anything longer
+            // came off an older sheet, and sewing all of them is how a fitting
+            // became seven garments.
+            $packFields['sample_sizes'] = array_slice($sizes, 0, 1);
         }
 
         // The leader lines: whichever pins were moved, and any that were
