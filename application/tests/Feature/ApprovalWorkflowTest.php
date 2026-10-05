@@ -175,7 +175,21 @@ class ApprovalWorkflowTest extends TestCase
         $this->assertSame($agent->id, (int) $task->fresh()->assigned_to);
     }
 
-    public function test_an_agent_with_an_open_task_is_not_given_a_second_one(): void
+    /**
+     * A leader may hand somebody a second job.
+     *
+     * Assignment used to refuse it outright: one open task per person, or the
+     * post came back with an error. That is not the shop. Pairing runs four
+     * jobs at once, the roller press six, and every artist carries ten to
+     * forty designs — the rule described a floor where one person finishes
+     * one thing before touching the next, and nobody there works that way.
+     *
+     * Automatic assignment still PREFERS whoever is free, and only doubles
+     * somebody up when everyone on that team is busy — see StaffAssigner.
+     * That is a preference, which is the right strength for it. The leader
+     * standing on the floor can see what a person has on and decides.
+     */
+    public function test_a_leader_may_hand_somebody_a_second_job(): void
     {
         $order = $this->order();
         $tasks = $order->tasks()->take(2)->get();
@@ -184,16 +198,18 @@ class ApprovalWorkflowTest extends TestCase
         $agent = $this->user('sewing');
         $leader = $this->user(User::ROLE_LEADER);
 
-        // First assignment sticks.
         $this->actingAs($leader)->post("/tasks/{$tasks[0]->id}/assign", ['assigned_to' => $agent->id]);
         $this->assertSame($agent->id, (int) $tasks[0]->fresh()->assigned_to);
 
-        // Second is refused — one job at a time.
         $this->actingAs($leader)
             ->post("/tasks/{$tasks[1]->id}/assign", ['assigned_to' => $agent->id])
-            ->assertInvalid(['assigned_to']);
+            ->assertSessionHasNoErrors();
 
-        $this->assertNull($tasks[1]->fresh()->assigned_to);
+        $this->assertSame($agent->id, (int) $tasks[1]->fresh()->assigned_to,
+            'the leader was refused a second job for somebody who can take it');
+
+        // And the first one is still theirs: this adds work, it does not move it.
+        $this->assertSame($agent->id, (int) $tasks[0]->fresh()->assigned_to);
     }
 
     public function test_sales_cannot_assign_tasks(): void
