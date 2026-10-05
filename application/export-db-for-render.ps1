@@ -33,6 +33,10 @@ $kb = [math]::Round($text.Length / 1KB)
 
 Write-Output ("database : {0:N0} KB" -f ($raw.Length / 1KB))
 Write-Output ("packed   : {0:N0} KB  ->  $OutFile" -f $kb)
+# The number to check against the server. A text box that silently takes only
+# the start of a long paste reports no error anywhere; comparing this with
+# what the container says it received is what tells you that happened.
+Write-Output ("characters: {0:N0}  <- the container must report this exact number" -f $text.Length)
 
 if ($kb -gt 950) {
     Write-Output ""

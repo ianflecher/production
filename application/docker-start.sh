@@ -1,17 +1,43 @@
 #!/bin/sh
 # What the container does before Apache answers anything.
-#
-# It used to be a one-line CMD that only fixed the port, so the app started
-# with no database at all and every page that touched one returned 500 - which
-# is what /login was doing.
 set -e
 
 DB=/var/www/html/database/imprint.sqlite
 SECRET=/etc/secrets/imprint.sqlite.b64
 
+restore_failed() {
+    echo "----------------------------------------------------------------"
+    echo "The secret file did not decode: $1"
+    echo ""
+    echo "It holds $(tr -d '[:space:]' < "$SECRET" | wc -c) characters."
+    echo "Compare that with the number export-db-for-render.ps1 printed. If it"
+    echo "is smaller, the paste was cut short and nothing else is wrong."
+    echo ""
+    echo "It is pasted into a browser text box, and 642 KB is a lot to paste."
+    echo "Truncation is the usual cause - the box takes the start of it and"
+    echo "drops the rest, which looks exactly like this."
+    echo ""
+    echo "Re-run export-db-for-render.ps1, open imprint.sqlite.b64 in a real"
+    echo "editor, select all, and check the paste landed whole before saving."
+    echo "----------------------------------------------------------------"
+    exit 1
+}
+
 if [ -f "$SECRET" ]; then
     echo "Restoring the database from the secret file..."
-    base64 -d < "$SECRET" | gunzip > "$DB"
+
+    # Whitespace is stripped first: a text box may wrap or re-indent what was
+    # pasted, and base64 refuses the lot over a single stray newline. Real
+    # corruption still fails below, where it is caught properly.
+    tr -d '[:space:]' < "$SECRET" | base64 -d 2>/dev/null | gunzip > "$DB" 2>/dev/null \
+        || restore_failed "it is not valid gzipped base64"
+
+    # Decoding something is not the same as decoding a database. A truncated
+    # paste can still produce bytes; this is what says whether they are one.
+    head -c 15 "$DB" | grep -q "SQLite format 3" \
+        || restore_failed "what came out is not a SQLite database"
+
+    echo "Restored $(wc -c < "$DB") bytes."
 else
     echo "No secret file found - starting on an empty database."
     touch "$DB"
@@ -23,14 +49,13 @@ chown www-data:www-data "$DB"
 chmod 664 "$DB"
 chown www-data:www-data /var/www/html/database
 
-# Brings an empty database up; a no-op on a restored one that is already
-# current. Never --seed: this must not invent data on a real copy.
+# Brings an empty database up; a no-op on a restored one already current.
 php artisan migrate --force --no-interaction
 
 php artisan config:cache
 php artisan route:cache
 
-# Render hands the port in at runtime, so this cannot be baked into the image.
+# Render hands the port in at runtime, so it cannot be baked into the image.
 sed -i "s/Listen 80/Listen ${PORT:-10000}/" /etc/apache2/ports.conf
 sed -i "s/:80>/:${PORT:-10000}>/" /etc/apache2/sites-available/000-default.conf
 
