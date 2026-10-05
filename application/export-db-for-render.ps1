@@ -27,23 +27,33 @@ $gzip.Write($raw, 0, $raw.Length)
 $gzip.Close()
 
 $text = [System.Convert]::ToBase64String($buffer.ToArray())
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $OutFile), $text)
 
-$kb = [math]::Round($text.Length / 1KB)
+# Render caps a secret file at 500 KiB - not the 1 MB the docs quote for all
+# of them combined - so the packed database goes in as several parts and the
+# container joins them back up. 400,000 characters is about 390 KiB, which
+# leaves room for the limit to be measured slightly differently at their end.
+$chunk = 400000
+$parts = [math]::Ceiling($text.Length / $chunk)
 
-Write-Output ("database : {0:N0} KB" -f ($raw.Length / 1KB))
-Write-Output ("packed   : {0:N0} KB  ->  $OutFile" -f $kb)
-# The number to check against the server. A text box that silently takes only
-# the start of a long paste reports no error anywhere; comparing this with
-# what the container says it received is what tells you that happened.
+Get-ChildItem -Path . -Filter "$OutFile.*" -ErrorAction SilentlyContinue | Remove-Item
+
+for ($i = 0; $i -lt $parts; $i++) {
+    $slice = $text.Substring($i * $chunk, [math]::Min($chunk, $text.Length - $i * $chunk))
+    $name = "{0}.{1:d2}" -f $OutFile, ($i + 1)
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $name), $slice)
+    Write-Output ("  {0}  {1:N0} KB" -f $name, ($slice.Length / 1KB))
+}
+
+Write-Output ""
+Write-Output ("database  : {0:N0} KB" -f ($raw.Length / 1KB))
+Write-Output ("packed    : {0:N0} KB across $parts file(s)" -f ($text.Length / 1KB))
 Write-Output ("characters: {0:N0}  <- the container must report this exact number" -f $text.Length)
+Write-Output ""
 
-if ($kb -gt 950) {
-    Write-Output ""
-    Write-Output "TOO BIG. Render caps all secret files at 1 MB combined and this is $kb KB."
+if (($text.Length / 1KB) -gt 1000) {
+    Write-Output "TOO BIG. All secret files together cannot exceed 1 MB and this is over it."
     Write-Output "The database has outgrown this route - use a Render Postgres instance instead."
 } else {
-    Write-Output ""
-    Write-Output "Fits, with $(1024 - $kb) KB to spare."
-    Write-Output "Paste the contents into Render > Secret Files, filename: imprint.sqlite.b64"
+    Write-Output "Upload each part above as its own secret file in Render, under the same name."
+    Write-Output "The container joins them in order and restores the database from the result."
 }

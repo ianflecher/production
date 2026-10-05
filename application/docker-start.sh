@@ -3,7 +3,10 @@
 set -e
 
 DB=/var/www/html/database/imprint.sqlite
-SECRET=/etc/secrets/imprint.sqlite.b64
+# Render caps a secret file at 500 KiB, so the packed database arrives in
+# numbered parts and is joined here. A single unsplit file still works.
+SECRET=/tmp/imprint.sqlite.b64
+cat /etc/secrets/imprint.sqlite.b64.?? /etc/secrets/imprint.sqlite.b64 > "$SECRET" 2>/dev/null || true
 
 restore_failed() {
     echo "----------------------------------------------------------------"
@@ -23,7 +26,7 @@ restore_failed() {
     exit 1
 }
 
-if [ -f "$SECRET" ]; then
+if [ -s "$SECRET" ]; then
     echo "Restoring the database from the secret file..."
 
     # Whitespace is stripped first: a text box may wrap or re-indent what was
