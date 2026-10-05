@@ -22,3 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# The packed database, made by export-db-for-render.ps1. Same reason the
+# .sqlite is ignored: it is the whole database, just base64.
+imprint.sqlite.b64
