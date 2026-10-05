@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo_mysql \
+        pdo_sqlite \
         mbstring \
         bcmath \
         gd \
@@ -49,6 +50,24 @@ Require all granted\n\
 </Directory>\n' \
     >> /etc/apache2/apache2.conf
 
+# The database arrives as a Render secret file, never through git.
+#
+# This repository is PUBLIC. The database holds every client, payment and
+# message in the shop, so committing it would publish all of it to anyone who
+# finds the URL, and git history keeps it after a delete. Render mounts secret
+# files at /etc/secrets, which the repo never sees.
+#
+# Gzipped and base64'd because a secret file is plaintext and capped at 1 MB:
+# 2.4 MB of database becomes 642 KB of text, which fits.
+COPY docker-start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+# The DIRECTORY has to be writable, not just the file: SQLite puts its -wal
+# and -journal beside the database, so a writable file in a read-only folder
+# still fails the moment anybody saves anything.
+RUN chown -R www-data:www-data /var/www/html/database \
+    && chmod -R 775 /var/www/html/database
+
 EXPOSE 10000
 
-CMD ["sh", "-c", "sed -i \"s/Listen 80/Listen ${PORT:-10000}/\" /etc/apache2/ports.conf && sed -i \"s/:80>/:${PORT:-10000}>/\" /etc/apache2/sites-available/000-default.conf && apache2-foreground"]
+CMD ["/usr/local/bin/start.sh"]
