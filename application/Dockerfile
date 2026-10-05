@@ -1,10 +1,17 @@
 FROM php:8.3-apache
 
+# libsqlite3-dev is here for pdo_sqlite, which is compiled below.
+#
+# The base image carries SQLite's runtime library but not its headers, so
+# the extension cannot be built without it and the whole apt/ext-install
+# layer exits 1 - which is a deploy that never ships rather than an app
+# that starts and then cannot reach its database.
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     unzip \
     zip \
+    libsqlite3-dev \
     libzip-dev \
     libpng-dev \
     libjpeg62-turbo-dev \
