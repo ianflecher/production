@@ -567,6 +567,50 @@ class Task extends Model
         }
     }
 
+    /**
+     * Steps the shop has no computer at, which therefore cannot be marked off.
+     *
+     * Manual cutting is done by hand at a table. The people doing it have no
+     * screen in front of them, so nothing ever said it was finished and the
+     * job stopped dead on a step that was, in the room, already done. Eight
+     * were sitting like that.
+     *
+     * It is listed under the laser cutting team because that is the nearest
+     * desk, which made it look reachable without being so: the laser operator
+     * is at their own machine, not standing over somebody else's cutting table.
+     */
+    public const NO_STATION_DEPARTMENTS = ['Manual cutting'];
+
+    public function hasNoStation(): bool
+    {
+        return in_array($this->department, self::NO_STATION_DEPARTMENTS, true);
+    }
+
+    /**
+     * Pass a step that has no station straight through to the next one.
+     *
+     * Marked complete with nobody against it, because nobody told the system
+     * anything - stamping whoever happened to finish the previous step would
+     * put a name on work they did not do and did not see.
+     *
+     * The cutting still happens; it is the recording of it that had nowhere to
+     * come from.
+     */
+    public function passWithoutAStation(): void
+    {
+        if (in_array($this->status, ['complete', 'cancelled'], true)) {
+            return;
+        }
+
+        $this->update([
+            'status' => 'complete',
+            'released_at' => $this->released_at ?? now(),
+            'approved_at' => now(),
+        ]);
+
+        $this->order->handleTaskCompleted($this);
+    }
+
     /** FOR CHECKING -> REVISION REQUIRED. Never unlocks the next task. */
     public function requestRevision(string $note): void
     {

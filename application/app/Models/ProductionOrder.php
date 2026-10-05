@@ -2743,6 +2743,10 @@ class ProductionOrder extends Model
      */
     public function unlockStage(int $stage): void
     {
+        // Steps released here that nothing can mark off, passed once the whole
+        // release is saved - see the foot of this method.
+        $passThrough = [];
+
         // A partial design approval can release the sample / pre-production
         // work, but the full batch must never start while any design is still
         // waiting on the client. Stage 10 is the mass-production stage.
@@ -2838,6 +2842,17 @@ class ProductionOrder extends Model
 
             // Desktop alert to whoever just received the released task.
             $task->notifyAssignee();
+
+            // Nobody can mark this one off - see Task::hasNoStation(). Passed
+            // after the loop rather than inside it, because passing it opens
+            // the next stage and that walks this same list.
+            if ($task->hasNoStation()) {
+                $passThrough[] = $task;
+            }
+        }
+
+        foreach ($passThrough as $task) {
+            $task->passWithoutAStation();
         }
     }
 
@@ -2850,6 +2865,7 @@ class ProductionOrder extends Model
         // complete (the press once Printer and Raw materials are done;
         // Embroidery once Sewing). Each held step runs on its own, after its prereq.
         $releasedAny = false;
+        $passThrough = [];
         foreach ($stageTasks->where('status', 'todo') as $held) {
             // Only steps that actually have prerequisites, and only once ALL of
             // them are done (the press needs Printer AND Raw materials).
@@ -2874,8 +2890,18 @@ class ProductionOrder extends Model
                 $held->save();
                 $held->notifyAssignee();
                 $releasedAny = true;
+
+                if ($held->hasNoStation()) {
+                    $passThrough[] = $held;
+                }
             }
         }
+        // Same as unlockStage: passing one opens the next step, which walks
+        // this list again, so it happens after the loop rather than inside it.
+        foreach ($passThrough as $held) {
+            $held->passWithoutAStation();
+        }
+
         if ($releasedAny) {
             $this->refreshCompletion();
 
