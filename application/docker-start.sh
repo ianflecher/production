@@ -52,6 +52,26 @@ chown www-data:www-data "$DB"
 chmod 664 "$DB"
 chown www-data:www-data /var/www/html/database
 
+# Laravel has to be looking at the file we just wrote.
+#
+# DB_DATABASE is set in the Render dashboard by hand, and the obvious thing to
+# paste there is whatever the local .env says - which on a Windows machine is
+# C:/ImprintProduction/... A path like that fails inside a Linux container as
+# "database file does not exist", pointing at the one thing that is not the
+# problem: the file is there, nothing is looking at it.
+if [ -n "$DB_DATABASE" ] && [ "$DB_DATABASE" != "$DB" ]; then
+    echo "----------------------------------------------------------------"
+    echo "DB_DATABASE does not point at the database."
+    echo ""
+    echo "  it is set to : $DB_DATABASE"
+    echo "  the file is  : $DB"
+    echo ""
+    echo "Set DB_DATABASE to the second path in the Render dashboard, under"
+    echo "Environment. A Windows path cannot work inside a Linux container."
+    echo "----------------------------------------------------------------"
+    exit 1
+fi
+
 # Brings an empty database up; a no-op on a restored one already current.
 php artisan migrate --force --no-interaction
 
