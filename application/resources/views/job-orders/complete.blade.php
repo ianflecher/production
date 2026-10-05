@@ -397,6 +397,108 @@
                 </tr>
             </table>
 
+            {{-- How many, and in which sizes.
+
+                 The page said what the garment IS - press, cutting, materials,
+                 pocket - and never how much of it to make. The floor was
+                 reading a sheet called PRODUCTION DETAILS that could not tell
+                 them what to produce, and went looking for the count on
+                 another page or asked somebody.
+
+                 Every size the order has, whichever run this sheet is for: the
+                 people cutting and sewing need the shape of the whole job, not
+                 the arithmetic of what is left. Off the order's own lines, so
+                 it cannot disagree with the order it was made from. --}}
+            @php
+                $sizeLines = $order->itemsInSizeOrder();
+                $sizeTotal = $sizeLines->sum('quantity');
+
+                // Whether one of these pieces is sewn first as the sample, and
+                // in which size. A job that skips the sample has no such piece,
+                // so the row is left off rather than printed as NONE: half the
+                // shop's orders skip it, and a row that always says nothing is
+                // a row people stop reading.
+                $makesASample = ! $order->skip_sample;
+                $sampleSize = $makesASample
+                    ? ($order->techPackOrNew(\App\Models\TechPack::PHASE_SAMPLE)->sampleSizeList($order)[0] ?? null)
+                    : null;
+
+                // And what is LEFT once it has been sewn. The same sum the
+                // tech pack's batch sheet does, asked here rather than worked
+                // out again: two places doing the arithmetic is two places to
+                // get it wrong, and this is the page the floor cuts from.
+                $leftToSew = $makesASample
+                    ? $order->techPackOrNew(\App\Models\TechPack::PHASE_MASSPROD)->batchSizeList($order)
+                    : [];
+                $leftTotal = array_sum(array_column($leftToSew, 'quantity'));
+                $leftBySize = collect($leftToSew)
+                    ->map(fn ($row) => strtoupper($row['size']).' '.number_format($row['quantity']))
+                    ->join(', ');
+            @endphp
+            <h2 style="font-size: 1.1rem; margin: 2.2rem 0 0.6rem 0;">SIZE AND QUANTITY</h2>
+            <table class="jo prod-details" style="max-width: 620px;">
+                <tr>
+                    <td class="lbl-l" style="width: 32%;">Size</td>
+                    <td class="lbl-l">Quantity</td>
+                </tr>
+                @forelse ($sizeLines as $item)
+                    <tr>
+                        <td class="lbl-l">{{ strtoupper($item->size ?: 'One size') }}</td>
+                        <td class="yellow">{{ number_format($item->quantity) }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td class="lbl-l">&mdash;</td>
+                        <td class="yellow">&mdash;</td>
+                    </tr>
+                @endforelse
+                <tr>
+                    <td class="lbl-l">Total</td>
+                    <td class="yellow">{{ number_format($sizeTotal) }} PC{{ $sizeTotal == 1 ? '' : 'S' }}</td>
+                </tr>
+            </table>
+
+            {{-- The sample gets its own block rather than a row in the run.
+
+                 It is one garment, sewn first for the client to approve, and
+                 inside the table it read as another line to cut - which on a
+                 12-piece job is how the floor makes 13. Set apart, with the
+                 count it comes out of said plainly, it is the thing it
+                 actually is: one of those pieces, made before the rest.
+
+                 Jobs that skip the sample show nothing here at all. Half the
+                 shop's orders skip it, and a block that always says NONE is a
+                 block people stop reading. --}}
+            @if ($makesASample)
+                <h2 style="font-size: 1.1rem; margin: 2.2rem 0 0.6rem 0;">SAMPLE</h2>
+                <table class="jo prod-details" style="max-width: 620px;">
+                    <tr>
+                        <td class="lbl-l" style="width: 32%;">Size</td>
+                        <td class="lbl-l">Quantity</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-l">{{ $sampleSize ? strtoupper($sampleSize) : 'NOT CHOSEN YET' }}</td>
+                        <td class="yellow">1 PC</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-l">Taken from</td>
+                        <td class="yellow">THE {{ number_format($sizeTotal) }} ABOVE, NOT EXTRA</td>
+                    </tr>
+                    {{-- The number the mass production run is actually for.
+
+                         Without it this page said 12 and showed a sample of 1,
+                         and the floor sewing the run after the sample had no
+                         reading but "make 12" - which with the sample already
+                         on the rail is thirteen garments on a twelve-piece job.
+                         The size the sample came out of is one short, so it is
+                         named: L 5, not L 6. --}}
+                    <tr>
+                        <td class="lbl-l">Left to sew</td>
+                        <td class="yellow">{{ number_format($leftTotal) }} PC{{ $leftTotal == 1 ? '' : 'S' }}{{ $leftBySize ? ' ('.$leftBySize.')' : '' }}</td>
+                    </tr>
+                </table>
+            @endif
+
         </div>
     </div>
     @endif
