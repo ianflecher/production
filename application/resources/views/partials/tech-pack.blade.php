@@ -451,6 +451,32 @@
                     </tr>
                     <tr class="tp-ref-size-total"><td>Total</td><td>1</td></tr>
                 </table>
+
+                {{-- And the order underneath it.
+
+                     The sample row says one piece in one size, which is what
+                     to cut today and nothing about the job it is a fitting
+                     for. The floor was reading a sheet that said "1" on an
+                     830-piece order and had no way to see the run coming.
+
+                     Shown, not editable: it is the order's own breakdown, and
+                     a second place to type it is a second place for it to be
+                     wrong. The piece being sewn is still the one picked above
+                     — this does not add to it. --}}
+                @php
+                    $orderLines = $order->itemsInSizeOrder();
+                    $orderTotal = $orderLines->sum('quantity');
+                @endphp
+                <div class="tp-ref-light-title">The whole order</div>
+                <table class="tp-ref-table">
+                    <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
+                    @forelse ($orderLines as $item)
+                        <tr><td>{{ $item->size ?: 'One size' }}</td><td>{{ $item->quantity }}</td></tr>
+                    @empty
+                        <tr><td>&mdash;</td><td>&mdash;</td></tr>
+                    @endforelse
+                    <tr class="tp-ref-size-total"><td>Total</td><td>{{ number_format($orderTotal) }}</td></tr>
+                </table>
             @else
                 {{-- The batch, less the pieces the sample already used. The
                      sample is cut from the real order, so sewing the full
