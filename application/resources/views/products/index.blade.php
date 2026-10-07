@@ -46,7 +46,15 @@
                         <tr>
                             <td style="font-weight: 600;">{{ $r->name }}</td>
                             <td>
-                                <span style="color: var(--accent); font-weight: 600;">{{ $r->order?->order_number ?? '—' }}</span>
+                                {{-- The number opens the pack. The desk receiving
+                                     a garment needs to see what it is meant to be
+                                     - it was painted link-coloured and was not a
+                                     link, so clicking it did nothing. --}}
+                                @if ($r->order)
+                                    <a href="{{ route('orders.package', $r->order) }}" style="font-weight: 600;">{{ $r->order->order_number }}</a>
+                                @else
+                                    <span style="color: var(--ink-3); font-weight: 600;">&mdash;</span>
+                                @endif
                                 <div style="font-size: 0.78rem; color: var(--ink-3);">{{ $r->order?->clientName() }}</div>
                             </td>
                             <td style="white-space: nowrap;">{{ $r->expectedForHumans() }} {{ $r->unit }}</td>
@@ -129,13 +137,33 @@
                 </thead>
                 <tbody>
                     @foreach ($toRelease as $t)
-                        @php $paid = $t->order->isFullyPaid(); $bal = $t->order->balance(); @endphp
+                        @php
+                            $paid = $t->order->isFullyPaid();
+                            $bal = $t->order->balance();
+                            // Pay-upon-delivery: the client pays as they receive,
+                            // so a balance is the ARRANGEMENT, not an obstacle.
+                            // This page asked only "is it paid" and held orders at
+                            // the counter over money nobody had ever intended to
+                            // collect first - while tasks.approve, which this very
+                            // button posts to, would have let them through. The
+                            // button was hidden from a release the system allowed.
+                            $onDelivery = $t->order->paysOnDelivery();
+                            $mayRelease = $paid || $onDelivery;
+                        @endphp
                         <tr>
-                            <td><a href="{{ route('orders.show', $t->order) }}" style="font-weight: 600;">{{ $t->order->order_number }}</a></td>
+                            <td><a href="{{ route('orders.package', $t->order) }}" style="font-weight: 600;">{{ $t->order->order_number }}</a></td>
                             <td>{{ $t->order->clientName() }}</td>
                             <td>
                                 @if ($paid)
                                     <span class="badge" style="background: #f0fdf4; color: #15803d;">FULLY PAID</span>
+                                @elseif ($onDelivery)
+                                    {{-- Owed, and meant to be. The amount is said
+                                         plainly because the counter is the desk
+                                         collecting it. --}}
+                                    <span class="badge" style="background: #fffbeb; color: #b45309;">
+                                        @if ($bal === null) NO PRICE SET @else COLLECT &#8369;{{ number_format($bal, 2) }} @endif
+                                    </span>
+                                    <div style="font-size: 0.7rem; color: var(--ink-3); margin-top: 0.15rem;">Pays on delivery</div>
                                 @else
                                     {{-- Nothing leaves on an unpaid balance. Say so
                                          here rather than letting them click and be
@@ -147,7 +175,7 @@
                                 @endif
                             </td>
                             <td style="text-align: right;">
-                                @if ($paid)
+                                @if ($mayRelease)
                                     {{-- Shared login, so the account cannot say
                                          who stood at the counter. Same question
                                          every other handover in the shop asks. --}}
