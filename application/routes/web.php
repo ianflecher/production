@@ -17,6 +17,13 @@ use App\Http\Controllers\SystemHealthController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AccountController;
+use App\Models\Inquiry;
+use App\Models\InventoryItem;
+use App\Models\MaterialRequest;
+use App\Models\Payment;
+use App\Models\ProductionOrder;
+use App\Models\Task;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,6 +40,30 @@ use Illuminate\Support\Facades\Route;
  * Deliberately open to guests: the login page is where this bites hardest.
  */
 
+
+Route::get('/internal/central-admin/summary', function (Request $request) {
+    $token = (string) config('services.central_admin.token');
+    $provided = (string) $request->header('X-Central-Admin-Token');
+
+    abort_unless($token !== '' && hash_equals($token, $provided), 404);
+
+    return response()->json([
+        'service' => 'Production',
+        'generatedAt' => now()->toIso8601String(),
+        'orders' => [
+            'total' => ProductionOrder::count(),
+            'active' => ProductionOrder::where('status', 'active')->count(),
+            'completed' => ProductionOrder::where('status', 'complete')->count(),
+        ],
+        'inquiries' => Inquiry::count(),
+        'tasksForChecking' => Task::where('status', 'for_checking')->count(),
+        'pendingPayments' => Payment::whereNull('confirmed_at')
+            ->whereHas('order', fn ($query) => $query->where('status', '!=', 'cancelled'))
+            ->count(),
+        'pendingMaterialRequests' => MaterialRequest::where('status', 'pending')->count(),
+        'inventoryItems' => InventoryItem::count(),
+    ]);
+})->name('internal.central-admin.summary');
 
 Route::redirect('/', '/dashboard');
 
