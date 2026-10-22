@@ -310,7 +310,7 @@
                     <a href="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" target="_blank" class="layout-file-card">
                         <span class="layout-file-preview">
                             @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                                <img src="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" alt="{{ $file['original_name'] }}">
+                                <img src="{{ route('inquiries.layout.file', [$inquiry, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" loading="lazy" decoding="async">
                             @else
                                 <span style="font-size:2rem;">📄</span>
                             @endif
@@ -560,7 +560,7 @@
                             <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank" class="layout-file-card">
                                 <span class="layout-file-preview" style="min-height:110px;">
                                     @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                                        <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" style="height:130px;">
+                                        <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" loading="lazy" decoding="async" style="height:130px;">
                                     @else
                                         <span style="font-size:1.8rem;">&#128196;</span>
                                     @endif

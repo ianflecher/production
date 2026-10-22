@@ -51,8 +51,8 @@ class PaymentTest extends TestCase
         $this->actingAs($user)->post("/orders/{$order->id}/payment", [
             'portion' => 'half',
             'method' => 'GCash',
-            'reference' => 'GC-1001',
-            'proof' => UploadedFile::fake()->image('proof.jpg'),
+            'proof_references' => ['GC-1001'],
+            'proofs' => [UploadedFile::fake()->image('proof.jpg')],
         ])->assertSessionHasErrors('payment');
 
         $this->assertSame(0, Payment::count());
@@ -71,8 +71,8 @@ class PaymentTest extends TestCase
         $response = $this->actingAs($user)->post("/orders/{$order->id}/payment", [
             'portion' => 'half',
             'method' => 'GCash',
-            'reference' => 'GC-1002',
-            'proof' => UploadedFile::fake()->image('proof.jpg'),
+            'proof_references' => ['GC-1002'],
+            'proofs' => [UploadedFile::fake()->image('proof.jpg')],
         ]);
 
         // Recording it is not receiving it. What the officer writes down is
@@ -102,9 +102,9 @@ class PaymentTest extends TestCase
         $this->actingAs($user)->post("/orders/{$order->id}/payment", [
             'portion' => 'half',
             'method' => 'GCash',
-            'reference' => 'GC-1003',
+            'proof_references' => ['GC-1003'],
             // no proof file
-        ])->assertInvalid(['proof']);
+        ])->assertInvalid(['proofs']);
 
         $this->assertSame(0, Payment::count());
     }
@@ -119,8 +119,8 @@ class PaymentTest extends TestCase
         $this->actingAs($user)->post("/orders/{$order->id}/payment", [
             'portion' => 'half',
             'method' => 'GCash',
-            'proof' => UploadedFile::fake()->image('proof.jpg'),
-        ])->assertInvalid(['reference']);
+            'proofs' => [UploadedFile::fake()->image('proof.jpg')],
+        ])->assertInvalid(['proof_references']);
 
         $this->assertSame(0, Payment::count());
     }
@@ -136,8 +136,8 @@ class PaymentTest extends TestCase
             'portion' => 'half',
             'method' => Payment::METHOD_OTHER_TRANSFER,
             'other_transfer' => 'Maya',
-            'reference' => 'MAYA-1001',
-            'proof' => UploadedFile::fake()->image('maya.jpg'),
+            'proof_references' => ['MAYA-1001'],
+            'proofs' => [UploadedFile::fake()->image('maya.jpg')],
         ])->assertRedirect();
 
         $this->assertSame('Other transfer — Maya', Payment::firstOrFail()->method);
@@ -153,8 +153,8 @@ class PaymentTest extends TestCase
         $this->actingAs($user)->post("/orders/{$order->id}/payment", [
             'portion' => 'half',
             'method' => Payment::METHOD_OTHER_TRANSFER,
-            'reference' => 'OTHER-1001',
-            'proof' => UploadedFile::fake()->image('other.jpg'),
+            'proof_references' => ['OTHER-1001'],
+            'proofs' => [UploadedFile::fake()->image('other.jpg')],
         ])->assertInvalid(['other_transfer']);
     }
 
@@ -170,8 +170,8 @@ class PaymentTest extends TestCase
             'portion' => 'custom_downpayment',
             'amount' => $amount,
             'method' => 'GCash',
-            'reference' => 'GC-7500',
-            'proof' => UploadedFile::fake()->image('custom-downpayment.jpg'),
+            'proof_references' => ['GC-7500'],
+            'proofs' => [UploadedFile::fake()->image('custom-downpayment.jpg')],
         ])->assertRedirect();
 
         $payment = Payment::firstOrFail();
@@ -179,7 +179,40 @@ class PaymentTest extends TestCase
         $this->assertEqualsWithDelta($amount, (float) $payment->amount, 0.01);
     }
 
-    public function test_a_first_custom_downpayment_cannot_be_less_than_half(): void
+    /**
+     * A downpayment is whatever the client actually handed over.
+     *
+     * It had to be at least half - the shop's printed term, which the system
+     * cannot enforce on a client standing at the counter with a third of it.
+     * The officer was left recording nothing, so the job sat unstarted and the
+     * money sat unrecorded: the opposite of what the rule was for.
+     *
+     * The quotation still asks for 50%. Agreeing the terms and writing down
+     * what arrived are two different jobs.
+     */
+    public function test_a_first_downpayment_can_be_any_amount(): void
+    {
+        Storage::fake('local');
+        $user = $this->salesUser();
+        $order = $this->makeOrder($user);
+        $this->approveLayout($order);
+        $amount = round((float) $order->total_price * 0.30, 2);
+
+        $this->actingAs($user)->post("/orders/{$order->id}/payment", [
+            'portion' => 'custom_downpayment',
+            'amount' => $amount,
+            'method' => 'GCash',
+            'proof_references' => ['GC-3000'],
+            'proofs' => [UploadedFile::fake()->image('thirty-percent.jpg')],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('downpayment', $payment->kind);
+        $this->assertEqualsWithDelta($amount, (float) $payment->amount, 0.01);
+    }
+
+    /** The ceiling stays: more than is owed is a mistake, not a payment. */
+    public function test_a_downpayment_is_still_capped_at_what_is_owed(): void
     {
         Storage::fake('local');
         $user = $this->salesUser();
@@ -188,12 +221,15 @@ class PaymentTest extends TestCase
 
         $this->actingAs($user)->post("/orders/{$order->id}/payment", [
             'portion' => 'custom_downpayment',
-            'amount' => round((float) $order->total_price * 0.49, 2),
+            'amount' => round((float) $order->total_price * 3, 2),
             'method' => 'GCash',
-            'reference' => 'GC-4900',
-            'proof' => UploadedFile::fake()->image('too-small.jpg'),
-        ])->assertSessionHasErrors('amount');
+            'proof_references' => ['GC-9999'],
+            'proofs' => [UploadedFile::fake()->image('too-much.jpg')],
+        ])->assertRedirect();
 
-        $this->assertSame(0, Payment::count());
+        $this->assertEqualsWithDelta(
+            (float) $order->total_price, (float) Payment::firstOrFail()->amount, 0.01,
+            'the shop booked more money than the order is worth'
+        );
     }
 }

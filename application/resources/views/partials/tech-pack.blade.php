@@ -407,7 +407,15 @@
 
     </div></section>
 
-    <section class="tp-ref-materials"><div class="tp-ref-black-title">Size list and quantity</div>
+    {{-- Which run this sheet is for, said on the sheet.
+
+         The two are different documents - a sample sheet and a batch sheet -
+         and they print the same heading over different numbers. Somebody
+         holding one on the floor had nothing on it to say which, and the
+         numbers alone do not tell you: a one-piece order's batch sheet and its
+         sample sheet both read 1. --}}
+    @php $runLabel = $tp->showsTheSampleRun($order) ? 'Sample' : 'Mass production'; @endphp
+    <section class="tp-ref-materials"><div class="tp-ref-black-title">Size list and quantity &mdash; {{ strtoupper($runLabel) }}</div>
         <div class="tp-ref-sizelist">
             {{-- Asked of the ORDER, not of the row. A job that skips the
                  sample has one sheet and it is the batch sheet; asking
@@ -433,9 +441,15 @@
                 @endphp
                 <table class="tp-ref-table">
                     <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
+                    @if ($tp->sample_all_sizes)
+                        @foreach ($tp->sampleSizeList($order) as $size)
+                            <tr><td>{{ $size }}</td><td>1</td></tr>
+                        @endforeach
+                        <tr class="tp-ref-size-total"><td>Total</td><td>{{ count($tp->sampleSizeList($order)) }}</td></tr>
+                    @else
                     <tr>
                         <td>
-                            @if ($textEditable)
+                            @if ($canType('sample_sizes'))
                                 <select class="tp-in" name="sample_sizes[]" aria-label="Which size the sample is made in">
                                     @forelse ($sizeChoices as $size)
                                         <option value="{{ $size }}" @selected($size === $sampleSize)>{{ $size }}</option>
@@ -450,32 +464,7 @@
                         <td>1</td>
                     </tr>
                     <tr class="tp-ref-size-total"><td>Total</td><td>1</td></tr>
-                </table>
-
-                {{-- And the order underneath it.
-
-                     The sample row says one piece in one size, which is what
-                     to cut today and nothing about the job it is a fitting
-                     for. The floor was reading a sheet that said "1" on an
-                     830-piece order and had no way to see the run coming.
-
-                     Shown, not editable: it is the order's own breakdown, and
-                     a second place to type it is a second place for it to be
-                     wrong. The piece being sewn is still the one picked above
-                     — this does not add to it. --}}
-                @php
-                    $orderLines = $order->itemsInSizeOrder();
-                    $orderTotal = $orderLines->sum('quantity');
-                @endphp
-                <div class="tp-ref-light-title">The whole order</div>
-                <table class="tp-ref-table">
-                    <tr><th>Size</th><th class="tp-ref-qty-head">Quantity</th></tr>
-                    @forelse ($orderLines as $item)
-                        <tr><td>{{ $item->size ?: 'One size' }}</td><td>{{ $item->quantity }}</td></tr>
-                    @empty
-                        <tr><td>&mdash;</td><td>&mdash;</td></tr>
-                    @endforelse
-                    <tr class="tp-ref-size-total"><td>Total</td><td>{{ number_format($orderTotal) }}</td></tr>
+                    @endif
                 </table>
             @else
                 {{-- The batch, less the pieces the sample already used. The

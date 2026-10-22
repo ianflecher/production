@@ -172,6 +172,46 @@ class FinanceController extends Controller
         ));
     }
 
+    /** Remove Finance's confirmation without deleting the payment or proof. */
+    public function unconfirm(Request $request, Payment $payment): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($request->user()->canReversePayments(), 403);
+
+        if (! $payment->isConfirmed()) {
+            return back()->with('success', 'That payment is already waiting for confirmation.');
+        }
+
+        $payment->update([
+            'confirmed_at' => null,
+            'confirmed_by' => null,
+            'confirmed_name' => null,
+        ]);
+
+        return back()->with('success', 'Payment unconfirmed. The payment and its proof were kept, and it is back in the Finance confirmation queue.');
+    }
+
+    /** Remove an incorrectly recorded, still-unconfirmed payment. */
+    public function destroy(Request $request, Payment $payment): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($request->user()->canReversePayments(), 403);
+
+        if ($payment->isConfirmed()) {
+            return back()->withErrors(['payment' => 'A confirmed payment cannot be removed. Unconfirm it first, then remove it if it was recorded by mistake.']);
+        }
+
+        foreach ($payment->proofFiles as $proof) {
+            Storage::disk('local')->delete($proof->path);
+            $proof->delete();
+        }
+        if ($payment->proof_path) {
+            Storage::disk('local')->delete($payment->proof_path);
+        }
+
+        $payment->delete();
+
+        return back()->with('success', 'The pending payment and its proof were removed.');
+    }
+
     public function proof(Payment $payment)
     {
         abort_unless(request()->user()?->canManageFinance(), 403);

@@ -198,6 +198,66 @@
     </form>
 @elseif ($task->status === 'for_checking')
     <p class="muted">Submitted {{ $task->submitted_at?->diffForHumans() }}. Waiting for {{ $task->approver_role === 'sales' ? 'the account officer' : 'the leader' }}.</p>
+    @if ($task->assigned_to === auth()->id())
+        @php
+            $replaceSlots = $task->fileSlots();
+            $latestRound = (int) ($task->files->max('round') ?? 0);
+            $latestFiles = $task->files
+                ->filter(fn ($file) => (int) ($file->round ?? 0) === $latestRound)
+                ->values();
+        @endphp
+        <details class="path-help path-help-action" style="margin-top:0.8rem;">
+            <summary>Need to change what you sent? Replace submitted work</summary>
+
+            @if ($latestFiles->isNotEmpty())
+                <div style="font-size:0.82rem; color:var(--ink-2); margin:0.55rem 0;">
+                    Current submitted file{{ $latestFiles->count() === 1 ? '' : 's' }}:
+                    @foreach ($latestFiles as $file)
+                        <a href="{{ route('tasks.file.download', $file) }}" style="margin-left:0.35rem;">{{ $file->label ?: $file->original_name }}</a>@if (! $loop->last),@endif
+                    @endforeach
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('tasks.submit', $task->id) }}" enctype="multipart/form-data" style="margin-top:0.65rem;">
+                @csrf
+                @if ($task->usesFilePath())
+                    @foreach ($replaceSlots as $key => $label)
+                        @php $current = $task->files->where('label', $label)->sortByDesc('id')->first(); @endphp
+                        <div class="field" style="max-width: 520px;">
+                            <label for="replace_{{ $key }}_{{ $task->id }}">{{ $label }} — corrected file path <span style="color: var(--danger-ink);">*</span></label>
+                            <input id="replace_{{ $key }}_{{ $task->id }}" type="text" name="paths[{{ $key }}]" class="no-caps"
+                                   value="{{ old('paths.'.$key, $current?->external_path) }}"
+                                   placeholder="\\server\FolderName\file..." required maxlength="1024">
+                        </div>
+                    @endforeach
+                @elseif ($replaceSlots !== [])
+                    @foreach ($replaceSlots as $key => $label)
+                        <div class="field paste-file-field" style="max-width: 420px;" data-paste-into-box>
+                            <label for="replace_{{ $key }}_{{ $task->id }}">{{ $label }} — replacement <span style="color: var(--danger-ink);">*</span></label>
+                            <input id="replace_{{ $key }}_{{ $task->id }}" type="file" name="{{ $key }}" accept=".jpg,.jpeg,.png,.webp,.pdf,.ai,.psd,.eps,.cdr,.zip" class="js-file-preview" data-paste-into required>
+                            <div class="file-preview" hidden></div>
+                            <div class="paste-file-hint">Paste a screenshot here with Ctrl+V, drop a file, or choose one.</div>
+                        </div>
+                    @endforeach
+                    @if (count($replaceSlots) > 1)
+                        <p style="font-size: 0.78rem; color: var(--ink-3); margin: -0.4rem 0 0.9rem;">Upload all {{ count($replaceSlots) }} files again so the reviewer checks one complete set.</p>
+                    @endif
+                @elseif (! $task->isTechPackStep())
+                    <div class="field paste-file-field" style="max-width: 420px;" data-paste-into-box>
+                        <label for="replace_file_{{ $task->id }}">Replacement file</label>
+                        <input id="replace_file_{{ $task->id }}" type="file" name="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.ai,.psd,.eps,.cdr,.zip" class="js-file-preview" data-paste-into>
+                        <div class="file-preview" hidden></div>
+                        <div class="paste-file-hint">Paste a screenshot here with Ctrl+V, drop a file, or choose one.</div>
+                    </div>
+                @endif
+
+                <p style="font-size:0.82rem; color:var(--ink-2); margin:0.2rem 0 0.7rem;">
+                    This keeps the task waiting for review, but sends your newest file to the top.
+                </p>
+                <button class="btn btn-primary btn-sm" onclick="return confirm('Replace the submitted work with this newer file?');">Replace submitted work</button>
+            </form>
+        </details>
+    @endif
 @elseif ($task->status === 'complete')
     <p class="muted">Approved {{ $task->approved_at?->diffForHumans() }}.</p>
 @else

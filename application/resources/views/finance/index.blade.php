@@ -16,6 +16,8 @@
     .fin-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
     .fin-toolbar input, .fin-toolbar select { height: auto; }
     .badge-kind { text-transform: capitalize; }
+    .fin-money { white-space: nowrap; min-width: 7.5rem; font-variant-numeric: tabular-nums; }
+    .fin-order-no { white-space: nowrap; }
 </style>
 
 <div class="page-head">
@@ -82,45 +84,62 @@
                 </thead>
                 <tbody>
                     @foreach ($payments as $p)
+                        @php
+                            $proofLinks = collect();
+
+                            if ($p->proof_path) {
+                                $proofLinks->push([
+                                    'url' => route('finance.proof', $p),
+                                    'name' => $p->proof_name,
+                                    'reference' => $p->reference,
+                                    'path' => $p->proof_path,
+                                ]);
+                            }
+
+                            foreach ($p->proofFiles as $proof) {
+                                if ($proofLinks->contains('path', $proof->path)) {
+                                    continue;
+                                }
+
+                                $proofLinks->push([
+                                    'url' => route('finance.proof-file', $proof),
+                                    'name' => $proof->original_name,
+                                    'reference' => $proof->reference,
+                                    'path' => $proof->path,
+                                ]);
+                            }
+                        @endphp
                         <tr>
-                            <td style="font-weight:600;">{{ $p->order?->order_number ?? '—' }}</td>
+                            <td class="fin-order-no" style="font-weight:600;">{{ $p->order?->order_number ?? '—' }}</td>
                             <td>{{ $p->order?->clientName() ?: '—' }}</td>
-                            <td style="text-align:right; font-weight:600; font-variant-numeric: tabular-nums;">₱{{ number_format((float) $p->amount, 2) }}</td>
+                            <td class="fin-money" style="text-align:right; font-weight:600;">₱{{ number_format((float) $p->amount, 2) }}</td>
                             <td><span class="badge badge-kind" style="background: var(--accent-soft); color: #1d4ed8;">{{ $p->kind ?? 'payment' }}</span></td>
                             <td>{{ $p->method ?? '—' }}</td>
-                            <td>{{ $p->reference ?? '—' }}</td>
+                            <td>
+                                @if ($proofLinks->isNotEmpty())
+                                    {{-- Numbered only when there is something to tell
+                                         apart. The number pairs this reference with the
+                                         file button of the same number beside it, which
+                                         is worth saying for three receipts and is noise
+                                         for one: every row on the page read "1." in
+                                         front of its only reference. --}}
+                                    @php $several = $proofLinks->count() > 1; @endphp
+                                    @foreach ($proofLinks as $proof)
+                                        @php $prefix = $several ? $loop->iteration.'. ' : ''; @endphp
+                                        <div style="white-space:nowrap;">{{ $prefix }}{{ $proof['reference'] ?: '—' }}</div>
+                                    @endforeach
+                                @else
+                                    {{ $p->reference ?? '—' }}
+                                @endif
+                            </td>
                             <td>
                                 @if ($p->hasProof())
-                                    @php
-                                        $proofLinks = collect();
-
-                                        if ($p->proof_path) {
-                                            $proofLinks->push([
-                                                'url' => route('finance.proof', $p),
-                                                'name' => $p->proof_name,
-                                                'path' => $p->proof_path,
-                                            ]);
-                                        }
-
-                                        foreach ($p->proofFiles as $proof) {
-                                            if ($proofLinks->contains('path', $proof->path)) {
-                                                continue;
-                                            }
-
-                                            $proofLinks->push([
-                                                'url' => route('finance.proof-file', $proof),
-                                                'name' => $proof->original_name,
-                                                'path' => $proof->path,
-                                            ]);
-                                        }
-                                    @endphp
-
                                     @if ($proofLinks->count() > 1)
                                         <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
                                             @foreach ($proofLinks as $proof)
                                                 @php $ext = strtolower(pathinfo($proof['name'] ?? '', PATHINFO_EXTENSION)); @endphp
                                                 <a href="{{ $proof['url'] }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:0.25rem 0.45rem;">
-                                                    {{ $loop->iteration }}{{ $ext ? ' '.strtoupper($ext) : '' }}
+                                                    {{ $loop->iteration }}{{ $ext ? ' '.strtoupper($ext) : '' }}{{ $proof['reference'] ? ' - '.$proof['reference'] : '' }}
                                                 </a>
                                             @endforeach
                                         </div>
@@ -158,6 +177,14 @@
                                 @if ($p->isConfirmed())
                                     <span style="color: var(--success-ink); font-weight:600;">✓ {{ $p->confirmed_at->format('M j') }}</span>
                                     <div style="color: var(--ink-3);">{{ $p->confirmedByName() ?? '—' }}</div>
+                                    @if (auth()->user()->canReversePayments())
+                                        <form method="POST" action="{{ route('finance.unconfirm', $p) }}"
+                                              style="margin-top:0.3rem;"
+                                              onsubmit="return confirm('Unconfirm this payment? The payment and proof will remain, but Finance will need to confirm it again.')">
+                                            @csrf
+                                            <button type="submit" class="btn btn-ghost btn-sm">Unconfirm</button>
+                                        </form>
+                                    @endif
                                 @elseif (auth()->user()->canConfirmPayments())
                                     {{-- Asked before, not after. Confirming is
                                          the shop agreeing the money arrived: it
@@ -172,6 +199,15 @@
                                         @csrf
                                         <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
                                     </form>
+                                    @if (auth()->user()->canReversePayments())
+                                    <form method="POST" action="{{ route('finance.destroy', $p) }}"
+                                          style="display:inline-block; margin-top:0.3rem;"
+                                          onsubmit="return confirm('Remove this pending payment of ₱{{ number_format((float) $p->amount, 2) }}? Its receipt/proof will also be removed.')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-ghost btn-sm">Remove</button>
+                                    </form>
+                                    @endif
                                 @else
                                     <span style="color: var(--ink-3);">Waiting on finance</span>
                                 @endif

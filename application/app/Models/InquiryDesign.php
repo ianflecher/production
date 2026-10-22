@@ -205,7 +205,9 @@ class InquiryDesign extends Model
         }
 
         $order->tasks()
-            ->whereIn('department', ['Layout', 'Final mockup'])
+            ->where(fn ($q) => $q
+                ->whereIn('department', ['Layout', 'Final mockup'])
+                ->orWhere('department', 'like', 'Tech pack%'))
             ->whereNotIn('status', ['complete', 'for_checking'])
             ->update(['assigned_to' => $this->artist_id]);
     }

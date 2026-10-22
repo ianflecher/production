@@ -44,7 +44,18 @@
                 <tbody>
                     @foreach ($pending as $r)
                         <tr>
-                            <td style="font-weight: 600;">{{ $r->name }}</td>
+                            <td style="font-weight: 600;">{{ $r->name }}
+                                {{-- Sample or batch. One piece of a 111-piece job and
+                                     the first piece of the run look identical here -
+                                     both read "1 pcs" - and they are not the same thing
+                                     to receive: the sample goes back out to the client
+                                     for approval. The flag was already on the row. --}}
+                                @if ($r->is_sample)
+                                    <div style="margin-top:0.2rem;"><span class="badge" style="background:#eef2ff; color:#4338ca;">SAMPLE</span></div>
+                                @else
+                                    <div style="margin-top:0.2rem;"><span class="badge" style="background:#f0fdf4; color:#15803d;">MASS PRODUCTION</span></div>
+                                @endif
+                            </td>
                             <td>
                                 {{-- The number opens the pack. The desk receiving
                                      a garment needs to see what it is meant to be

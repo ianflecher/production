@@ -55,6 +55,7 @@
                     href="{{ route('orders.index', array_filter([
                         'status' => $card['status'],
                         'q' => $search,
+                        'officer' => $officerId ?? 0,
                     ])) }}"
                     class="order-summary-card {{ $card['class'] }} {{ $status === $card['status'] ? 'is-active' : '' }}"
                     @if ($status === $card['status']) aria-current="true" @endif
@@ -110,6 +111,9 @@
                 id="ordersFilterForm"
                 class="orders-toolbar"
             >
+                @if (!empty($officerId))
+                    <input type="hidden" name="officer" value="{{ $officerId }}">
+                @endif
 
                 <div class="orders-search">
                     <svg
@@ -201,6 +205,14 @@
 
         @elseif ($totalOrders > 0)
 
+            @if ($officers->isNotEmpty())
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; padding:1rem;">
+                    <a class="btn {{ empty($officerId) ? 'btn-primary' : 'btn-ghost' }} btn-sm" href="{{ route('orders.index', array_filter(['q' => $search, 'status' => $status])) }}">All officers</a>
+                    @foreach ($officers as $officer)
+                        <a class="btn {{ $officerId === $officer->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" href="{{ route('orders.index', array_filter(['q' => $search, 'status' => $status, 'officer' => $officer->id])) }}">{{ $officer->name }}</a>
+                    @endforeach
+                </div>
+            @endif
             <div class="orders-table-wrap">
 
                 <table class="orders-table">
@@ -208,7 +220,9 @@
                     <thead>
                         <tr>
                             <th>Order</th>
+                            <th>Production</th>
                             <th>Customer</th>
+                            <th>Account officer</th>
                             <th>Quantity</th>
                             <th>Due date</th>
                             <th>Progress</th>
@@ -220,9 +234,27 @@
                     <tbody id="ordersBody">
 
                         @foreach ($orders as $order)
+                            @foreach (['sample', 'massprod'] as $productionPhase)
+                                @continue($productionPhase === 'sample' && $order->skip_sample)
+                                @php
+                                    $sampleTasks = $order->tasks->filter(fn ($task) => $task->stage < 10);
+                                    $sampleFinished = $sampleTasks->isNotEmpty()
+                                        && $sampleTasks->every(fn ($task) => $task->status === 'complete');
+                                @endphp
+                                @continue($productionPhase === 'massprod' && ! $order->skip_sample && ! $sampleFinished)
 
                             @php
-                                [$done, $total] = $order->progress();
+                                $phaseTasks = $order->tasks->filter(fn ($task) => $order->skip_sample
+                                    ? $productionPhase === 'massprod'
+                                    : ($productionPhase === 'massprod' ? $task->stage >= 10 : $task->stage < 10));
+                                $done = $phaseTasks->where('status', 'complete')->count();
+                                $total = $phaseTasks->count();
+                                $phaseFinished = $total > 0 && $done === $total;
+                                $phaseStatus = $phaseFinished ? 'complete' : $order->status;
+                                $hideCompletedSample = $productionPhase === 'sample' && $phaseFinished;
+                                $phaseUrl = $productionPhase === 'massprod'
+                                    ? route('orders.mass-production', $order).'#production-pipeline'
+                                    : route('orders.show', ['order' => $order, 'phase' => 'sample']).'#production-pipeline';
 
                                 $progressPercent = $total
                                     ? min(
@@ -231,7 +263,7 @@
                                     )
                                     : 0;
 
-                                $current = $order->tasks->first(
+                                $current = $phaseTasks->first(
                                     fn ($task) => ! in_array(
                                         strtolower(
                                             (string) $task->status
@@ -262,10 +294,12 @@
 
                                 $isOverdue = $daysUntilDue !== null
                                     && $daysUntilDue < 0
+                                    && ! $phaseFinished
                                     && ! $order->completed_at;
 
                                 $isDueSoon = $daysUntilDue !== null
                                     && $daysUntilDue >= 0
+                                    && ! $phaseFinished
                                     && $daysUntilDue <= 3
                                     && ! $order->completed_at;
 
@@ -274,26 +308,49 @@
                                     : ($isDueSoon ? 'soon' : '');
                             @endphp
 
+                            @continue($hideCompletedSample)
                             <tr
                                 class="order-row"
                                 tabindex="0"
                                 role="link"
-                                data-url="{{ route('orders.show', $order) }}"
+                                data-url="{{ $phaseUrl }}"
                                 aria-label="Open order {{ $order->order_number }}"
                             >
 
                                 <td>
-                                    <span class="order-number">
+                                    <a class="order-number" href="{{ $phaseUrl }}">
                                         {{ $order->order_number }}
-                                    </span>
+                                    </a>
                                 </td>
 
+                                <td><span class="quantity-badge">{{ $productionPhase === 'massprod' ? 'MASS PROD' : 'SAMPLE' }}</span></td>
                                 <td>
                                     <span class="order-customer">
                                         {{ $order->clientName() }}
                                     </span>
                                 </td>
 
+                                <td>
+                                    {{ $order->creator?->name ?? 'Unassigned' }}
+                                    @if (auth()->user()->canTransferFollowUps())
+                                        <details style="margin-top:0.4rem;">
+                                            <summary class="btn btn-ghost btn-sm" style="cursor:pointer;">Transfer</summary>
+                                            <form method="POST" action="{{ route('orders.transfer-officer', $order) }}" style="margin-top:0.5rem;" onsubmit="return confirm('Transfer this production order to the selected officer?')">
+                                                @csrf
+                                                <input type="hidden" name="from_officer" value="{{ $order->created_by }}">
+                                                <select name="to_officer" required aria-label="Receiving officer">
+                                                    <option value="">Choose officer</option>
+                                                    @foreach ($transferOfficers as $officer)
+                                                        @if ($officer->id !== $order->created_by)
+                                                            <option value="{{ $officer->id }}">{{ $officer->name }}</option>
+                                                        @endif
+                                                    @endforeach
+                                                </select>
+                                                <button class="btn btn-primary btn-sm" style="margin-top:0.4rem;">Confirm transfer</button>
+                                            </form>
+                                        </details>
+                                    @endif
+                                </td>
                                 <td>
                                     <span class="quantity-badge">
                                         {{ number_format($order->quantity) }}
@@ -335,13 +392,13 @@
                                         {{-- A job that is late, or due today and
                                              still on the floor, plus where it is
                                              stuck — so the row says who to chase. --}}
-                                        @if ($delay = $order->delayState())
+                                        @if (! $phaseFinished && ($delay = $order->delayState()))
                                             <span class="delay-chip {{ $delay === 'delayed' ? 'is-late' : 'is-at-risk' }}">
                                                 <span class="delay-alert-dot" aria-hidden="true"></span>
                                                 {{ $order->delayLabel() }}
                                             </span>
                                             <span class="due-date-note" style="display:block; margin-top:0.15rem;">
-                                                at {{ $order->currentStepLabel() }}@if ($n = $order->nextStepLabel()) &rarr; {{ $n }}@endif
+                                                at {{ $current?->department ?? 'Phase finished' }}
                                             </span>
                                         @endif
 
@@ -366,7 +423,11 @@
                                 </td>
 
                                 <td>
-                                    @if ($order->completed_at)
+                                    @if ($productionPhase === 'sample' && $order->skip_sample)
+                                        <span class="current-step">No sample required</span>
+                                    @elseif ($phaseFinished)
+                                        <span class="current-step complete">✓ Completed</span>
+                                    @elseif ($order->completed_at)
 
                                         <span class="current-step complete">
                                             ✓
@@ -420,12 +481,13 @@
 
                                 <td>
                                     @include('partials.status', [
-                                        'status' => $order->status
+                                        'status' => $phaseStatus
                                     ])
                                 </td>
 
                             </tr>
 
+                            @endforeach
                         @endforeach
 
                     </tbody>
@@ -464,7 +526,7 @@
             row.addEventListener('click', function (event) {
                 if (
                     event.target.closest(
-                        'a, button, input, select'
+                        'a, button, input, select, details, summary, form'
                     )
                 ) {
                     return;
@@ -477,6 +539,7 @@
             row.addEventListener(
                 'keydown',
                 function (event) {
+                    if (event.target !== row) return;
                     if (
                         event.key === 'Enter' ||
                         event.key === ' '

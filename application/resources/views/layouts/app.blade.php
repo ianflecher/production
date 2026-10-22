@@ -16,6 +16,8 @@
 </head>
 <body>
     @auth
+    @include('partials.enable-notifications')
+    @include('partials.lan-alerts')
     <div class="shell">
         <aside class="sidebar" id="sidebar">
             <div class="brand">
@@ -68,6 +70,12 @@
                         <a href="{{ route('orders.index') }}" class="nav-item {{ request()->routeIs('orders.*') ? 'active' : '' }}">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
                             Production Orders
+                        </a>
+                        {{-- Account supervisors such as Maam Ann work the same
+                             client follow-up queue as the leader. --}}
+                        <a href="{{ route('inquiries.index') }}" class="nav-item {{ request()->routeIs('inquiries.index') ? 'active' : '' }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.96.91.34 1.85.57 2.81A2 2 0 0 1 8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                            Follow-ups
                         </a>
                     @endif
                     {{-- Every supervisor gets the calendar. What is due and when
@@ -223,7 +231,7 @@
                      day's work had no place of its own in the sidebar. The
                      count rides here rather than on the stock link, because it
                      counts requests and this is where they are. --}}
-                @if (auth()->user()->canDecideMaterialRequests())
+                @if (auth()->user()->canDecideMaterialRequests() && strtolower(trim((string) auth()->user()->job_role)) !== \App\Models\User::JOB_RAW_MATERIALS_SUPERVISOR)
                     <a href="{{ route('inventory.requests') }}" class="nav-item {{ request()->routeIs('inventory.requests*') ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H3v10h6z"/><path d="M14 3h-4v18h4z"/><path d="M21 7h-6v14h6z"/></svg>
                         Material Requests
@@ -261,7 +269,7 @@
                                  Same count as the ledger it opens - see
                                  Payment::scopeAwaitingConfirmation. --}}
                             <span style="margin-left:auto; min-width:20px; padding:0 6px; border-radius:99px; background:#E31B23; color:#fff; font-weight:700; font-size:0.72rem; line-height:20px; text-align:center;"
-                                  title="{{ $toConfirm }} payment(s) waiting to be confirmed">{{ $toConfirm }}</span>
+                                  data-payment-count title="{{ $toConfirm }} payment(s) waiting to be confirmed">{{ $toConfirm }}</span>
                         @endif
                     </a>
 

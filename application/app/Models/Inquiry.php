@@ -403,7 +403,14 @@ class Inquiry extends Model
     {
         return $query
             ->where(function ($visible) {
-                $visible->where('status', self::STATUS_OPEN)
+                $visible->where(function ($newInquiry) {
+                    // A new inquiry without designs still needs follow-up.
+                    // An old Open flag must not retain a fully ordered brief.
+                    $newInquiry->where('status', self::STATUS_OPEN)
+                        ->whereDoesntHave('designs')
+                        ->whereDoesntHave('orders')
+                        ->whereNull('production_order_id');
+                })
                     // A design that has not become a job yet - whatever stage
                     // it is at, with no exceptions.
                     //

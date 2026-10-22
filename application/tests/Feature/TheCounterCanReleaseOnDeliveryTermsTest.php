@@ -104,6 +104,53 @@ class TheCounterCanReleaseOnDeliveryTermsTest extends TestCase
         $this->assertStringNotContainsString('Released to client', $html);
     }
 
+    /* ---------------- sample or batch ---------------- */
+
+    /**
+     * Which run a thing to receive belongs to.
+     *
+     * One piece of a 111-piece job and the first piece of the run read the
+     * same here - "1 pcs" - and they are not the same thing to take in: the
+     * sample goes back out to the client for approval. The flag was already on
+     * the row, just never shown.
+     */
+    public function test_a_sample_waiting_to_be_received_says_so(): void
+    {
+        $order = $this->orderWaitingAtTheCounter(waived: true);
+
+        \App\Models\ProductReceipt::create([
+            'production_order_id' => $order->id,
+            'name' => 'Order '.$order->order_number.' (L)',
+            'unit' => 'pcs',
+            'expected_quantity' => 1,
+            'status' => 'pending',
+            'is_sample' => true,
+        ]);
+
+        $html = $this->page();
+
+        $this->assertStringContainsString('SAMPLE', $html);
+    }
+
+    /** And the batch says that instead. */
+    public function test_a_batch_waiting_to_be_received_says_mass_production(): void
+    {
+        $order = $this->orderWaitingAtTheCounter(waived: true);
+
+        \App\Models\ProductReceipt::create([
+            'production_order_id' => $order->id,
+            'name' => $order->order_number.' — Cotton Shirt',
+            'unit' => 'pcs',
+            'expected_quantity' => 830,
+            'status' => 'pending',
+            'is_sample' => false,
+        ]);
+
+        $html = $this->page();
+
+        $this->assertStringContainsString('MASS PRODUCTION', $html);
+    }
+
     /* ---------------- the order number ---------------- */
 
     /** It opens the pack, on both tables. */

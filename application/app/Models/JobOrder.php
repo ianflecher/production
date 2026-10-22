@@ -24,7 +24,7 @@ class JobOrder extends Model
      */
     public const PRINT_TYPES = [
         'full_sublimation' => ['label' => 'Full Sublimation', 'printer' => 'atexco',            'cutting' => 'laser',  'press' => 'roller_press'],
-        'dtf' => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => null],
+        'dtf' => ['label' => 'DTF',              'printer' => 'dtf_printer',       'cutting' => 'manual', 'press' => 'small_press'],
         'eco_solvent' => ['label' => 'Eco Solvent',     'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
         'vinyl' => ['label' => 'Vinyl',           'printer' => 'epson_eco_solvent', 'cutting' => 'manual', 'press' => null],
         'embroidery' => ['label' => 'Embroidery',      'printer' => 'embroidery',        'cutting' => 'manual', 'press' => null],
@@ -408,8 +408,12 @@ class JobOrder extends Model
         }
 
         // Read on the word, not the key: the box is free text and the shop
-        // writes "SUBLIMATION" as often as "FULL SUBLIMATION".
-        return str_contains(mb_strtolower((string) $this->print_type), 'sublimation')
+        // writes "SUBLIMATION" as often as "FULL SUBLIMATION". Some imported
+        // sheets leave the print type as N/A but still name the Atexco printer,
+        // and on this floor Atexco is the sublimation route.
+        $type = mb_strtolower((string) $this->print_type);
+
+        return str_contains($type, 'sublimation') || $this->printer === 'atexco'
             ? ['cutting' => 'laser', 'fabric_press' => 'roller_press']
             : ['cutting' => 'manual', 'fabric_press' => 'small_press'];
     }

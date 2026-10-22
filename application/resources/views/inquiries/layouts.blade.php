@@ -19,11 +19,25 @@
     'label' => 'Search layouts',
 ])
 
+@if ($doneCount > 0)
+    <div style="display:flex; justify-content:flex-end; margin:-.4rem 0 1rem;">
+        @if ($showDone)
+            <a class="btn btn-secondary btn-sm" href="{{ route('inquiries.layouts', array_filter(['q' => $search ?: null])) }}">
+                Hide handed-back layouts
+            </a>
+        @else
+            <a class="btn btn-secondary btn-sm" href="{{ route('inquiries.layouts', array_filter(['q' => $search ?: null, 'show_done' => 1])) }}">
+                Show {{ $doneCount }} handed-back {{ \Illuminate\Support\Str::plural('layout', $doneCount) }}
+            </a>
+        @endif
+    </div>
+@endif
+
 @if ($queue->isEmpty())
     <div class="card panel">
         <p class="sub" style="margin: 0;">
             @if (filled($search))
-                Nothing matches “{{ $search }}”.
+                No active layouts match “{{ $search }}”.
             @else
                 Nothing to draw. Anything new will appear here.
             @endif
@@ -67,7 +81,7 @@
                         <a href="{{ route('inquiries.layout.file', [$inq, 'index' => $index]) }}" target="_blank"
                            style="border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; width: 150px; text-align: center; text-decoration: none;">
                             @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                                <img src="{{ route('inquiries.layout.file', [$inq, 'index' => $index]) }}" alt="{{ $file['original_name'] }}"
+                                <img src="{{ route('inquiries.layout.file', [$inq, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" loading="lazy" decoding="async"
                                      style="max-width: 100%; max-height: 110px; border-radius: 4px; display: block; margin: 0 auto;">
                             @else
                                 <div style="font-size: 1.8rem;">&#128196;</div>
@@ -85,7 +99,7 @@
                  its own, so five of a six-piece kit can be finished while the
                  sixth is still being redrawn. --}}
             @foreach ($designs as $design)
-                <div style="border:1px solid var(--border); border-radius:10px; padding:0.85rem; margin-bottom:0.75rem;">
+                <div id="design-{{ $design->id }}" style="border:1px solid var(--border); border-radius:10px; padding:0.85rem; margin-bottom:0.75rem; scroll-margin-top:1rem;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; flex-wrap:wrap;">
                         <strong>{{ $design->name() }}</strong>
                         <span class="sub" style="margin:0;">
@@ -117,19 +131,34 @@
 
                     @if ($design->drawings()->isNotEmpty())
                         <div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin:0.7rem 0;">
-                            @foreach ($design->drawings() as $index => $file)
-                                <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank"
-                                   style="border:1px solid var(--border); border-radius:8px; padding:0.5rem; width:150px; text-align:center; text-decoration:none;">
-                                    @if (str_starts_with($file['mime'] ?? '', 'image/'))
-                                        <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}"
-                                             style="max-width:100%; max-height:110px; border-radius:4px; display:block; margin:0 auto;">
-                                    @else
-                                        <div style="font-size:1.8rem;">&#128196;</div>
-                                    @endif
-                                    <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.3rem; word-break:break-all;">
-                                        {{ $file['original_name'] }} <em>(yours)</em>
-                                    </div>
-                                </a>
+                            @foreach ($design->drawings()->reverse() as $index => $file)
+                                <div style="position:relative; border:1px solid var(--border); border-radius:8px; padding:0.5rem; width:150px; text-align:center; background:var(--surface);">
+                                    <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank"
+                                       style="display:block; text-decoration:none;">
+                                        @if (str_starts_with($file['mime'] ?? '', 'image/'))
+                                            <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" loading="lazy" decoding="async"
+                                                 style="max-width:100%; max-height:110px; border-radius:4px; display:block; margin:0 auto;">
+                                        @else
+                                            <div style="font-size:1.8rem;">&#128196;</div>
+                                        @endif
+                                        <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.3rem; word-break:break-all;">
+                                            {{ $file['original_name'] }} <em>(yours)</em>
+                                        </div>
+                                    </a>
+                                    <form method="POST" action="{{ route('inquiries.designs.drawing.remove', [$inq, $design]) }}"
+                                          style="position:absolute; top:0.25rem; right:0.25rem;"
+                                          onsubmit="return confirm('Remove {{ addslashes($file['original_name'] ?? 'this design file') }} from {{ addslashes($design->name()) }}?');">
+                                        @csrf
+                                        <input type="hidden" name="index" value="{{ $index }}">
+                                        <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}#design-{{ $design->id }}">
+                                        <button type="submit" class="btn btn-ghost btn-sm"
+                                                title="Remove this file"
+                                                aria-label="Remove {{ $file['original_name'] ?? 'this file' }}"
+                                                style="min-width:0; padding:0.08rem 0.38rem; border-radius:999px; background:rgba(255,255,255,.94); color:var(--danger-ink); border-color:var(--danger-border); box-shadow:0 2px 8px rgba(15,23,42,.12);">
+                                            ×
+                                        </button>
+                                    </form>
+                                </div>
                             @endforeach
                         </div>
                     @endif
@@ -147,6 +176,7 @@
                               class="artist-layout-upload" data-paste-into-box
                               style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
                             @csrf
+                            <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}#design-{{ $design->id }}">
                             {{-- The drawing is in the clipboard the moment it is
                                  finished. data-paste-into lets it go straight in -
                                  see partials/paste-into-file-input. --}}
@@ -165,10 +195,128 @@
                             </button>
                         </form>
                     @else
-                        <p class="sub" style="margin:.5rem 0 0;">
-                            Handed back &mdash; waiting on the client. It comes back here if they ask for a change.
-                        </p>
+                        <div style="margin:.5rem 0 0;">
+                            <p class="sub" style="margin:0 0 .45rem;">
+                                Handed back &mdash; waiting on the client. If you sent the wrong file, replace it here before the client answers.
+                            </p>
+                            <details class="path-help path-help-action">
+                                <summary>Replace / add corrected design files</summary>
+                                <form method="POST" action="{{ route('inquiries.designs.submit', $design) }}" enctype="multipart/form-data"
+                                      class="artist-layout-upload" data-paste-into-box
+                                      style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-top:.65rem;">
+                                    @csrf
+                                    <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}#design-{{ $design->id }}">
+                                    <input id="artistDesignReplaceFiles_{{ $design->id }}" type="file" name="files[]" multiple required
+                                           class="artist-layout-files" data-paste-into
+                                           accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+                                    <span class="paste-drop-hint" style="flex-basis:100%; margin:0;">
+                                        <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the corrected drawing, or drop files here. Paste again to add another.
+                                    </span>
+                                    <div class="artist-layout-picked" aria-live="polite"
+                                         style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
+                                    <button type="submit" class="btn btn-primary btn-sm"
+                                            onclick="return confirm('Replace/add this corrected design before the client answers?');">
+                                        Send corrected design
+                                    </button>
+                                </form>
+                            </details>
+                        </div>
                     @endif
+                </div>
+            @endforeach
+        </div>
+    @endforeach
+@endif
+
+@if ($showDone && $doneQueue->isNotEmpty())
+    <div style="display:flex; align-items:center; gap:.7rem; margin:1.25rem 0 .85rem;">
+        <h2 style="margin:0;">Handed back / waiting on client</h2>
+        <span class="sub" style="margin:0;">These are hidden by default so active layouts stay first.</span>
+    </div>
+
+    @foreach ($doneQueue as $designs)
+        @php
+            $inq = $designs->first()->inquiry;
+            $officer = $inq->officer;
+            $from = $officer
+                ? trim(($officer->teamLabel() ? $officer->teamLabel().' ' : '').$officer->name)
+                : 'the office';
+        @endphp
+        <div class="card panel" style="margin-bottom: 1.1rem; opacity:.92;">
+            <h2>{{ $inq->client->fullName() }}@if ($inq->client->company) - {{ $inq->client->company }}@endif</h2>
+            <p class="sub">
+                From {{ $from }}
+                @if ($inq->layout_sent_at) &middot; sent {{ $inq->layout_sent_at->diffForHumans() }} @endif
+                &middot; <strong>{{ $designs->count() }} handed back</strong>
+            </p>
+
+            @foreach ($designs as $design)
+                <div id="design-{{ $design->id }}" style="border:1px solid var(--border); border-radius:10px; padding:0.85rem; margin-bottom:0.75rem; scroll-margin-top:1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                        <strong>{{ $design->name() }}</strong>
+                        <span class="sub" style="margin:0;">handed back, waiting on the client</span>
+                    </div>
+
+                    @if ($design->drawings()->isNotEmpty())
+                        <div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin:0.7rem 0;">
+                            @foreach ($design->drawings()->reverse() as $index => $file)
+                                <div style="position:relative; border:1px solid var(--border); border-radius:8px; padding:0.5rem; width:150px; text-align:center; background:var(--surface);">
+                                    <a href="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" target="_blank"
+                                       style="display:block; text-decoration:none;">
+                                        @if (str_starts_with($file['mime'] ?? '', 'image/'))
+                                            <img src="{{ route('inquiries.designs.file', [$design, 'index' => $index]) }}" alt="{{ $file['original_name'] }}" loading="lazy" decoding="async"
+                                                 style="max-width:100%; max-height:110px; border-radius:4px; display:block; margin:0 auto;">
+                                        @else
+                                            <div style="font-size:1.8rem;">&#128196;</div>
+                                        @endif
+                                        <div style="font-size:0.7rem; color:var(--ink-3); margin-top:0.3rem; word-break:break-all;">
+                                            {{ $file['original_name'] }} <em>(yours)</em>
+                                        </div>
+                                    </a>
+                                    <form method="POST" action="{{ route('inquiries.designs.drawing.remove', [$inq, $design]) }}"
+                                          style="position:absolute; top:0.25rem; right:0.25rem;"
+                                          onsubmit="return confirm('Remove {{ addslashes($file['original_name'] ?? 'this design file') }} from {{ addslashes($design->name()) }}?');">
+                                        @csrf
+                                        <input type="hidden" name="index" value="{{ $index }}">
+                                        <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}#design-{{ $design->id }}">
+                                        <button type="submit" class="btn btn-ghost btn-sm"
+                                                title="Remove this file"
+                                                aria-label="Remove {{ $file['original_name'] ?? 'this file' }}"
+                                                style="min-width:0; padding:0.08rem 0.38rem; border-radius:999px; background:rgba(255,255,255,.94); color:var(--danger-ink); border-color:var(--danger-border); box-shadow:0 2px 8px rgba(15,23,42,.12);">
+                                            ×
+                                        </button>
+                                    </form>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <div style="margin:.5rem 0 0;">
+                        <p class="sub" style="margin:0 0 .45rem;">
+                            Waiting on the client. This layout returns to the active list if they ask for a change.
+                        </p>
+                        <details class="path-help path-help-action">
+                            <summary>Replace / add corrected design files</summary>
+                            <form method="POST" action="{{ route('inquiries.designs.submit', $design) }}" enctype="multipart/form-data"
+                                  class="artist-layout-upload" data-paste-into-box
+                                  style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-top:.65rem;">
+                                @csrf
+                                <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}#design-{{ $design->id }}">
+                                <input id="artistDesignDoneReplaceFiles_{{ $design->id }}" type="file" name="files[]" multiple required
+                                       class="artist-layout-files" data-paste-into
+                                       accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.ai,.psd,.eps,.cdr,.zip">
+                                <span class="paste-drop-hint" style="flex-basis:100%; margin:0;">
+                                    <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the corrected drawing, or drop files here. Paste again to add another.
+                                </span>
+                                <div class="artist-layout-picked" aria-live="polite"
+                                     style="display:flex; flex-wrap:wrap; gap:0.45rem; flex-basis:100%;"></div>
+                                <button type="submit" class="btn btn-primary btn-sm"
+                                        onclick="return confirm('Replace/add this corrected design before the client answers?');">
+                                    Send corrected design
+                                </button>
+                            </form>
+                        </details>
+                    </div>
                 </div>
             @endforeach
         </div>

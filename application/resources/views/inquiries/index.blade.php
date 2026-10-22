@@ -26,7 +26,7 @@
     // What is on now. Each filter link starts from this and changes only its
     // own key, so choosing a team does not quietly throw away the kind — and
     // the empty values drop out, which is what "All" is.
-    $now = array_filter(['q' => $search ?? '', 'kind' => $kind, 'team' => $team]);
+    $now = array_filter(['q' => $search ?? '', 'kind' => $kind, 'team' => $team, 'officer' => $officerId ?? 0]);
     $filterLink = fn (array $change) => route('inquiries.index', array_filter(array_merge($now, $change)));
     // The artist leader reads this page for different reasons than the office
     // does: he is looking for work to hand out, not clients to ring. The two
@@ -49,7 +49,7 @@
     'value' => $search ?? '',
     'placeholder' => 'Client, company, number, or what they asked for…',
     'label' => 'Search follow-ups',
-    'keep' => ['kind' => $kind, 'team' => $team],
+    'keep' => ['kind' => $kind, 'team' => $team, 'officer' => $officerId ?? 0],
 ])
 
 @if ($isArtistLead)
@@ -78,6 +78,49 @@
 @endif
 
 </div>
+
+@if (($officers ?? collect())->isNotEmpty())
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;" aria-label="Filter follow-ups by account officer">
+        <a class="btn {{ empty($officerId) ? 'btn-primary' : 'btn-ghost' }} btn-sm" href="{{ $filterLink(['officer' => null]) }}">All officers</a>
+        @foreach ($officers as $officer)
+            <a class="btn {{ ($officerId ?? 0) === $officer->id ? 'btn-primary' : 'btn-ghost' }} btn-sm"
+               href="{{ $filterLink(['officer' => $officer->id]) }}"
+               @if (($officerId ?? 0) === $officer->id) aria-current="page" @endif>{{ $officer->name }}</a>
+        @endforeach
+    </div>
+@endif
+
+@if ($me->canTransferFollowUps())
+    <details class="card panel" style="margin-bottom:1rem;">
+        <summary style="cursor:pointer; font-weight:700;">Transfer follow-ups to another officer</summary>
+        <p class="sub" style="margin-top:0.75rem;">Transfer all pending inquiries belonging to the selected officer. Designs, files, and previous follow-up notes stay attached. Existing production orders keep their current owner.</p>
+        <form method="POST" action="{{ route('inquiries.transfer-follow-ups') }}"
+              onsubmit="return confirm('Transfer ALL pending follow-ups from the selected officer to the new officer? This includes inquiries outside the current search filters.')">
+            @csrf
+            <div class="form-grid">
+                <div class="field">
+                    <label for="from_officer">From officer</label>
+                    <select id="from_officer" name="from_officer" required>
+                        <option value="">Choose current officer</option>
+                        @foreach ($officers as $officer)
+                            <option value="{{ $officer->id }}">{{ $officer->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="to_officer">Transfer to</label>
+                    <select id="to_officer" name="to_officer" required>
+                        <option value="">Choose receiving officer</option>
+                        @foreach ($transferOfficers as $officer)
+                            <option value="{{ $officer->id }}">{{ $officer->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-primary" type="submit">Transfer all pending follow-ups</button>
+        </form>
+    </details>
+@endif
 
 @if ($followUps->isEmpty())
     <div class="card panel">

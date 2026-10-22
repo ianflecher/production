@@ -37,6 +37,7 @@ class MessageController extends Controller
             ->whereColumn('production_order_id', 'production_orders.id');
 
         $orders = ProductionOrder::whereIn('id', $orderIds)
+            ->where('status', '!=', 'complete')
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('order_number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%")
@@ -123,6 +124,7 @@ class MessageController extends Controller
             'search' => $search,
             // Counted across the whole inbox, not the page on screen.
             'talkedAbout' => ProductionOrder::whereIn('id', $orderIds)
+                ->where('status', '!=', 'complete')
                 ->whereHas('messages')
                 ->count(),
         ]);

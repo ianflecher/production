@@ -88,9 +88,17 @@ class InquiryDesignController extends Controller
             'how_many' => ['nullable', 'integer', 'min:1', 'max:20'],
         ]);
 
-        $artist = isset($data['artist_id'])
-            ? User::find($data['artist_id'])
-            : \App\Services\StaffAssigner::next(User::JOB_ARTIST);
+        // Once a brief has an artist, every added design stays with that same
+        // person. Only the artist leader / leader / admin move work after that
+        // through the explicit reassignment control.
+        $existingArtistId = $inquiry->layout_artist_id
+            ?: $inquiry->designs()->whereNotNull('artist_id')->value('artist_id');
+
+        $artist = $existingArtistId
+            ? User::find($existingArtistId)
+            : (isset($data['artist_id'])
+                ? User::find($data['artist_id'])
+                : \App\Services\StaffAssigner::next(User::JOB_ARTIST));
 
         // The same rule "Send to artist" uses when it lists the first design
         // itself - see Inquiry::addDesigns.
@@ -100,6 +108,10 @@ class InquiryDesignController extends Controller
             $artist,
             (int) ($data['how_many'] ?? 1)
         );
+
+        if (! $inquiry->layout_artist_id && $artist) {
+            $inquiry->update(['layout_artist_id' => $artist->id]);
+        }
 
         $inquiry->syncLayoutStatus();
 
@@ -232,8 +244,14 @@ class InquiryDesignController extends Controller
 
         abort_unless($artist->isArtist(), 422);
 
-        $design->update(['artist_id' => $artist->id]);
-        $design->syncOpenOrderArtistTasks();
+        // Moving a design is the explicit leader/admin exception to the
+        // one-artist rule. Move the whole open set together so later designs
+        // do not quietly split across artists again.
+        $inquiry->designs()
+            ->where('status', '!=', InquiryDesign::STATUS_APPROVED)
+            ->update(['artist_id' => $artist->id]);
+        $inquiry->update(['layout_artist_id' => $artist->id]);
+        $inquiry->designs()->get()->each->syncOpenOrderArtistTasks();
 
         if ($inquiry->layout_sent_at) {
             AppNotification::toUser($artist->id,
@@ -242,7 +260,7 @@ class InquiryDesignController extends Controller
                 route('inquiries.layouts'));
         }
 
-        return back()->with('success', $design->name().' is now '.$artist->name."'s.");
+        return back()->with('success', 'Open designs on this brief are now '.$artist->name."'s.");
     }
 
     /** The artist hands back ONE design; the rest stay on their desk. */
@@ -297,7 +315,8 @@ class InquiryDesignController extends Controller
                 .($left ? ' ('.$left.' still open)' : ' — that is the last one.'),
             route('inquiries.layout', $inquiry));
 
-        return back()->with('success', $design->name().' handed back.');
+        return redirect()->to($request->input('redirect_to') ?: url()->previous())
+            ->with('success', $design->name().' handed back.');
     }
 
     /** The client said yes to this one. */
@@ -467,16 +486,24 @@ class InquiryDesignController extends Controller
         $files = $design->files ?? [];
         abort_unless(isset($files[$index]), 404);
 
-        // The last one standing is not removable: a design with no drawing at
-        // all cannot be approved, and the page gives no way back.
-        if ($design->drawings()->count() <= 1) {
-            return back()->withErrors(['drawings' =>
-                'That is the only drawing on '.$design->name().'. Add the new one before taking this off.']);
-        }
-
         $name = $files[$index]['original_name'] ?? 'the drawing';
         $files[$index]['kind'] = 'superseded';
-        $design->update(['files' => $files]);
+        $remaining = collect($files)
+            ->reject(fn ($file) => in_array($file['kind'] ?? 'layout', ['revision', 'superseded'], true))
+            ->count();
+
+        $updates = ['files' => $files];
+
+        // If the artist removes the only handed-back drawing, the design is no
+        // longer ready for the client. Put it back on the artist's desk so they
+        // can upload the corrected one cleanly.
+        if ($remaining === 0 && $design->submitted()) {
+            $updates['status'] = InquiryDesign::STATUS_WITH_ARTIST;
+            $updates['submitted_at'] = null;
+        }
+
+        $design->update($updates);
+        $inquiry->syncLayoutStatus();
 
         // The job order carries these as the artist's references, and the
         // whole point is that the floor stops working from the old one.
@@ -485,7 +512,8 @@ class InquiryDesignController extends Controller
             $order->jobOrder->referenceFiles()->where('path', $path)->delete();
         }
 
-        return back()->with('success', $name.' is no longer shown on '.$design->name().'.');
+        return redirect()->to($request->input('redirect_to') ?: url()->previous())
+            ->with('success', $name.' is no longer shown on '.$design->name().'.');
     }
 
     public function file(Request $request, int $design, int $index)

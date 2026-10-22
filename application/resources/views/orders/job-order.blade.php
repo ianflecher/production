@@ -63,10 +63,15 @@
         @php $currentPack = $order->techPackOrNew($phase ?? \App\Models\TechPack::PHASE_SAMPLE); @endphp
         <div class="card no-print" style="max-width:1180px; margin:0 auto 1rem;">
             <strong>Import complete Tech Pack image</strong>
-            <p class="hint" style="margin:0.35rem 0 0.7rem;">Upload one JPEG, PNG, or WebP when the supplier already made the whole Tech Pack as an image. It will be the sheet shown for review and print.</p>
+            <p class="hint" style="margin:0.35rem 0 0.7rem;">Upload one JPEG, PNG, or WebP when the supplier already made the whole Tech Pack as an image. You can also copy the image and press <kbd>Ctrl</kbd>+<kbd>V</kbd> here. It will be the sheet shown for review and print.</p>
             <div style="display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
-                <input type="file" name="imported_tech_pack" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                       onchange="if (this.files.length) this.form.requestSubmit()">
+                @include('partials.paste-image-field', [
+                    'name' => 'imported_tech_pack',
+                    'id' => 'imported_tech_pack',
+                    'accept' => '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp',
+                    'hint' => 'paste the copied Tech Pack image here, or choose a file',
+                    'autoSubmit' => true,
+                ])
                 @if ($currentPack->imported_pack_path)
                     <button type="submit" name="remove_imported_tech_pack" value="1" class="btn btn-ghost btn-sm"
                             onclick="return confirm('Remove the imported Tech Pack image?')">Remove imported image</button>

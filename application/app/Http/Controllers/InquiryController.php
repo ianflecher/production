@@ -59,7 +59,18 @@ class InquiryController extends Controller
         $team = strtolower((string) $request->query('team', ''));
         $team = in_array($team, ['meta', 'vip'], true) ? $team : '';
 
+        $canFilterOfficers = $request->user()->isLeader() || $request->user()->leadsTeam();
+        $officerId = $canFilterOfficers ? (int) $request->query('officer', 0) : 0;
+        $officers = $canFilterOfficers
+            ? User::whereIn('id', Inquiry::visibleTo($request->user())->select('created_by'))->orderBy('name')->get(['id', 'name'])
+            : collect();
+
         return view('inquiries.index', [
+            'transferOfficers' => $request->user()->canTransferFollowUps()
+                ? User::where('is_active', true)->orderBy('name')->get()->filter(fn ($u) => $u->canCreateOrders())->values()
+                : collect(),
+            'officerId' => $officerId,
+            'officers' => $officers,
             'search' => $search,
             'kind' => $kind,
             'team' => $team,
@@ -77,6 +88,7 @@ class InquiryController extends Controller
                 ->when(! $request->user()->isArtistLead(),
                     fn ($q) => $q->visibleTo($request->user()))
                 ->forFollowUp()
+                ->when($officerId > 0, fn ($q) => $q->where('created_by', $officerId))
                 // Searched in the database so it reaches every name on the
                 // list, not the ones that happen to be on screen. The fields
                 // are the ones the row actually shows - a name, the company,
@@ -98,6 +110,37 @@ class InquiryController extends Controller
                 ->when($team !== '', fn ($q) => $q->where('team', $team))
                 ->get(),
         ]);
+    }
+
+    /** Page one of a new job: the client, and what they are asking about. */
+    public function transferFollowUps(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->canTransferFollowUps(), 403);
+        $data = $request->validate([
+            'from_officer' => ['required', 'integer', 'exists:users,id'],
+            'to_officer' => ['required', 'integer', 'different:from_officer', 'exists:users,id'],
+            'inquiry_id' => ['nullable', 'integer', 'exists:inquiries,id'],
+        ]);
+        $from = User::findOrFail($data['from_officer']);
+        $to = User::findOrFail($data['to_officer']);
+        abort_unless($to->is_active && $to->canCreateOrders(), 422, 'Choose an active account officer or order-desk user.');
+
+        $count = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $from, $to, $data) {
+            $inquiries = Inquiry::visibleTo($request->user())->forFollowUp()
+                ->where('created_by', $from->id)
+                ->when(! empty($data['inquiry_id']), fn ($q) => $q->whereKey($data['inquiry_id']))
+                ->lockForUpdate()->get();
+            foreach ($inquiries as $inquiry) {
+                $inquiry->update(['created_by' => $to->id, 'team' => $to->team ?: $inquiry->team]);
+                $inquiry->followUps()->create([
+                    'user_id' => $request->user()->id,
+                    'note' => 'Follow-up responsibility transferred from '.$from->name.' to '.$to->name.'.',
+                ]);
+            }
+            return $inquiries->count();
+        });
+
+        return back()->with('success', $count.' pending follow-up(s) transferred from '.$from->name.' to '.$to->name.'.');
     }
 
     /** Page one of a new job: the client, and what they are asking about. */
@@ -486,7 +529,12 @@ class InquiryController extends Controller
         // leaves this page knowing whose desk it landed on. The same person is
         // then handed the layout task itself — a name shown here and a
         // different artist actually doing it would be worse than showing none.
-        $artist = $inquiry->layoutArtist ?: StaffAssigner::next(User::JOB_ARTIST);
+        $existingArtistId = $inquiry->layout_artist_id
+            ?: $inquiry->designs()->whereNotNull('artist_id')->value('artist_id');
+        $artist = $existingArtistId
+            ? User::find($existingArtistId)
+            : (isset($data['artist_id']) ? User::find($data['artist_id']) : null);
+        $artist ??= StaffAssigner::next(User::JOB_ARTIST);
 
         // A brief with no designs listed is one design: the officer who did
         // not need the list should not have to use it. It is listed with
@@ -497,7 +545,7 @@ class InquiryController extends Controller
             $inquiry->addDesigns(
                 $data['label'] ?? null,
                 $typed,
-                isset($data['artist_id']) ? User::find($data['artist_id']) : $artist,
+                $artist,
                 (int) ($data['how_many'] ?? 1)
             );
         }
@@ -680,6 +728,7 @@ class InquiryController extends Controller
         // things somebody is told over the phone: the client, their company,
         // and what they asked for.
         $search = trim((string) $request->query('q', ''));
+        $showDone = $request->boolean('show_done');
 
         // DESIGNS, not enquiries. One brief can carry six of them split
         // between two artists, and each person's queue is the designs on their
@@ -701,15 +750,21 @@ class InquiryController extends Controller
                     ->orWhere('company', 'like', "%{$search}%"))))
             ->get()
             ->sortBy([
-                fn ($a, $b) => optional($a->inquiry->layout_sent_at) <=> optional($b->inquiry->layout_sent_at),
+                fn ($a, $b) => optional($b->inquiry->layout_sent_at) <=> optional($a->inquiry->layout_sent_at),
                 fn ($a, $b) => $a->position <=> $b->position,
             ]);
 
+        $active = $designs->reject(fn (InquiryDesign $design) => $design->submitted());
+        $done = $designs->filter(fn (InquiryDesign $design) => $design->submitted());
+
         return view('inquiries.layouts', [
             'search' => $search,
+            'showDone' => $showDone,
+            'doneCount' => $done->count(),
             // Grouped under the brief they belong to, so a kit reads as one
             // client's job rather than six unrelated cards.
-            'queue' => $designs->groupBy('inquiry_id'),
+            'queue' => $active->groupBy('inquiry_id'),
+            'doneQueue' => $showDone ? $done->groupBy('inquiry_id') : collect(),
         ]);
     }
 

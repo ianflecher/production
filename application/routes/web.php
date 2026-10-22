@@ -119,6 +119,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     // reach someone now — the server sends them. Nothing asks on a timer.
     Route::post('/push/subscribe', [\App\Http\Controllers\NotificationController::class, 'subscribe'])->name('push.subscribe');
     Route::post('/push/unsubscribe', [\App\Http\Controllers\NotificationController::class, 'unsubscribe'])->name('push.unsubscribe');
+    Route::get('/notifications/alerts', [\App\Http\Controllers\NotificationController::class, 'alerts'])->name('notifications.alerts');
 
     // -------- Station board: who is on each machine, breaks & shift changes --------
     Route::get('/stations', [\App\Http\Controllers\StationController::class, 'index'])->name('stations.index');
@@ -268,7 +269,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     // "order_desk" is not a role - it is the permission itself, so one named
     // leader holds it without the whole leader role being let in. See
     // User::canCreateOrders().
-    Route::middleware('role:sales,super_admin,order_desk')->group(function () {
+    Route::middleware('role:sales,leader,super_admin,order_desk')->group(function () {
         Route::get('/sample-review', [TaskController::class, 'sampleReview'])->name('sample.review');
         Route::get('/job-orders/{order}/create', [JobOrderController::class, 'createJobOrder'])->name('job-orders.create');
         Route::post('/job-orders/{order}', [JobOrderController::class, 'storeJobOrder'])->name('job-orders.store');
@@ -292,6 +293,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     // everything else on the page stays the office's — see the partial.
     Route::middleware('role:sales,leader,super_admin,artist_lead')->group(function () {
         Route::get('/inquiries', [\App\Http\Controllers\InquiryController::class, 'index'])->name('inquiries.index');
+        Route::post('/inquiries/transfer-follow-ups', [\App\Http\Controllers\InquiryController::class, 'transferFollowUps'])->name('inquiries.transfer-follow-ups');
     });
 
     // Sending a layout back is the officer's job, but the fourth round is the
@@ -425,6 +427,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         // with the leader: the controller checks canConfirmPayments().
         Route::post('/finance/payments/{payment}/confirm', [FinanceController::class, 'confirm'])
             ->whereNumber('payment')->name('finance.confirm');
+        Route::post('/finance/payments/{payment}/unconfirm', [FinanceController::class, 'unconfirm'])
+            ->whereNumber('payment')->name('finance.unconfirm');
+        Route::delete('/finance/payments/{payment}', [FinanceController::class, 'destroy'])
+            ->whereNumber('payment')->name('finance.destroy');
 
         // -------- Bookkeeping: money in vs money out, month by month --------
         Route::get('/books', [BookkeepingController::class, 'index'])->name('books.index');
@@ -465,7 +471,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     // creating, editing, payments and approvals all live in other groups.
     Route::middleware('role:sales,leader,super_admin,mover')->group(function () {
         Route::get('/orders', [ProductionOrderController::class, 'index'])->name('orders.index');
+        Route::post('/orders/{order}/transfer-officer', [ProductionOrderController::class, 'transferOfficer'])->whereNumber('order')->name('orders.transfer-officer');
         Route::get('/orders/{order}', [ProductionOrderController::class, 'show'])->whereNumber('order')->name('orders.show');
+        Route::get('/orders/{order}/mass-production', [ProductionOrderController::class, 'show'])->whereNumber('order')->name('orders.mass-production');
         // The whole package as one document (mockup, template, job order, production details).
         Route::get('/orders/{order}/mockup', [ProductionOrderController::class, 'mockup'])->whereNumber('order')->name('orders.mockup');
         Route::get('/orders/{order}/reference', [ProductionOrderController::class, 'references'])->whereNumber('order')->name('orders.references');

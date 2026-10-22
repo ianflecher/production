@@ -60,6 +60,29 @@
                 </a>
             </div>
 
+            @if ($user->canTransferFollowUps() && isset($transferOfficers))
+                <details style="margin:0.6rem 0;">
+                    <summary class="btn btn-ghost btn-sm" style="cursor:pointer; display:inline-flex;">Transfer</summary>
+                    <form method="POST" action="{{ route('inquiries.transfer-follow-ups') }}"
+                          style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.6rem;"
+                          onsubmit="return confirm('Transfer this client’s follow-up to the selected officer?')">
+                        @csrf
+                        <input type="hidden" name="inquiry_id" value="{{ $inq->id }}">
+                        <input type="hidden" name="from_officer" value="{{ $inq->created_by }}">
+                        <label for="transfer-officer-{{ $inq->id }}">Transfer to</label>
+                        <select id="transfer-officer-{{ $inq->id }}" name="to_officer" required style="max-width:260px;">
+                            <option value="">Choose officer</option>
+                            @foreach ($transferOfficers as $officer)
+                                @if ($officer->id !== $inq->created_by)
+                                    <option value="{{ $officer->id }}">{{ $officer->name }}</option>
+                                @endif
+                            @endforeach
+                        </select>
+                        <button class="btn btn-primary btn-sm" type="submit">Confirm transfer</button>
+                    </form>
+                </details>
+            @endif
+
             @if ($inq->what_they_want)
                 <div class="follow-up-ask">{{ $inq->what_they_want }}</div>
             @endif

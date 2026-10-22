@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', $order->order_number.' — Imprint Production')
-@section('page-title', 'Order '.$order->order_number)
+@section('title', $order->order_number.(request()->routeIs('orders.mass-production') ? ' — Mass Production' : ' — Sample Production'))
+@section('page-title', (request()->routeIs('orders.mass-production') || ($order->skip_sample && request()->query('phase') !== 'sample') ? 'Mass Production — ' : 'Sample Production — ').$order->order_number)
 
 @section('content')
 @php
@@ -16,7 +16,20 @@
     // keeps a date for a clock that is not running. Shown, that reads as a
     // deadline nobody set.
     $sampleDue = $order->computeSampleDueDate();
+    $massProductionPage = request()->routeIs('orders.mass-production') || ($order->skip_sample && request()->query('phase') !== 'sample');
+    $phaseTasks = $order->tasks->filter(fn ($task) => $order->skip_sample
+        ? $massProductionPage
+        : ($massProductionPage ? $task->stage >= 10 : $task->stage < 10));
+    $phaseTotal = $phaseTasks->count();
+    $phaseDone = $phaseTasks->where('status', 'complete')->count();
 @endphp
+
+<nav aria-label="Production phase" style="display:flex;gap:0.7rem;flex-wrap:wrap;margin-bottom:1rem;">
+    @unless ($order->skip_sample)
+        <a class="btn {{ ! $massProductionPage ? 'btn-primary' : 'btn-ghost' }}" href="{{ route('orders.show', ['order' => $order, 'phase' => 'sample']) }}#production-pipeline" @if (! $massProductionPage) aria-current="page" @endif>Sample Production</a>
+    @endunless
+    <a class="btn {{ $massProductionPage ? 'btn-primary' : 'btn-ghost' }}" href="{{ route('orders.mass-production', $order) }}#production-pipeline" @if ($massProductionPage) aria-current="page" @endif>Mass Production</a>
+</nav>
 
 <style>
     /* Compact spacing — scoped to the order detail page (this <style> only
@@ -357,18 +370,49 @@
                     <thead><tr><th>Amount</th><th>Method</th><th>Ref</th><th>Proof</th><th>When</th></tr></thead>
                     <tbody>
                         @foreach ($order->payments as $p)
+                            @php
+                                $paymentProofLinks = collect();
+
+                                if ($p->proof_path) {
+                                    $paymentProofLinks->push([
+                                        'url' => route('payments.proof', $p),
+                                        'reference' => $p->reference,
+                                        'path' => $p->proof_path,
+                                    ]);
+                                }
+
+                                foreach ($p->proofFiles as $proof) {
+                                    if ($paymentProofLinks->contains('path', $proof->path)) {
+                                        continue;
+                                    }
+
+                                    $paymentProofLinks->push([
+                                        'url' => route('payments.proof-file', $proof),
+                                        'reference' => $proof->reference,
+                                        'path' => $proof->path,
+                                    ]);
+                                }
+                            @endphp
                             <tr>
                                 <td>₱{{ number_format((float) $p->amount, 2) }}</td>
                                 <td>{{ $p->method ?? '—' }}</td>
-                                <td>{{ $p->reference ?? '—' }}</td>
+                                <td>
+                                    @if ($paymentProofLinks->isNotEmpty())
+                                        @foreach ($paymentProofLinks as $proof)
+                                            <div style="white-space:nowrap;">{{ $loop->iteration }}. {{ $proof['reference'] ?: '—' }}</div>
+                                        @endforeach
+                                    @else
+                                        {{ $p->reference ?? '—' }}
+                                    @endif
+                                </td>
                                 <td>
                                     @if ($p->hasProof())
-                                        @if ($p->proofFiles->isNotEmpty())
-                                            @foreach ($p->proofFiles as $proof)
-                                                <a href="{{ route('payments.proof-file', $proof) }}" target="_blank" style="font-size:0.8rem; display:inline-block; margin-right:0.25rem;">View {{ $loop->iteration }}</a>
+                                        @if ($paymentProofLinks->count() > 1)
+                                            @foreach ($paymentProofLinks as $proof)
+                                                <a href="{{ $proof['url'] }}" target="_blank" style="font-size:0.8rem; display:inline-block; margin-right:0.25rem;">View {{ $loop->iteration }}{{ $proof['reference'] ? ' - '.$proof['reference'] : '' }}</a>
                                             @endforeach
                                         @else
-                                            <a href="{{ route('payments.proof', $p) }}" target="_blank" style="font-size:0.8rem;">View</a>
+                                            <a href="{{ $paymentProofLinks->first()['url'] ?? route('payments.proof', $p) }}" target="_blank" style="font-size:0.8rem;">View{{ $paymentProofLinks->first()['reference'] ?? null ? ' - '.$paymentProofLinks->first()['reference'] : '' }}</a>
                                         @endif
                                     @else
                                         <span style="color: var(--ink-3);">—</span>
@@ -464,10 +508,6 @@
                                 </label>
                             @endif
 
-                            <label style="margin-top:0.5rem;">Reference number <span style="color: var(--danger-ink);">*</span></label>
-                            <input type="text" name="reference" placeholder="Receipt / txn no." required>
-                            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — receipt, transaction, or official reference number.</div>
-
                             <label style="margin-top:0.5rem;">Proof of payment <span style="color: var(--danger-ink);">*</span></label>
                             @include('partials.paste-image-field', [
                                 'name' => 'proofs[]',
@@ -476,11 +516,9 @@
                                 'required' => true,
                                 'multiple' => true,
                                 'hint' => 'the GCash or bank screenshots, drop files, or choose them.',
-                                // Read the reference number off it and offer
-                                // it above — the officer still has to agree.
-                                'ocrTarget' => 'reference',
+                                'referenceListName' => 'proof_references',
                             ])
-                            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — photo/screenshot or PDF.</div>
+                            <div style="font-size:0.72rem;color:var(--ink-3);margin-top:0.25rem;">Required — photo/screenshot or PDF. Each receipt needs its own reference number.</div>
 
                             <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.8rem;">
                                 @if (! $order->hasDownpayment())
@@ -497,20 +535,20 @@
                                             data-all="{{ number_format($combinedTotal / 2, 2) }}">Half downpayment — ₱{{ number_format($order->total_price / 2, 2) }}</button>
                                     <div style="display:flex; gap:0.4rem; align-items:stretch; margin-top:0.15rem;">
                                         <input type="number" step="0.01" id="pay_amount" name="amount"
-                                               min="{{ number_format($order->total_price / 2, 2, '.', '') }}"
+                                               min="0.01"
                                                max="{{ number_format((float) $order->total_price, 2, '.', '') }}"
-                                               data-one-min="{{ number_format($order->total_price / 2, 2, '.', '') }}"
+                                               data-one-min="0.01"
                                                data-one-max="{{ number_format((float) $order->total_price, 2, '.', '') }}"
-                                               data-all-min="{{ number_format($combinedTotal / 2, 2, '.', '') }}"
+                                               data-all-min="0.01"
                                                data-all-max="{{ number_format($combinedTotal, 2, '.', '') }}"
-                                               placeholder="50% or more (₱)" class="no-caps" style="flex:1; min-width:0;">
+                                               placeholder="Amount received (₱)" class="no-caps" style="flex:1; min-width:0;">
                                         <button type="submit" name="portion" value="custom_downpayment" class="btn btn-ghost btn-sm" style="white-space:nowrap;">Record amount</button>
                                     </div>
                                     <div style="font-size:0.72rem;color:var(--ink-3);"
-                                         data-pay-label="Custom downpayment must be at least ₱"
-                                         data-pay-suffix=" (50%)."
-                                         data-one="{{ number_format($order->total_price / 2, 2) }}"
-                                         data-all="{{ number_format($combinedTotal / 2, 2) }}">Custom downpayment must be at least ₱{{ number_format($order->total_price / 2, 2) }} (50%).</div>
+                                         data-pay-label="Whatever the client paid, up to ₱"
+                                         data-pay-suffix=" (the total)."
+                                         data-one="{{ number_format($order->total_price, 2) }}"
+                                         data-all="{{ number_format($combinedTotal, 2) }}">Whatever the client paid, up to ₱{{ number_format($order->total_price, 2) }} (the total). The quotation still asks for 50% — this records what actually came in.</div>
                                     <button type="submit" name="portion" value="full" class="btn btn-success btn-sm" style="width:100%;"
                                             data-pay-label="Full payment — ₱"
                                             data-one="{{ number_format($order->total_price, 2) }}"
@@ -932,7 +970,11 @@
 @endif
 
 <div class="card panel" style="margin-bottom: 1.4rem;">
-    <h2>Pipeline — {{ $done }} of {{ $total }} steps complete</h2>
+    <h2 id="production-pipeline">{{ $massProductionPage ? 'Mass Production' : 'Sample Production' }} — {{ $phaseDone }} of {{ $phaseTotal }} steps complete</h2>
+    @if (! $massProductionPage && $order->skip_sample)
+        <p class="sub">No sample required for this order. Its production steps are on the Mass Production page.</p>
+    @endif
+    <a class="btn btn-ghost btn-sm" style="margin-bottom:0.7rem;" href="{{ route('orders.job-order', ['order' => $order, 'phase' => $massProductionPage && ! $order->skip_sample ? 'massprod' : 'sample']) }}">Open {{ $massProductionPage ? 'mass production' : 'sample' }} tech pack</a>
     <p class="sub">
         @if ($isLeader)
             Approving a step unlocks only the next one. Use “Unlock early” to override a dependency.
@@ -944,11 +986,11 @@
     {{-- Colorful progress bar for the whole pipeline. --}}
     <div style="display:flex; align-items:center; gap:0.75rem; margin: 0 0 1.1rem;">
         <div class="progress" style="height:11px; flex:1;">
-            <div style="width: {{ $total ? round($done / $total * 100) : 0 }}%;
+            <div style="width: {{ $phaseTotal ? round($phaseDone / $phaseTotal * 100) : 0 }}%;
                         background: linear-gradient(90deg, var(--brand), #a855f7 50%, var(--accent));"></div>
         </div>
         <span style="font-size:0.8rem; font-weight:800; color:#3b2a66; font-variant-numeric:tabular-nums;">
-            {{ $total ? round($done / $total * 100) : 0 }}%
+            {{ $phaseTotal ? round($phaseDone / $phaseTotal * 100) : 0 }}%
         </span>
     </div>
 
@@ -1025,7 +1067,7 @@
                         'cancelled' => '#cbd5e1',
                     ];
                 @endphp
-                @foreach ($order->tasks as $task)
+                @foreach ($phaseTasks as $task)
                     @if (! $order->skip_sample && $task->stage === 1)
                         <tr>
                             <td colspan="{{ $isLeader ? 6 : 5 }}" style="background:#eef6ff; color:#1d4ed8; font-size:0.76rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:.48rem .65rem;">

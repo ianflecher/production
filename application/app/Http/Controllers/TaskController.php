@@ -1225,6 +1225,18 @@ class TaskController extends Controller
 
         $task->assignTo($userId);
 
+        // Artist work is one chain: layout → final mockup → tech pack. When a
+        // leader/admin explicitly moves one artist step, keep the other open
+        // artist steps on that same order with the same artist instead of
+        // letting auto-assignment split them again.
+        if ($task->team === User::JOB_ARTIST) {
+            $task->order->tasks()
+                ->where('team', User::JOB_ARTIST)
+                ->where('id', '!=', $task->id)
+                ->whereNotIn('status', ['complete', 'cancelled'])
+                ->update(['assigned_to' => $userId]);
+        }
+
         return back()->with('success', $task->department.' assignment updated.');
     }
 

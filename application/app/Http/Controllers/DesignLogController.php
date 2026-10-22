@@ -99,7 +99,7 @@ class DesignLogController extends Controller
             // without leaving the board. Whether the person reading may do it
             // is the design endpoint's own decision, not this page's.
             'bench' => \App\Models\User::where('is_active', true)
-                ->where('job_role', \App\Models\User::JOB_ARTIST)
+                ->whereIn('job_role', [\App\Models\User::JOB_ARTIST, \App\Models\User::JOB_ARTIST_LEAD])
                 ->orderBy('name')
                 ->get(['id', 'name']),
             // Counted off the rows already in hand, so the strip is free.

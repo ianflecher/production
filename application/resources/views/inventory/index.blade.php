@@ -13,6 +13,8 @@
     // Counted across the whole sheet by the controller, not the page on screen.
     $totalItems = $totalCount;
     $inStockCount = $totalItems - $outCount;
+    $showMaterialRequests = auth()->user()->canDecideMaterialRequests()
+        && strtolower(trim((string) auth()->user()->job_role)) !== \App\Models\User::JOB_RAW_MATERIALS_SUPERVISOR;
 
     $isFiltered = $search !== '' || $category !== '' || $color !== '' || $size !== '' || ($stock ?? '') !== '';
 
@@ -41,7 +43,7 @@
                      compile a directive written flush against a word, so
                      "levels@if (...)" printed the directive to the page. --}}
                 @php
-                    $blurb = auth()->user()->canDecideMaterialRequests()
+                    $blurb = $showMaterialRequests
                         ? 'Manage stock levels, material requests, and CSV imports in one place.'
                         : 'Manage stock levels and CSV imports in one place.';
                 @endphp
@@ -50,7 +52,7 @@
         </div>
 
         <div class="inv-actions">
-            @if (auth()->user()->canDecideMaterialRequests())
+            @if ($showMaterialRequests)
                 <a href="{{ route('inventory.requests') }}" class="btn btn-sm inv-action {{ $pendingCount > 0 ? 'inv-action-primary' : 'btn-ghost' }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Material requests
@@ -105,7 +107,7 @@
             </div>
         </a>
 
-        @if (auth()->user()->canDecideMaterialRequests())
+        @if ($showMaterialRequests)
         <article class="inv-kpi inv-kpi-orange">
             <div class="inv-kpi-label">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H6l-2 2V4z"/><path d="M8 9h8M8 13h5"/></svg>

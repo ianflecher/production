@@ -33,7 +33,8 @@ class PaymentController extends Controller
             'amount' => ['nullable', 'numeric', 'min:1', 'max:100000000', 'required_if:portion,partial,custom_downpayment'],
             'method' => ['required', 'in:'.implode(',', \App\Models\Payment::METHODS)],
             'other_transfer' => ['nullable', 'string', 'max:100', 'required_if:method,'.\App\Models\Payment::METHOD_OTHER_TRANSFER],
-            'reference' => ['required', 'string', 'max:255'],
+            'proof_references' => ['required', 'array', 'min:1'],
+            'proof_references.*' => ['required', 'string', 'max:255'],
             // One payment for every job under this number.
             'covers_all' => ['nullable', 'boolean'],
             // Proof is mandatory — no payment is recorded without it.
@@ -44,7 +45,20 @@ class PaymentController extends Controller
         ], [
             'proofs.required' => 'A picture/screenshot of the payment proof is required before the payment can be recorded.',
             'proofs.min' => 'A picture/screenshot of the payment proof is required before the payment can be recorded.',
+            'proof_references.required' => 'Add the reference number for each receipt.',
+            'proof_references.*.required' => 'Every receipt needs its own reference number.',
         ]);
+
+        $proofFiles = collect($request->file('proofs', []))->values();
+        $proofReferences = collect($data['proof_references'] ?? [])
+            ->values()
+            ->map(fn ($reference) => trim((string) $reference));
+
+        if ($proofReferences->count() !== $proofFiles->count()) {
+            return back()->withInput()->withErrors([
+                'proof_references' => 'Add one reference number for each receipt.',
+            ]);
+        }
 
         // Does this cover the whole job number?
         //
@@ -101,16 +115,22 @@ class PaymentController extends Controller
             return back()->withErrors(['payment' => 'The downpayment is already recorded. Use a partial payment or pay the remaining balance.']);
         }
 
-        $minimumDownpayment = round($total / 2, 2);
-        if ($data['portion'] === 'custom_downpayment'
-            && round((float) ($data['amount'] ?? 0), 2) < $minimumDownpayment) {
-            return back()->withErrors(['amount' => 'The first downpayment must be at least 50% (₱'.number_format($minimumDownpayment, 2).').']);
-        }
+        // A downpayment is whatever the client actually hands over.
+        //
+        // It had to be at least half, which is the shop's printed term and not
+        // a thing the system can enforce on a client standing at the counter
+        // with a third of it. The officer was left recording nothing at all,
+        // so the job sat unstarted and the money sat unrecorded - the opposite
+        // of what the rule was for.
+        //
+        // The terms still say 50% on the quotation. This is about writing down
+        // what happened, not about agreeing to it.
 
         $amount = match ($data['portion']) {
             'half' => round($total / 2, 2),
-            // An agent may collect more than 50% up front, but never more
-            // than the total balance of the order.
+            // Any amount the client pays, never more than what is owed.
+            // The ceiling stays: money that exceeds the balance is a mistake,
+            // not a payment.
             'custom_downpayment' => min(round((float) ($data['amount'] ?? 0), 2), $balance),
             'full' => $wasFirst ? $total : $balance,
             'balance' => $balance,
@@ -126,15 +146,16 @@ class PaymentController extends Controller
 
         // Proof files stay on this PC in storage/app (never in the public folder)
         // and are only served through an authenticated route.
-        $proofUploads = collect($request->file('proofs', []))
-            ->values()
+        $proofUploads = $proofFiles
             ->map(fn ($file, $position) => [
                 'path' => $file->store('payment-proofs', 'local'),
                 'name' => $file->getClientOriginalName(),
+                'reference' => $proofReferences[$position] ?? null,
                 'position' => $position,
             ]);
 
         $primaryProof = $proofUploads->first();
+        $primaryReference = $primaryProof['reference'] ?? null;
 
         $method = $data['method'];
         if ($method === \App\Models\Payment::METHOD_OTHER_TRANSFER) {
@@ -142,9 +163,9 @@ class PaymentController extends Controller
         }
 
         // One row per order, so each carries its own share and opens its own
-        // gate. The reference and the proof are the SAME on every row - it
-        // was one transfer, and that is what Finance reconciles against the
-        // statement.
+        // gate. Multiple receipts can be attached; each proof keeps its own
+        // reference, while the payment row carries the first one for the
+        // ledger's compact reference column.
         $shares = $covering->count() > 1
             ? ProductionOrder::splitPaymentAcross($amount, $covering)
             : [$order->id => $amount];
@@ -161,7 +182,7 @@ class PaymentController extends Controller
             $payment = $sibling->recordPayment([
                 'amount' => $share,
                 'method' => $method,
-                'reference' => trim($data['reference']),
+                'reference' => $primaryReference,
                 'proof_path' => $primaryProof['path'] ?? null,
                 'proof_name' => $primaryProof['name'] ?? null,
                 'kind' => $sibling->hasDownpayment() ? 'payment' : $kind,
@@ -172,10 +193,16 @@ class PaymentController extends Controller
                 $payment->proofFiles()->create([
                     'path' => $proof['path'],
                     'original_name' => $proof['name'],
+                    'reference' => $proof['reference'],
                     'position' => $proof['position'],
                 ]);
             }
         }
+
+        \App\Models\AppNotification::toRole(\App\Models\User::ROLE_FINANCE,
+            'Payment needs confirmation',
+            $order->order_number.' — ₱'.number_format($amount, 2).' recorded by '.$request->user()->name,
+            route('finance.index'));
 
         // Safety net: the draft job order is normally created at inquiry, but make
         // sure one exists before the officer fills it in.

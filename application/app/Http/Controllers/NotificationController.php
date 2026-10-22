@@ -7,6 +7,17 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    public function alerts(Request $request)
+    {
+        $user = $request->user();
+        $alerts = AppNotification::query()
+            ->where('id', '>', max(0, (int) $request->query('since', 0)))
+            ->where('created_at', '>=', now()->subDay())
+            ->where(fn ($q) => $q->where('user_id', $user->id)->orWhere('role', $user->job_role))
+            ->orderBy('id')->limit(30)->get(['id', 'title', 'body', 'url']);
+        return response()->json(['alerts' => $alerts])->header('Cache-Control', 'no-store');
+    }
+
     /**
      * Return the signed-in user's pending desktop alerts and immediately mark
      * them delivered, so each one pops up exactly once.

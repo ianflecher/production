@@ -31,6 +31,9 @@ class ProductionOrderController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q', ''));
+        $officerId = $request->user()->canTransferFollowUps() ? (int) $request->query('officer', 0) : 0;
+        $officers = $request->user()->canTransferFollowUps()
+            ? User::whereIn('id', $this->visibleOrders($request)->select('created_by'))->orderBy('name')->get(['id', 'name']) : collect();
 
         // Only the four real statuses filter; anything else means "all".
         $status = in_array($request->query('status'), ProductionOrder::STATUSES, true)
@@ -46,7 +49,8 @@ class ProductionOrderController extends Controller
         // One page at a time. The list only ever grows, so loading it whole
         // would get slower every week the shop stays busy.
         $orders = $this->visibleOrders($request)
-            ->with(['tasks', 'client'])
+            ->with(['tasks', 'client', 'creator'])
+            ->when($officerId > 0, fn ($q) => $q->where('created_by', $officerId))
             // Answered per row on the list, so answer it in this query rather
             // than once per order (see hasDownpayment).
             ->withExists('payments')
@@ -97,6 +101,10 @@ class ProductionOrderController extends Controller
             ->pluck('total', 'status');
 
         return view('orders.index', [
+            'officerId' => $officerId,
+            'officers' => $officers,
+            'transferOfficers' => $request->user()->canTransferFollowUps()
+                ? User::where('is_active', true)->orderBy('name')->get()->filter(fn ($u) => $u->canCreateOrders())->values() : collect(),
             'orders' => $orders,
             'search' => $search,
             'status' => $status,
@@ -105,6 +113,31 @@ class ProductionOrderController extends Controller
         ]);
     }
 
+
+    public function transferOfficer(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        abort_unless($request->user()->canTransferFollowUps(), 403);
+        $data = $request->validate([
+            'to_officer' => ['required', 'integer', 'exists:users,id'],
+            'from_officer' => ['required', 'integer'],
+        ]);
+        $to = User::findOrFail($data['to_officer']);
+        abort_unless($to->is_active && $to->canCreateOrders(), 422, 'Choose an active account officer or order-desk user.');
+        DB::transaction(function () use ($request, $order, $to, $data) {
+            $locked = ProductionOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $locked->created_by === (int) $data['from_officer'], 409, 'This order was already transferred. Refresh and try again.');
+            if ((int) $locked->created_by === (int) $to->id) return;
+            $fromName = $locked->creator?->name ?? 'Unassigned';
+            $locked->update(['created_by' => $to->id]);
+            \App\Models\Message::create([
+                'production_order_id' => $locked->id,
+                'sender_id' => $request->user()->id,
+                'sender_name' => $request->user()->name,
+                'body' => 'Order responsibility transferred from '.$fromName.' to '.$to->name.'.',
+            ]);
+        });
+        return back()->with('success', 'Order transferred to '.$to->name.'.');
+    }
 
     public function create(Request $request): View|RedirectResponse
     {

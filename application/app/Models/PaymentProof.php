@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PaymentProof extends Model
 {
     protected $fillable = [
-        'payment_id', 'path', 'original_name', 'position',
+        'payment_id', 'path', 'original_name', 'reference', 'position',
     ];
 
     public function payment(): BelongsTo

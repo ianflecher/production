@@ -121,7 +121,7 @@ class Stations
      */
     public static function forUser(\App\Models\User $user): array
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isSuperAdmin() || strtolower(trim((string) $user->job_role)) === \App\Models\User::JOB_OPERATIONS_SUPERVISOR) {
             return self::keys();
         }
 

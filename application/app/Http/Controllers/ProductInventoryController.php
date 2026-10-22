@@ -135,10 +135,11 @@ class ProductInventoryController extends Controller
         $order = $receipt->order;
         $note = '';
 
-        if ($order && ! ProductReceipt::where('production_order_id', $order->id)->pending()->exists()) {
+        if ($order && ! $receipt->is_sample
+            && ! ProductReceipt::where('production_order_id', $order->id)->where('is_sample', false)->pending()->exists()) {
             $task = $order->tasks()
                 ->where('department', 'Inventory')
-                ->whereNotIn('status', ['complete', 'cancelled'])
+                ->whereIn('status', ['ready', 'in_progress'])
                 ->first();
 
             if ($task) {

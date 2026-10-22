@@ -66,6 +66,7 @@ class User extends Authenticatable
      * system had her supervising the printers.
      */
     public const JOB_AGENT_SUPERVISOR = 'agent supervisor';
+    public const JOB_OPERATIONS_SUPERVISOR = 'operations supervisor';
 
     /**
      * The raw materials supervisor. She holds the fabric — the bolts, by the
@@ -159,6 +160,7 @@ class User extends Authenticatable
             // map to a station - an account with none signs in and sees
             // nothing - and hers is the order desk. See StaffPositionsTest.
             self::JOB_AGENT_SUPERVISOR => 'Account Officers\' Supervisor',
+            self::JOB_OPERATIONS_SUPERVISOR => 'Operations Supervisor',
             self::JOB_ARTIST_LEAD => 'Artist Leader',
             self::ROLE_LEADER => 'Leader',
             self::ROLE_SUPER_ADMIN => 'Super Admin',
@@ -295,7 +297,7 @@ class User extends Authenticatable
             // isLeader() said true — the `role:` middleware trusts this value,
             // so every leader page (approvals, users, orders, calendar) 403'd
             // even though UserController already scopes the user list for them.
-            'supervisor', self::JOB_SEWING_SUPERVISOR, self::JOB_AGENT_SUPERVISOR,
+            'supervisor', self::JOB_SEWING_SUPERVISOR, self::JOB_AGENT_SUPERVISOR, self::JOB_OPERATIONS_SUPERVISOR,
             'sewer supervisor' => self::ROLE_LEADER,
             // The mover walks the floor chasing progress, so she needs to READ
             // every job order and see where each one is stuck. She gets the
@@ -329,6 +331,7 @@ class User extends Authenticatable
             self::JOB_SUPERVISOR,
             self::JOB_SEWING_SUPERVISOR,
             self::JOB_AGENT_SUPERVISOR,
+            self::JOB_OPERATIONS_SUPERVISOR,
             'sewer supervisor',
         ], true);
     }
@@ -353,7 +356,7 @@ class User extends Authenticatable
 
         // The order desk, not the floor. Written into the docblock above from
         // the start and unreachable until now.
-        if ($role === self::JOB_AGENT_SUPERVISOR) {
+        if (in_array($role, [self::JOB_AGENT_SUPERVISOR, self::JOB_OPERATIONS_SUPERVISOR], true)) {
             return 'design';
         }
 
@@ -375,6 +378,12 @@ class User extends Authenticatable
     public function canConfirmPayments(): bool
     {
         return $this->isFinance() || $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    /** Only Super Admin may reverse or remove a recorded payment. */
+    public function canReversePayments(): bool
+    {
+        return $this->isSuperAdmin();
     }
 
     public function isArtistLead(): bool
@@ -435,7 +444,7 @@ class User extends Authenticatable
     {
         $r = strtolower(trim((string) $role));
 
-        if (in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_FINANCE, 'supervisor', self::JOB_SEWING_SUPERVISOR, self::JOB_AGENT_SUPERVISOR, 'sewer supervisor'], true)) {
+        if (in_array($r, [self::ROLE_SUPER_ADMIN, self::ROLE_LEADER, self::ROLE_FINANCE, 'supervisor', self::JOB_SEWING_SUPERVISOR, self::JOB_AGENT_SUPERVISOR, self::JOB_OPERATIONS_SUPERVISOR, 'sewer supervisor'], true)) {
             return 'admin';
         }
 
@@ -713,6 +722,12 @@ class User extends Authenticatable
     public function canCreateOrders(): bool
     {
         return $this->isSales() || $this->isSuperAdmin() || (bool) $this->can_create_orders;
+    }
+
+    public function canTransferFollowUps(): bool
+    {
+        return $this->isSuperAdmin()
+            || ($this->role === self::ROLE_LEADER && (! $this->isSupervisor() || $this->supervisorScope() === 'design'));
     }
 
     public function roleLabel(): string

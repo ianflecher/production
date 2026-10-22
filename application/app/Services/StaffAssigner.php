@@ -11,9 +11,9 @@ class StaffAssigner
      * Pick the next person to receive work from a team. First choice is someone
      * present today AND free — they hold no open task, so the whole job stays
      * with one person until it's finished. But when EVERYONE is already busy we
-     * don't leave the job unassigned: we fall back to round-robin among the
-     * present members (least recently auto-assigned first), so the work still
-     * lands on someone. Fair rotation = whoever was auto-assigned least recently.
+     * don't leave the job unassigned: artists give Port a 50% chance, with
+     * the other half rotating among the remaining present artists. Other
+     * teams use the usual least-recently-assigned rotation.
      * Null only when nobody on that team is available at all.
      */
     public static function next(?string $team): ?User
@@ -50,6 +50,17 @@ class StaffAssigner
         // the available members — whoever was assigned least recently gets it.
         if ($candidates->isEmpty()) {
             $candidates = $available;
+            if ($team === User::JOB_ARTIST) {
+                $port = $available->first(fn (User $u) => strtolower(trim($u->name)) === 'port');
+                $others = $port ? $available->reject(fn (User $u) => $u->id === $port->id) : $available;
+
+                // Port must be active and present like everyone else. Exclude
+                // him from the other half so his chance stays at 50%, rather
+                // than 50% plus another share of the ordinary rotation.
+                if ($port && $others->isNotEmpty()) {
+                    $candidates = random_int(0, 1) === 1 ? collect([$port]) : $others;
+                }
+            }
         }
 
         // Supply chain must receive the job order and material requests even when

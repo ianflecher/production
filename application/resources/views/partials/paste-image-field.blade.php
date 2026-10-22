@@ -27,12 +27,14 @@
     $required = $required ?? false;
     $hint = $hint ?? 'Paste a screenshot, drop a file, or choose one.';
     $multiple = $multiple ?? false;
+    $autoSubmit = $autoSubmit ?? false;
+    $referenceListName = $referenceListName ?? null;
     // The name of a field on the same form to read out of the picture, or
     // null to just take the file and ask nothing of it.
     $ocrTarget = $ocrTarget ?? null;
 @endphp
 
-<div class="paste-drop" data-paste-drop @if ($ocrTarget) data-ocr-target="{{ $ocrTarget }}" @endif>
+<div class="paste-drop" data-paste-drop @if ($ocrTarget) data-ocr-target="{{ $ocrTarget }}" @endif @if ($autoSubmit) data-auto-submit="1" @endif>
     <input type="file" id="{{ $id }}" name="{{ $name }}" accept="{{ $accept }}"
            class="paste-drop-input" @if ($multiple) multiple @endif @if ($required) required @endif>
 
@@ -46,8 +48,18 @@
         <button type="button" class="paste-drop-clear" title="Remove this file">Remove</button>
     </div>
 
-    @if ($ocrTarget)
+    {{-- Either reader says what it is doing here: the single field, and the
+         one that fills a reference per receipt. It used to be rendered for
+         $ocrTarget alone, and readNumberInto() takes the absence of this line
+         as a reason not to run at all - so the multi-receipt form, which asks
+         for $referenceListName and no $ocrTarget, read nothing and said
+         nothing about it either. --}}
+    @if ($ocrTarget || $referenceListName)
         <div class="paste-drop-ocr" data-ocr-status hidden></div>
+    @endif
+
+    @if ($referenceListName)
+        <div class="paste-drop-reference-list" data-reference-list data-reference-name="{{ $referenceListName }}" hidden></div>
     @endif
 </div>
 
@@ -186,13 +198,59 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function readNumberInto(box, file, field, label, done) {
+        var status = box.querySelector('[data-ocr-status]');
+        done = done || function () {};
+
+        /* The status line is a message, not a prerequisite. Reading the
+           receipt is the job; saying so while it happens is a courtesy, and
+           a courtesy that is missing is no reason to skip the job - that is
+           exactly how this came to fill in nothing at all.
+
+           Whoever is counting the receipts still hears back either way, so a
+           file that cannot be read does not leave the tally one short and the
+           message stuck on "reading...". */
+        if (!field || !/^image\//.test(file.type)) { done(false); return; }
+
+        function say(state, words) {
+            if (!status) return;
+            status.hidden = false;
+            status.className = 'paste-drop-ocr is-' + state;
+            status.textContent = words;
+        }
+
+        say('working', 'Reading reference for ' + label + '...');
+
+        loadEngine().then(function (T) {
+            return T.recognize(file, 'eng');
+        }).then(function (result) {
+            var found = referenceIn(result && result.data ? result.data.text : '');
+
+            if (!found || (field.value && !field.classList.contains('is-suggested'))) {
+                done(false);
+                return;
+            }
+
+            field.value = found;
+            field.classList.add('is-suggested');
+            done(true);
+        }).catch(function () {
+            done(false);
+        });
+    }
+
     boxes.forEach(function (box) {
         var input = box.querySelector('.paste-drop-input');
         var preview = box.querySelector('.paste-drop-preview');
         var thumb = box.querySelector('.paste-drop-thumb');
         var nameOut = box.querySelector('.paste-drop-name');
         var clear = box.querySelector('.paste-drop-clear');
+        var referenceList = box.querySelector('[data-reference-list]');
+        var ocrRun = 0;
         if (!input) return;
+
+        var autoSubmit = box.hasAttribute('data-auto-submit');
+        var autoSubmitQueued = false;
 
         box.addEventListener('mouseenter', function () { hovered = box; });
         box.addEventListener('mouseleave', function () { if (hovered === box) hovered = null; });
@@ -205,6 +263,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 thumb.hidden = true;
                 if (thumb.src) { URL.revokeObjectURL(thumb.src); thumb.removeAttribute('src'); }
                 box.classList.remove('has-file');
+                if (referenceList) {
+                    referenceList.hidden = true;
+                    referenceList.innerHTML = '';
+                }
                 return;
             }
 
@@ -230,6 +292,81 @@ document.addEventListener('DOMContentLoaded', function () {
             if (box.hasAttribute('data-ocr-target') && /^image\//.test(file.type)) {
                 readNumberFrom(box, file);
             }
+
+            if (referenceList) {
+                var run = ++ocrRun;
+                var baseName = referenceList.getAttribute('data-reference-name');
+                var status = box.querySelector('[data-ocr-status]');
+                var imageCount = files.filter(function (f) { return /^image\//.test(f.type); }).length;
+                var doneCount = 0;
+                var foundCount = 0;
+
+                referenceList.hidden = false;
+                referenceList.innerHTML = '';
+
+                if (status && imageCount) {
+                    status.hidden = false;
+                    status.className = 'paste-drop-ocr is-working';
+                    status.textContent = 'Reading reference numbers from ' + imageCount + ' receipt image' + (imageCount === 1 ? '' : 's') + '...';
+                }
+
+                files.forEach(function (f, i) {
+                    var row = document.createElement('label');
+                    row.style.display = 'block';
+                    row.style.marginTop = '0.55rem';
+                    row.style.fontSize = '0.82rem';
+                    row.style.fontWeight = '700';
+                    row.textContent = 'Reference for receipt ' + (i + 1);
+
+                    var small = document.createElement('span');
+                    small.style.display = 'block';
+                    small.style.fontWeight = '400';
+                    small.style.color = 'var(--ink-3)';
+                    small.style.fontSize = '0.72rem';
+                    small.textContent = f.name;
+
+                    var ref = document.createElement('input');
+                    ref.type = 'text';
+                    ref.name = baseName + '[' + i + ']';
+                    ref.required = true;
+                    ref.maxLength = 255;
+                    ref.className = 'no-caps';
+                    ref.placeholder = 'Receipt / txn no. for this file';
+                    ref.style.marginTop = '0.25rem';
+
+                    row.appendChild(small);
+                    row.appendChild(ref);
+                    referenceList.appendChild(row);
+
+                    ref.addEventListener('input', function () { ref.classList.remove('is-suggested'); });
+
+                    if (/^image\//.test(f.type)) {
+                        readNumberInto(box, f, ref, 'receipt ' + (i + 1), function (found) {
+                            if (run !== ocrRun) return;
+
+                            doneCount++;
+                            if (found) foundCount++;
+
+                            if (status && doneCount >= imageCount) {
+                                status.hidden = false;
+                                status.className = foundCount ? 'paste-drop-ocr is-found' : 'paste-drop-ocr is-none';
+                                status.textContent = foundCount
+                                    ? 'Filled ' + foundCount + ' reference ' + (foundCount === 1 ? 'number' : 'numbers') + '. Please check each receipt before recording.'
+                                    : 'No reference numbers found automatically — please type each one in.';
+                            }
+                        });
+                    }
+                });
+            }
+
+            if (autoSubmit && !autoSubmitQueued) {
+                autoSubmitQueued = true;
+                setTimeout(function () {
+                    autoSubmitQueued = false;
+                    var form = box.closest('form');
+                    if (form && input.files && input.files.length && form.requestSubmit) form.requestSubmit();
+                }, 0);
+            }
         }
 
         function put(file) {
@@ -253,6 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         clear.addEventListener('click', function () {
             input.value = '';
+            ocrRun++;
             show();
 
             var status = box.querySelector('[data-ocr-status]');

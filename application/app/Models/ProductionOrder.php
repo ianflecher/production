@@ -2733,6 +2733,7 @@ class ProductionOrder extends Model
             );
         }
 
+        \App\Services\AutomaticFabricIssue::run($this);
         return $new;
     }
 
@@ -2854,6 +2855,9 @@ class ProductionOrder extends Model
         foreach ($passThrough as $task) {
             $task->passWithoutAStation();
         }
+        if ($stage === 3) {
+            \App\Services\AutomaticFabricIssue::run($this);
+        }
     }
 
     /** Called when a task reaches COMPLETE: unlock the next stage if this one is done. */
@@ -2882,9 +2886,25 @@ class ProductionOrder extends Model
                 $held->status = 'ready';
                 $held->released_at ??= now();
                 if ($held->auto_assign && ! $held->assigned_to) {
-                    $staff = StaffAssigner::next($held->team);
-                    if ($staff) {
-                        $held->assigned_to = $staff->id;
+                    // Keep the artist chain intact here too. This branch
+                    // releases same-stage held work such as Tech pack after
+                    // Final mockup; round-robin here could hand the pack to a
+                    // different artist than the one who drew the mockup.
+                    $same = $held->team === User::JOB_ARTIST
+                        ? $this->tasks()
+                            ->where('team', User::JOB_ARTIST)
+                            ->whereNotNull('assigned_to')
+                            ->orderByDesc('sequence')
+                            ->first()?->assignee
+                        : null;
+
+                    if ($same && $same->is_active) {
+                        $held->assigned_to = $same->id;
+                    } else {
+                        $staff = StaffAssigner::next($held->team);
+                        if ($staff) {
+                            $held->assigned_to = $staff->id;
+                        }
                     }
                 }
                 $held->save();
@@ -2965,7 +2985,7 @@ class ProductionOrder extends Model
     public function queueProductReceipts(): void
     {
         try {
-            if (ProductReceipt::where('production_order_id', $this->id)->exists()) {
+            if (ProductReceipt::where('production_order_id', $this->id)->where('is_sample', false)->exists()) {
                 return;
             }
 

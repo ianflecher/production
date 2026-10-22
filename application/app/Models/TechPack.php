@@ -46,7 +46,7 @@ class TechPack extends Model
         'extra_notes',
         // Which sizes THIS sample is made in — one piece of each. Not the
         // order's breakdown, which is the batch's.
-        'sample_sizes',
+        'sample_sizes', 'sample_all_sizes', 'full_batch_quantity',
         // A complete pack supplied as one approved image instead of rebuilt
         // from the interactive boxes.
         'imported_pack_path', 'imported_pack_name',
@@ -69,6 +69,8 @@ class TechPack extends Model
         'callouts' => 'array',
         'extra_notes' => 'array',
         'sample_sizes' => 'array',
+        'sample_all_sizes' => 'boolean',
+        'full_batch_quantity' => 'boolean',
         'pack_created_date' => 'date',
         'pack_delivery_date' => 'date',
     ];
@@ -519,7 +521,7 @@ class TechPack extends Model
     {
         $sampled = [];
 
-        if (! $order->skip_sample) {
+        if (! $order->skip_sample && ! $this->full_batch_quantity) {
             // techPackOrNew, not techPackFor: a sample gets sewn whether or not
             // anybody has opened its sheet yet, and asking for the saved row
             // meant the batch quietly kept the full count until somebody did.
@@ -562,6 +564,9 @@ class TechPack extends Model
      */
     public function sampleSizeList(ProductionOrder $order): array
     {
+        if ($this->sample_all_sizes) {
+            return $this->sizesOnTheOrder($order);
+        }
         $saved = $this->sample_sizes;
 
         if (is_array($saved)) {
