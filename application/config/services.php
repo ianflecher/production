@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'central_admin' => [
+        'token' => env('CENTRAL_ADMIN_TOKEN'),
+    ],
+
 ];
